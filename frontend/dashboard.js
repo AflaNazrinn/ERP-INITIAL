@@ -516,6 +516,9 @@ function refocusWithin(container, selector) {
 
 let quickMenuReturnFocus = null;
 let quickMenuView = 'main';
+let quickMenuAltArmed = false;            // Alt is down and no other key has been pressed with it
+// Either Alt key: on Linux and most non-US layouts the right one reports itself as AltGraph.
+const isAltKey = key => key === 'Alt' || key === 'AltGraph';
 
 function quickMenuViewEl(view) {
   return byId('quick-menu').querySelector(`.qm-view[data-view="${view}"]`);
@@ -564,6 +567,7 @@ function handleQuickMenuKeys(event) {
   const menu = byId('quick-menu');
   const plainCtrl = event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (!isAltKey(key)) quickMenuAltArmed = false;   // Alt + another key is a different shortcut
 
   if (plainCtrl && key === 'd') {          // replaces the browser's "bookmark page"
     event.preventDefault();
@@ -582,8 +586,14 @@ function handleQuickMenuKeys(event) {
     if (!event.repeat) openQuickMenu(opener.dataset.qmOpen);
     return true;
   }
+  // Alt on its own (pressed and released) opens this sub-menu's Create; see handleQuickMenuAltUp.
+  // Checked before the Ctrl test: on Windows the right Alt (AltGr) arrives with ctrlKey set.
+  if (menu.open && isAltKey(key) && !event.shiftKey && quickMenuViewEl(quickMenuView).querySelector('[aria-keyshortcuts="Alt"]')) {
+    event.preventDefault();
+    if (!event.repeat) quickMenuAltArmed = true;
+    return true;
+  }
   if (!menu.open || event.ctrlKey || event.metaKey) return false;
-
   if (key === 'Escape' && !event.altKey && quickMenuView !== 'main') {
     event.preventDefault();                // stop the dialog closing; step back instead
     quickMenuBack();
@@ -606,8 +616,20 @@ function handleQuickMenuKeys(event) {
   return false;
 }
 
+// Fires on Alt release, so Alt + letter (the "Create (Alt)" entries) still works.
+// preventDefault stops Firefox showing its menu bar.
+function handleQuickMenuAltUp(event) {
+  if (!isAltKey(event.key) || !quickMenuAltArmed) return;
+  quickMenuAltArmed = false;
+  event.preventDefault();
+  const create = byId('quick-menu').open && quickMenuViewEl(quickMenuView).querySelector('[aria-keyshortcuts="Alt"]');
+  if (create) create.click();
+}
+
 function initQuickMenu() {
   const menu = byId('quick-menu');
+  window.addEventListener('keyup', handleQuickMenuAltUp, true);
+  window.addEventListener('blur', () => { quickMenuAltArmed = false; });
   menu.addEventListener('close', () => {
     // Chromium can deliver 'close' (after Esc) late; if a shortcut has already
     // reopened the menu, this event is stale and must not reset it.

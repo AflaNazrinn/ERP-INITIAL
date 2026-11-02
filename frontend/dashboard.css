@@ -85,7 +85,7 @@ button, select { font-family: inherit; }
 
 .app { padding: 20px 8px; min-height: 100vh; }
 .app:focus, .app:focus-visible { outline: none; box-shadow: none; }  /* focus anchor only, never shown */
-.shell { display: flex; flex-direction: column; gap: 12px; }
+.shell { display: flex; flex-direction: column; gap: 12px; min-height: calc(100vh - 40px); }   /* fills the window; the audit card takes the spare height */
 
 /* ---------- Header ---------- */
 .app-header {
@@ -214,7 +214,8 @@ button, select { font-family: inherit; }
 .quote-rate { margin-top: 12px; }
 
 /* ---------- Audit trail ---------- */
-.audit { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-xs); }
+.audit { flex: 1 0 auto; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-xs); }
+.audit .table-scroll { flex: 1 0 auto; }
 .audit-head { padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--surface-muted); display: flex; align-items: center; gap: 12px; }
 .audit-icon {
   flex: none; width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--ink-900); color: #fff;
@@ -284,7 +285,7 @@ button, select { font-family: inherit; }
 html.has-modal { overflow: hidden; }
 .quick-menu {
   position: fixed; inset: 72px 38px auto auto; margin: 0;
-  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 84px); overflow: hidden;
+  width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 84px); overflow: hidden;
   padding: 0; border: 0; border-radius: 16px; background: var(--surface); color: var(--ink-800);
   box-shadow: 0 24px 48px -12px rgba(15, 23, 42, .25), 0 0 0 1px rgba(15, 23, 42, .04);
 }
@@ -308,7 +309,8 @@ html.has-modal { overflow: hidden; }
 
 .qm-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 20px 20px 20px; }
 .qm-item {
-  display: flex; align-items: center; gap: 14px; min-height: 92px; padding: 0 20px 0 18px;
+  display: flex; align-items: center; gap: 16px; padding: 0 22px 0 20px;
+  min-height: clamp(72px, calc((100vh - 320px) / 6), 104px);   /* main menu: shrink rows on short screens so Quit stays in view */
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
   color: inherit; text-decoration: none; transition: border-color .15s ease, background-color .15s ease;
   flex: none; width: 100%; font: inherit; text-align: left; cursor: pointer;   /* also used on <button> */
@@ -317,23 +319,21 @@ html.has-modal { overflow: hidden; }
 .qm-item:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(15, 23, 42, .08); }
 .qm-item:hover .qm-chevron, .qm-item:focus-visible .qm-chevron { color: var(--ink-700); transform: translateX(2px); }
 .qm-icon {
-  flex: none; width: 36px; height: 36px; border-radius: 8px; background: var(--ink-900); color: #fff;
+  flex: none; width: 44px; height: 44px; border-radius: 8px; background: var(--ink-900); color: #fff;
   display: flex; align-items: center; justify-content: center;
 }
 .qm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.qm-name { font-size: 15px; font-weight: 400; color: var(--ink-800); }   /* the shortcut letter (.qm-key) is the bold part */
-.qm-desc { font-size: 12.5px; color: var(--ink-500); }
+.qm-name { font-size: 19px; font-weight: 400; color: var(--ink-800); }   /* the shortcut letter (.qm-key) is the bold part */
 .qm-chevron { flex: none; color: var(--ink-400); transition: transform .15s ease, color .15s ease; }
 
 /* Sub-menus (Masters, Purchase Book, Trade, Entry, Returns, Supply) share one
    panel size and compact rows, per the Masters design. The dialog carries
    data-view so the panel can resize per view. */
 .quick-menu:not([data-view="main"]) {
-  inset: 24px 36px auto auto; width: min(560px, calc(100vw - 32px)); border-radius: 12px;
+  inset: 24px 36px auto auto; width: min(700px, calc(100vw - 32px)); border-radius: 12px;
   height: min(900px, calc(100vh - 40px)); max-height: none;   /* tall panel; rows stretch to fill it */
 }
-/* Masters uses the same header, text and icon sizes as the main Quick Menu;
-   only the rows are tighter so all nine entries fit. */
+/* Sub-menu rows are tighter than the main menu's so all nine Masters entries fit. */
 .qm-list-sm { gap: 6px; padding: 14px 20px 14px; }
 .qm-section {
   margin: 6px 0 0; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: .08em;
@@ -343,9 +343,16 @@ html.has-modal { overflow: hidden; }
 .qm-item-sm { flex: 1 0 auto; min-height: 56px; border-radius: 10px; }
 .qm-item-sm:focus-visible { border-color: var(--ink-900); background: var(--surface); box-shadow: 0 0 0 .5px var(--ink-900); }
 .qm-icon-sm svg { width: 18px; height: 18px; }
+.qm-item-sm .qm-icon { width: 40px; height: 40px; }
+.qm-item-sm .qm-name { font-size: 18px; }
+.qm-view[data-view="masters"] .qm-title { font-size: 15px; }
 .qm-item-sm .qm-name-strong { font-weight: 700; color: var(--ink-900); }
 /* Short lists (3-4 entries) keep normal row height instead of stretching to fill the panel. */
 .qm-list-fixed .qm-item-sm { flex: none; min-height: 64px; }
+.qm-kbd {
+  flex: none; padding: 3px 8px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px;
+  background: var(--surface-muted); font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ink-600);
+}
 .qm-key { font-weight: 800; color: var(--ink-900); text-transform: uppercase; }
 .qm-foot { flex: none; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
 .qm-quit {

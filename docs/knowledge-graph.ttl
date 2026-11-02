@@ -1,0 +1,1521 @@
+# Knowledge graph of the Growth Engine ERP frontend (ERP-INITIAL), as RDF/Turtle.
+# Vocabulary: https://github.com/AflaNazrinn/ERP-INITIAL/ontology#  (ge:)   ·   Things: https://github.com/AflaNazrinn/ERP-INITIAL/resource/  (res:)
+# Built from frontend/dashboard.html and dashboard.js at commit 2e6b13d plus project facts.
+# Query example (SPARQL): every menu entry with its shortcut and target
+#   SELECT ?menu ?entry ?key ?target WHERE {
+#     ?m ge:hasEntry ?e . ?m rdfs:label ?menu . ?e rdfs:label ?entry .
+#     OPTIONAL { ?e ge:shortcutKey ?key }
+#     OPTIONAL { ?e ge:opensMenu|ge:navigatesTo ?t . ?t rdfs:label ?target }
+#   }
+
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix ge: <https://github.com/AflaNazrinn/ERP-INITIAL/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix res: <https://github.com/AflaNazrinn/ERP-INITIAL/resource/> .
+@prefix schema: <https://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ge:action a owl:DatatypeProperty .
+
+ge:definedIn a owl:ObjectProperty ;
+    rdfs:comment "Where this is implemented." ;
+    rdfs:range ge:SourceFile .
+
+ge:dependsOn a owl:ObjectProperty ;
+    rdfs:comment "Needs this to work." .
+
+ge:fieldName a owl:DatatypeProperty .
+
+ge:follows a owl:ObjectProperty ;
+    rdfs:comment "Project follows this convention." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:Convention .
+
+ge:hasCard a owl:ObjectProperty ;
+    rdfs:comment "Screen shows this card." ;
+    rdfs:domain ge:Screen ;
+    rdfs:range ge:DashboardCard .
+
+ge:hasColumn a owl:ObjectProperty ;
+    rdfs:comment "Section table has this column." ;
+    rdfs:domain ge:FormSection ;
+    rdfs:range ge:TableColumn .
+
+ge:hasCommit a owl:ObjectProperty ;
+    rdfs:comment "Repository history." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:Commit .
+
+ge:hasEntry a owl:ObjectProperty ;
+    rdfs:comment "Menu lists this entry." ;
+    rdfs:domain ge:Menu ;
+    rdfs:range ge:MenuEntry .
+
+ge:hasField a owl:ObjectProperty ;
+    rdfs:comment "Section contains this field." ;
+    rdfs:domain ge:FormSection ;
+    rdfs:range ge:FormField .
+
+ge:hasFile a owl:ObjectProperty ;
+    rdfs:comment "Project contains this file." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:SourceFile .
+
+ge:hasMenu a owl:ObjectProperty ;
+    rdfs:comment "Project has this Quick Menu view." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:Menu .
+
+ge:hasScreen a owl:ObjectProperty ;
+    rdfs:comment "Project has this screen." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:Screen .
+
+ge:hasSection a owl:ObjectProperty ;
+    rdfs:comment "Form page has this section." ;
+    rdfs:domain ge:Screen ;
+    rdfs:range ge:FormSection .
+
+ge:hasShortcut a owl:ObjectProperty ;
+    rdfs:comment "Shortcut available on this screen or menu." ;
+    rdfs:range ge:Shortcut .
+
+ge:inputType a owl:DatatypeProperty .
+
+ge:keys a owl:DatatypeProperty .
+
+ge:navigatesTo a owl:ObjectProperty ;
+    rdfs:comment "Choosing the entry goes to this route." ;
+    rdfs:domain ge:MenuEntry ;
+    rdfs:range ge:Route .
+
+ge:opensMenu a owl:ObjectProperty ;
+    rdfs:comment "Choosing the entry opens this menu." ;
+    rdfs:domain ge:MenuEntry ;
+    rdfs:range ge:Menu .
+
+ge:order a owl:DatatypeProperty .
+
+ge:parentMenu a owl:ObjectProperty ;
+    rdfs:comment "Esc / back from this menu returns to the parent." ;
+    rdfs:domain ge:Menu ;
+    rdfs:range ge:Menu .
+
+ge:placeholder a owl:DatatypeProperty .
+
+ge:replacesBrowserAction a owl:DatatypeProperty .
+
+ge:required a owl:DatatypeProperty .
+
+ge:role a owl:DatatypeProperty .
+
+ge:routePath a owl:DatatypeProperty .
+
+ge:scope a owl:DatatypeProperty .
+
+ge:sectionLabel a owl:DatatypeProperty .
+
+ge:shortcutKey a owl:DatatypeProperty .
+
+ge:showsScreen a owl:ObjectProperty ;
+    rdfs:comment "The router shows this screen for the route." ;
+    rdfs:domain ge:Route ;
+    rdfs:range ge:Screen .
+
+ge:status a owl:DatatypeProperty .
+
+ge:usesTechnology a owl:ObjectProperty ;
+    rdfs:comment "Project uses this technology." ;
+    rdfs:domain ge:Project ;
+    rdfs:range ge:Technology .
+
+ge:version a owl:DatatypeProperty .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/Caddyfile> a ge:PlannedComponent ;
+    rdfs:label "Caddyfile" ;
+    rdfs:comment "Local HTTPS, routing and security headers." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/public/api/session.php> a ge:PlannedComponent ;
+    rdfs:label "backend/public/api/session.php" ;
+    rdfs:comment "Returns the signed-in user and CSRF token." ;
+    ge:status "planned" .
+
+res:project a ge:Project,
+        schema:SoftwareSourceCode ;
+    rdfs:label "Growth Engine (ERP-INITIAL)" ;
+    dcterms:created "2026-10-30"^^xsd:date ;
+    rdfs:comment "ERP web application: dashboard, quick menu and master/transaction forms. Currency OMR." ;
+    ge:follows <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/hash-router>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/keyboard-first>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/money-decimal>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/no-build>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/server-authority>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/strict-csp>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/text-content> ;
+    ge:hasCommit <https://github.com/AflaNazrinn/ERP-INITIAL/resource/commit/2e6b13d> ;
+    ge:hasFile <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.css>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/fonts/roboto-latin-wght-normal.woff2>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/fonts/roboto-mono-latin-wght-normal.woff2> ;
+    ge:hasMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry-create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters-create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book-create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns-create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply-create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade-create> ;
+    ge:hasScreen <https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/dashboard>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/item-creation> ;
+    ge:usesTechnology <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/caddy>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/composer>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/css>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/html>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/javascript>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/mysql>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/php>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/roboto> ;
+    schema:codeRepository <https://github.com/AflaNazrinn/ERP-INITIAL> ;
+    schema:currency "OMR" ;
+    schema:programmingLanguage "JavaScript",
+        "PHP" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/home> a ge:Route ;
+    rdfs:label "#/home" ;
+    ge:routePath "#/home" ;
+    ge:showsScreen <https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/dashboard> ;
+    ge:status "built" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/audit-trail> a ge:DashboardCard ;
+    rdfs:label "Audit Trail & Recent Activities" ;
+    rdfs:comment "Paged activity log (15 rows per page)." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-creditors> a ge:KpiTile ;
+    rdfs:label "Creditors" ;
+    ge:order 5 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-debtors> a ge:KpiTile ;
+    rdfs:label "Debtors" ;
+    ge:order 6 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-pendingPurchase> a ge:KpiTile ;
+    rdfs:label "Pending Purchase" ;
+    ge:order 3 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalItems> a ge:KpiTile ;
+    rdfs:label "Total Items" ;
+    ge:order 4 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalPurchase> a ge:KpiTile ;
+    rdfs:label "Total Purchase" ;
+    ge:order 2 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalSales> a ge:KpiTile ;
+    rdfs:label "Total Sales" ;
+    ge:order 1 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/monthly-chart> a ge:DashboardCard ;
+    rdfs:label "Monthly Purchase & Sales" ;
+    rdfs:comment "Weekly sales vs purchase bars with a month switcher." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/profit-loss> a ge:DashboardCard ;
+    rdfs:label "Profit & Loss" ;
+    rdfs:comment "Last month and overall margin %; green for profit, red for loss." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/quotations> a ge:DashboardCard ;
+    rdfs:label "Total No of Quotations" ;
+    rdfs:comment "Count, value, pending/approved/rejected and win rate." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/returns> a ge:DashboardCard ;
+    rdfs:label "Purchase & Sales Return" ;
+    rdfs:comment "Purchase/sales return totals and RMA progress." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/commit/2e6b13d> a ge:Commit ;
+    rdfs:label "Add Growth Engine dashboard, quick menu and item creation form" ;
+    dcterms:date "2026-10-30"^^xsd:date ;
+    schema:identifier "2e6b13d" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/commit/2e6b13d> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/hash-router> a ge:Convention ;
+    rdfs:label "Hash Router" ;
+    rdfs:comment "One page, many screens: a hash router shows one screen; forms live at /new, /<id>, /<id>/edit." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/keyboard-first> a ge:Convention ;
+    rdfs:label "Keyboard First" ;
+    rdfs:comment "Keyboard-first: focus stays inside the page; bold letters are shortcuts." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/money-decimal> a ge:Convention ;
+    rdfs:label "Money Decimal" ;
+    rdfs:comment "Money is DECIMAL(12,3) handled as strings (OMR baisa precision)." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/no-build> a ge:Convention ;
+    rdfs:label "No Build" ;
+    rdfs:comment "No build step: what is in the repo is what runs." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/server-authority> a ge:Convention ;
+    rdfs:label "Server Authority" ;
+    rdfs:comment "The server is the authority; browser validation is for instant feedback." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/strict-csp> a ge:Convention ;
+    rdfs:label "Strict Csp" ;
+    rdfs:comment "Strict CSP ('self' only): no inline script/style/onclick, no CDNs." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/convention/text-content> a ge:Convention ;
+    rdfs:label "Text Content" ;
+    rdfs:comment "Dynamic text is set with textContent, never innerHTML with data." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/purchase-entry> a ge:MenuEntry ;
+    rdfs:label "Purchase Entry" ;
+    rdfs:comment "Record a supplier bill" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/purchase-entry/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/sales-entry> a ge:MenuEntry ;
+    rdfs:label "Sales Entry" ;
+    rdfs:comment "Record a sale" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/sales-entry/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/tax-invoice> a ge:MenuEntry ;
+    rdfs:label "Tax Invoice" ;
+    rdfs:comment "Invoice with VAT" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/tax-invoice/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new transaction" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Transaction Entry" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/purchase-entry> a ge:MenuEntry ;
+    rdfs:label "Purchase Entry" ;
+    rdfs:comment "Record a supplier bill" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/purchase-entry/new> ;
+    ge:order 2 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/sales-entry> a ge:MenuEntry ;
+    rdfs:label "Sales Entry" ;
+    rdfs:comment "Record a sale" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/sales-entry/new> ;
+    ge:order 3 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/tax-invoice> a ge:MenuEntry ;
+    rdfs:label "Tax Invoice" ;
+    rdfs:comment "Invoice with VAT" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/tax-invoice/new> ;
+    ge:order 4 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/masters> a ge:MenuEntry ;
+    rdfs:label "Masters" ;
+    rdfs:comment "Clients & vendors" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters> ;
+    ge:order 1 ;
+    ge:shortcutKey "M" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/purchase-book> a ge:MenuEntry ;
+    rdfs:label "Purchase Book" ;
+    rdfs:comment "Daily ledgers" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book> ;
+    ge:order 2 ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/return-replacement> a ge:MenuEntry ;
+    rdfs:label "Return & Replacement" ;
+    rdfs:comment "Returns & credits" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns> ;
+    ge:order 5 ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/supply-management> a ge:MenuEntry ;
+    rdfs:label "Supply Management" ;
+    rdfs:comment "Fleet & supply" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply> ;
+    ge:order 6 ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/trade-management> a ge:MenuEntry ;
+    rdfs:label "Trade Management" ;
+    rdfs:comment "Wholesale exchange" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade> ;
+    ge:order 3 ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/transaction-entry> a ge:MenuEntry ;
+    rdfs:label "Transaction Entry" ;
+    rdfs:comment "Orders & invoices" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry> ;
+    ge:order 4 ;
+    ge:shortcutKey "E" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/brand> a ge:MenuEntry ;
+    rdfs:label "Brand" ;
+    rdfs:comment "Product brands" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/brand/new> ;
+    ge:order 4 ;
+    ge:shortcutKey "B" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/category> a ge:MenuEntry ;
+    rdfs:label "Category" ;
+    rdfs:comment "Item groups" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/category/new> ;
+    ge:order 5 ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/item> a ge:MenuEntry ;
+    rdfs:label "Item" ;
+    rdfs:comment "Products & stock items" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/item/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "I" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/parties> a ge:MenuEntry ;
+    rdfs:label "Parties" ;
+    rdfs:comment "Suppliers & customers" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/party/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/rack> a ge:MenuEntry ;
+    rdfs:label "Rack" ;
+    rdfs:comment "Shelf positions" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack/new> ;
+    ge:order 7 ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/stock-point> a ge:MenuEntry ;
+    rdfs:label "Stock Point" ;
+    rdfs:comment "Storage locations" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/stock-point/new> ;
+    ge:order 6 ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/uom> a ge:MenuEntry ;
+    rdfs:label "UOM" ;
+    rdfs:comment "Units of measure" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/uom/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "U" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/brand> a ge:MenuEntry ;
+    rdfs:label "Brand" ;
+    rdfs:comment "Product brands" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/brand> ;
+    ge:order 6 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "B" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/category> a ge:MenuEntry ;
+    rdfs:label "Category" ;
+    rdfs:comment "Item groups" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/category> ;
+    ge:order 7 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "A" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new master record" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Masters" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/customer> a ge:MenuEntry ;
+    rdfs:label "Customer" ;
+    rdfs:comment "Clients you sell to" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/customer> ;
+    ge:order 3 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "C" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/item> a ge:MenuEntry ;
+    rdfs:label "Item" ;
+    rdfs:comment "Products & stock items" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/item> ;
+    ge:order 4 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "I" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/rack> a ge:MenuEntry ;
+    rdfs:label "Rack" ;
+    rdfs:comment "Shelf positions" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack> ;
+    ge:order 9 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/stock-point> a ge:MenuEntry ;
+    rdfs:label "Stock Point" ;
+    rdfs:comment "Storage locations" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/stock-point> ;
+    ge:order 8 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/supplier> a ge:MenuEntry ;
+    rdfs:label "Supplier" ;
+    rdfs:comment "Vendors you buy from" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/supplier> ;
+    ge:order 2 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/uom> a ge:MenuEntry ;
+    rdfs:label "UOM" ;
+    rdfs:comment "Units of measure" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/uom> ;
+    ge:order 5 ;
+    ge:sectionLabel "Masters" ;
+    ge:shortcutKey "U" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/grn> a ge:MenuEntry ;
+    rdfs:label "Grn" ;
+    rdfs:comment "Goods received note" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/grn/new> ;
+    ge:order 4 ;
+    ge:shortcutKey "G" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/purchase-order> a ge:MenuEntry ;
+    rdfs:label "Purchase order" ;
+    rdfs:comment "Order goods from a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-order/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/purchase-req> a ge:MenuEntry ;
+    rdfs:label "Purchase Req" ;
+    rdfs:comment "Request items to purchase" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-request/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/quotation-req> a ge:MenuEntry ;
+    rdfs:label "Quotation req" ;
+    rdfs:comment "Ask suppliers for prices" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/quotation-request/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "Q" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new purchase record" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Purchase Book" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/grn> a ge:MenuEntry ;
+    rdfs:label "Grn" ;
+    rdfs:comment "Goods received note" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/grn/new> ;
+    ge:order 5 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "G" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/purchase-order> a ge:MenuEntry ;
+    rdfs:label "Purchase order" ;
+    rdfs:comment "Order goods from a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-order/new> ;
+    ge:order 4 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/purchase-req> a ge:MenuEntry ;
+    rdfs:label "Purchase Req" ;
+    rdfs:comment "Request items to purchase" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-request/new> ;
+    ge:order 2 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/quotation-req> a ge:MenuEntry ;
+    rdfs:label "Quotation req" ;
+    rdfs:comment "Ask suppliers for prices" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/quotation-request/new> ;
+    ge:order 3 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "Q" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/purchase-replacement> a ge:MenuEntry ;
+    rdfs:label "Purchase Replacement" ;
+    rdfs:comment "Replacement from a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-replacement/new> ;
+    ge:order 4 ;
+    ge:shortcutKey "U" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/purchase-return> a ge:MenuEntry ;
+    rdfs:label "Purchase Return" ;
+    rdfs:comment "Send goods back to a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-return/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/sales-replacement> a ge:MenuEntry ;
+    rdfs:label "Sales Replacement" ;
+    rdfs:comment "Replace goods for a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-replacement/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "E" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/sales-return> a ge:MenuEntry ;
+    rdfs:label "Sales Return" ;
+    rdfs:comment "Goods returned by a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-return/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new return or replacement" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Return & Replacement" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/purchase-replacement> a ge:MenuEntry ;
+    rdfs:label "Purchase Replacement" ;
+    rdfs:comment "Replacement from a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-replacement/new> ;
+    ge:order 5 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "U" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/purchase-return> a ge:MenuEntry ;
+    rdfs:label "Purchase Return" ;
+    rdfs:comment "Send goods back to a supplier" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-return/new> ;
+    ge:order 4 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "P" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/sales-replacement> a ge:MenuEntry ;
+    rdfs:label "Sales Replacement" ;
+    rdfs:comment "Replace goods for a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-replacement/new> ;
+    ge:order 3 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "E" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/sales-return> a ge:MenuEntry ;
+    rdfs:label "Sales Return" ;
+    rdfs:comment "Goods returned by a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-return/new> ;
+    ge:order 2 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-adjustment> a ge:MenuEntry ;
+    rdfs:label "Stock Adjustment" ;
+    rdfs:comment "Correct stock quantities" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-adjustment/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "A" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-reservation> a ge:MenuEntry ;
+    rdfs:label "Stock Reservation" ;
+    rdfs:comment "Hold stock for an order" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-reservation/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-transfer> a ge:MenuEntry ;
+    rdfs:label "Stock Transfer" ;
+    rdfs:comment "Move stock between stock points" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-transfer/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new supply record" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Supply Management" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-adjustment> a ge:MenuEntry ;
+    rdfs:label "Stock Adjustment" ;
+    rdfs:comment "Correct stock quantities" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-adjustment/new> ;
+    ge:order 3 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "A" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-reservation> a ge:MenuEntry ;
+    rdfs:label "Stock Reservation" ;
+    rdfs:comment "Hold stock for an order" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-reservation/new> ;
+    ge:order 4 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "R" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-transfer> a ge:MenuEntry ;
+    rdfs:label "Stock Transfer" ;
+    rdfs:comment "Move stock between stock points" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-transfer/new> ;
+    ge:order 2 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "T" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/delivery-note> a ge:MenuEntry ;
+    rdfs:label "Delivery Note" ;
+    rdfs:comment "Dispatch goods to a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/delivery-note/new> ;
+    ge:order 3 ;
+    ge:shortcutKey "D" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/quotation> a ge:MenuEntry ;
+    rdfs:label "Quotation" ;
+    rdfs:comment "Price offer to a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/quotation/new> ;
+    ge:order 1 ;
+    ge:shortcutKey "Q" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/sales-order> a ge:MenuEntry ;
+    rdfs:label "Sales Order" ;
+    rdfs:comment "Confirmed customer order" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/sales-order/new> ;
+    ge:order 2 ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/create> a ge:MenuEntry ;
+    rdfs:label "Create" ;
+    rdfs:comment "Add a new trade record" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade-create> ;
+    ge:order 1 ;
+    ge:sectionLabel "Create Trade Management" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/delivery-note> a ge:MenuEntry ;
+    rdfs:label "Delivery Note" ;
+    rdfs:comment "Dispatch goods to a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/delivery-note/new> ;
+    ge:order 4 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "D" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/quotation> a ge:MenuEntry ;
+    rdfs:label "Quotation" ;
+    rdfs:comment "Price offer to a customer" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/quotation/new> ;
+    ge:order 2 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "Q" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/sales-order> a ge:MenuEntry ;
+    rdfs:label "Sales Order" ;
+    rdfs:comment "Confirmed customer order" ;
+    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/sales-order/new> ;
+    ge:order 3 ;
+    ge:sectionLabel "Create (Alt)" ;
+    ge:shortcutKey "S" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.css> a ge:SourceFile ;
+    rdfs:label "frontend/dashboard.css" ;
+    rdfs:comment "Design tokens, dashboard, quick menu, form page and toast styles." ;
+    ge:status "built" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/blob/main/frontend/dashboard.css> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/fonts/roboto-latin-wght-normal.woff2> a ge:SourceFile ;
+    rdfs:label "frontend/fonts/roboto-latin-wght-normal.woff2" ;
+    rdfs:comment "Roboto variable font." ;
+    ge:status "built" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/blob/main/frontend/fonts/roboto-latin-wght-normal.woff2> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/fonts/roboto-mono-latin-wght-normal.woff2> a ge:SourceFile ;
+    rdfs:label "frontend/fonts/roboto-mono-latin-wght-normal.woff2" ;
+    rdfs:comment "Roboto Mono variable font." ;
+    ge:status "built" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/blob/main/frontend/fonts/roboto-mono-latin-wght-normal.woff2> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/batchExpiry> a ge:TableColumn ;
+    rdfs:label "Batch expiry" ;
+    ge:fieldName "batchExpiry" ;
+    ge:inputType "date" ;
+    ge:order 6 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/brand> a ge:TableColumn ;
+    rdfs:label "Brand name" ;
+    ge:fieldName "brand" ;
+    ge:inputType "text" ;
+    ge:order 1 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/cost> a ge:TableColumn ;
+    rdfs:label "Cost (OMR)" ;
+    ge:fieldName "cost" ;
+    ge:inputType "decimal" ;
+    ge:order 3 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/openingStock> a ge:TableColumn ;
+    rdfs:label "Opening stock" ;
+    ge:fieldName "openingStock" ;
+    ge:inputType "decimal" ;
+    ge:order 4 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/sellingPrice> a ge:TableColumn ;
+    rdfs:label "Selling price (OMR)" ;
+    ge:fieldName "sellingPrice" ;
+    ge:inputType "decimal" ;
+    ge:order 5 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/supplier> a ge:TableColumn ;
+    rdfs:label "Supplier entity" ;
+    ge:fieldName "supplier" ;
+    ge:inputType "text" ;
+    ge:order 2 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/category> a ge:FormField ;
+    rdfs:label "Primary Category" ;
+    ge:fieldName "category" ;
+    ge:inputType "text" ;
+    ge:placeholder "e.g. Pneumatics, Electrical, Hardware..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/code> a ge:FormField ;
+    rdfs:label "Item Code" ;
+    rdfs:comment "Read-only preview; the server assigns the code on save." ;
+    ge:inputType "text" ;
+    ge:required true .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/comments> a ge:FormField ;
+    rdfs:label "Comments" ;
+    ge:fieldName "comments" ;
+    ge:inputType "text" ;
+    ge:placeholder "Enter operational comments, technical remarks, or batch notes..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/doc-link> a ge:FormField ;
+    rdfs:label "Doc / PDF Spec" ;
+    ge:fieldName "docLink" ;
+    ge:inputType "url" ;
+    ge:placeholder "PDF spec link..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/image-link> a ge:FormField ;
+    rdfs:label "CAD / Image" ;
+    ge:fieldName "imageLink" ;
+    ge:inputType "url" ;
+    ge:placeholder "CAD or image URL..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/name> a ge:FormField ;
+    rdfs:label "Item Designation & Specification" ;
+    ge:fieldName "itemName" ;
+    ge:inputType "text" ;
+    ge:placeholder "Enter comprehensive item designation, technical specification, and model numbers..." ;
+    ge:required true .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/rack> a ge:FormField ;
+    rdfs:label "Rack / Bin" ;
+    ge:fieldName "rack" ;
+    ge:inputType "text" ;
+    ge:placeholder "BAY-04 / TIER-2" ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/status> a ge:FormField ;
+    rdfs:label "Inventory Status" ;
+    ge:fieldName "status" ;
+    ge:inputType "text" ;
+    ge:placeholder "ACTIVE / RELEASED" ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/stock-point> a ge:FormField ;
+    rdfs:label "Stock Point" ;
+    ge:fieldName "stockPoint" ;
+    ge:inputType "text" ;
+    ge:placeholder "e.g. WH-NORTH" ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/subcategory> a ge:FormField ;
+    rdfs:label "Subcategory" ;
+    ge:fieldName "subCategory" ;
+    ge:inputType "text" ;
+    ge:placeholder "e.g. High Pressure Valves..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/supplier-url> a ge:FormField ;
+    rdfs:label "Supplier URL" ;
+    ge:fieldName "supplierUrl" ;
+    ge:inputType "url" ;
+    ge:placeholder "Vendor catalog link..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/unit> a ge:FormField ;
+    rdfs:label "Unit of Measure" ;
+    ge:fieldName "unit" ;
+    ge:inputType "text" ;
+    ge:placeholder "e.g. PCS, BOX, KGS, SET, MTR..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-1> a ge:FormSection ;
+    rdfs:label "1. General Product Identification" ;
+    ge:hasField <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/category>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/code>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/comments>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/name>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/subcategory>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/unit> ;
+    ge:order 1 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-2> a ge:FormSection ;
+    rdfs:label "2. Sourcing Matrix & Multi-Vendor Pricing (OMR)" ;
+    ge:hasColumn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/batchExpiry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/brand>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/cost>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/openingStock>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/sellingPrice>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/column/supplier> ;
+    ge:order 2 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-3> a ge:FormSection ;
+    rdfs:label "3. Stock & Warehouse Location" ;
+    ge:hasField <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/rack>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/status>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/stock-point> ;
+    ge:order 3 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-4> a ge:FormSection ;
+    rdfs:label "4. Media & Specification Assets" ;
+    ge:hasField <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/doc-link>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/image-link>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/supplier-url> ;
+    ge:order 4 .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/config.php> a ge:PlannedComponent ;
+    rdfs:label "backend/config.php" ;
+    rdfs:comment "Configuration from environment variables; fails closed." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/db.php> a ge:PlannedComponent ;
+    rdfs:label "backend/db.php" ;
+    rdfs:comment "PDO singleton and query() helper." ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/config.php> ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/migrations/NNN_create_items.sql> a ge:PlannedComponent ;
+    rdfs:label "backend/migrations/NNN_create_items.sql" ;
+    rdfs:comment "items table (+ sourcing lines)." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/public/api/dashboard.php> a ge:PlannedComponent ;
+    rdfs:label "backend/public/api/dashboard.php" ;
+    rdfs:comment "KPI, profit & loss, chart, returns, quotations and audit data." ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/api_bootstrap.php> ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/public/api/items.php> a ge:PlannedComponent ;
+    rdfs:label "backend/public/api/items.php" ;
+    rdfs:comment "Item JSON endpoint (GET/POST/PUT/DELETE, ?nextCode)." ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/api_bootstrap.php>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/items.php> ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/items.php> a ge:PlannedComponent ;
+    rdfs:label "backend/src/items.php" ;
+    rdfs:comment "Item module: next_code, validate, list, find, insert, update, save, soft_delete, format." ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/db.php>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/migrations/NNN_create_items.sql> ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/security.php> a ge:PlannedComponent ;
+    rdfs:label "backend/src/security.php" ;
+    rdfs:comment "Sessions, CSRF, password hashing, rate limits, current_user()." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/brand> a ge:Route ;
+    rdfs:label "#/masters/brand" ;
+    ge:routePath "#/masters/brand" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/brand/new> a ge:Route ;
+    rdfs:label "#/masters/brand/new" ;
+    ge:routePath "#/masters/brand/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/category> a ge:Route ;
+    rdfs:label "#/masters/category" ;
+    ge:routePath "#/masters/category" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/category/new> a ge:Route ;
+    rdfs:label "#/masters/category/new" ;
+    ge:routePath "#/masters/category/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/customer> a ge:Route ;
+    rdfs:label "#/masters/customer" ;
+    ge:routePath "#/masters/customer" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/item> a ge:Route ;
+    rdfs:label "#/masters/item" ;
+    ge:routePath "#/masters/item" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/item/new> a ge:Route ;
+    rdfs:label "#/masters/item/new" ;
+    ge:routePath "#/masters/item/new" ;
+    ge:showsScreen <https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/item-creation> ;
+    ge:status "built" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/party/new> a ge:Route ;
+    rdfs:label "#/masters/party/new" ;
+    ge:routePath "#/masters/party/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack> a ge:Route ;
+    rdfs:label "#/masters/rack" ;
+    ge:routePath "#/masters/rack" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack/new> a ge:Route ;
+    rdfs:label "#/masters/rack/new" ;
+    ge:routePath "#/masters/rack/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/stock-point> a ge:Route ;
+    rdfs:label "#/masters/stock-point" ;
+    ge:routePath "#/masters/stock-point" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/stock-point/new> a ge:Route ;
+    rdfs:label "#/masters/stock-point/new" ;
+    ge:routePath "#/masters/stock-point/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/supplier> a ge:Route ;
+    rdfs:label "#/masters/supplier" ;
+    ge:routePath "#/masters/supplier" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/uom> a ge:Route ;
+    rdfs:label "#/masters/uom" ;
+    ge:routePath "#/masters/uom" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/uom/new> a ge:Route ;
+    rdfs:label "#/masters/uom/new" ;
+    ge:routePath "#/masters/uom/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/arrows> a ge:Shortcut ;
+    rdfs:label "Arrow keys" ;
+    ge:action "Move focus to the nearest control in that direction" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Arrow keys" ;
+    ge:scope "whole page" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/ctrl-d> a ge:Shortcut ;
+    rdfs:label "Ctrl+D" ;
+    ge:action "Open / close the Quick Menu" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Ctrl+D" ;
+    ge:replacesBrowserAction "Bookmark page" ;
+    ge:scope "whole page" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-e> a ge:Shortcut ;
+    rdfs:label "E" ;
+    ge:action "Open Transaction Entry" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "E" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-m> a ge:Shortcut ;
+    rdfs:label "M" ;
+    ge:action "Open Masters" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "M" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-p> a ge:Shortcut ;
+    rdfs:label "P" ;
+    ge:action "Open Purchase Book" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "P" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-r> a ge:Shortcut ;
+    rdfs:label "R" ;
+    ge:action "Open Return & Replacement" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "R" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-s> a ge:Shortcut ;
+    rdfs:label "S" ;
+    ge:action "Open Supply Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "S" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-t> a ge:Shortcut ;
+    rdfs:label "T" ;
+    ge:action "Open Trade Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "T" ;
+    ge:opensMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade> ;
+    ge:scope "dashboard, menu closed, not typing" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-alt-a> a ge:Shortcut ;
+    rdfs:label "Alt+A" ;
+    ge:action "Add sourcing row" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Alt+A" ;
+    ge:scope "item form" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-ctrl-s> a ge:Shortcut ;
+    rdfs:label "Ctrl+S" ;
+    ge:action "Save item record" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Ctrl+S" ;
+    ge:replacesBrowserAction "Save page" ;
+    ge:scope "item form" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-enter> a ge:Shortcut ;
+    rdfs:label "Enter" ;
+    ge:action "Next field; on Batch Expiry adds a row; last field → Save" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Enter" ;
+    ge:scope "item form" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-esc> a ge:Shortcut ;
+    rdfs:label "Esc" ;
+    ge:action "Back to dashboard" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Esc" ;
+    ge:scope "item form" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-shift-x> a ge:Shortcut ;
+    rdfs:label "Shift+X" ;
+    ge:action "Add sourcing row (outside text fields)" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Shift+X" ;
+    ge:scope "item form" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-table-arrows> a ge:Shortcut ;
+    rdfs:label "↑ ↓ ← →" ;
+    ge:action "Move between sourcing-table cells; ↓ on last row adds a row" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "↑ ↓ ← →" ;
+    ge:scope "item form table" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/menu-esc> a ge:Shortcut ;
+    rdfs:label "Esc / ←" ;
+    ge:action "Back one menu level; closes from the main menu" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Esc / ←" ;
+    ge:scope "open menu view" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/menu-letter> a ge:Shortcut ;
+    rdfs:label "letter / Alt+letter" ;
+    ge:action "Pick the entry with that bold letter" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "letter / Alt+letter" ;
+    ge:scope "open menu view" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/tab> a ge:Shortcut ;
+    rdfs:label "Tab / Shift+Tab" ;
+    ge:action "Cycle controls, wrapping inside the page (or open menu)" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> ;
+    ge:keys "Tab / Shift+Tab" ;
+    ge:scope "whole page" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/caddy> a ge:Technology ;
+    rdfs:label "Caddy 2" ;
+    rdfs:comment "Web server: serves frontend/ statically, reverse-proxies the rest to PHP, TLS, security headers." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/composer> a ge:Technology ;
+    rdfs:label "Composer: phpmailer, libphonenumber-lite" ;
+    rdfs:comment "The only third-party server packages." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/css> a ge:Technology ;
+    rdfs:label "CSS" ;
+    rdfs:comment "One stylesheet with design tokens at the top." ;
+    ge:status "in use" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/html> a ge:Technology ;
+    rdfs:label "HTML" ;
+    rdfs:comment "Single page dashboard.html holding every screen." ;
+    ge:status "in use" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/javascript> a ge:Technology ;
+    rdfs:label "Vanilla JavaScript (ES2022)" ;
+    rdfs:comment "No framework, no build step." ;
+    ge:status "in use" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/mysql> a ge:Technology ;
+    rdfs:label "MySQL 8" ;
+    rdfs:comment "Database (InnoDB, utf8mb4) via PDO prepared statements." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/php> a ge:Technology ;
+    rdfs:label "PHP 8.2+" ;
+    rdfs:comment "Server language: sessions, auth, CSRF, validation, SQL. Functions only, strict_types." ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/tech/roboto> a ge:Technology ;
+    rdfs:label "Roboto / Roboto Mono (self-hosted)" ;
+    rdfs:comment "Fonts served from frontend/fonts because the CSP allows self only." ;
+    ge:status "in use" .
+
+ge:Commit a owl:Class ;
+    rdfs:label "Commit" ;
+    rdfs:comment "A git commit." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry-create> a ge:Menu ;
+    rdfs:label "Create Transaction Entry" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/purchase-entry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/sales-entry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry-create/tax-invoice> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters-create> a ge:Menu ;
+    rdfs:label "Create Masters" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/brand>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/category>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/item>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/parties>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/rack>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/stock-point>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/uom> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book-create> a ge:Menu ;
+    rdfs:label "Create Purchase Book" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/grn>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/purchase-order>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/purchase-req>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book-create/quotation-req> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns-create> a ge:Menu ;
+    rdfs:label "Create Return & Replacement" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/purchase-replacement>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/purchase-return>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/sales-replacement>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns-create/sales-return> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply-create> a ge:Menu ;
+    rdfs:label "Create Supply Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-adjustment>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-reservation>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply-create/stock-transfer> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade-create> a ge:Menu ;
+    rdfs:label "Create Trade Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/delivery-note>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/quotation>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade-create/sales-order> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/api_bootstrap.php> a ge:PlannedComponent ;
+    rdfs:label "backend/src/api_bootstrap.php" ;
+    rdfs:comment "Headers, exception handler and session for JSON endpoints." ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/src/security.php> ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/purchase-entry/new> a ge:Route ;
+    rdfs:label "#/entry/purchase-entry/new" ;
+    ge:routePath "#/entry/purchase-entry/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/sales-entry/new> a ge:Route ;
+    rdfs:label "#/entry/sales-entry/new" ;
+    ge:routePath "#/entry/sales-entry/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/entry/tax-invoice/new> a ge:Route ;
+    rdfs:label "#/entry/tax-invoice/new" ;
+    ge:routePath "#/entry/tax-invoice/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/grn/new> a ge:Route ;
+    rdfs:label "#/purchase-book/grn/new" ;
+    ge:routePath "#/purchase-book/grn/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-order/new> a ge:Route ;
+    rdfs:label "#/purchase-book/purchase-order/new" ;
+    ge:routePath "#/purchase-book/purchase-order/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/purchase-request/new> a ge:Route ;
+    rdfs:label "#/purchase-book/purchase-request/new" ;
+    ge:routePath "#/purchase-book/purchase-request/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/purchase-book/quotation-request/new> a ge:Route ;
+    rdfs:label "#/purchase-book/quotation-request/new" ;
+    ge:routePath "#/purchase-book/quotation-request/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-replacement/new> a ge:Route ;
+    rdfs:label "#/returns/purchase-replacement/new" ;
+    ge:routePath "#/returns/purchase-replacement/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/purchase-return/new> a ge:Route ;
+    rdfs:label "#/returns/purchase-return/new" ;
+    ge:routePath "#/returns/purchase-return/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-replacement/new> a ge:Route ;
+    rdfs:label "#/returns/sales-replacement/new" ;
+    ge:routePath "#/returns/sales-replacement/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/returns/sales-return/new> a ge:Route ;
+    rdfs:label "#/returns/sales-return/new" ;
+    ge:routePath "#/returns/sales-return/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-adjustment/new> a ge:Route ;
+    rdfs:label "#/supply/stock-adjustment/new" ;
+    ge:routePath "#/supply/stock-adjustment/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-reservation/new> a ge:Route ;
+    rdfs:label "#/supply/stock-reservation/new" ;
+    ge:routePath "#/supply/stock-reservation/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/supply/stock-transfer/new> a ge:Route ;
+    rdfs:label "#/supply/stock-transfer/new" ;
+    ge:routePath "#/supply/stock-transfer/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/delivery-note/new> a ge:Route ;
+    rdfs:label "#/trade/delivery-note/new" ;
+    ge:routePath "#/trade/delivery-note/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/quotation/new> a ge:Route ;
+    rdfs:label "#/trade/quotation/new" ;
+    ge:routePath "#/trade/quotation/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/trade/sales-order/new> a ge:Route ;
+    rdfs:label "#/trade/sales-order/new" ;
+    ge:routePath "#/trade/sales-order/new" ;
+    ge:status "planned" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/dashboard> a ge:Screen ;
+    rdfs:label "Dashboard" ;
+    rdfs:comment "Home screen: KPIs, charts and audit trail." ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/public/api/dashboard.php> ;
+    ge:hasCard <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/audit-trail>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-creditors>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-debtors>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-pendingPurchase>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalItems>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalPurchase>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/kpi-totalSales>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/monthly-chart>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/profit-loss>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/quotations>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/card/returns> ;
+    ge:hasShortcut <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/arrows>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/ctrl-d>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-e>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-m>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-p>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-r>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-s>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/dashboard-t>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/tab> ;
+    ge:status "built" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/screen/item-creation> a ge:Screen ;
+    rdfs:label "Item Creation" ;
+    rdfs:comment "Form page: Masters › Create › Item." ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:dependsOn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/planned/backend/public/api/items.php> ;
+    ge:hasSection <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-1>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-2>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-3>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-4> ;
+    ge:hasShortcut <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-alt-a>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-ctrl-s>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-enter>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-esc>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-shift-x>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/item-table-arrows> ;
+    ge:status "built" .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/entry> a ge:Menu ;
+    rdfs:label "Transaction Entry" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/purchase-entry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/sales-entry>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/entry/tax-invoice> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters> a ge:Menu ;
+    rdfs:label "Masters" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/brand>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/category>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/customer>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/item>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/rack>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/stock-point>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/supplier>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/uom> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/purchase-book> a ge:Menu ;
+    rdfs:label "Purchase Book" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/grn>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/purchase-order>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/purchase-req>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/purchase-book/quotation-req> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/returns> a ge:Menu ;
+    rdfs:label "Return & Replacement" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/purchase-replacement>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/purchase-return>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/sales-replacement>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/returns/sales-return> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/supply> a ge:Menu ;
+    rdfs:label "Supply Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-adjustment>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-reservation>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/supply/stock-transfer> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/trade> a ge:Menu ;
+    rdfs:label "Trade Management" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/create>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/delivery-note>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/quotation>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/trade/sales-order> ;
+    ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> .
+
+ge:KpiTile a owl:Class ;
+    rdfs:label "KpiTile" ;
+    rdfs:comment "A headline figure tile on the dashboard." ;
+    rdfs:subClassOf ge:DashboardCard .
+
+ge:Screen a owl:Class ;
+    rdfs:label "Screen" ;
+    rdfs:comment "A full page the user sees (shown by the hash router)." .
+
+ge:DashboardCard a owl:Class ;
+    rdfs:label "DashboardCard" ;
+    rdfs:comment "A card on the dashboard." .
+
+ge:FormSection a owl:Class ;
+    rdfs:label "FormSection" ;
+    rdfs:comment "A numbered section of a form page." .
+
+ge:Project a owl:Class ;
+    rdfs:label "Project" ;
+    rdfs:comment "A software project." .
+
+ge:TableColumn a owl:Class ;
+    rdfs:label "TableColumn" ;
+    rdfs:comment "A column of an editable form table." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/main> a ge:Menu ;
+    rdfs:label "Quick Menu" ;
+    ge:definedIn <https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> ;
+    ge:hasEntry <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/masters>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/purchase-book>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/return-replacement>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/supply-management>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/trade-management>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/main/transaction-entry> ;
+    ge:hasShortcut <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/menu-esc>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/shortcut/menu-letter> .
+
+ge:Convention a owl:Class ;
+    rdfs:label "Convention" ;
+    rdfs:comment "A rule the codebase follows." .
+
+ge:SourceFile a owl:Class ;
+    rdfs:label "SourceFile" ;
+    rdfs:comment "A file in the repository." .
+
+ge:Technology a owl:Class ;
+    rdfs:label "Technology" ;
+    rdfs:comment "A language, runtime, server or library the project uses." .
+
+ge:PlannedComponent a owl:Class ;
+    rdfs:label "PlannedComponent" ;
+    rdfs:comment "A part of the system defined by the stack playbook but not built yet." ;
+    rdfs:subClassOf ge:SourceFile .
+
+ge:FormField a owl:Class ;
+    rdfs:label "FormField" ;
+    rdfs:comment "An input on a form page." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.html> a ge:SourceFile ;
+    rdfs:label "frontend/dashboard.html" ;
+    rdfs:comment "Every screen, the Quick Menu dialog, the item form and the toast." ;
+    ge:status "built" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/blob/main/frontend/dashboard.html> .
+
+ge:Menu a owl:Class ;
+    rdfs:label "Menu" ;
+    rdfs:comment "A view inside the Quick Menu dialog." .
+
+ge:Shortcut a owl:Class ;
+    rdfs:label "Shortcut" ;
+    rdfs:comment "A keyboard shortcut handled by the page." .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/file/frontend/dashboard.js> a ge:SourceFile ;
+    rdfs:label "frontend/dashboard.js" ;
+    rdfs:comment "Data rendering, keyboard navigation, quick menu, item form and hash router." ;
+    ge:status "built" ;
+    schema:url <https://github.com/AflaNazrinn/ERP-INITIAL/blob/main/frontend/dashboard.js> .
+
+ge:Route a owl:Class ;
+    rdfs:label "Route" ;
+    rdfs:comment "A hash route (#/...) the router understands or a menu entry points to." .
+
+ge:MenuEntry a owl:Class ;
+    rdfs:label "MenuEntry" ;
+    rdfs:comment "A selectable row or card inside a Quick Menu view." .
+
