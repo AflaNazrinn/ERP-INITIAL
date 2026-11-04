@@ -50,6 +50,7 @@ async function fetchDashboard({ chartYear, chartMonth }) {
       totalPurchase: '0.000',
       pendingPurchase: '0.000',
       totalItems: 0,
+      totalEmployees: 0,
       creditors: '0.000',
       debtors: '0.000',
     },
@@ -112,6 +113,7 @@ const KPI_TILES = [
   { key: 'totalPurchase', label: 'Total Purchase', money: true },
   { key: 'pendingPurchase', label: 'Pending Purchase', money: true },
   { key: 'totalItems', label: 'Total Items', money: false },
+  { key: 'totalEmployees', label: 'Total Employees', money: false },
   { key: 'creditors', label: 'Creditors', money: true },
   { key: 'debtors', label: 'Debtors', money: true },
 ];
