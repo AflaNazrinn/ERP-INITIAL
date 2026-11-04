@@ -180,7 +180,7 @@
       <span class="fp-key-sep" aria-hidden="true">·</span>
       <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
       <span class="fp-key-sep" aria-hidden="true">·</span>
-      <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      <span class="fp-key"><kbd>Esc</kbd> Back</span>
     </div>
   </header>
 
@@ -301,12 +301,6 @@
 
     <!-- Footer bar -->
     <div class="fp-footer">
-      <div class="fp-total">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="5" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"></path></svg>
-        <span class="fp-total-label">Total Opening Stock:</span>
-        <span id="item-stock-total" class="fp-total-value">0</span>
-        <span id="item-stock-unit" class="fp-total-unit"></span>
-      </div>
       <div class="fp-actions">
         <button type="button" id="item-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
         <button type="button" id="item-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span>Save Item Record</span></button>
@@ -316,7 +310,7 @@
 
   <!-- One sourcing row; cloned by "Add Sourcing Row". -->
   <template id="item-source-row-template">
-    <tr class="fp-source-row">
+    <tr class="fp-source-row fp-row">
       <td><input class="fp-cell" data-field="brand" type="text" autocomplete="off" placeholder="Brand Name" aria-label="Brand name"></td>
       <td><input class="fp-cell" data-field="supplier" type="text" autocomplete="off" placeholder="Supplier Entity Ltd" aria-label="Supplier entity"></td>
       <td><input class="fp-cell fp-cell-num" data-field="cost" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000" aria-label="Cost (OMR)"></td>
@@ -326,6 +320,661 @@
       <td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
     </tr>
   </template>
+</section>
+
+<!-- UOM CREATION  (#/masters/uom/new · Masters › Create › UOM) -->
+<section id="uom-page" class="form-page form-page-auto" aria-labelledby="uom-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path></svg></div>
+      <h1 id="uom-title" class="fp-title">UOM Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="uom-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
+        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      </button>
+    </div>
+  </header>
+
+  <form id="uom-form" class="fp-form" novalidate>
+
+    <!-- 1. Basic specification -->
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Basic UOM Specification</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="uom-code">UOM Code</label>
+          <input id="uom-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the UOM is saved">
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="uom-name">Unit of Measure <span class="fp-req">*</span></label>
+          <input id="uom-name" name="unitName" class="fp-input" type="text" maxlength="100" required autocomplete="off"
+                 placeholder="Enter unit of measure (e.g. Kilograms, Box, Metric Tonne, Pieces)...">
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Conversion and precision -->
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Conversion &amp; Precision Parameters</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="uom-decimals">Decimal Allowed <span class="fp-req">*</span></label>
+          <input id="uom-decimals" name="decimalAllowed" class="fp-input fp-input-num" type="text" inputmode="numeric" required autocomplete="off" value="3">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="uom-status">Record Status <span class="fp-req">*</span></label>
+          <select id="uom-status" name="status" class="fp-input fp-select" required>
+            <option value="active" selected>Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="uom-base">Conversion Base Unit <span class="fp-req">*</span></label>
+          <!-- Fixed list until the UOM API can supply saved units. -->
+          <select id="uom-base" name="baseUnit" class="fp-input fp-select" required>
+            <option selected>KG</option>
+            <option>G</option>
+            <option>MT</option>
+            <option>L</option>
+            <option>M</option>
+            <option>PCS</option>
+            <option>BOX</option>
+            <option>SET</option>
+          </select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="uom-factor">Conversion Factor <span class="fp-req">*</span></label>
+          <div class="fp-input-wrap">
+            <input id="uom-factor" name="conversionFactor" class="fp-input fp-input-num fp-mono fp-has-suffix" type="text" inputmode="decimal" required autocomplete="off" value="1.0000">
+            <span class="fp-input-suffix" aria-hidden="true">x BASE</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Remarks -->
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Operational Remarks &amp; Description</h2>
+      <div class="fp-field">
+        <label class="fp-label" for="uom-description">Detailed Description / Specifications</label>
+        <textarea id="uom-description" name="description" class="fp-input fp-textarea" rows="4" autocomplete="off"
+                  placeholder="Enter operational comments, technical remarks, ISO standard UOM compliance notes, or packaging guidelines..."></textarea>
+      </div>
+    </section>
+
+    <!-- Footer bar -->
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="uom-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="uom-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span>Save UOM Record</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- PARTY CREATION  (#/masters/party/new · Masters › Create › Parties) -->
+<section id="party-page" class="form-page form-page-auto" aria-labelledby="party-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><span class="fp-brand-letter">P</span></div>
+      <h1 id="party-title" class="fp-title">Party Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Shift+X</kbd> Add Row</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="party-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+    </div>
+  </header>
+
+  <form id="party-form" class="fp-form" novalidate>
+    <section class="fp-card fp-party-bar">
+      <div class="fp-under"><label class="fp-under-label" for="party-under">Under</label><select id="party-under" class="fp-input fp-select fp-under-select" data-enter-opens="true"><option value="creditors">Creditors</option><option value="debtors">Debtors</option></select></div>
+      <div class="fp-tabs" role="tablist" aria-label="Party sections"><button type="button" class="fp-tab" role="tab" data-tab="general" aria-selected="false">General Information</button><button type="button" class="fp-tab" role="tab" data-tab="documents" aria-selected="false">Document Upload</button><button type="button" class="fp-tab" role="tab" data-tab="quotations" aria-selected="false">Quotations</button><button type="button" class="fp-tab" role="tab" data-tab="purchases" aria-selected="false">Previous Purchases</button></div>
+    </section>
+<div data-tab-panel="general">
+<div data-under="creditors">
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Supplier Details</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-code">ID</label>
+          <input id="party-sup-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the record is saved">
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="party-sup-name">Name <span class="fp-req">*</span></label>
+          <input id="party-sup-name" class="fp-input" type="text" autocomplete="off" maxlength="200" required placeholder="Enter registered company name...">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="party-sup-address">Address</label>
+          <input id="party-sup-address" class="fp-input" type="text" autocomplete="off" placeholder="Building, street, area, city...">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-country">Country</label>
+          <select id="party-sup-country" class="fp-input fp-select"><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-currency">Currency</label>
+          <select id="party-sup-currency" class="fp-input fp-select"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-tax">Tax Reg Number</label>
+          <input id="party-sup-tax" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. OM1100XXXXXX">
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="party-sup-comments">Comments</label>
+          <input id="party-sup-comments" class="fp-input" type="text" autocomplete="off" placeholder="Enter remarks, delivery notes or other comments...">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Contact Details</h2><button type="button" class="fp-add-row" data-add-row="supplierContacts" title="Add Contact (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Contact</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-grid-12 fp-grid-gap-bottom">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-owner">Owner Name</label>
+          <input id="party-sup-owner" class="fp-input" type="text" autocomplete="off" placeholder="Owner full name">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-mobile">Mobile Number</label>
+          <input id="party-sup-mobile" class="fp-input" type="text" autocomplete="off" placeholder="+968 9XXX XXXX">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-phone">Telephone Number</label>
+          <input id="party-sup-phone" class="fp-input" type="text" autocomplete="off" placeholder="+968 2XXX XXXX">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-email">Email ID</label>
+          <input id="party-sup-email" class="fp-input" type="text" autocomplete="off" placeholder="name@company.com">
+        </div>
+      </div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:170px">Contact</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-sup-contacts"></tbody></table></div>
+    </section>
+    <div class="fp-pair">
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Financial Terms</h2>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-credit-limit">Credit Limit (OMR)</label>
+          <input id="party-sup-credit-limit" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-credit-days">Credit Period (Days)</label>
+          <input id="party-sup-credit-days" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="numeric" placeholder="30">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-terms">Payment Terms</label>
+          <select id="party-sup-terms" class="fp-input fp-select"><option value="">Select terms</option><option value="Cash">Cash</option><option value="Advance">Advance</option><option value="Net 15">Net 15</option><option value="Net 30">Net 30</option><option value="Net 45">Net 45</option><option value="Net 60">Net 60</option><option value="Net 90">Net 90</option></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-opening">Opening Balance (OMR)</label>
+          <input id="party-sup-opening" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">4. Other Details</h2>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-bank">Bank Name</label>
+          <input id="party-sup-bank" class="fp-input" type="text" autocomplete="off" placeholder="e.g. Bank Muscat">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-branch">Bank Branch</label>
+          <input id="party-sup-branch" class="fp-input" type="text" autocomplete="off" placeholder="e.g. Ruwi Branch">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-iban">Bank Account / IBAN</label>
+          <input id="party-sup-iban" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="Account number or IBAN">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-sup-website">Website</label>
+          <input id="party-sup-website" class="fp-input" type="text" autocomplete="off" placeholder="www.company.com">
+        </div>
+      </div>
+    </section>
+    </div>
+</div>
+<div data-under="debtors" hidden>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. General Details</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-code">ID</label>
+          <input id="party-cus-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the record is saved">
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="party-cus-name">Name <span class="fp-req">*</span></label>
+          <input id="party-cus-name" class="fp-input" type="text" autocomplete="off" maxlength="200" required placeholder="Enter registered company name as per trade licence / CR...">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-head">Account Head</label>
+          <select id="party-cus-head" class="fp-input fp-select"><option value="Sundry Debtors">Sundry Debtors</option></select>
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="party-cus-organization">Organization Name</label>
+          <input id="party-cus-organization" class="fp-input" type="text" autocomplete="off" placeholder="Enter parent company or group organization name...">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Contact &amp; Location</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="party-cus-address">Address</label>
+          <input id="party-cus-address" class="fp-input" type="text" autocomplete="off" placeholder="Building, street, area...">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-country">Country</label>
+          <select id="party-cus-country" class="fp-input fp-select"><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-city">City</label>
+          <input id="party-cus-city" class="fp-input" type="text" autocomplete="off" placeholder="e.g. Muscat">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-zip">Zip Code</label>
+          <input id="party-cus-zip" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. 112">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-mobile">Mobile Number</label>
+          <input id="party-cus-mobile" class="fp-input" type="text" autocomplete="off" placeholder="+968 9XXX XXXX">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-phone">Telephone Number</label>
+          <input id="party-cus-phone" class="fp-input" type="text" autocomplete="off" placeholder="+968 2XXX XXXX">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-email">Email ID</label>
+          <input id="party-cus-email" class="fp-input" type="text" autocomplete="off" placeholder="name@company.com">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">3. Key Contacts &amp; Ownership</h2><button type="button" class="fp-add-row" data-add-row="customerContacts" title="Add Contact (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Contact</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-grid-12 fp-grid-gap-bottom">
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-cus-owner">Owner Details</label>
+          <input id="party-cus-owner" class="fp-input" type="text" autocomplete="off" placeholder="Owner name, mobile number and email...">
+        </div>
+      </div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:170px">Contact</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-cus-contacts"></tbody></table></div>
+    </section>
+    <div class="fp-pair">
+    <section class="fp-card">
+      <h2 class="fp-section-title">4. Credit &amp; Sales Settings</h2>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-credit-limit">Credit Limit (OMR)</label>
+          <input id="party-cus-credit-limit" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-credit-days">Credit Days</label>
+          <input id="party-cus-credit-days" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="numeric" placeholder="30">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-discount">Discount %</label>
+          <input id="party-cus-discount" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-salesman">Salesman</label>
+          <select id="party-cus-salesman" class="fp-input fp-select"><option value="">Select salesman</option></select>
+        </div>
+        <div class="fp-field fp-span-full">
+          <label class="fp-label" for="party-cus-tax">Tax Registration Number</label>
+          <input id="party-cus-tax" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. OM1100XXXXXX">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Additional Info</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-cus-other1">Other Details 1</label>
+          <input id="party-cus-other1" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-cus-other2">Other Details 2</label>
+          <input id="party-cus-other2" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-cus-other3">Other Details 3</label>
+          <input id="party-cus-other3" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+        </div>
+      </div>
+    </section>
+    </div>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">6. Agreements &amp; Documents</h2><button type="button" id="party-agreement-btn" class="fp-add-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg><span>Upload Agreements</span></button></div>
+              <div class="fp-field">
+          <label class="fp-label" for="party-cus-comments">Comments</label>
+          <textarea id="party-cus-comments" class="fp-input fp-textarea" rows="4" autocomplete="off" placeholder="Enter agreement terms, special pricing notes, delivery instructions or other comments about this customer..."></textarea>
+        </div>
+<ul id="party-agreement-files" class="fp-file-list"></ul><input id="party-agreement-input" type="file" multiple hidden>
+    </section>
+</div>
+</div>
+<div data-tab-panel="documents" hidden>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Upload Documents</h2>
+      <div id="party-doc-drop" class="fp-drop">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"></path><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"></path><path d="m8 17 4-4 4 4"></path></svg>
+        <strong class="fp-drop-title" data-creditors="Drag and drop supplier documents here" data-debtors="Drag and drop customer documents here"></strong>
+        <span class="fp-drop-note">PDF, JPG, PNG, Word or Excel · up to 10 MB each</span>
+        <button type="button" id="party-doc-btn" class="fp-drop-btn">Choose Files</button>
+        <input id="party-doc-input" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" hidden>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Uploaded Documents</h2><span id="party-doc-count" class="fp-file-count"></span></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th>File</th><th style="width:21%">Document Type</th><th style="width:16%">Expiry Date</th><th style="width:13%">Uploaded On</th><th class="fp-col-del" style="width:90px">Action</th></tr></thead><tbody id="party-doc-rows"></tbody></table></div>
+    </section>
+</div>
+<div data-tab-panel="quotations" hidden>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">1. Quotation Document Input</h2><button type="button" id="party-samples-btn" class="fp-link-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg><span>View Sample Formats</span></button></div>
+      <div class="fp-quote-input">
+        <div id="party-quote-drop" class="fp-drop">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"></path><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"></path><path d="m8 17 4-4 4 4"></path></svg>
+          <strong class="fp-drop-title">Drag and drop your Quotation file here</strong>
+          <span class="fp-drop-note">Supports JSON, CSV, Plain TXT and PDF quotation documents</span>
+          <button type="button" id="party-quote-btn" class="fp-drop-btn">Choose File</button>
+          <input id="party-quote-input" type="file" accept=".json,.csv,.txt,.pdf" hidden>
+        </div>
+        <button type="button" id="party-email-open" class="fp-email-card">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
+          <strong class="fp-drop-title">Attach &amp; Parse Email</strong>
+          <span class="fp-drop-note">Copy &amp; paste quotation text from email directly</span>
+        </button>
+      </div>
+      <div id="party-email-panel" class="fp-inline-panel" hidden>
+        <label class="fp-label" for="party-email-text">Quotation text</label>
+        <textarea id="party-email-text" class="fp-input fp-textarea" rows="4" data-transient="true" data-enter-newline="true" placeholder="Paste one item per line: item name, description, unit, rate, delivery time, warranty"></textarea>
+        <div class="fp-inline-actions"><button type="button" id="party-email-cancel" class="fp-btn fp-btn-secondary">Cancel</button><button type="button" id="party-email-parse" class="fp-btn fp-btn-primary">Parse Text</button></div>
+      </div>
+      <div id="party-samples" class="fp-inline-panel" hidden>
+        <p class="fp-sample-title">CSV, TXT or email text (the header line is optional)</p>
+        <pre class="fp-sample">Item Name, Description, Unit, Rate, Delivery Time, Warranty
+Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
+        <p class="fp-sample-title">JSON</p>
+        <pre class="fp-sample">[{ "itemName": "Ball Valve 1/2\"", "description": "Stainless steel 316", "unit": "PCS", "rate": 12.5, "deliveryTime": "7 days", "warranty": "12 months" }]</pre>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Parsed Item Details</h2><button type="button" class="fp-add-row" data-add-row="quotations" title="Add Row (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Row</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:22%">Item Name</th><th class="" style="width:auto">Description</th><th class="" style="width:8%">Unit</th><th class="fp-col-num" style="width:11%">Rate (OMR)</th><th class="" style="width:11%">Delivery Time</th><th class="" style="width:11%">Warranty</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-quote-rows"></tbody></table></div>
+      <p id="party-quote-summary" class="fp-table-note"></p>
+    </section>
+</div>
+<div data-tab-panel="purchases" hidden>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title"><span data-creditors="1. Previous Purchase Orders" data-debtors="1. Previous Sales Orders"></span></h2><button type="button" class="fp-add-row" data-add-row="orders" title="Add Order (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Order</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:20%"><span data-creditors="PO Number" data-debtors="SO Number"></span></th><th class="" style="width:17%">Order Date</th><th class="fp-col-num" style="width:18%">Total Value (OMR)</th><th class="fp-col-num" style="width:11%">Total Items</th><th class="" style="width:20%">Status</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-order-rows"></tbody><tfoot class="fp-table-foot"><tr><td>Total</td><td id="party-order-count"></td><td id="party-order-value" class="fp-foot-num"></td><td id="party-order-items" class="fp-foot-num"></td><td></td><td></td></tr></tfoot></table></div>
+    </section>
+</div>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="party-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="party-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="party-save-label">Save Supplier Record</span></button>
+      </div>
+    </div>
+  </form>
+  <template id="party-doc-row"><tr class="fp-row"><td><div class="fp-doc"><span class="fp-doc-badge" data-doc-badge></span><div class="fp-doc-text"><strong class="fp-doc-name" data-doc-name></strong><span class="fp-doc-size" data-doc-size></span></div></div></td><td><select class="fp-cell fp-select fp-cell-select" data-field="type" aria-label="Document type"><option value="">Select type</option><option>Commercial Registration</option><option>VAT Certificate</option><option>Trade Licence</option><option>Bank Letter</option><option>Agreement</option><option>Other</option></select></td><td><input class="fp-cell fp-cell-date" data-field="expiry" type="date" aria-label="Expiry date"></td><td><input class="fp-cell" data-field="uploadedOn" type="text" readonly tabindex="-1" aria-label="Uploaded on"></td><td class="fp-col-del"><button type="button" class="fp-del" data-doc-preview title="View file" aria-label="View file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="fp-del" data-doc-remove title="Remove file" aria-label="Remove file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" placeholder="+968 9XXX XXXX" aria-label="Mobile number"></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><input class="fp-cell" data-field="unit" type="text" autocomplete="off" placeholder="PCS" aria-label="Unit"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-order-row"><tr class="fp-row"><td><input class="fp-cell fp-mono" data-field="number" type="text" autocomplete="off" placeholder="Order number" aria-label="Order number"></td><td><input class="fp-cell fp-cell-date" data-field="date" type="date" aria-label="Order date"></td><td><input class="fp-cell fp-cell-num" data-field="value" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Total value (OMR)"></td><td><input class="fp-cell fp-cell-num" data-field="items" type="text" autocomplete="off" inputmode="numeric" placeholder="0" aria-label="Total items"></td><td><select class="fp-cell fp-select fp-cell-select" data-field="status" aria-label="Status"><option>Pending</option><option>Fulfilled</option><option>Cancelled</option></select></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+</section>
+
+<!-- BRAND CREATION  (#/masters/brand/new · Masters › Create › Brand) -->
+<section id="brand-page" class="form-page form-page-auto" aria-labelledby="brand-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg></div>
+      <h1 id="brand-title" class="fp-title">Brand Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="brand-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+    </div>
+  </header>
+
+  <form id="brand-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Basic Brand Identification</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="brand-code">Brand Code</label>
+          <input id="brand-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the record is saved">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="brand-name">Brand Name <span class="fp-req">*</span></label>
+          <input id="brand-name" class="fp-input" type="text" autocomplete="off" maxlength="150" required placeholder="Enter complete brand or manufacturer name (e.g. Swagelok, Parker, Festo)...">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="brand-status">Record Status <span class="fp-req">*</span></label>
+          <select id="brand-status" class="fp-input fp-select" required><option value="active">Active</option><option value="inactive">Inactive</option></select>
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Item Association</h2>
+              <div class="fp-field">
+          <label class="fp-label" for="brand-items">Item Name <span class="fp-req">*</span></label>
+          <textarea id="brand-items" class="fp-input fp-textarea" rows="3" autocomplete="off" data-enter-newline="true" required placeholder="Enter the items sold under this brand, one per line (e.g. Ball Valve 1/2&quot;, Pressure Regulator)..."></textarea>
+        </div>
+
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Operational Remarks &amp; Description</h2>
+              <div class="fp-field">
+          <label class="fp-label" for="brand-description">Detailed Description / Specifications</label>
+          <textarea id="brand-description" class="fp-input fp-textarea" rows="4" autocomplete="off" placeholder="Enter operational brand profile, manufacturer compliance notes, authorization certifications, warranty guidelines, or vendor authorization remarks..."></textarea>
+        </div>
+
+    </section>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="brand-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="brand-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="brand-save-label">Save Brand Record</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- CATEGORY CREATION  (#/masters/category/new · Masters › Create › Category) -->
+<section id="category-page" class="form-page form-page-auto" aria-labelledby="category-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg></div>
+      <h1 id="category-title" class="fp-title">Category Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Shift+X</kbd> Add Row</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="category-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+    </div>
+  </header>
+
+  <form id="category-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Basic Category Specification</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <div class="fp-label-row"><label class="fp-label" for="category-code">Category Code <span class="fp-req">*</span></label><span class="fp-auto-badge">Auto</span></div>
+          <div class="fp-input-wrap"><input id="category-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the record is saved"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="category-name">Category Name <span class="fp-req">*</span></label>
+          <input id="category-name" class="fp-input" type="text" autocomplete="off" maxlength="150" required placeholder="Enter primary category name (e.g. Pneumatics, Electrical, Hardware)...">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="category-status">Record Status <span class="fp-req">*</span></label>
+          <select id="category-status" class="fp-input fp-select" required><option value="active">Active</option><option value="inactive">Inactive</option></select>
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Subcategory Specification</h2><button type="button" class="fp-add-row" data-add-row="subcategories" title="Add Subcategory (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Subcategory</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:90px">S.No</th><th class="" style="width:auto">Subcategory Name <span class="fp-req">*</span></th><th class="fp-col-del" style="width:80px">Action</th></tr></thead><tbody id="category-subcategories"></tbody></table></div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Operational Remarks &amp; Description</h2>
+              <div class="fp-field">
+          <label class="fp-label" for="category-description">Detailed Description / Specifications</label>
+          <textarea id="category-description" class="fp-input fp-textarea" rows="4" autocomplete="off" placeholder="Enter operational comments, classification guidelines, reporting grouping, or accounting tax codes..."></textarea>
+        </div>
+
+    </section>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="category-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="category-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="category-save-label">Save Category Record</span></button>
+      </div>
+    </div>
+  </form>
+  <template id="category-subcategory-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" placeholder="e.g. Solenoid Valves" aria-label="Subcategory name"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+</section>
+
+<!-- WAREHOUSE CREATION  (#/masters/stock-point/new · Masters › Create › Stock Point) -->
+<section id="warehouse-page" class="form-page form-page-auto" aria-labelledby="warehouse-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"></path><path d="M7 21v-9h10v9M7 15h10M7 18h10"></path></svg></div>
+      <h1 id="warehouse-title" class="fp-title">Warehouse Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="warehouse-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+    </div>
+  </header>
+
+  <form id="warehouse-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Basic Warehouse Identification</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <div class="fp-label-row"><label class="fp-label" for="warehouse-code">Warehouse Code <span class="fp-req">*</span></label><span class="fp-auto-badge">Auto</span></div>
+          <div class="fp-input-wrap"><input id="warehouse-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the record is saved"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-name">Warehouse Name <span class="fp-req">*</span></label>
+          <input id="warehouse-name" class="fp-input" type="text" autocomplete="off" maxlength="150" required placeholder="e.g. Central Distribution Hub - Zone A">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="warehouse-type">Warehouse Type <span class="fp-req">*</span></label>
+          <select id="warehouse-type" class="fp-input fp-select" required><option value="Finished Goods">Finished Goods</option><option value="Raw Materials">Raw Materials</option><option value="Work in Progress">Work in Progress</option><option value="Spare Parts">Spare Parts</option><option value="Returns">Returns</option></select>
+        </div>
+      </div>
+    </section>
+    <div class="fp-pair">
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Location Details</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="warehouse-address">Address <span class="fp-req">*</span></label>
+          <input id="warehouse-address" class="fp-input" type="text" autocomplete="off" required placeholder="e.g. Industrial Area Phase II, Plot No. 44/B">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-country">Country <span class="fp-req">*</span></label>
+          <select id="warehouse-country" class="fp-input fp-select" required><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-city">City / Municipality <span class="fp-req">*</span></label>
+          <input id="warehouse-city" class="fp-input" type="text" autocomplete="off" required placeholder="e.g. Muscat">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Contact Person &amp; Management</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-contact">Contact Person <span class="fp-req">*</span></label>
+          <input id="warehouse-contact" class="fp-input" type="text" autocomplete="off" required placeholder="Full name">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-phone">Phone / Extension <span class="fp-req">*</span></label>
+          <input id="warehouse-phone" class="fp-input" type="text" autocomplete="off" required placeholder="+968 2XXX XXXX">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-email">Email Address <span class="fp-req">*</span></label>
+          <input id="warehouse-email" class="fp-input" type="text" autocomplete="off" required placeholder="name@company.com">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-manager">Assigned Manager <span class="fp-req">*</span></label>
+          <input id="warehouse-manager" class="fp-input" type="text" autocomplete="off" required placeholder="Full name">
+        </div>
+      </div>
+    </section>
+    </div>
+    <section class="fp-card">
+      <h2 class="fp-section-title">4. Items Included</h2>
+      <div class="fp-field">
+        <label class="fp-label" for="warehouse-item-entry">Select Items <span class="fp-req">*</span></label>
+        <div id="warehouse-chips" class="fp-chips"><input id="warehouse-item-entry" class="fp-chip-entry" type="text" autocomplete="off" data-transient="true" placeholder="Add more items..."></div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Capacity &amp; Operational Remarks</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="warehouse-capacity">Total Storage Capacity <span class="fp-req">*</span></label>
+          <input id="warehouse-capacity" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="numeric" required placeholder="e.g. 50000">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="warehouse-status">Operational Status <span class="fp-req">*</span></label>
+          <select id="warehouse-status" class="fp-input fp-select" required><option value="active">Active</option><option value="inactive">Inactive</option></select>
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="warehouse-remarks">Operational Remarks &amp; Handling Guidelines</label>
+          <textarea id="warehouse-remarks" class="fp-input fp-textarea" rows="3" autocomplete="off" placeholder="Enter operational comments, loading dock clearance, or safety guidelines..."></textarea>
+        </div>
+      </div>
+    </section>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="warehouse-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="warehouse-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="warehouse-save-label">Save Warehouse Record</span></button>
+      </div>
+    </div>
+  </form>
 </section>
 </div>
 
@@ -381,6 +1030,11 @@
       <button type="button" class="qm-item" data-qm-open="supply" data-key="s" aria-keyshortcuts="S">
         <span class="qm-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>upply Management</span></span>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </button>
+      <button type="button" class="qm-item" data-qm-open="employee" data-key="l" aria-keyshortcuts="L">
+        <span class="qm-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
+        <span class="qm-text"><span class="qm-name">Emp<span class="qm-key">L</span>oyee Management</span></span>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
     </nav>
@@ -926,6 +1580,66 @@
       <a class="qm-item qm-item-sm" href="#/supply/stock-reservation/new" data-key="r" aria-keyshortcuts="Alt+R R">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
         <span class="qm-text"><span class="qm-name">Stock <span class="qm-key">R</span>eservation</span></span>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
+    </nav>
+    <div class="qm-foot">
+      <button type="button" class="qm-quit" data-qm="close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
+        <span>Quit</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Employee Management view (L on the dashboard) -->
+  <section class="qm-view" data-view="employee" aria-labelledby="quick-menu-employee-title" hidden>
+    <div class="qm-head">
+      <button type="button" class="qm-back" data-qm="back" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 id="quick-menu-employee-title" class="qm-title">Employee Management</h2>
+      <button type="button" class="qm-close" data-qm="close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <nav class="qm-list qm-list-sm qm-list-fixed" aria-label="Employee Management">
+      <h3 class="qm-section">Create Employee Management</h3>
+      <button type="button" class="qm-item qm-item-sm" data-qm-open="employee-create" aria-keyshortcuts="Alt">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg></span>
+        <span class="qm-text"><span class="qm-name qm-name-strong">Create</span></span>
+        <kbd class="qm-kbd">Alt</kbd>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </button>
+      <h3 class="qm-section">Create (Alt)</h3>
+      <a class="qm-item qm-item-sm" href="#/employee/employee/new" data-key="e" aria-keyshortcuts="Alt+E E">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">E</span>mployee</span></span>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
+    </nav>
+    <div class="qm-foot">
+      <button type="button" class="qm-quit" data-qm="close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
+        <span>Quit</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Create Employee Management view (Employee Management › Create). ← / Esc return to Employee Management. -->
+  <section class="qm-view" data-view="employee-create" data-parent="employee" aria-labelledby="quick-menu-employee-create-title" hidden>
+    <div class="qm-head">
+      <button type="button" class="qm-back" data-qm="back" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 id="quick-menu-employee-create-title" class="qm-title">Create Employee Management</h2>
+      <button type="button" class="qm-close" data-qm="close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <nav class="qm-list qm-list-sm qm-list-fixed" aria-label="Create Employee Management">
+      <a class="qm-item qm-item-sm" href="#/employee/employee/new" data-key="e" aria-keyshortcuts="Alt+E E">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">E</span>mployee</span></span>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
     </nav>
