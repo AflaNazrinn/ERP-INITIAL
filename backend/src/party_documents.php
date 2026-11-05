@@ -1,0 +1,66 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/document_storage.php';
+
+/*
+ * Supplier and customer documents (supplier_documents, customer_documents). Both tables have
+ * the same shape, so one module serves both; $kind picks the table and storage folder.
+ */
+
+const PARTY_DOCUMENTS = [
+    'supplier' => ['table' => 'supplier_documents', 'owner' => 'supplier_id', 'parent' => 'suppliers', 'folder' => 'supplier-documents'],
+    'customer' => ['table' => 'customer_documents', 'owner' => 'customer_id', 'parent' => 'customers', 'folder' => 'customer-documents'],
+];
+
+function party_document_format(array $row): array
+{
+    return [
+        'id'           => (int) $row['id'],
+        'originalName' => $row['original_name'],
+        'uploadedAt'   => $row['uploaded_at'],
+    ];
+}
+
+function party_documents_list(string $kind, int $ownerId): array
+{
+    $t = PARTY_DOCUMENTS[$kind];
+    return array_map('party_document_format',
+        query("SELECT * FROM `{$t['table']}` WHERE `{$t['owner']}` = ? ORDER BY uploaded_at, id", [$ownerId])->fetchAll());
+}
+
+/* Stores every file in $files for one supplier or customer; all or nothing. */
+function party_documents_upload(string $kind, int $ownerId, array $files): array
+{
+    $t = PARTY_DOCUMENTS[$kind];
+    if (!row_exists($t['parent'], $ownerId)) {
+        throw new NotFound(ucfirst($kind) . ' not found.');
+    }
+    validate_uploads($files);
+    $stored = [];
+    try {
+        transaction(static function () use ($t, $ownerId, $files, &$stored): void {
+            foreach ($files as $file) {
+                [$path, $original] = store_upload($file, $t['folder']);
+                $stored[] = $path;
+                query("INSERT INTO `{$t['table']}` (`{$t['owner']}`, file_path, original_name) VALUES (?, ?, ?)", [$ownerId, $path, $original]);
+            }
+        });
+    } catch (Throwable $e) {
+        foreach ($stored as $path) {
+            delete_stored($path);   // no orphan files when the insert fails
+        }
+        throw $e;
+    }
+    return party_documents_list($kind, $ownerId);
+}
+
+function party_document_download(string $kind, int $id): never
+{
+    $t = PARTY_DOCUMENTS[$kind];
+    $row = query("SELECT * FROM `{$t['table']}` WHERE id = ?", [$id])->fetch();
+    if (!$row) {
+        throw new NotFound('Document not found.');
+    }
+    send_stored_file($row['file_path'], $row['original_name']);
+}

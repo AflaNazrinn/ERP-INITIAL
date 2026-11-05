@@ -506,6 +506,17 @@ function initKeyboardNavigation() {
   window.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing) return;   // IME composition: not a shortcut
 
+    // An open "Select …" popup takes every key; a lookup field's own keys come before the page's.
+    if (byId('lookup').open) {
+      handleLookupDialogKeys(event);
+      event.stopPropagation();
+      return;
+    }
+    if (handleLookupFieldKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
+
     // The open form's own keys (Esc, Ctrl+S, Enter …) come first, unless the menu is over it.
     const pageKeys = FORM_KEY_HANDLERS[currentPage];
     if (pageKeys && !byId('quick-menu').open && pageKeys(event)) {
@@ -772,6 +783,393 @@ function focusField(node) {
 }
 
 /* =====================================================================
+   API client  (backend/public/api/*.php, behind Caddy on the same origin)
+   Success: { data }. Errors: { error, fields? } with 4xx/5xx. Writes send
+   the session's CSRF token (from api/session.php) in X-CSRF-Token.
+   ===================================================================== */
+
+class ApiError extends Error {
+  constructor(message, status = 0, fields = {}) {
+    super(message);
+    this.status = status;
+    this.fields = fields;
+  }
+}
+
+let csrfToken = null;
+async function loadCsrfToken() {
+  csrfToken = (await apiRequest('api/session.php')).csrfToken;
+  return csrfToken;
+}
+
+// options: { method, json (body to send as JSON), body (e.g. FormData) }. Resolves to the response's data.
+async function apiRequest(url, { method = 'GET', json, body } = {}, retried = false) {
+  const headers = { Accept: 'application/json' };
+  if (json !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(json);
+  }
+  if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken ?? await loadCsrfToken();
+  let response;
+  try {
+    response = await fetch(url, { method, headers, body, credentials: 'same-origin' });
+  } catch {
+    throw new ApiError('The server could not be reached. Check that the backend is running.');
+  }
+  let result = null;
+  try { result = await response.json(); } catch { /* not JSON: handled below */ }
+  // An expired session has a new token: fetch it and try once more.
+  if (response.status === 403 && method !== 'GET' && !retried) {
+    await loadCsrfToken();
+    return apiRequest(url, { method, json, body: json === undefined ? body : undefined }, true);
+  }
+  if (!response.ok || !result || !('data' in result)) {
+    throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
+  }
+  return result.data;
+}
+
+/* =====================================================================
+   Lookup popups ("Select UOM", "Select Warehouse" …), one per foreign key
+   in the data model (database model/Growth-Engine-Masters-HD.png):
+     items.uom_id → uoms, items.category_id → categories,
+     items.sub_category_id → sub_categories, items.brand_id → brands,
+     items.warehouse_id → warehouses, items.rack_id → rack_bins,
+     item_brands / item_brand_suppliers → brands, suppliers,
+     uoms.conversion_base_id → uoms, supplier_brands → brands,
+     and the country pickers on the supplier, customer and warehouse forms.
+
+   A lookup field is <input data-lookup="KIND"> inside .fp-lookup-wrap; the
+   chosen record's id goes into the hidden input beside it. The field
+   cannot be typed into: a letter, Space, F4, Alt+↓, a click, or Enter while
+   it is empty opens the popup (the letter starts the search). Backspace or
+   Delete clears it. In the popup, type to search, ↑/↓ move, Enter picks,
+   Esc closes. A field with data-lookup-parent (sub-category, rack) lists
+   only the rows under the parent's choice.
+   ===================================================================== */
+
+// Countries are a fixed list, not a table; the record keeps the name (customers.country).
+const COUNTRIES = [
+  ['OM', 'Oman'], ['AE', 'United Arab Emirates'], ['SA', 'Saudi Arabia'], ['QA', 'Qatar'], ['KW', 'Kuwait'], ['BH', 'Bahrain'],
+  ['IN', 'India'], ['PK', 'Pakistan'], ['EG', 'Egypt'], ['JO', 'Jordan'], ['TR', 'Türkiye'], ['CN', 'China'], ['JP', 'Japan'],
+  ['KR', 'South Korea'], ['DE', 'Germany'], ['IT', 'Italy'], ['GB', 'United Kingdom'], ['US', 'United States'],
+].map(([code, name]) => ({ id: name, code, name }));
+
+// title and list name the popup; plural counts its rows; columns are [rowKey, heading], the first shown as the code.
+const codeAndName = row => `${row.code} · ${row.name}`;
+const LOOKUPS = {
+  uom: { title: 'Select UOM', letter: 'U', list: 'UOM List', plural: 'units', api: 'api/uoms.php',
+    columns: [['code', 'Code'], ['name', 'UOM Name']], display: row => row.name },
+  category: { title: 'Select Category', letter: 'C', list: 'Category List', plural: 'categories', api: 'api/categories.php',
+    columns: [['code', 'Code'], ['name', 'Category Name']], display: row => row.name },
+  subcategory: { title: 'Select Sub-category', letter: 'S', list: 'Sub-category List', plural: 'sub-categories', api: 'api/sub-categories.php',
+    columns: [['name', 'Sub-category Name'], ['categoryName', 'Category']], plainFirst: true, display: row => row.name, parentKey: 'categoryId' },
+  brand: { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands', api: 'api/brands.php',
+    columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
+  supplier: { title: 'Select Supplier', letter: 'S', list: 'Supplier List', plural: 'suppliers', api: 'api/suppliers.php',
+    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name },
+  warehouse: { title: 'Select Warehouse', letter: 'W', list: 'Warehouse List', plural: 'warehouses', api: 'api/warehouses.php',
+    columns: [['code', 'Code'], ['name', 'Warehouse Name'], ['type', 'Type']], display: codeAndName },
+  rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
+    columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
+  item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
+    columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
+  country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries',
+    columns: [['code', 'Code'], ['name', 'Country Name']], display: row => row.name },
+};
+
+// Each list is fetched once per page load; forgetLookups() drops lists after a save changes them.
+const lookupCache = {};
+async function loadLookup(kind) {
+  if (kind === 'country') return COUNTRIES;
+  if (!lookupCache[kind]) {
+    try {
+      lookupCache[kind] = await apiRequest(LOOKUPS[kind].api);
+    } catch (error) {
+      showToast(`Could not load ${LOOKUPS[kind].plural}`, error.message, true);
+      return [];
+    }
+  }
+  return lookupCache[kind];
+}
+
+function forgetLookups(...kinds) {
+  for (const kind of kinds) delete lookupCache[kind];
+}
+
+// Shows the code the next save will get. Only a preview: the server assigns the code on save.
+async function showNextCode(input, api) {
+  try {
+    input.value = (await apiRequest(`${api}?nextCode=1`)).code;
+  } catch {
+    input.value = '';                          // no backend: leave it blank rather than guess
+  }
+}
+
+// Marks the fields a 422 response named; fieldNode(key) maps a payload key to its input.
+function showServerErrors(error, fieldNode, reveal) {
+  const errors = Object.entries(error.fields || {})
+    .map(([key, message]) => ({ node: fieldNode?.(key), message }))
+    .filter(entry => entry.node);
+  if (errors.length) showFormErrors(errors, reveal);
+  showToast('Could not save', error.message, true);
+}
+
+// Fields that pick into a list (chips) instead of holding one value: entry → { exclude, isEmpty, onPick, onClear }.
+const lookupChipFields = new WeakMap();
+const lookup = { field: null, kind: '', rows: [], shown: [], active: 0, byKeyboard: false };
+const lookupIdInput = field => field.parentElement.querySelector('input[type="hidden"]');
+const lookupParentField = field => (field.dataset.lookupParent ? byId(field.dataset.lookupParent) : null);
+const isLookupField = node => node instanceof HTMLInputElement && node.dataset.lookup !== undefined;
+
+// Shows the record in the field and keeps its id beside it. A child field (sub-category under
+// category) whose choice no longer belongs to the new parent is cleared. silent: no input event.
+function setLookupValue(field, row, { silent = false } = {}) {
+  const hidden = lookupIdInput(field);
+  const before = hidden ? hidden.value : field.value;
+  field.value = row ? LOOKUPS[field.dataset.lookup].display(row) : '';
+  if (hidden) hidden.value = row ? String(row.id) : '';
+  if ((hidden ? hidden.value : field.value) === before) return;
+  for (const child of document.querySelectorAll(`[data-lookup-parent="${CSS.escape(field.id)}"]`)) {
+    const childId = lookupIdInput(child).value;
+    const childRow = lookupCache[child.dataset.lookup]?.find(other => String(other.id) === childId);
+    if (childId && (!row || String(childRow?.[LOOKUPS[child.dataset.lookup].parentKey]) !== String(row.id))) setLookupValue(child, null, { silent: true });
+  }
+  if (!silent) field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function openLookup(field, { query = '', byKeyboard = false } = {}) {
+  const dialog = byId('lookup');
+  if (dialog.open) return;
+  const kind = field.dataset.lookup;
+  const config = LOOKUPS[kind];
+  let rows = await loadLookup(kind);
+  const parent = lookupParentField(field);
+  const parentId = parent ? lookupIdInput(parent).value : '';
+  if (parentId) rows = rows.filter(row => String(row[config.parentKey]) === parentId);
+  const excluded = lookupChipFields.get(field)?.exclude() || [];
+  rows = rows.filter(row => !excluded.includes(row.id));
+
+  Object.assign(lookup, { field, kind, rows, byKeyboard });
+  const currentId = lookupIdInput(field)?.value ?? field.value;
+  lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId));
+  byId('lookup-letter').textContent = config.letter;
+  byId('lookup-title').textContent = config.title;
+  byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
+  byId('lookup-select-label').textContent = config.title;
+  byId('lookup-head').replaceChildren(...config.columns.map(([, heading]) => el('th', '', heading)));
+  const search = byId('lookup-search');
+  search.value = query;
+  search.placeholder = `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
+  renderLookupRows();
+  document.documentElement.classList.add('has-modal');
+  dialog.showModal();
+  search.focus();
+  search.setSelectionRange(query.length, query.length);
+  byId(`lookup-row-${lookup.active}`)?.scrollIntoView({ block: 'nearest' });
+}
+
+function renderLookupRows() {
+  const config = LOOKUPS[lookup.kind];
+  const query = byId('lookup-search').value.trim().toLowerCase();
+  // Rows where a column starts with the search come first ("k" → KG before PKT).
+  const texts = row => config.columns.map(([key]) => String(row[key] ?? '').toLowerCase());
+  lookup.shown = query
+    ? [...lookup.rows.filter(row => texts(row).some(text => text.startsWith(query))),
+       ...lookup.rows.filter(row => !texts(row).some(text => text.startsWith(query)) && texts(row).some(text => text.includes(query)))]
+    : lookup.rows;
+  lookup.active = Math.min(lookup.active, Math.max(0, lookup.shown.length - 1));
+  const rows = lookup.shown.map((row, index) => {
+    const tr = el('tr');
+    tr.id = `lookup-row-${index}`;
+    tr.dataset.index = String(index);
+    tr.setAttribute('role', 'option');
+    config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
+    return tr;
+  });
+  if (rows.length === 0) {
+    const tr = el('tr');
+    const td = el('td', 'lk-empty', query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`);
+    td.colSpan = config.columns.length;
+    tr.append(td);
+    rows.push(tr);
+  }
+  byId('lookup-rows').replaceChildren(...rows);
+  byId('lookup-count').textContent = query
+    ? `${lookup.shown.length} of ${lookup.rows.length} ${config.plural}`
+    : `${lookup.rows.length} ${config.plural}`;
+  byId('lookup-select').disabled = lookup.shown.length === 0;
+  syncLookupActive();
+}
+
+function syncLookupActive() {
+  const search = byId('lookup-search');
+  for (const tr of byId('lookup-rows').querySelectorAll('tr[data-index]')) {
+    const active = Number(tr.dataset.index) === lookup.active;
+    tr.classList.toggle('is-active', active);
+    tr.setAttribute('aria-selected', String(active));
+  }
+  const activeRow = byId(`lookup-row-${lookup.active}`);
+  if (activeRow) {
+    search.setAttribute('aria-activedescendant', activeRow.id);
+    activeRow.scrollIntoView({ block: 'nearest' });
+  } else {
+    search.removeAttribute('aria-activedescendant');
+  }
+}
+
+function moveLookupActive(delta) {
+  if (lookup.shown.length === 0) return;
+  lookup.active = Math.min(lookup.shown.length - 1, Math.max(0, lookup.active + delta));
+  syncLookupActive();
+}
+
+function closeLookup() {
+  const dialog = byId('lookup');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  if (document.contains(lookup.field)) lookup.field.focus();
+}
+
+// Picks the highlighted row. Keyboard use moves on to the next field, like Enter does.
+async function pickLookupRow() {
+  const row = lookup.shown[lookup.active];
+  if (!row) return;
+  const { field, byKeyboard } = lookup;
+  closeLookup();
+  const chips = lookupChipFields.get(field);
+  if (chips) { chips.onPick(row); return; }
+  const parent = lookupParentField(field);
+  if (parent && !lookupIdInput(parent).value) {   // picked a child first: fill in its parent too
+    const parentRows = await loadLookup(parent.dataset.lookup);
+    const parentRow = parentRows.find(other => other.id === row[LOOKUPS[field.dataset.lookup].parentKey]);
+    if (parentRow) setLookupValue(parent, parentRow, { silent: true });
+  }
+  setLookupValue(field, row);
+  if (byKeyboard) focusNextField(field);
+}
+
+function focusNextField(field) {
+  const form = field.closest('form');
+  const order = formEnterOrder(form, form.querySelector('.fp-footer .fp-btn-primary'));
+  focusField(order[order.indexOf(field) + 1] || field);
+}
+
+// Keys on a lookup field. Returns true when handled.
+function handleLookupFieldKeys(event) {
+  const field = event.target;
+  if (!isLookupField(field)) return false;
+  const { key } = event;
+  const chips = lookupChipFields.get(field);
+  const isEmpty = chips ? chips.isEmpty() : field.value === '';
+  const open = query => { event.preventDefault(); if (!event.repeat) openLookup(field, { query, byKeyboard: true }); return true; };
+  if (key === 'F4' || (event.altKey && key === 'ArrowDown')) return open('');
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (key === 'Backspace' || key === 'Delete') {
+    event.preventDefault();
+    if (chips) chips.onClear(); else if (field.value !== '') setLookupValue(field, null);
+    return true;
+  }
+  if (key === 'Enter' && !event.shiftKey && isEmpty) return open('');
+  if (key === ' ') return open('');
+  // Shift+X stays the Add Row shortcut on forms with rows.
+  if (key.length === 1 && !(event.shiftKey && key.toLowerCase() === 'x')) return open(key);
+  return false;
+}
+
+// Keys while the popup is open; it takes every key, so nothing reaches the page behind it.
+function handleLookupDialogKeys(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeLookup(); return; }
+  if (key === 'Tab' && !ctrl && !event.altKey) { event.preventDefault(); moveFocusByTab(event.shiftKey); return; }
+  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // page shortcuts wait until it closes
+  if (target !== byId('lookup-search') || ctrl || event.altKey) return;
+  const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
+  if (steps[key]) { event.preventDefault(); moveLookupActive(steps[key]); return; }
+  if (key === 'Enter') { event.preventDefault(); if (!event.repeat) pickLookupRow(); }
+}
+
+// A list of records picked one at a time (Brand → items, Supplier → brands, Warehouse → items).
+// The entry box opens the popup; Backspace in it removes the last chip. onChange runs after every change.
+function createLookupChips({ container, entry, onChange }) {
+  const box = byId(container);
+  const input = byId(entry);
+  const config = LOOKUPS[input.dataset.lookup];
+  let picked = [];
+  const render = () => {
+    for (const old of box.querySelectorAll('.fp-chip')) old.remove();
+    input.before(...picked.map((row, index) => {
+      const chip = el('span', 'fp-chip');
+      chip.append(el('span', '', config.display(row)));
+      const remove = el('button', 'fp-chip-del', '×');
+      remove.type = 'button';
+      remove.dataset.chip = String(index);
+      remove.setAttribute('aria-label', `Remove ${config.display(row)}`);
+      chip.append(remove);
+      return chip;
+    }));
+  };
+  const change = next => { picked = next; render(); onChange(); };
+  lookupChipFields.set(input, {
+    exclude: () => picked.map(row => row.id),
+    isEmpty: () => picked.length === 0,
+    onPick(row) { clearFieldError(input); change([...picked, row]); input.focus(); },
+    onClear() { if (picked.length) change(picked.slice(0, -1)); },
+  });
+  box.addEventListener('click', event => {
+    const remove = event.target.closest('[data-chip]');
+    if (remove) { change(picked.filter((_, index) => index !== Number(remove.dataset.chip))); input.focus(); }
+    else if (event.target === box) input.focus();
+  });
+  return {
+    get: () => [...picked],
+    set(rows) { picked = [...rows]; render(); },
+    ids: () => picked.map(row => row.id),
+    input,
+  };
+}
+
+// Hidden ids are not cleared by form.reset() (their value is their default), so forms call this too.
+function clearLookupIds(form) {
+  for (const hidden of form.querySelectorAll('.fp-lookup-wrap input[type="hidden"]')) hidden.value = '';
+}
+
+function initLookups() {
+  const dialog = byId('lookup');
+  // Lookup fields hold only picked records: block typed, pasted and dropped text.
+  document.addEventListener('beforeinput', event => { if (isLookupField(event.target)) event.preventDefault(); });
+  document.addEventListener('paste', event => {
+    if (!isLookupField(event.target)) return;
+    event.preventDefault();
+    openLookup(event.target, { query: event.clipboardData.getData('text').trim(), byKeyboard: true });
+  });
+  document.addEventListener('click', event => { if (isLookupField(event.target)) openLookup(event.target); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeLookup(); });
+  byId('lookup-search').addEventListener('input', () => { lookup.active = 0; renderLookupRows(); });
+  // Rows are not focusable: keep focus (and typing) in the search box while clicking them.
+  byId('lookup-rows').addEventListener('mousedown', event => event.preventDefault());
+  byId('lookup-rows').addEventListener('click', event => {
+    const tr = event.target.closest('tr[data-index]');
+    if (!tr) return;
+    lookup.active = Number(tr.dataset.index);
+    syncLookupActive();
+    if (event.detail >= 2) pickLookupRow();   // double-click picks
+  });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) {           // the backdrop, outside the panel
+      const r = dialog.getBoundingClientRect();
+      if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeLookup();
+      return;
+    }
+    const action = event.target.closest('[data-lookup-action]')?.dataset.lookupAction;
+    if (action === 'cancel') closeLookup();
+    else if (action === 'select') pickLookupRow();
+  });
+}
+
+/* =====================================================================
    Item Creation  (#/masters/item/new · Masters › Create › Item)
    Enter moves to the next field; Enter on a row's Batch Expiry adds a
    row. Shift+X (outside text fields) or Alt+A adds a row, Ctrl+S saves,
@@ -802,9 +1200,9 @@ function removeSourceRow(row) {
 
 function resetItemForm() {
   itemEl('form').reset();
+  clearLookupIds(itemEl('form'));
   clearFormErrors(itemEl('form'));
-  // Preview only; the server assigns the real code when the item is saved.
-  itemEl('code').value = `ITM-${today.getFullYear()}-0001`;
+  showNextCode(itemEl('code'), 'api/items.php');
   itemEl('source-body').replaceChildren();
   addSourceRow({ focus: false });
 }
@@ -818,16 +1216,18 @@ function readItemForm() {
   const errors = [];
   const fail = (node, message) => errors.push({ node, message });
   const text = suffix => itemEl(suffix).value.trim();
+  const id = suffix => (text(suffix) === '' ? null : Number(text(suffix)));   // a lookup's hidden id
 
   const payload = {
     itemName: text('name'),
-    unit: text('unit').toUpperCase(),
-    category: text('category'),
-    subCategory: text('subcategory'),
+    uomId: id('uom-id'),
+    categoryId: id('category-id'),
+    subCategoryId: id('subcategory-id'),
+    brandId: id('brand-id'),
     comments: text('comments'),
     sourcing: [],
-    stockPoint: text('stock-point'),
-    rack: text('rack'),
+    warehouseId: id('warehouse-id'),
+    rackId: id('rack-id'),
     status: text('status'),
     docLink: text('doc-link'),
     imageLink: text('image-link'),
@@ -837,12 +1237,13 @@ function readItemForm() {
 
   for (const row of itemEl('source-body').rows) {
     const cell = field => row.querySelector(`[data-field="${field}"]`);
-    const line = Object.fromEntries(['brand', 'supplier', 'cost', 'openingStock', 'sellingPrice', 'batchExpiry']
+    const line = Object.fromEntries(['brandId', 'supplierId', 'cost', 'openingStock', 'sellingPrice', 'batchExpiry']
       .map(field => [field, cell(field).value.trim()]));
     if (Object.values(line).every(v => v === '')) continue;     // blank rows are ignored
     for (const field of ['cost', 'openingStock', 'sellingPrice']) {
       if (line[field] !== '' && !DECIMAL_3.test(line[field])) fail(cell(field), 'Enter a number with up to 3 decimals.');
     }
+    for (const field of ['brandId', 'supplierId']) line[field] = line[field] === '' ? null : Number(line[field]);
     payload.sourcing.push(line);
   }
 
@@ -852,17 +1253,34 @@ function readItemForm() {
   return { payload, errors };
 }
 
-function saveItem() {
+const ITEM_FIELD_NODES = {
+  itemName: 'name', uomId: 'uom', categoryId: 'category', subCategoryId: 'subcategory', brandId: 'brand',
+  warehouseId: 'warehouse', rackId: 'rack', status: 'status', comments: 'comments', imageLink: 'image-link', supplierUrl: 'supplier-url',
+};
+let itemSaving = false;
+
+async function saveItem() {
+  if (itemSaving) return;
   clearFormErrors(itemEl('form'));
-  const { errors } = readItemForm();
+  const { payload, errors } = readItemForm();
   if (errors.length) {
     showFormErrors(errors);
     return;
   }
-  // Backend not built yet: this becomes
-  //   apiRequest('api/items.php', { method: 'POST', body: JSON.stringify(payload) })
-  // and returns to the dashboard on success.
-  showToast('Item details look good', 'Saving will work once the items API (api/items.php) is built.');
+  itemSaving = true;
+  itemEl('save').disabled = true;
+  try {
+    const item = await apiRequest('api/items.php', { method: 'POST', json: payload });
+    forgetLookups('item');
+    showToast('Item saved', `${item.code} · ${item.name}`);
+    resetItemForm();
+    itemEl('name').focus();
+  } catch (error) {
+    showServerErrors(error, key => (ITEM_FIELD_NODES[key] ? itemEl(ITEM_FIELD_NODES[key]) : null));
+  } finally {
+    itemSaving = false;
+    itemEl('save').disabled = false;
+  }
 }
 
 // Keys for the item page. Returns true when handled.
@@ -911,7 +1329,7 @@ function handleTableArrows(event, addRow) {
   const row = input.closest('.fp-row');
   if (!row || !['INPUT', 'SELECT'].includes(input.tagName) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   const rows = [...row.parentElement.rows].filter(other => other.matches('.fp-row'));
-  const columnCells = r => [...r.querySelectorAll('input:not([readonly]), select')];
+  const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select')];
   const col = columnCells(row).indexOf(input);
   const cells = columnCells(row).filter(cell => !cell.disabled);
   const cellAt = r => {
@@ -1080,6 +1498,7 @@ function createFormPage(config) {
 
   function reset() {
     el('form').reset();
+    clearLookupIds(el('form'));
     clearFormErrors(el('form'));
     config.setCode?.();
     for (const [name, list] of Object.entries(lists)) {
@@ -1095,16 +1514,32 @@ function createFormPage(config) {
     refresh();
   }
 
-  function save() {
+  let saving = false;
+  async function save() {
+    if (saving) return;
     clearFormErrors(el('form'));
-    const { errors } = config.read();
+    const { payload, errors } = config.read();
     if (errors.length) {
       showFormErrors(errors, config.reveal);
       return;
     }
-    // Backend not built yet: this becomes
-    //   apiRequest(config.api, { method: 'POST', body: JSON.stringify(payload) })
-    showToast(`${config.noun} details look good`, `Saving will work once the ${config.noun} API (${config.api}) is built.`);
+    saving = true;
+    el('save').disabled = true;
+    try {
+      const api = typeof config.api === 'function' ? config.api() : config.api;
+      const record = await apiRequest(api, { method: 'POST', json: payload });
+      const warning = await config.afterSave?.(record);   // e.g. upload the party's documents; a message if that failed
+      forgetLookups(...(config.lookups || []));
+      if (warning) showToast(`${record.code} saved, but its documents were not uploaded`, warning, true);
+      else showToast(`${typeof config.noun === 'function' ? config.noun() : config.noun} saved`, `${record.code} · ${record.name}`);
+      reset();
+      config.firstField().focus();
+    } catch (error) {
+      showServerErrors(error, key => config.fieldNodes?.[key]?.(), config.reveal);
+    } finally {
+      saving = false;
+      el('save').disabled = false;
+    }
   }
 
   function handleKeys(event) {
@@ -1199,7 +1634,7 @@ function formChecks(el) {
 }
 
 const isBlankRow = row => ![...row.querySelectorAll('input')].some(isCellFilled);
-const previewCode = prefix => `${prefix}-${today.getFullYear()}-0001`;   // the server assigns the real code on save
+const previewCode = prefix => `${prefix}-${today.getFullYear()}-0001`;   // order-number placeholders only
 
 /* ---------- UOM Creation  (#/masters/uom/new) ---------- */
 
@@ -1209,9 +1644,13 @@ const uomEl = suffix => byId(`uom-${suffix}`);
 const isValidUomFactor = value => UOM_FACTOR.test(value) && Number(value) > 0;
 
 const uomForm = createFormPage({
-  key: 'uom', route: 'masters/uom/new', noun: 'UOM', api: 'api/uoms.php',
+  key: 'uom', route: 'masters/uom/new', noun: 'UOM', api: 'api/uoms.php', lookups: ['uom'],
   firstField: () => uomEl('name'),
-  setCode: () => { uomEl('code').value = 'UOM-0001'; },
+  setCode: () => showNextCode(uomEl('code'), 'api/uoms.php'),
+  fieldNodes: {
+    unitName: () => uomEl('name'), decimalAllowed: () => uomEl('decimals'), status: () => uomEl('status'),
+    conversionBaseId: () => uomEl('base'), conversionFactor: () => uomEl('factor'), description: () => uomEl('description'),
+  },
   read() {
     const check = formChecks(uomEl);
     check.required('name', 'Unit of measure');
@@ -1223,7 +1662,9 @@ const uomForm = createFormPage({
       errors: check.errors,
       payload: {
         unitName: check.text('name'), decimalAllowed: Number(check.text('decimals')), status: check.text('status'),
-        baseUnit: check.text('base'), conversionFactor: Number(check.text('factor')), description: check.text('description'),
+        // No base unit: this unit is a base unit itself.
+        conversionBaseId: check.text('base-id') === '' ? null : Number(check.text('base-id')),
+        conversionFactor: Number(check.text('factor')), description: check.text('description'),
       },
     };
   },
@@ -1241,19 +1682,24 @@ const uomForm = createFormPage({
 /* ---------- Brand Creation  (#/masters/brand/new) ---------- */
 
 const brandEl = suffix => byId(`brand-${suffix}`);
+// item_brands: the items sold under this brand.
+const brandItems = createLookupChips({ container: 'brand-items', entry: 'brand-item-entry', onChange: () => brandForm.record() });
 const brandForm = createFormPage({
-  key: 'brand', route: 'masters/brand/new', noun: 'Brand', api: 'api/brands.php',
+  key: 'brand', route: 'masters/brand/new', noun: 'Brand', api: 'api/brands.php', lookups: ['brand'],
   firstField: () => brandEl('name'),
-  setCode: () => { brandEl('code').value = previewCode('BRD'); },
+  setCode: () => showNextCode(brandEl('code'), 'api/brands.php'),
+  fieldNodes: { brandName: () => brandEl('name'), status: () => brandEl('status'), itemIds: () => brandItems.input },
+  extra: { read: brandItems.get, write: brandItems.set, reset: () => brandItems.set([]) },
+  extraFocus: () => brandItems.input,
   read() {
     const check = formChecks(brandEl);
     check.required('name', 'Brand name');
-    check.required('items', 'Item name');
+    if (brandItems.ids().length === 0) check.fail(brandItems.input, 'Add at least one item.');
     return {
       errors: check.errors,
       payload: {
         brandName: check.text('name'), status: check.text('status'), description: check.text('description'),
-        itemNames: check.text('items').split('\n').map(line => line.trim()).filter(Boolean),
+        itemIds: brandItems.ids(),
       },
     };
   },
@@ -1263,9 +1709,13 @@ const brandForm = createFormPage({
 
 const categoryEl = suffix => byId(`category-${suffix}`);
 const categoryForm = createFormPage({
-  key: 'category', route: 'masters/category/new', noun: 'Category', api: 'api/categories.php',
+  key: 'category', route: 'masters/category/new', noun: 'Category', api: 'api/categories.php', lookups: ['category', 'subcategory'],
   firstField: () => categoryEl('name'),
-  setCode: () => { categoryEl('code').value = previewCode('CAT'); },
+  setCode: () => showNextCode(categoryEl('code'), 'api/categories.php'),
+  fieldNodes: {
+    categoryName: () => categoryEl('name'), status: () => categoryEl('status'),
+    subcategories: () => categoryForm.rowsOf('subcategories')[0]?.querySelector('input'),
+  },
   lists: {
     subcategories: { body: 'category-subcategories', template: 'category-subcategory-row', initial: 1, label: index => String(index + 1).padStart(2, '0') },
   },
@@ -1289,93 +1739,36 @@ const categoryForm = createFormPage({
 /* ---------- Warehouse Creation  (#/masters/stock-point/new) ---------- */
 
 const warehouseEl = suffix => byId(`warehouse-${suffix}`);
-let warehouseItems = [];
-
-function renderWarehouseChips() {
-  const chips = warehouseItems.map((name, index) => {
-    const chip = el('span', 'fp-chip');
-    chip.append(el('span', '', name));
-    const remove = el('button', 'fp-chip-del');
-    remove.type = 'button';
-    remove.dataset.chip = String(index);
-    remove.setAttribute('aria-label', `Remove ${name}`);
-    remove.textContent = '×';
-    chip.append(remove);
-    return chip;
-  });
-  for (const old of warehouseEl('chips').querySelectorAll('.fp-chip')) old.remove();
-  warehouseEl('item-entry').before(...chips);   // the box itself stays put, keeping its focus
-}
-
-// Free text until the items API can supply the saved item list.
-function addWarehouseItem() {
-  const entry = warehouseEl('item-entry');
-  const name = entry.value.trim();
-  entry.value = '';
-  if (name === '') return false;
-  if (!warehouseItems.some(item => item.toLowerCase() === name.toLowerCase())) {
-    warehouseItems = [...warehouseItems, name];
-    renderWarehouseChips();
-    clearFieldError(entry);
-    warehouseForm.record();
-  }
-  return true;
-}
-
-function removeWarehouseItem(index) {
-  warehouseItems = warehouseItems.filter((_, i) => i !== index);
-  renderWarehouseChips();
-  warehouseForm.record();
-  warehouseEl('item-entry').focus();
-}
+const warehouseItems = createLookupChips({ container: 'warehouse-chips', entry: 'warehouse-item-entry', onChange: () => warehouseForm.record() });
 
 const warehouseForm = createFormPage({
-  key: 'warehouse', route: 'masters/stock-point/new', noun: 'Warehouse', api: 'api/warehouses.php',
+  key: 'warehouse', route: 'masters/stock-point/new', noun: 'Warehouse', api: 'api/warehouses.php', lookups: ['warehouse', 'item'],
   firstField: () => warehouseEl('name'),
-  setCode: () => { warehouseEl('code').value = previewCode('WH'); },
-  extra: {
-    read: () => warehouseItems,
-    write(items) { warehouseItems = items; renderWarehouseChips(); },
-    reset() { warehouseItems = []; renderWarehouseChips(); },
-  },
-  extraFocus: () => warehouseEl('item-entry'),
-  onEnter(event) {
-    return event.target === warehouseEl('item-entry') && addWarehouseItem();
-  },
-  onKey(event) {
-    const entry = warehouseEl('item-entry');
-    if (event.target === entry && event.key === 'Backspace' && entry.value === '' && warehouseItems.length) {
-      event.preventDefault();
-      removeWarehouseItem(warehouseItems.length - 1);
-      return true;
-    }
-    return false;
-  },
+  setCode: () => showNextCode(warehouseEl('code'), 'api/warehouses.php'),
+  fieldNodes: Object.fromEntries([
+    ['warehouseName', 'name'], ['type', 'type'], ['address', 'address'], ['country', 'country'], ['city', 'city'],
+    ['contactPerson', 'contact'], ['phone', 'phone'], ['email', 'email'], ['manager', 'manager'], ['capacity', 'capacity'],
+    ['status', 'status'], ['remarks', 'remarks'], ['itemIds', 'item-entry'],
+  ].map(([key, suffix]) => [key, () => warehouseEl(suffix)])),
+  extra: { read: warehouseItems.get, write: warehouseItems.set, reset: () => warehouseItems.set([]) },
+  extraFocus: () => warehouseItems.input,
   read() {
-    addWarehouseItem();                       // text still in the box counts as added
     const check = formChecks(warehouseEl);
     for (const [suffix, label] of [['name', 'Warehouse name'], ['address', 'Address'], ['city', 'City / municipality'], ['contact', 'Contact person'], ['phone', 'Phone / extension'], ['email', 'Email address'], ['manager', 'Assigned manager'], ['capacity', 'Total storage capacity']]) {
       check.required(suffix, label);
     }
     check.matches('email', EMAIL, 'Enter a valid email address.');
-    if (warehouseItems.length === 0) check.fail(warehouseEl('item-entry'), 'Add at least one item.');
+    check.required('country', 'Country');
+    if (warehouseItems.ids().length === 0) check.fail(warehouseItems.input, 'Add at least one item.');
     check.matches('capacity', WHOLE_NUMBER, 'Total storage capacity must be a whole number.');
     return {
       errors: check.errors,
       payload: {
         warehouseName: check.text('name'), type: check.text('type'), address: check.text('address'), country: check.text('country'), city: check.text('city'),
         contactPerson: check.text('contact'), phone: check.text('phone'), email: check.text('email'), manager: check.text('manager'),
-        items: warehouseItems, capacity: Number(check.text('capacity')), status: check.text('status'), remarks: check.text('remarks'),
+        itemIds: warehouseItems.ids(), capacity: Number(check.text('capacity')), status: check.text('status'), remarks: check.text('remarks'),
       },
     };
-  },
-  init() {
-    warehouseEl('chips').addEventListener('click', event => {
-      const remove = event.target.closest('[data-chip]');
-      if (remove) removeWarehouseItem(Number(remove.dataset.chip));
-      else warehouseEl('item-entry').focus();
-    });
-    warehouseEl('item-entry').addEventListener('blur', addWarehouseItem);
   },
 });
 
@@ -1650,12 +2043,39 @@ function previewDocument(row) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);   // long enough for the new tab to load it
 }
 
+// supplier_brands: the brands this supplier sells.
+const supplierBrands = createLookupChips({ container: 'party-sup-brands', entry: 'party-sup-brand-entry', onChange: () => partyForm.record() });
+
 const partyForm = createFormPage({
-  key: 'party', route: 'masters/party/new', noun: 'Party', api: 'api/parties.php',
+  key: 'party', route: 'masters/party/new', noun: () => (partyVariant() === 'cus' ? 'Customer' : 'Supplier'), lookups: ['supplier'],
+  // Creditors are suppliers, debtors are customers: each has its own table and endpoint.
+  api: () => (partyVariant() === 'cus' ? 'api/customers.php' : 'api/suppliers.php'),
+  async afterSave(record) {
+    const variant = partyVariant();
+    const files = [...docRows().map(row => docFiles.get(row).file), ...(variant === 'cus' ? partyFiles.agreements : [])];
+    if (files.length === 0) return;
+    const owner = variant === 'cus' ? 'customer' : 'supplier';
+    const form = new FormData();
+    form.append(`${owner}Id`, String(record.id));
+    for (const file of files) form.append('files[]', file, file.name);
+    try {
+      await apiRequest(`api/${owner}-documents.php`, { method: 'POST', body: form });
+      return null;
+    } catch (error) {
+      return error.message;                     // the record is saved; only the files failed
+    }
+  },
+  fieldNodes: Object.fromEntries([
+    ['supplierName', 'sup-name'], ['customerName', 'cus-name'], ['organizationName', 'cus-organization'],
+    ['email', () => `${partyVariant()}-email`], ['country', () => `${partyVariant()}-country`], ['address', () => `${partyVariant()}-address`],
+    ['taxRegNo', () => `${partyVariant()}-tax`], ['debitLimit', 'sup-credit-limit'], ['debitDays', 'sup-credit-days'],
+    ['openingBalance', 'sup-opening'], ['paymentTerms', 'sup-terms'], ['currency', 'sup-currency'], ['brandIds', 'sup-brand-entry'],
+    ['creditLimit', 'cus-credit-limit'], ['creditDays', 'cus-credit-days'], ['discountPercent', 'cus-discount'],
+  ].map(([key, suffix]) => [key, () => partyEl(typeof suffix === 'function' ? suffix() : suffix)])),
   firstField: () => partyEl(`${partyVariant()}-name`),
   setCode() {
-    partyEl('sup-code').value = previewCode('SUP');
-    partyEl('cus-code').value = previewCode('CUS');
+    showNextCode(partyEl('sup-code'), 'api/suppliers.php');
+    showNextCode(partyEl('cus-code'), 'api/customers.php');
   },
   lists: {
     supplierContacts: { body: 'party-sup-contacts', template: 'party-contact-row', initial: 2, label: index => `Contact Person ${index + 1}` },
@@ -1669,9 +2089,9 @@ const partyForm = createFormPage({
   },
   refresh: refreshPartyTotals,
   extra: {
-    read: () => docRows().map(readDocRow),
-    write: renderDocRows,
-    reset: () => renderDocRows([]),
+    read: () => ({ documents: docRows().map(readDocRow), brands: supplierBrands.get() }),
+    write(state) { renderDocRows(state.documents); supplierBrands.set(state.brands); },
+    reset() { renderDocRows([]); supplierBrands.set([]); },
   },
   extraFocus: () => partyEl('doc-btn'),
   onReset() {
@@ -1697,9 +2117,12 @@ const partyForm = createFormPage({
     const WHOLE = 'Enter a whole number.';
     check.required('name', 'Name');
     check.matches('email', EMAIL, VALID_EMAIL);
-    check.matches('credit-limit', DECIMAL_3, NUMBER_3);
+    // suppliers.debit_limit / opening_balance hold 2 decimals; customers.credit_limit holds 3.
+    const MONEY_2 = /^\d{1,10}(\.\d{1,2})?$/;
+    const NUMBER_2 = 'Enter a number with up to 2 decimals.';
+    check.matches('credit-limit', variant === 'sup' ? MONEY_2 : DECIMAL_3, variant === 'sup' ? NUMBER_2 : NUMBER_3);
     check.matches('credit-days', WHOLE_NUMBER, WHOLE);
-    if (variant === 'sup') check.matches('opening', DECIMAL_3, NUMBER_3);
+    if (variant === 'sup') check.matches('opening', MONEY_2, NUMBER_2);
     if (variant === 'cus' && (check.text('discount') !== '') && (!DECIMAL_2.test(check.text('discount')) || Number(check.text('discount')) > 100)) {
       check.fail(partyEl('cus-discount'), 'Discount must be from 0 to 100, with up to 2 decimals.');
     }
@@ -1710,19 +2133,26 @@ const partyForm = createFormPage({
       check.rowCell(row, 'items', WHOLE_NUMBER, WHOLE);
     }
     const generalFields = [...partyEl('form').querySelectorAll(`[data-under="${partyEl('under').value}"] input[id], [data-under="${partyEl('under').value}"] select, [data-under="${partyEl('under').value}"] textarea`)]
-      .filter(node => node.type !== 'file' && !node.readOnly);
+      .filter(node => node.type !== 'file' && !node.readOnly && !node.dataset.transient);
     const filledRows = rows => rows.filter(row => !isBlankRow(row)).map(partyForm.readRow);
-    return {
-      errors: check.errors,
-      payload: {
-        under: partyEl('under').value,
-        details: Object.fromEntries(generalFields.map(node => [node.id.replace(`party-${variant}-`, ''), node.value.trim()])),
-        contacts: filledRows(contacts),
-        quotations: filledRows(partyForm.rowsOf('quotations')),
-        orders: filledRows(partyForm.rowsOf('orders')),
-        documents: docRows().map(readDocRow).map(({ file, type, expiry }) => ({ fileName: file.name, type, expiry })),
-      },
+    const d = Object.fromEntries(generalFields.map(node => [node.id.replace(`party-${variant}-`, ''), node.value.trim()]));
+    const lines = (...values) => values.filter(Boolean).join('\n');
+    // supplier_contacts / customer_contacts keep a name and one number per contact.
+    const contactRows = filledRows(contacts).map(row => ({ name: row.name.trim(), number: row.mobile.trim() }));
+    // Mapped onto the suppliers / customers columns of the data model.
+    const payload = variant === 'sup' ? {
+      supplierName: d.name, address: d.address, country: d.country, currency: d.currency, taxRegNo: d.tax, remarks: d.comments,
+      ownerDetails: d.owner, phone: d.mobile, telephone: d.phone, email: d.email,
+      debitLimit: d['credit-limit'], debitDays: d['credit-days'], paymentTerms: d.terms, openingBalance: d.opening,
+      accountDetails: lines(d.bank && `Bank: ${d.bank}`, d.branch && `Branch: ${d.branch}`, d.iban && `Account / IBAN: ${d.iban}`, d.website && `Website: ${d.website}`),
+      brandIds: supplierBrands.ids(), contacts: contactRows,
+    } : {
+      customerName: d.name, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip,
+      phone: d.mobile, telephone: d.phone, email: d.email, ownerDetails: d.owner,
+      creditLimit: d['credit-limit'], creditDays: d['credit-days'], discountPercent: d.discount, salesman: d.salesman, taxRegNo: d.tax,
+      accountDetails: lines(d.other1, d.other2, d.other3), comments: d.comments, contacts: contactRows,
     };
+    return { errors: check.errors, payload };
   },
   init() {
     partyEl('under').addEventListener('change', syncPartyVariant);
@@ -1855,6 +2285,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('footer-year').textContent = String(today.getFullYear());
   initKeyboardNavigation();
   initQuickMenu();
+  initLookups();
   initItemPage();
   for (const form of MASTER_FORMS) form.init();
   loadDashboard();

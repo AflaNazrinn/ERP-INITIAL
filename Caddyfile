@@ -1,0 +1,36 @@
+# Growth Engine: one HTTPS origin for the static frontend and the PHP JSON API.
+#
+#   APP_ROOT=$PWD caddy run --config Caddyfile      (from the repository root)
+#
+# Files that exist under frontend/ are served as they are; every other request goes
+# to PHP-FPM with backend/public/ as the document root (so /api/items.php runs
+# backend/public/api/items.php). backend/src, backend/storage and backend/.env are
+# outside both roots and can never be fetched.
+# APP_ROOT must be an absolute path: PHP-FPM resolves script paths itself.
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	@frontend file {
+		root {$APP_ROOT}/frontend
+		try_files {path} {path}/index.html
+	}
+	handle @frontend {
+		root * {$APP_ROOT}/frontend
+		file_server
+	}
+
+	handle {
+		root * {$APP_ROOT}/backend/public
+		php_fastcgi {$PHP_FPM_ADDRESS:127.0.0.1:9000}
+	}
+}

@@ -780,9 +780,10 @@ res:project a ge:Project,
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/category> a ge:FormField ;
     rdfs:label "Primary Category" ;
-    ge:fieldName "category" ;
-    ge:inputType "text" ;
-    ge:placeholder "e.g. Pneumatics, Electrical, Hardware..." ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the categories id." ;
+    ge:fieldName "categoryId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select category..." ;
     ge:required false .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/code> a ge:FormField ;
@@ -821,9 +822,10 @@ res:project a ge:Project,
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/rack> a ge:FormField ;
     rdfs:label "Rack / Bin" ;
-    ge:fieldName "rack" ;
-    ge:inputType "text" ;
-    ge:placeholder "BAY-04 / TIER-2" ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the rack_bins id." ;
+    ge:fieldName "rackId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select rack / bin..." ;
     ge:required false .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/status> a ge:FormField ;
@@ -835,16 +837,18 @@ res:project a ge:Project,
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/stock-point> a ge:FormField ;
     rdfs:label "Stock Point" ;
-    ge:fieldName "stockPoint" ;
-    ge:inputType "text" ;
-    ge:placeholder "e.g. WH-NORTH" ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the warehouses id." ;
+    ge:fieldName "warehouseId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select warehouse..." ;
     ge:required false .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/subcategory> a ge:FormField ;
     rdfs:label "Subcategory" ;
-    ge:fieldName "subCategory" ;
-    ge:inputType "text" ;
-    ge:placeholder "e.g. High Pressure Valves..." ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the sub_categories id." ;
+    ge:fieldName "subCategoryId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select subcategory..." ;
     ge:required false .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/supplier-url> a ge:FormField ;
@@ -856,14 +860,24 @@ res:project a ge:Project,
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/unit> a ge:FormField ;
     rdfs:label "Unit of Measure" ;
-    ge:fieldName "unit" ;
-    ge:inputType "text" ;
-    ge:placeholder "e.g. PCS, BOX, KGS, SET, MTR..." ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the uoms id." ;
+    ge:fieldName "uomId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select unit..." ;
+    ge:required false .
+
+<https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/brand> a ge:FormField ;
+    rdfs:label "Brand" ;
+    rdfs:comment "Lookup field: picked from the Select popup; sends the brands id." ;
+    ge:fieldName "brandId" ;
+    ge:inputType "lookup" ;
+    ge:placeholder "Select brand..." ;
     ge:required false .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/section-1> a ge:FormSection ;
     rdfs:label "1. General Product Identification" ;
-    ge:hasField <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/category>,
+    ge:hasField <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/brand>,
+        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/category>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/code>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/comments>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/item-form/field/name>,

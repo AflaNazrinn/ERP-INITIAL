@@ -202,19 +202,21 @@
           <input id="item-name" name="itemName" class="fp-input" type="text" maxlength="200" required autocomplete="off"
                  placeholder="Enter comprehensive item designation, technical specification, and model numbers...">
         </div>
-        <div class="fp-field fp-span-4">
-          <label class="fp-label" for="item-unit">Unit of Measure</label>
-          <input id="item-unit" name="unit" class="fp-input" type="text" list="item-unit-list" autocomplete="off" placeholder="e.g. PCS, BOX, KGS, SET, MTR...">
-          <datalist id="item-unit-list"><option value="PCS"></option><option value="BOX"></option><option value="KGS"></option><option value="SET"></option><option value="MTR"></option></datalist>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="item-uom">Unit of Measure</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-uom" class="fp-input fp-lookup" type="text" data-lookup="uom" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select unit..."><input id="item-uom-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
-        <div class="fp-field fp-span-4">
+        <div class="fp-field fp-span-3">
           <label class="fp-label" for="item-category">Primary Category</label>
-          <input id="item-category" name="category" class="fp-input" type="text" list="item-category-list" autocomplete="off" placeholder="e.g. Pneumatics, Electrical, Hardware...">
-          <datalist id="item-category-list"><option value="Pneumatics &amp; Hydraulics"></option><option value="Electrical Switchgear"></option><option value="Mechanical Hardware"></option><option value="Safety &amp; Protective"></option></datalist>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-category" class="fp-input fp-lookup" type="text" data-lookup="category" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select category..."><input id="item-category-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
-        <div class="fp-field fp-span-4">
+        <div class="fp-field fp-span-3">
           <label class="fp-label" for="item-subcategory">Subcategory</label>
-          <input id="item-subcategory" name="subCategory" class="fp-input" type="text" autocomplete="off" placeholder="e.g. High Pressure Valves...">
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-subcategory" class="fp-input fp-lookup" type="text" data-lookup="subcategory" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select subcategory..." data-lookup-parent="item-category"><input id="item-subcategory-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="item-brand">Brand</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-brand" class="fp-input fp-lookup" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..."><input id="item-brand-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-12">
           <label class="fp-label" for="item-comments">Comments</label>
@@ -255,13 +257,12 @@
         <h2 class="fp-section-title">3. Stock &amp; Warehouse Location</h2>
         <div class="fp-grid-3">
           <div class="fp-field">
-            <label class="fp-label fp-label-sm" for="item-stock-point">Stock Point</label>
-            <input id="item-stock-point" name="stockPoint" class="fp-input fp-input-sm" type="text" list="item-stock-point-list" autocomplete="off" placeholder="e.g. WH-NORTH">
-            <datalist id="item-stock-point-list"><option value="Central WH North"></option><option value="Secondary WH South"></option><option value="Assembly Plant 01"></option></datalist>
+            <label class="fp-label fp-label-sm" for="item-warehouse">Stock Point</label>
+            <div class="fp-input-wrap fp-lookup-wrap"><input id="item-warehouse" class="fp-input fp-input-sm fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select warehouse..."><input id="item-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
           </div>
           <div class="fp-field">
             <label class="fp-label fp-label-sm" for="item-rack">Rack / Bin</label>
-            <input id="item-rack" name="rack" class="fp-input fp-input-sm fp-mono" type="text" autocomplete="off" placeholder="BAY-04 / TIER-2">
+            <div class="fp-input-wrap fp-lookup-wrap"><input id="item-rack" class="fp-input fp-input-sm fp-mono fp-lookup" type="text" data-lookup="rack" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select rack / bin..." data-lookup-parent="item-warehouse"><input id="item-rack-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
           </div>
           <div class="fp-field">
             <label class="fp-label fp-label-sm" for="item-status">Inventory Status</label>
@@ -311,8 +312,8 @@
   <!-- One sourcing row; cloned by "Add Sourcing Row". -->
   <template id="item-source-row-template">
     <tr class="fp-source-row fp-row">
-      <td><input class="fp-cell" data-field="brand" type="text" autocomplete="off" placeholder="Brand Name" aria-label="Brand name"></td>
-      <td><input class="fp-cell" data-field="supplier" type="text" autocomplete="off" placeholder="Supplier Entity Ltd" aria-label="Supplier entity"></td>
+      <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="brand" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..." aria-label="Brand"><input data-field="brandId" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
+      <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="supplier" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select supplier..." aria-label="Supplier"><input data-field="supplierId" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
       <td><input class="fp-cell fp-cell-num" data-field="cost" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000" aria-label="Cost (OMR)"></td>
       <td><input class="fp-cell fp-cell-num" data-field="openingStock" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Opening stock"></td>
       <td><input class="fp-cell fp-cell-num fp-cell-price" data-field="sellingPrice" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000" aria-label="Selling price (OMR)"></td>
@@ -379,18 +380,9 @@
           </select>
         </div>
         <div class="fp-field fp-span-3">
-          <label class="fp-label" for="uom-base">Conversion Base Unit <span class="fp-req">*</span></label>
-          <!-- Fixed list until the UOM API can supply saved units. -->
-          <select id="uom-base" name="baseUnit" class="fp-input fp-select" required>
-            <option selected>KG</option>
-            <option>G</option>
-            <option>MT</option>
-            <option>L</option>
-            <option>M</option>
-            <option>PCS</option>
-            <option>BOX</option>
-            <option>SET</option>
-          </select>
+          <label class="fp-label" for="uom-base">Conversion Base Unit</label>
+          <!-- uoms.conversion_base_id. Left blank, this unit is a base unit itself. -->
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="uom-base" class="fp-input fp-lookup" type="text" data-lookup="uom" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="None (base unit)"><input id="uom-base-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="uom-factor">Conversion Factor <span class="fp-req">*</span></label>
@@ -467,7 +459,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-country">Country</label>
-          <select id="party-sup-country" class="fp-input fp-select"><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="party-sup-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-currency">Currency</label>
@@ -480,6 +472,10 @@
         <div class="fp-field fp-span-9">
           <label class="fp-label" for="party-sup-comments">Comments</label>
           <input id="party-sup-comments" class="fp-input" type="text" autocomplete="off" placeholder="Enter remarks, delivery notes or other comments...">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-sup-brand-entry">Brands Supplied</label>
+          <div id="party-sup-brands" class="fp-chips"><input id="party-sup-brand-entry" class="fp-chip-entry fp-lookup" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" data-transient="true" placeholder="Type or press Space to add brands..."></div>
         </div>
       </div>
     </section>
@@ -581,7 +577,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-country">Country</label>
-          <select id="party-cus-country" class="fp-input fp-select"><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="party-cus-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-city">City</label>
@@ -781,8 +777,8 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     <section class="fp-card">
       <h2 class="fp-section-title">2. Item Association</h2>
               <div class="fp-field">
-          <label class="fp-label" for="brand-items">Item Name <span class="fp-req">*</span></label>
-          <textarea id="brand-items" class="fp-input fp-textarea" rows="3" autocomplete="off" data-enter-newline="true" required placeholder="Enter the items sold under this brand, one per line (e.g. Ball Valve 1/2&quot;, Pressure Regulator)..."></textarea>
+          <label class="fp-label" for="brand-item-entry">Items Sold Under This Brand <span class="fp-req">*</span></label>
+          <div id="brand-items" class="fp-chips"><input id="brand-item-entry" class="fp-chip-entry fp-lookup" type="text" data-lookup="item" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" data-transient="true" placeholder="Type or press Space to add items..."></div>
         </div>
 
     </section>
@@ -913,7 +909,7 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
         </div>
         <div class="fp-field fp-span-6">
           <label class="fp-label" for="warehouse-country">Country <span class="fp-req">*</span></label>
-          <select id="warehouse-country" class="fp-input fp-select" required><option value="Oman">Oman</option><option value="United Arab Emirates">United Arab Emirates</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Qatar">Qatar</option><option value="Kuwait">Kuwait</option><option value="Bahrain">Bahrain</option><option value="India">India</option><option value="Other">Other</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="warehouse-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman" required><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-6">
           <label class="fp-label" for="warehouse-city">City / Municipality <span class="fp-req">*</span></label>
@@ -947,7 +943,7 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
       <h2 class="fp-section-title">4. Items Included</h2>
       <div class="fp-field">
         <label class="fp-label" for="warehouse-item-entry">Select Items <span class="fp-req">*</span></label>
-        <div id="warehouse-chips" class="fp-chips"><input id="warehouse-item-entry" class="fp-chip-entry" type="text" autocomplete="off" data-transient="true" placeholder="Add more items..."></div>
+        <div id="warehouse-chips" class="fp-chips"><input id="warehouse-item-entry" class="fp-chip-entry fp-lookup" type="text" data-lookup="item" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" data-transient="true" placeholder="Type or press Space to add items..."></div>
       </div>
     </section>
     <section class="fp-card">
@@ -977,6 +973,41 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
   </form>
 </section>
 </div>
+
+<!-- LOOKUP POPUP ("Select UOM", "Select Warehouse" …): one dialog serves every lookup field. Layout: design/masters/popup_reference.png -->
+<dialog id="lookup" class="lookup" aria-labelledby="lookup-title">
+  <div class="lk-head">
+    <span id="lookup-letter" class="lk-letter" aria-hidden="true"></span>
+    <h2 id="lookup-title" class="lk-title"></h2>
+    <div class="lk-keys" aria-hidden="true">
+      <span class="lk-key"><kbd>↑↓</kbd> Navigate</span>
+      <span class="lk-key"><kbd>Enter</kbd> Select</span>
+      <span class="lk-key"><kbd>Esc</kbd> Close</span>
+    </div>
+    <button type="button" class="lk-close" data-lookup-action="cancel" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="lk-body">
+    <section class="lk-card" aria-labelledby="lookup-list-title">
+      <h3 id="lookup-list-title" class="fp-section-title lk-list-title"></h3>
+      <label class="lk-label" for="lookup-search">Search</label>
+      <div class="lk-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="lookup-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-controls="lookup-rows" aria-expanded="true" aria-autocomplete="list">
+        <span id="lookup-count" class="lk-count" aria-live="polite"></span>
+      </div>
+      <div class="lk-table-wrap">
+        <table class="lk-table">
+          <thead><tr id="lookup-head"></tr></thead>
+          <tbody id="lookup-rows" role="listbox" aria-labelledby="lookup-list-title"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <div class="lk-foot">
+    <button type="button" class="fp-btn fp-btn-secondary" data-lookup-action="cancel">Cancel</button>
+    <button type="button" id="lookup-select" class="fp-btn fp-btn-primary" data-lookup-action="select"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="lookup-select-label"></span></button>
+  </div>
+</dialog>
 
 <!-- Notification toast (shared by all screens) -->
 <div id="toast" class="toast" role="status" aria-live="polite">
