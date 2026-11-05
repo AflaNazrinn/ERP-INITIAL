@@ -403,6 +403,7 @@ function mayHaveOpenSuggestions(input) {
 function arrowLeavesField(event) {
   const field = event.target;
   const key = event.key;
+  if (isLookupField(field)) return true;   // picked values only: no caret to move
   if (key === 'ArrowLeft' || key === 'ArrowRight') return caretAtEdge(field, key);
   if (field.tagName === 'TEXTAREA') {
     // Only the browser knows the wrapped lines: if ↑/↓ did not move the caret, it was on the last line that way.
@@ -505,6 +506,15 @@ function initKeyboardNavigation() {
 
   window.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing) return;   // IME composition: not a shortcut
+    // An open styled dropdown (.fp-select-list) keeps focus on its options and handles its own keys.
+    // After Enter picks an option of a dropdown that Enter opened (data-enter-opens), move on like a lookup pick.
+    const openSelect = event.target.closest?.('select');
+    if (openSelect?.matches(':open')) {
+      if (event.key === 'Enter' && openSelect.dataset.enterOpens !== undefined && openSelect.closest('form')) {
+        setTimeout(() => { if (!openSelect.matches(':open')) focusNextField(openSelect); }, 0);
+      }
+      return;
+    }
 
     // An open "Select …" popup takes every key; a lookup field's own keys come before the page's.
     if (byId('lookup').open) {
@@ -764,8 +774,17 @@ function showFormErrors(errors, reveal) {
 // Fields Enter walks through, in page order, ending on the Save button.
 function formEnterOrder(form, saveButton) {
   const fields = [...form.querySelectorAll('input:not([readonly]):not([disabled]):not([type="file"]), select, textarea')]
+    .filter(node => node.dataset.enterSkip === undefined)
     .filter(node => node.getClientRects().length > 0);
   return [...fields, saveButton];
+}
+
+// The stop after node in an Enter order. A field Enter skips (data-enter-skip) is not in the order
+// itself, so from there Enter goes to the first stop after it on the page.
+function fieldAfter(order, node) {
+  const index = order.indexOf(node);
+  if (index !== -1) return order[index + 1];
+  return order.find(other => other && node.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING);
 }
 
 // Today as a date input holds it (YYYY-MM-DD), in local time.
@@ -781,6 +800,17 @@ function focusField(node) {
   node.focus();
   if (node.select && node.type !== 'date') node.select();
 }
+
+// Moving on with Enter (or a pick / Esc in a popup): a lookup field opens its "Select …" popup straight
+// away, and a field with suggestions shows them. Tab, arrows and other focus moves only focus the field.
+function enterField(node) {
+  focusField(node);
+  if (isLookupField(node)) openLookup(node, { byKeyboard: true });
+  else if (node instanceof HTMLInputElement && node.list) {
+    try { node.showPicker(); } catch { /* not supported here: typing still shows the suggestions */ }
+  }
+}
+
 
 /* =====================================================================
    API client  (backend/public/api/*.php, behind Caddy on the same origin)
@@ -849,11 +879,38 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
    ===================================================================== */
 
 // Countries are a fixed list, not a table; the record keeps the name (customers.country).
+// Each carries its currency and calling code, which the forms fill in when the country is picked.
 const COUNTRIES = [
-  ['OM', 'Oman'], ['AE', 'United Arab Emirates'], ['SA', 'Saudi Arabia'], ['QA', 'Qatar'], ['KW', 'Kuwait'], ['BH', 'Bahrain'],
-  ['IN', 'India'], ['PK', 'Pakistan'], ['EG', 'Egypt'], ['JO', 'Jordan'], ['TR', 'Türkiye'], ['CN', 'China'], ['JP', 'Japan'],
-  ['KR', 'South Korea'], ['DE', 'Germany'], ['IT', 'Italy'], ['GB', 'United Kingdom'], ['US', 'United States'],
-].map(([code, name]) => ({ id: name, code, name }));
+  ['OM', 'Oman', 'OMR', '+968'], ['AE', 'United Arab Emirates', 'AED', '+971'], ['SA', 'Saudi Arabia', 'SAR', '+966'],
+  ['QA', 'Qatar', 'QAR', '+974'], ['KW', 'Kuwait', 'KWD', '+965'], ['BH', 'Bahrain', 'BHD', '+973'], ['IN', 'India', 'INR', '+91'],
+  ['PK', 'Pakistan', 'PKR', '+92'], ['EG', 'Egypt', 'EGP', '+20'], ['JO', 'Jordan', 'JOD', '+962'], ['TR', 'Türkiye', 'TRY', '+90'],
+  ['CN', 'China', 'CNY', '+86'], ['JP', 'Japan', 'JPY', '+81'], ['KR', 'South Korea', 'KRW', '+82'], ['DE', 'Germany', 'EUR', '+49'],
+  ['IT', 'Italy', 'EUR', '+39'], ['GB', 'United Kingdom', 'GBP', '+44'], ['US', 'United States', 'USD', '+1'],
+].map(([code, name, currency, dial]) => ({ id: name, code, name, currency, dial }));
+const countryNamed = name => COUNTRIES.find(country => country.name === name);
+
+/* Phone fields: a calling-code dropdown (select[data-phone-code]) in front of the number. The code
+   follows the country, Enter passes it by (data-enter-skip); ←, Tab or a click reach it to change it. */
+function fillPhoneCodes(select) {
+  select.replaceChildren(...COUNTRIES.map(country => {
+    const option = el('option', '', country.dial);
+    option.value = country.dial;
+    option.dataset.country = country.name;           // shown beside the code in the open list
+    return option;
+  }));
+}
+// One stored value: "+968 9123 4455". A number typed with its own + code is kept as typed.
+const joinPhone = (code, number) => {
+  const digits = String(number ?? '').trim();
+  if (!digits) return '';
+  return digits.startsWith('+') ? digits : `${code} ${digits}`;
+};
+// "+91 94470 12345" → ['+91', '94470 12345']; a number without a known code keeps the fallback code.
+function splitPhone(value, fallback) {
+  const text = String(value ?? '').trim();
+  const dial = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length).find(country => text.startsWith(`${country.dial} `) || text === country.dial)?.dial;
+  return dial ? [dial, text.slice(dial.length).trim()] : [fallback, text];
+}
 
 // title and list name the popup; plural counts its rows; columns are [rowKey, heading], the first shown as the code.
 const codeAndName = row => `${row.code} · ${row.name}`;
@@ -874,14 +931,36 @@ const LOOKUPS = {
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
-  country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries',
-    columns: [['code', 'Code'], ['name', 'Country Name']], display: row => row.name },
+  country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
+    columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
+  // The master Edit pages pick from the master lists on this page (the rows those lists show).
+  'master-category': { title: 'Select Category', letter: 'C', list: 'Category List', plural: 'categories',
+    rows: () => masterLookupRows(categoryList), columns: [['code', 'Code'], ['name', 'Category Name']], display: row => row.name },
+  'master-subcategory': { title: 'Select Sub-category', letter: 'S', list: 'Sub-category List', plural: 'sub-categories',
+    rows: () => categoryList.rows.flatMap(category => category.subCategories.split(',').map(name => name.trim()).filter(Boolean)
+      .map(name => ({ id: `${category.code}:${name}`, name, categoryName: category.name }))),
+    // Only the chosen category's sub-categories, once a category is filled in on the page.
+    filterFor: (rows, field) => {
+      const category = field.form?.querySelector('[data-key="category"]')?.value;
+      const own = rows.filter(row => row.categoryName === category);
+      return own.length ? own : rows;
+    },
+    columns: [['name', 'Sub-category Name'], ['categoryName', 'Category']], plainFirst: true, display: row => row.name },
+  'master-uom': { title: 'Select UOM', letter: 'U', list: 'UOM List', plural: 'units',
+    rows: () => masterLookupRows(uomList), columns: [['code', 'Code'], ['name', 'UOM Name']], display: row => row.name },
+  'master-brand': { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands',
+    rows: () => masterLookupRows(brandList), columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
+  'master-stock-point': { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points',
+    rows: () => masterLookupRows(stockPointList), columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: row => row.name },
 };
+
+// A master list's rows as lookup rows (its code is the id).
+const masterLookupRows = list => list.rows.map(row => ({ ...row, id: row.code }));
 
 // Each list is fetched once per page load; forgetLookups() drops lists after a save changes them.
 const lookupCache = {};
 async function loadLookup(kind) {
-  if (kind === 'country') return COUNTRIES;
+  if (LOOKUPS[kind].rows) return LOOKUPS[kind].rows();
   if (!lookupCache[kind]) {
     try {
       lookupCache[kind] = await apiRequest(LOOKUPS[kind].api);
@@ -915,7 +994,7 @@ function showServerErrors(error, fieldNode, reveal) {
   showToast('Could not save', error.message, true);
 }
 
-// Fields that pick into a list (chips) instead of holding one value: entry → { exclude, isEmpty, onPick, onClear }.
+// Fields that pick into a list (chips) instead of holding one value: entry → { exclude, onPick, onClear }.
 const lookupChipFields = new WeakMap();
 const lookup = { field: null, kind: '', rows: [], shown: [], active: 0, byKeyboard: false };
 const lookupIdInput = field => field.parentElement.querySelector('input[type="hidden"]');
@@ -938,21 +1017,28 @@ function setLookupValue(field, row, { silent = false } = {}) {
   if (!silent) field.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+let lookupOpening = false;                // set while the rows load, so a second request is ignored
 async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   const dialog = byId('lookup');
-  if (dialog.open) return;
+  if (dialog.open || lookupOpening) return;
   const kind = field.dataset.lookup;
   const config = LOOKUPS[kind];
-  let rows = await loadLookup(kind);
+  lookupOpening = true;
+  let rows;
+  try { rows = await loadLookup(kind); } finally { lookupOpening = false; }
+  if (dialog.open || !document.contains(field)) return;
   const parent = lookupParentField(field);
   const parentId = parent ? lookupIdInput(parent).value : '';
   if (parentId) rows = rows.filter(row => String(row[config.parentKey]) === parentId);
+  if (config.filterFor) rows = config.filterFor(rows, field);
   const excluded = lookupChipFields.get(field)?.exclude() || [];
   rows = rows.filter(row => !excluded.includes(row.id));
 
   Object.assign(lookup, { field, kind, rows, byKeyboard });
   const currentId = lookupIdInput(field)?.value ?? field.value;
-  lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId));
+  // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
+  lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
+    || (!lookupIdInput(field) && config.display(row) === field.value)));
   byId('lookup-letter').textContent = config.letter;
   byId('lookup-title').textContent = config.title;
   byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
@@ -1024,22 +1110,25 @@ function moveLookupActive(delta) {
   syncLookupActive();
 }
 
-function closeLookup() {
+// advance: Esc and keyboard picks move on to the next field; Cancel and the backdrop stay on the field.
+function closeLookup({ advance = false } = {}) {
   const dialog = byId('lookup');
   if (!dialog.open) return;
   dialog.close();
   if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
-  if (document.contains(lookup.field)) lookup.field.focus();
+  if (!document.contains(lookup.field)) return;
+  if (advance) focusNextField(lookup.field); else focusField(lookup.field);
 }
 
-// Picks the highlighted row. Keyboard use moves on to the next field, like Enter does.
-async function pickLookupRow() {
+// Picks the highlighted row. Enter (advance) and keyboard use move on to the next field.
+async function pickLookupRow({ advance = false } = {}) {
   const row = lookup.shown[lookup.active];
   if (!row) return;
-  const { field, byKeyboard } = lookup;
+  const { field } = lookup;
+  const moveOn = advance || lookup.byKeyboard;
   closeLookup();
   const chips = lookupChipFields.get(field);
-  if (chips) { chips.onPick(row); return; }
+  if (chips) { chips.onPick(row); if (moveOn) focusNextField(field); return; }
   const parent = lookupParentField(field);
   if (parent && !lookupIdInput(parent).value) {   // picked a child first: fill in its parent too
     const parentRows = await loadLookup(parent.dataset.lookup);
@@ -1047,13 +1136,14 @@ async function pickLookupRow() {
     if (parentRow) setLookupValue(parent, parentRow, { silent: true });
   }
   setLookupValue(field, row);
-  if (byKeyboard) focusNextField(field);
+  if (moveOn) focusNextField(field);
 }
 
 function focusNextField(field) {
   const form = field.closest('form');
   const order = formEnterOrder(form, form.querySelector('.fp-footer .fp-btn-primary'));
-  focusField(order[order.indexOf(field) + 1] || field);
+  const next = fieldAfter(order, field);
+  if (next) enterField(next); else focusField(field);   // the last field: stay, without reopening its popup
 }
 
 // Keys on a lookup field. Returns true when handled.
@@ -1062,7 +1152,6 @@ function handleLookupFieldKeys(event) {
   if (!isLookupField(field)) return false;
   const { key } = event;
   const chips = lookupChipFields.get(field);
-  const isEmpty = chips ? chips.isEmpty() : field.value === '';
   const open = query => { event.preventDefault(); if (!event.repeat) openLookup(field, { query, byKeyboard: true }); return true; };
   if (key === 'F4' || (event.altKey && key === 'ArrowDown')) return open('');
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
@@ -1071,7 +1160,8 @@ function handleLookupFieldKeys(event) {
     if (chips) chips.onClear(); else if (field.value !== '') setLookupValue(field, null);
     return true;
   }
-  if (key === 'Enter' && !event.shiftKey && isEmpty) return open('');
+  // Enter always opens the popup, with the current value highlighted: Enter again keeps it and moves on, Esc moves on.
+  if (key === 'Enter' && !event.shiftKey) return open('');
   if (key === ' ') return open('');
   // Shift+X stays the Add Row shortcut on forms with rows.
   if (key.length === 1 && !(event.shiftKey && key.toLowerCase() === 'x')) return open(key);
@@ -1082,13 +1172,18 @@ function handleLookupFieldKeys(event) {
 function handleLookupDialogKeys(event) {
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
-  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeLookup(); return; }
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeLookup({ advance: true }); return; }
   if (key === 'Tab' && !ctrl && !event.altKey) { event.preventDefault(); moveFocusByTab(event.shiftKey); return; }
   if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // page shortcuts wait until it closes
-  if (target !== byId('lookup-search') || ctrl || event.altKey) return;
+  if (ctrl || event.altKey) return;
+  // On the Cancel / Select buttons the arrows move between controls (↑ goes back to the search box).
+  if (target !== byId('lookup-search')) {
+    if (key.startsWith('Arrow')) { event.preventDefault(); moveFocusByArrow(key); }
+    return;
+  }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
   if (steps[key]) { event.preventDefault(); moveLookupActive(steps[key]); return; }
-  if (key === 'Enter') { event.preventDefault(); if (!event.repeat) pickLookupRow(); }
+  if (key === 'Enter') { event.preventDefault(); if (!event.repeat) pickLookupRow({ advance: true }); }
 }
 
 // A list of records picked one at a time (Brand → items, Supplier → brands, Warehouse → items).
@@ -1114,7 +1209,6 @@ function createLookupChips({ container, entry, onChange }) {
   const change = next => { picked = next; render(); onChange(); };
   lookupChipFields.set(input, {
     exclude: () => picked.map(row => row.id),
-    isEmpty: () => picked.length === 0,
     onPick(row) { clearFieldError(input); change([...picked, row]); input.focus(); },
     onClear() { if (picked.length) change(picked.slice(0, -1)); },
   });
@@ -1314,8 +1408,8 @@ function handleItemPageKeys(event) {
     event.preventDefault();
     if (target.type === 'date' && target.closest('.fp-source-row')) { addSourceRow(); return true; }
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
-    const next = order[order.indexOf(target) + 1];
-    if (next) focusField(next); else saveItem();
+    const next = fieldAfter(order, target);
+    if (next) enterField(next); else saveItem();
     return true;
   }
   return false;
@@ -1438,7 +1532,9 @@ function createFormPage(config) {
     const row = byId(lists[name].template).content.firstElementChild.cloneNode(true);
     const defaults = lists[name].defaults?.() || {};
     for (const cell of row.querySelectorAll('[data-field]')) {
-      if (defaults[cell.dataset.field] !== undefined) cell.defaultValue = defaults[cell.dataset.field];
+      if (defaults[cell.dataset.field] !== undefined) {
+        if (cell.tagName === 'SELECT') cell.value = defaults[cell.dataset.field]; else cell.defaultValue = defaults[cell.dataset.field];
+      }
       if (values[cell.dataset.field] !== undefined) cell.value = values[cell.dataset.field];
     }
     byId(lists[name].body).append(row);
@@ -1581,7 +1677,7 @@ function createFormPage(config) {
       }
       if (config.onEnter?.(event)) return true;
       const order = formEnterOrder(el('form'), el('save'));
-      focusField(order[order.indexOf(target) + 1] || el('save'));
+      enterField(fieldAfter(order, target) || el('save'));
       return true;
     }
     return config.onKey?.(event) || false;
@@ -1784,6 +1880,14 @@ function showPartyTab(tab) {
   for (const panel of partyEl('form').querySelectorAll('[data-tab-panel]')) panel.hidden = panel.dataset.tabPanel !== tab;
   for (const button of partyEl('form').querySelectorAll('[data-tab]')) button.setAttribute('aria-selected', String(button.dataset.tab === tab));
 }
+
+// The calling codes on one side of the form (Creditors or Debtors) follow that side's country.
+function syncPartyPhoneCodes(under) {
+  const dial = countryNamed(partyEl(under === 'debtors' ? 'cus-country' : 'sup-country').value)?.dial;
+  if (!dial) return;
+  for (const select of partyEl('form').querySelectorAll(`[data-under="${under}"] select[data-phone-code]`)) select.value = dial;
+}
+const partyDial = under => countryNamed(partyEl(under === 'debtors' ? 'cus-country' : 'sup-country').value)?.dial || '+968';
 
 // Show what the Under choice selects: the matching General panel, labels and placeholders.
 function syncPartyVariant() {
@@ -2078,8 +2182,10 @@ const partyForm = createFormPage({
     showNextCode(partyEl('cus-code'), 'api/customers.php');
   },
   lists: {
-    supplierContacts: { body: 'party-sup-contacts', template: 'party-contact-row', initial: 2, label: index => `Contact Person ${index + 1}` },
-    customerContacts: { body: 'party-cus-contacts', template: 'party-contact-row', initial: 1, label: index => `Contact Person ${index + 1}` },
+    supplierContacts: { body: 'party-sup-contacts', template: 'party-contact-row', initial: 2, label: index => `Contact Person ${index + 1}`,
+      defaults: () => ({ mobileCode: partyDial('creditors') }) },
+    customerContacts: { body: 'party-cus-contacts', template: 'party-contact-row', initial: 1, label: index => `Contact Person ${index + 1}`,
+      defaults: () => ({ mobileCode: partyDial('debtors') }) },
     quotations: { body: 'party-quote-rows', template: 'party-quote-row', initial: 1 },
     orders: { body: 'party-order-rows', template: 'party-order-row', initial: 1, defaults: () => ({ date: todayInputValue() }) },
   },
@@ -2138,17 +2244,17 @@ const partyForm = createFormPage({
     const d = Object.fromEntries(generalFields.map(node => [node.id.replace(`party-${variant}-`, ''), node.value.trim()]));
     const lines = (...values) => values.filter(Boolean).join('\n');
     // supplier_contacts / customer_contacts keep a name and one number per contact.
-    const contactRows = filledRows(contacts).map(row => ({ name: row.name.trim(), number: row.mobile.trim() }));
+    const contactRows = filledRows(contacts).map(row => ({ name: row.name.trim(), number: joinPhone(row.mobileCode, row.mobile) }));
     // Mapped onto the suppliers / customers columns of the data model.
     const payload = variant === 'sup' ? {
       supplierName: d.name, address: d.address, country: d.country, currency: d.currency, taxRegNo: d.tax, remarks: d.comments,
-      ownerDetails: d.owner, phone: d.mobile, telephone: d.phone, email: d.email,
+      ownerDetails: d.owner, phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email,
       debitLimit: d['credit-limit'], debitDays: d['credit-days'], paymentTerms: d.terms, openingBalance: d.opening,
       accountDetails: lines(d.bank && `Bank: ${d.bank}`, d.branch && `Branch: ${d.branch}`, d.iban && `Account / IBAN: ${d.iban}`, d.website && `Website: ${d.website}`),
       brandIds: supplierBrands.ids(), contacts: contactRows,
     } : {
       customerName: d.name, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip,
-      phone: d.mobile, telephone: d.phone, email: d.email, ownerDetails: d.owner,
+      phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email, ownerDetails: d.owner,
       creditLimit: d['credit-limit'], creditDays: d['credit-days'], discountPercent: d.discount, salesman: d.salesman, taxRegNo: d.tax,
       accountDetails: lines(d.other1, d.other2, d.other3), comments: d.comments, contacts: contactRows,
     };
@@ -2156,6 +2262,14 @@ const partyForm = createFormPage({
   },
   init() {
     partyEl('under').addEventListener('change', syncPartyVariant);
+    // Picking the supplier's country sets its currency. This runs before the form records the edit,
+    // so Ctrl+Z undoes both together.
+    partyEl('sup-country').addEventListener('input', () => {
+      const country = countryNamed(partyEl('sup-country').value);
+      if (country) partyEl('sup-currency').value = country.currency;
+      syncPartyPhoneCodes('creditors');
+    });
+    partyEl('cus-country').addEventListener('input', () => syncPartyPhoneCodes('debtors'));
     partyEl('form').addEventListener('click', event => {
       const tab = event.target.closest('[data-tab]');
       if (tab) showPartyTab(tab.dataset.tab);
@@ -2205,10 +2319,1164 @@ const partyForm = createFormPage({
   },
 });
 
+/* ---------- Master list pages  (#/masters/supplier, customer, item, uom, brand, category, stock-point) ----------
+   One builder for every "<Noun> Master" list: table, search, Filter popup, Import popup, CSV export.
+   Each page declares its columns; rows are dummy data held in memory until the pages read the API.
+   View, Edit and Delete are not built yet: they show a "coming soon" toast. */
+
+const ML_ICONS = {
+  view: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+  edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>',
+  delete: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"></path></svg>',
+};
+const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const normalHeader = text => String(text).toLowerCase().replace(/[^a-z]/g, '');
+
+// Column cell styles: code (amber mono), name (bold capitals), pill, status (green when active), upper, mono, wrap (long text), text.
+const ML_CELL_CLASS = { code: 'ml-code', name: 'ml-name', upper: 'ml-email', mono: 'ml-mono', wrap: 'ml-wrap' };
+
+// A column's value as shown in the table and the View popup ("—" when empty).
+function masterValue(column, value) {
+  const text = String(value ?? '');
+  if (!text) return document.createTextNode('—');
+  if (column.type === 'pill') return el('span', 'ml-pill', text);
+  if (column.type === 'status') return el('span', `ml-status${/^active/i.test(text) ? '' : ' ml-status-off'}`, text);
+  return document.createTextNode(text);
+}
+
+function masterCell(column, value) {
+  const td = el('td', ML_CELL_CLASS[column.type] || '');
+  td.append(masterValue(column, value));
+  return td;
+}
+
+// config: key ('item' → #item-list-page), route, newRoute, noun, nouns (plural), codePrefix + codeDigits
+// (auto-numbering), columns [{ key, label, type, headers (spreadsheet aliases), read(value) → value or throws,
+// inTable: false for detail columns shown only in View, Edit, import and export }],
+// sample (template row values by key), rows (newest first; every row has code and name).
+function createMasterList(config) {
+  const page = `${config.key}-list`;
+  const $ = suffix => byId(`${page}-${suffix}`);
+  const tableColumns = config.columns.filter(column => column.inTable !== false);
+  const caps = config.noun === config.noun.toUpperCase();          // UOM stays UOM in sentences
+  const list = {
+    config, rows: config.rows, applied: new Set(), $, render,
+    one: caps ? config.noun : config.noun.toLowerCase(),
+    many: caps ? config.nouns : config.nouns.toLowerCase(),
+  };
+  list.count = count => `${count} ${count === 1 ? list.one : list.many}`;
+
+  function render() {
+    const query = $('search').value.trim().toLowerCase();
+    const { applied, rows: all } = list;
+    const rows = all.filter(row => (applied.size === 0 || applied.has(row.code))
+      && (!query || config.columns.some(column => String(row[column.key] ?? '').toLowerCase().includes(query))));
+    $('body').replaceChildren(...rows.map(row => {
+      const tr = el('tr');
+      tr.dataset.code = row.code;
+      const actions = el('td', 'ml-col-actions');
+      const group = el('div', 'ml-actions');
+      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ['delete', 'Delete']]) {
+        const button = el('button', `ml-act${action === 'delete' ? ' ml-act-danger' : ''}`);
+        button.type = 'button';
+        button.dataset.action = action;
+        button.setAttribute('aria-label', `${label} ${row.name}`);
+        button.innerHTML = ML_ICONS[action];
+        button.append(el('span', '', label));
+        group.append(button);
+      }
+      actions.append(group);
+      tr.append(...tableColumns.map(column => masterCell(column, row[column.key])), actions);
+      return tr;
+    }));
+    $('empty').hidden = rows.length > 0;
+    const filtered = rows.length < all.length ? ` (filtered from ${all.length})` : '';
+    $('count').textContent = rows.length
+      ? `Showing 1 to ${rows.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
+    $('filter-label').textContent = applied.size ? `Filter (${applied.size})` : 'Filter';
+    $('filter').classList.toggle('is-on', applied.size > 0);
+  }
+
+  // "/" search, F filter, I import, Shift+N new record, Esc back to the Masters popup (Esc in a filled search clears it first).
+  function handleKeys(event) {
+    if (byId('master-filter').open) return handleMasterFilterKeys(event);
+    if (byId('master-import').open) return handleMasterImportKeys(event);
+    if (byId('master-view').open) return handleMasterViewKeys(event);
+    if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+    if (event.ctrlKey || event.altKey || event.metaKey) return false;
+    const search = $('search');
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (event.repeat) return true;
+      if (event.target === search && search.value) {
+        search.value = '';
+        render();
+      } else {
+        leavePageToMenu();
+      }
+      return true;
+    }
+    if (isTextEntry(event.target)) return false;
+    const letter = event.key.toLowerCase();
+    if (event.key === '/') {
+      event.preventDefault();
+      search.focus();
+    } else if (letter === 'f' && !event.shiftKey) {
+      event.preventDefault();
+      if (!event.repeat) openMasterFilter(list);
+    } else if (letter === 'i' && !event.shiftKey) {
+      event.preventDefault();
+      if (!event.repeat) openMasterImport(list);
+    } else if (event.key === 'N' && event.shiftKey) {
+      event.preventDefault();
+      location.hash = config.newRoute;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  list.init = () => {
+    $('head').replaceChildren(...tableColumns.map(column => el('th', '', column.label)), el('th', 'ml-col-actions', 'Actions'));
+    $('search').addEventListener('input', render);
+    $('back').addEventListener('click', leavePageToMenu);
+    $('filter').addEventListener('click', () => openMasterFilter(list));
+    $('import').addEventListener('click', () => openMasterImport(list));
+    $('body').addEventListener('click', event => {
+      const button = event.target.closest('[data-action]');
+      const row = button && list.rows.find(entry => entry.code === button.closest('tr').dataset.code);
+      if (!row) return;
+      if (button.dataset.action === 'view') openMasterView(list, row);
+      else if (button.dataset.action === 'edit') location.hash = masterEditHash(list, row);
+      else deleteMasterRow(list, row);
+    });
+  };
+  // After Save on the Edit page or a delete, focus lands back on that row (or the row now in its place).
+  list.focusRow = code => {
+    const tr = [...$('body').rows].find(entry => entry.dataset.code === code) || $('body').rows[0];
+    (tr?.querySelector('[data-action="edit"]') || $('search')).focus();
+  };
+
+  FORM_KEY_HANDLERS[page] = handleKeys;
+  FORM_PAGES[config.route] = {
+    page,
+    reset() {
+      $('search').value = '';
+      list.applied.clear();
+      render();
+    },
+    firstField() {
+      const code = list.returnTo;
+      list.returnTo = null;
+      const tr = code && [...$('body').rows].find(entry => entry.dataset.code === code);
+      return tr?.querySelector('[data-action="edit"]') || $('body').querySelector('button') || $('search');
+    },
+  };
+  return list;
+}
+
+/* ---------- Filter popup (#master-filter, shared by the list pages) ----------
+   Ticks pick which records the list shows; none ticked shows them all.
+   Keys: ↑/↓ move between the search box and the rows, Space ticks, Enter applies
+   (Ctrl+Enter from anywhere), Esc closes without applying. */
+
+const masterFilter = { list: null, picked: new Set(), opener: null };
+const mfEl = suffix => byId(`master-filter-${suffix}`);
+const mfVisibleRows = () => {
+  const query = mfEl('search').value.trim().toLowerCase();
+  return [...masterFilter.list.rows].sort((a, b) => a.code.localeCompare(b.code))
+    .filter(row => !query || row.code.toLowerCase().includes(query) || row.name.toLowerCase().includes(query));
+};
+
+function renderMasterFilterList() {
+  const rows = mfVisibleRows();
+  mfEl('list').replaceChildren(...rows.map(row => {
+    const label = el('label', 'sf-check sf-row');
+    const box = el('input', 'sf-radio');
+    box.type = 'checkbox';
+    box.value = row.code;
+    box.checked = masterFilter.picked.has(row.code);
+    label.append(box, el('span', 'sf-code', row.code), el('span', 'sf-name', row.name));
+    return label;
+  }));
+  mfEl('empty').hidden = rows.length > 0;
+  syncMasterFilterCounts();
+}
+
+function syncMasterFilterCounts() {
+  const { list, picked } = masterFilter;
+  const total = list.rows.length;
+  const all = mfEl('all');
+  all.checked = picked.size === total;
+  all.indeterminate = picked.size > 0 && picked.size < total;
+  mfEl('badge').textContent = `${picked.size} of ${total} selected`;
+  mfEl('summary').replaceChildren(`${picked.size} of ${total} ${list.many} selected `,
+    el('span', 'sf-muted', `(${mfVisibleRows().length} visible)`));
+}
+
+function openMasterFilter(list) {
+  Object.assign(masterFilter, { list, picked: new Set(list.applied), opener: document.activeElement });
+  mfEl('title').textContent = `Filter ${list.config.nouns}`;
+  mfEl('sub').textContent = `Search and select the ${list.many} to show`;
+  mfEl('search').placeholder = `Filter by ${list.one} code or name...`;
+  mfEl('search').setAttribute('aria-label', `Filter by ${list.one} code or name`);
+  mfEl('list').setAttribute('aria-label', list.config.nouns);
+  mfEl('search').value = '';
+  renderMasterFilterList();
+  document.documentElement.classList.add('has-modal');
+  byId('master-filter').showModal();
+  mfEl('search').focus();
+}
+
+function closeMasterFilter() {
+  const dialog = byId('master-filter');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  const back = masterFilter.opener;
+  (back && document.contains(back) && back !== document.body ? back : masterFilter.list.$('filter')).focus();
+}
+
+function applyMasterFilter() {
+  const { list } = masterFilter;
+  list.applied = new Set(masterFilter.picked);
+  list.render();
+  closeMasterFilter();
+  const count = list.applied.size;
+  showToast('Filter applied', count ? `Showing ${list.count(count)}.` : `Showing all ${list.many}.`);
+}
+
+function resetMasterFilter() {
+  masterFilter.picked.clear();
+  masterFilter.list.applied.clear();
+  mfEl('search').value = '';
+  renderMasterFilterList();
+  masterFilter.list.render();
+  mfEl('search').focus();
+}
+
+// Saves rows (arrays of cells) as a CSV file Excel opens with the right characters (BOM first).
+function downloadCsv(fileName, lines) {
+  const cell = value => `"${String(value).replace(/"/g, '""')}"`;
+  const blob = new Blob([`﻿${lines.map(line => line.map(cell).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const link = el('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+const masterFileName = (list, suffix) => `${list.config.nouns.toLowerCase().replace(/\s+/g, '-')}-${suffix}.csv`;
+
+// CSV of the ticked records, or of every record when none is ticked.
+function exportMasterRows() {
+  const { list, picked } = masterFilter;
+  const { columns } = list.config;
+  const rows = list.rows.filter(row => picked.size === 0 || picked.has(row.code));
+  downloadCsv(masterFileName(list, today.toISOString().slice(0, 10)),
+    [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
+  showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
+}
+
+function handleMasterFilterKeys(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeMasterFilter(); return true; }
+  if (key === 'Enter' && (ctrl || target === mfEl('search') || target.classList.contains('sf-radio'))) {
+    event.preventDefault();
+    if (!event.repeat) applyMasterFilter();
+    return true;
+  }
+  if (ctrl || event.altKey || (key !== 'ArrowDown' && key !== 'ArrowUp')) return false;
+  // ↑/↓ walk search → Select All → each row → Apply Filters; other controls use the page's arrow navigation.
+  const stops = [mfEl('search'), mfEl('all'), ...mfEl('list').querySelectorAll('input[type="checkbox"]'),
+    byId('master-filter').querySelector('[data-sf="apply"]')];
+  const index = stops.indexOf(target);
+  if (index === -1 || (index === stops.length - 1 && key === 'ArrowDown')) return false;   // Apply is the bottom
+  event.preventDefault();
+  stops[Math.max(0, Math.min(stops.length - 1, index + (key === 'ArrowDown' ? 1 : -1)))].focus();
+  return true;
+}
+
+function initMasterFilter() {
+  const dialog = byId('master-filter');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeMasterFilter(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeMasterFilter(); return; }   // backdrop
+    const action = event.target.closest('[data-sf]')?.dataset.sf;
+    if (action === 'close') closeMasterFilter();
+    else if (action === 'apply') applyMasterFilter();
+    else if (action === 'reset') resetMasterFilter();
+    else if (action === 'export') exportMasterRows();
+    else if (action === 'visible' || action === 'none') {
+      for (const row of action === 'visible' ? mfVisibleRows() : masterFilter.list.rows) {
+        if (action === 'visible') masterFilter.picked.add(row.code); else masterFilter.picked.delete(row.code);
+      }
+      renderMasterFilterList();
+    }
+  });
+  mfEl('search').addEventListener('input', renderMasterFilterList);
+  mfEl('all').addEventListener('change', event => {
+    masterFilter.picked = new Set(event.target.checked ? masterFilter.list.rows.map(row => row.code) : []);
+    renderMasterFilterList();
+  });
+  mfEl('list').addEventListener('change', event => {
+    const { value, checked } = event.target;
+    if (checked) masterFilter.picked.add(value); else masterFilter.picked.delete(value);
+    syncMasterFilterCounts();
+  });
+}
+
+/* ---------- Spreadsheet reading (import) ----------
+   Every reader returns rows as arrays of cell strings. No library: the CSP allows 'self' only.
+   .xlsx is a zip of XML parts, unzipped with the browser's DecompressionStream. An ".xls"
+   export is often an HTML table or plain text, and those are read; a real binary (BIFF)
+   .xls is not, and the error asks for .xlsx or .csv. */
+
+const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+
+// Quoted cells may hold the delimiter, doubled quotes and line breaks. The delimiter is
+// whichever of tab ; | , appears most in the first line.
+function parseDelimited(text) {
+  const firstLine = text.slice(0, text.search(/\r?\n|$/));
+  const delimiter = ['\t', ';', '|', ','].reduce((best, mark) =>
+    firstLine.split(mark).length > firstLine.split(best).length ? mark : best, ',');
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"' && cell === '') quoted = true;
+    else if (ch === delimiter) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+function parseHtmlTable(text) {
+  const table = new DOMParser().parseFromString(text, 'text/html').querySelector('table');
+  if (!table) throw new Error('No table was found in this file.');
+  return [...table.rows].map(tr => [...tr.cells].map(td => td.textContent.trim()));
+}
+
+async function readZipEntries(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  let end = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { end = i; break; }
+  }
+  if (end < 0) throw new Error('This .xlsx file is damaged or not a real Excel file.');
+  const entries = new Map();
+  let at = view.getUint32(end + 16, true);
+  for (let n = view.getUint16(end + 10, true); n > 0; n--) {
+    const nameLength = view.getUint16(at + 28, true);
+    entries.set(new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLength)), {
+      method: view.getUint16(at + 10, true), size: view.getUint32(at + 20, true), offset: view.getUint32(at + 42, true),
+    });
+    at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  return async name => {
+    const entry = entries.get(name);
+    if (!entry) return null;
+    const start = entry.offset + 30 + view.getUint16(entry.offset + 26, true) + view.getUint16(entry.offset + 28, true);
+    const data = bytes.subarray(start, start + entry.size);
+    if (entry.method === 0) return new TextDecoder().decode(data);
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  };
+}
+
+// First worksheet of an .xlsx file. Cell references (B7) place each value in its column, so empty cells keep their gap.
+async function parseXlsx(buffer) {
+  const read = await readZipEntries(buffer);
+  const xml = text => new DOMParser().parseFromString(text, 'application/xml');
+  const shared = [...xml((await read('xl/sharedStrings.xml')) || '<sst/>').getElementsByTagName('si')]
+    .map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join(''));
+  const sheet = await read('xl/worksheets/sheet1.xml');
+  if (!sheet) throw new Error('No worksheet was found in this .xlsx file.');
+  const column = ref => [...ref.replace(/\d+/g, '')].reduce((sum, ch) => sum * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+  return [...xml(sheet).getElementsByTagName('row')].map(row => {
+    const cells = [];
+    [...row.getElementsByTagName('c')].forEach((c, index) => {
+      const type = c.getAttribute('t');
+      const raw = c.getElementsByTagName('v')[0]?.textContent ?? '';
+      const value = type === 's' ? shared[Number(raw)] ?? ''
+        : type === 'inlineStr' ? [...c.getElementsByTagName('t')].map(t => t.textContent).join('')
+        : raw;
+      cells[c.getAttribute('r') ? column(c.getAttribute('r')) : index] = value;
+    });
+    return Array.from(cells, value => value ?? '');
+  });
+}
+
+async function readSpreadsheet(file) {
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+  if (!['csv', 'txt', 'xlsx', 'xls'].includes(ext)) throw new Error('Choose a .csv, .xlsx or .xls file.');
+  if (file.size > IMPORT_MAX_BYTES) throw new Error('The file is larger than 5 MB.');
+  const buffer = await file.arrayBuffer();
+  const head = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  if (head[0] === 0x50 && head[1] === 0x4b) return parseXlsx(buffer);                   // "PK": zip (.xlsx)
+  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {   // binary Excel 97-2003
+    throw new Error('This is an old binary .xls file. Open it in Excel and save it as .xlsx or .csv, then import that.');
+  }
+  const text = new TextDecoder().decode(buffer).replace(/^﻿/, '');
+  return /^\s*</.test(text) ? parseHtmlTable(text) : parseDelimited(text);
+}
+
+/* ---------- Import popup (#master-import, shared by the list pages) ----------
+   Reads the file as soon as it is chosen and shows what will happen; Start Import applies it.
+   Spreadsheet headings match a column by its key, its label or one of its aliases (case, spaces
+   and punctuation ignored). A duplicate matches an existing record by code or by name (ignoring case).
+   Rows are added to the page's in-memory list until the pages read and write the API. */
+
+const masterImport = { list: null, rows: [], opener: null };
+const miEl = suffix => byId(`master-import-${suffix}`);
+const miMode = () => byId('master-import').querySelector('input[name="master-import-mode"]:checked').value;
+const findMasterRow = (rows, row) => rows.find(existing => (row.code && sameText(existing.code, row.code)) || sameText(existing.name, row.name));
+
+// Header row: the first of the top five rows naming the name column.
+function masterRowsFromSheet(list, sheet) {
+  const { columns, noun } = list.config;
+  const byHeader = {};
+  for (const column of columns) {
+    for (const header of [column.key, column.label, ...(column.headers || [])]) byHeader[normalHeader(header)] ??= column;
+  }
+  const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.some(cell => byHeader[normalHeader(cell)]?.key === 'name'));
+  if (headerIndex === -1) throw new Error(`No "${noun} Name" column was found. Download the template to see the expected columns.`);
+  const sheetColumns = sheet[headerIndex].map(cell => byHeader[normalHeader(cell)]);
+  const rows = [], issues = [];
+  sheet.slice(headerIndex + 1).forEach((cells, index) => {
+    if (cells.every(cell => String(cell).trim() === '')) return;
+    const line = headerIndex + index + 2;
+    const raw = {};
+    sheetColumns.forEach((column, at) => { if (column && !raw[column.key]) raw[column.key] = String(cells[at] ?? '').trim(); });
+    if (!raw.name) { issues.push(`Row ${line}: ${list.one} name is empty`); return; }
+    try {
+      rows.push(Object.fromEntries(columns.map(column => [column.key, column.read ? column.read(raw[column.key] || '') : raw[column.key] || ''])));
+    } catch (error) {
+      issues.push(`Row ${line}: ${error.message}`);
+    }
+  });
+  return { rows, issues };
+}
+
+function renderMasterImportPreview(fileName, { rows, issues }) {
+  const { list } = masterImport;
+  masterImport.rows = rows;
+  const duplicates = rows.filter(row => findMasterRow(list.rows, row)).length;
+  miEl('drop').hidden = true;
+  miEl('file').hidden = false;
+  miEl('file-name').textContent = fileName;
+  miEl('file-summary').textContent = `${list.count(rows.length)} ready · ${rows.length - duplicates} new · ${duplicates} already exist`
+    + (issues.length ? ` · ${issues.length} row${issues.length === 1 ? '' : 's'} skipped` : '');
+  miEl('file-issues').replaceChildren(...issues.slice(0, 3).map(text => el('li', '', text)),
+    ...(issues.length > 3 ? [el('li', '', `…and ${issues.length - 3} more`)] : []));
+  miEl('start').disabled = rows.length === 0;
+}
+
+async function loadMasterImportFile(file) {
+  if (!file) return;
+  try {
+    renderMasterImportPreview(file.name, masterRowsFromSheet(masterImport.list, await readSpreadsheet(file)));
+    miEl('start').focus();
+    if (miEl('start').disabled) miEl('file').querySelector('[data-si="browse"]').focus();
+  } catch (error) {
+    clearMasterImportFile();
+    showToast('Could not read the file', error.message || 'The file could not be read.', true);
+  }
+}
+
+function clearMasterImportFile() {
+  masterImport.rows = [];
+  miEl('input').value = '';
+  miEl('file').hidden = true;
+  miEl('drop').hidden = false;
+  miEl('start').disabled = true;
+}
+
+function openMasterImport(list) {
+  Object.assign(masterImport, { list, opener: document.activeElement });
+  miEl('title').textContent = `Import ${list.config.nouns}`;
+  miEl('sub').textContent = `Add many ${list.many} at once from a spreadsheet`;
+  miEl('icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg').cloneNode(true));
+  clearMasterImportFile();
+  byId('master-import').querySelector('input[value="skip"]').checked = true;
+  document.documentElement.classList.add('has-modal');
+  byId('master-import').showModal();
+  miEl('drop').focus();
+}
+
+function closeMasterImport() {
+  const dialog = byId('master-import');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  const back = masterImport.opener;
+  (back && document.contains(back) && back !== document.body ? back : masterImport.list.$('import')).focus();
+}
+
+function startMasterImport() {
+  const { list } = masterImport;
+  if (!masterImport.rows.length) return;
+  const overwrite = miMode() === 'overwrite';
+  const { codePrefix, codeDigits } = list.config;
+  // Auto-numbering continues the page's series (SUP005 → SUP006, ITM-2026-0006 → ITM-2026-0007);
+  // imported codes in other formats (V-77) do not move it.
+  const series = new RegExp(`^${codePrefix.replace(/[-]/g, '\\-')}(\\d+)$`, 'i');
+  let next = Math.max(0, ...list.rows.map(row => Number(series.exec(row.code)?.[1] ?? 0))) + 1;
+  const added = [];
+  let updated = 0, skipped = 0;
+  for (const row of masterImport.rows) {
+    const existing = findMasterRow(list.rows, row) || findMasterRow(added, row);
+    if (existing && overwrite) {
+      const { code, ...details } = row;
+      Object.assign(existing, details);
+      updated++;
+    } else if (existing) {
+      skipped++;
+    } else {
+      added.push({ ...row, code: row.code ? row.code.toUpperCase() : `${codePrefix}${String(next++).padStart(codeDigits, '0')}` });
+    }
+  }
+  list.rows.unshift(...added);                     // newest first, in the file's order
+  list.render();
+  closeMasterImport();
+  showToast('Import complete', `${added.length} added, ${overwrite ? `${updated} updated` : `${skipped} skipped`}.`);
+}
+
+function handleMasterImportKeys(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeMasterImport(); return true; }
+  if (key === 'Enter' && ctrl) { event.preventDefault(); if (!event.repeat) startMasterImport(); return true; }
+  if (!key.startsWith('Arrow') || ctrl || event.altKey) return false;
+  // The strategy radios sit side by side: ←/→ pick the other option, ↑/↓ leave the row.
+  // Arrows coming into the row land on the chosen option, not the nearest one.
+  const dialog = byId('master-import');
+  const chosen = dialog.querySelector('input[name="master-import-mode"]:checked');
+  const above = miEl('file').hidden ? miEl('drop') : miEl('file').querySelector('[data-si="browse"]');
+  const below = miEl('start').disabled ? dialog.querySelector('.si-foot [data-si="close"]') : miEl('start');
+  let next = null;
+  if (target.name === 'master-import-mode') {
+    if (key === 'ArrowUp') next = above;
+    else if (key === 'ArrowDown') next = below;
+    else {
+      next = dialog.querySelector(`input[name="master-import-mode"]:not([value="${target.value}"])`);
+      next.checked = true;
+    }
+  } else if (key === 'ArrowDown' && (target === miEl('drop') || miEl('file').contains(target))) {
+    next = chosen;
+  } else if (key === 'ArrowUp' && target.closest('.si-foot')) {
+    next = chosen;
+  }
+  if (!next) return false;
+  event.preventDefault();
+  next.focus();
+  return true;
+}
+
+function initMasterImport() {
+  const dialog = byId('master-import');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeMasterImport(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeMasterImport(); return; }   // backdrop
+    const action = event.target.closest('[data-si]')?.dataset.si;
+    if (action === 'close') closeMasterImport();
+    else if (action === 'browse') miEl('input').click();
+    else if (action === 'clear') { clearMasterImportFile(); miEl('drop').focus(); }
+    else if (action === 'start') startMasterImport();
+    else if (action === 'template') {
+      const { list } = masterImport;
+      const { columns, sample } = list.config;
+      downloadCsv(masterFileName(list, 'import-template'), [columns.map(column => column.label), columns.map(column => sample[column.key] ?? '')]);
+      showToast('Template downloaded', `Fill one ${list.one} per row. Leave Code blank to number it automatically.`);
+    }
+  });
+  miEl('input').addEventListener('change', event => loadMasterImportFile(event.target.files[0]));
+  for (const zone of [miEl('drop'), miEl('file')]) enableFileDrop(zone, files => loadMasterImportFile(files[0]));
+}
+
+/* ---------- Confirmation popup (#master-confirm) ----------
+   confirmAction({ title, message, confirm }) resolves true on the confirm button, false on Cancel,
+   Esc or the backdrop. Focus starts on Cancel, so Enter alone never deletes. */
+
+let resolveConfirm = null;
+let confirmOpener = null;
+
+function confirmAction({ title, message, confirm }) {
+  confirmOpener = document.activeElement;
+  byId('master-confirm-title').textContent = title;
+  byId('master-confirm-message').textContent = message;
+  byId('master-confirm-ok').textContent = confirm;
+  document.documentElement.classList.add('has-modal');
+  byId('master-confirm').showModal();
+  byId('master-confirm').querySelector('[data-mc="cancel"]').focus();
+  return new Promise(resolve => { resolveConfirm = resolve; });
+}
+
+function closeConfirm(result) {
+  const dialog = byId('master-confirm');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  if (!result && confirmOpener && document.contains(confirmOpener)) confirmOpener.focus();
+  resolveConfirm?.(result);
+  resolveConfirm = null;
+}
+
+function handleMasterConfirmKeys(event) {
+  if (event.key !== 'Escape') return false;
+  event.preventDefault();
+  if (!event.repeat) closeConfirm(false);
+  return true;
+}
+
+function initMasterConfirm() {
+  const dialog = byId('master-confirm');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeConfirm(false); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeConfirm(false); return; }   // backdrop
+    const action = event.target.closest('[data-mc]')?.dataset.mc;
+    if (action) closeConfirm(action === 'ok');
+  });
+}
+
+/* ---------- Delete ---------- */
+
+async function deleteMasterRow(list, row) {
+  const ok = await confirmAction({
+    title: `Delete this ${list.one}?`,
+    message: `${row.code} · ${row.name} will be removed from the ${list.one} list.`,
+    confirm: `Delete ${list.config.noun}`,
+  });
+  if (!ok) return;
+  const index = list.rows.indexOf(row);
+  if (index === -1) return;
+  list.rows.splice(index, 1);
+  list.applied.delete(row.code);
+  list.render();
+  showToast(`${list.config.noun} deleted`, `${row.code} · ${row.name} was removed.`);
+  const next = list.rows[index] || list.rows[index - 1];
+  list.focusRow(next?.code);
+}
+
+/* ---------- View popup (#master-view) ----------
+   Every column of the record. Keys: E edit, Delete removes, Esc closes. */
+
+const masterView = { list: null, row: null, opener: null };
+
+function openMasterView(list, row) {
+  Object.assign(masterView, { list, row, opener: document.activeElement });
+  byId('master-view-icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg').cloneNode(true));
+  byId('master-view-title').textContent = `${list.config.noun} Details`;
+  byId('master-view-sub').textContent = row.code;
+  byId('master-view-fields').replaceChildren(...list.config.columns.filter(column => column.key !== 'code').map(column => {
+    const item = el('div', `mv-item${column.type === 'wrap' || column.key === 'name' ? ' mv-item-wide' : ''}`);
+    const value = el('dd', `mv-value${column.key === 'name' ? ' mv-value-name' : ''}`);
+    value.append(masterValue(column, row[column.key]));
+    item.append(el('dt', 'mv-label', column.label), value);
+    return item;
+  }));
+  document.documentElement.classList.add('has-modal');
+  byId('master-view').showModal();
+  byId('master-view').querySelector('[data-mv="edit"]').focus();
+}
+
+function closeMasterView({ restoreFocus = true } = {}) {
+  const dialog = byId('master-view');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  const back = masterView.opener;
+  if (restoreFocus && back && document.contains(back)) back.focus();
+}
+
+function masterViewAction(action) {
+  const { list, row } = masterView;
+  if (action === 'close') closeMasterView();
+  else if (action === 'edit') { closeMasterView({ restoreFocus: false }); location.hash = masterEditHash(list, row); }
+  else if (action === 'delete') { closeMasterView(); deleteMasterRow(list, row); }
+}
+
+function handleMasterViewKeys(event) {
+  const { key } = event;
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  // ↑/↓ and Page Up/Down scroll the details (long records such as a full supplier); ←/→ move between the buttons.
+  const scroll = { ArrowUp: -60, ArrowDown: 60, PageUp: -300, PageDown: 300 }[key];
+  if (scroll) {
+    event.preventDefault();
+    byId('master-view-fields').scrollBy({ top: scroll });
+    return true;
+  }
+  const action = key === 'Escape' ? 'close' : key === 'Delete' ? 'delete' : key.toLowerCase() === 'e' ? 'edit' : null;
+  if (!action) return false;
+  event.preventDefault();
+  if (!event.repeat) masterViewAction(action);
+  return true;
+}
+
+function initMasterView() {
+  const dialog = byId('master-view');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeMasterView(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeMasterView(); return; }   // backdrop
+    const action = event.target.closest('[data-mv]')?.dataset.mv;
+    if (action) masterViewAction(action);
+  });
+}
+
+/* ---------- Edit page (#/masters/<list>/edit/<code>, #master-edit-page) ----------
+   One full page for every list, built from the list's columns: the code is read-only,
+   columns with choices are dropdowns, columns with options suggest values (datalist).
+   Save checks each value with the column's read() and keeps names unique. */
+
+const masterEdit = { list: null, row: null, saved: '' };
+const meEl = suffix => byId(`master-edit-${suffix}`);
+const masterEditHash = (list, row) => `#/${list.config.route}/edit/${encodeURIComponent(row.code)}`;
+const meFields = () => [...meEl('fields').querySelectorAll('[data-key], [data-code-for]')];
+const meSnapshot = () => meFields().map(field => field.value).join('\u0000');
+
+function buildMasterEditField(list, column, row) {
+  const id = `master-edit-field-${column.key}`;
+  const isCode = column.key === 'code';
+  const span = isCode ? 'fp-span-3' : column.key === 'name' ? 'fp-span-9' : column.type === 'wrap' ? 'fp-span-12' : 'fp-span-4';
+  const field = el('div', `fp-field ${span}`);
+  const label = el('label', 'fp-label', isCode ? `${list.config.noun} Code` : column.label);
+  label.htmlFor = id;
+  if (column.key === 'name') label.append(' ', el('span', 'fp-req', '*'));
+  let input;
+  if (column.lookup) {
+    // Same markup as the creation forms' lookup fields: picked values only, the "Select …" popup on Enter.
+    input = el('input', 'fp-input fp-lookup');
+    Object.assign(input, { type: 'text', autocomplete: 'off', spellcheck: false, placeholder: `Select ${column.label.toLowerCase()}...` });
+    input.inputMode = 'none';
+    input.dataset.lookup = column.lookup;
+    input.setAttribute('aria-haspopup', 'dialog');
+    const wrap = el('div', 'fp-input-wrap fp-lookup-wrap');
+    const icon = el('span', 'fp-lookup-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>';
+    wrap.append(input, icon);
+    input.id = id;
+    input.dataset.key = column.key;
+    input.value = String(row[column.key] ?? '');
+    field.prepend(label, wrap);
+    return field;
+  }
+  if (column.phone) {
+    // Calling code + number; the code comes from the record's number, else from its country.
+    const country = countryNamed(String(row.country ?? ''));
+    const [dial, number] = splitPhone(row[column.key], country?.dial || '+968');
+    const code = el('select', 'fp-input fp-select fp-select-list fp-phone-code');
+    fillPhoneCodes(code);
+    Object.assign(code, { id: `${id}-code`, value: dial });
+    code.dataset.phoneCode = '';
+    code.dataset.codeFor = column.key;
+    code.dataset.enterSkip = '';
+    code.dataset.enterOpens = 'true';
+    code.setAttribute('aria-label', `${column.label} country code`);
+    input = el('input', 'fp-input');
+    Object.assign(input, { type: 'text', autocomplete: 'off', id, value: number });
+    input.dataset.key = column.key;
+    const wrap = el('div', 'fp-phone');
+    wrap.append(code, input);
+    field.prepend(label, wrap);
+    return field;
+  }
+  if (column.choices) {
+    // compactList: the styled option list, opened by Enter (Currency); skipEnter: Enter passes it by.
+    input = el('select', `fp-input fp-select${column.compactList ? ' fp-select-list' : ''}`);
+    if (column.compactList) input.dataset.enterOpens = 'true';
+    if (column.skipEnter) input.dataset.enterSkip = '';
+    const current = String(row[column.key] ?? '');
+    const choices = column.choices.includes(current) || !current ? column.choices : [current, ...column.choices];
+    input.append(...choices.map(choice => { const option = el('option', '', choice); option.value = choice; return option; }));
+  } else {
+    input = el('input', `fp-input${isCode ? ' fp-input-code' : ''}`);
+    input.type = 'text';
+    input.autocomplete = 'off';
+    if (isCode) { input.readOnly = true; input.tabIndex = -1; input.title = 'Codes cannot be changed'; }
+    const options = column.options?.();
+    if (options?.length) {
+      const datalist = el('datalist');
+      datalist.id = `${id}-options`;
+      datalist.append(...[...new Set(options)].map(option => { const node = el('option'); node.value = option; return node; }));
+      input.setAttribute('list', datalist.id);
+      field.append(datalist);
+    }
+  }
+  input.id = id;
+  input.dataset.key = column.key;
+  input.value = String(row[column.key] ?? '');
+  field.prepend(label, input);
+  return field;
+}
+
+// Route resolver used by renderRoute: a known list and code open the page; an unknown code returns to the list.
+function masterEditPage(route) {
+  const match = /^(masters\/[a-z-]+)\/edit\/(.+)$/.exec(route);
+  const list = match && MASTER_LISTS.find(entry => entry.config.route === match[1]);
+  if (!list) return null;
+  const row = list.rows.find(entry => entry.code === decodeURIComponent(match[2]));
+  if (!row) {
+    history.replaceState(null, '', `#/${list.config.route}`);
+    showToast(`${list.config.noun} not found`, `No ${list.one} has the code ${decodeURIComponent(match[2])}.`, true);
+    return FORM_PAGES[list.config.route];
+  }
+  return {
+    page: 'master-edit',
+    alwaysReset: true,                     // another record may be opened while this page is showing
+    reset: () => openMasterEdit(list, row),
+    firstField: () => meEl('fields').querySelector('[data-key="name"]'),
+  };
+}
+
+function openMasterEdit(list, row) {
+  Object.assign(masterEdit, { list, row });
+  meEl('icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg').cloneNode(true));
+  meEl('title').textContent = `Edit ${list.config.noun}`;
+  meEl('sub').textContent = `${row.code} · ${row.name}`;
+  meEl('section').textContent = `${list.config.noun} Details`;
+  meEl('cancel').textContent = `Back to ${list.config.nouns}`;
+  meEl('fields').replaceChildren(...list.config.columns.map(column => buildMasterEditField(list, column, row)));
+  masterEdit.saved = meSnapshot();
+}
+
+function leaveMasterEdit() {
+  const { list, row } = masterEdit;
+  list.returnTo = row.code;
+  location.hash = `#/${list.config.route}`;
+}
+
+async function backFromMasterEdit() {
+  if (meSnapshot() !== masterEdit.saved) {
+    const discard = await confirmAction({
+      title: 'Discard your changes?',
+      message: `The changes to ${masterEdit.row.code} have not been saved.`,
+      confirm: 'Discard Changes',
+    });
+    if (!discard) return;
+  }
+  leaveMasterEdit();
+}
+
+function saveMasterEdit() {
+  const { list, row } = masterEdit;
+  clearFormErrors(meEl('form'));
+  const errors = [];
+  const values = {};
+  for (const column of list.config.columns) {
+    if (column.key === 'code') continue;
+    const node = meEl('fields').querySelector(`[data-key="${column.key}"]`);
+    const code = meEl('fields').querySelector(`[data-code-for="${column.key}"]`);
+    const raw = code ? joinPhone(code.value, node.value) : node.value.trim();
+    try {
+      if (column.key === 'name' && !raw) throw new Error(`${column.label} is required`);
+      values[column.key] = column.read ? column.read(raw) : raw;
+    } catch (error) {
+      errors.push({ node, message: `${error.message[0].toUpperCase()}${error.message.slice(1)}.` });
+    }
+  }
+  const nameNode = meEl('fields').querySelector('[data-key="name"]');
+  if (values.name && list.rows.some(other => other !== row && sameText(other.name, values.name))) {
+    errors.push({ node: nameNode, message: `Another ${list.one} is already named “${values.name}”.` });
+  }
+  if (errors.length) { showFormErrors(errors); return; }
+  Object.assign(row, values);
+  masterEdit.saved = meSnapshot();
+  showToast(`${list.config.noun} updated`, `${row.code} · ${row.name} was saved.`);
+  leaveMasterEdit();
+}
+
+// Enter: next field (the last one goes to Save). Ctrl+S saves. Esc goes back (asking first if anything changed).
+function handleMasterEditKeys(event) {
+  if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+  const { key, target } = event;
+  const ctrl = event.ctrlKey && !event.metaKey;
+  if (key === 'Escape' && !ctrl && !event.altKey) {
+    event.preventDefault();
+    if (!event.repeat) backFromMasterEdit();
+    return true;
+  }
+  if (ctrl && !event.altKey && !event.shiftKey && key.toLowerCase() === 's') {
+    event.preventDefault();
+    if (!event.repeat) saveMasterEdit();
+    return true;
+  }
+  if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && target.dataset.key) {
+    event.preventDefault();
+    if (target.dataset.enterOpens) {
+      try { target.showPicker(); } catch { /* unsupported: Space still opens it */ }
+      return true;
+    }
+    const order = formEnterOrder(meEl('form'), meEl('save'));
+    enterField(fieldAfter(order, target) || meEl('save'));
+    return true;
+  }
+  return false;
+}
+
+function initMasterEdit() {
+  meEl('save').addEventListener('click', saveMasterEdit);
+  meEl('cancel').addEventListener('click', backFromMasterEdit);
+  meEl('back').addEventListener('click', backFromMasterEdit);
+  meEl('form').addEventListener('submit', event => event.preventDefault());
+  meEl('form').addEventListener('input', event => {
+    if (event.target.classList.contains('is-invalid')) clearFieldError(event.target);
+    // A new category clears a sub-category that is not one of its own, as on the Item creation form.
+    const subCategoryField = meEl('fields').querySelector('[data-key="subCategory"]');
+    if (event.target.dataset.key === 'category' && subCategoryField?.value) {
+      const own = categoryList.rows.find(row => row.name === event.target.value)?.subCategories.split(',').map(name => name.trim());
+      if (!own?.includes(subCategoryField.value)) subCategoryField.value = '';
+    }
+    // A known country fills in its currency and calling codes, as on the party form.
+    const country = event.target.dataset.key === 'country' && countryNamed(event.target.value);
+    if (country) {
+      const currencyField = meEl('fields').querySelector('[data-key="currency"]');
+      if (currencyField) currencyField.value = country.currency;
+      for (const code of meEl('fields').querySelectorAll('[data-code-for]')) code.value = country.dial;
+    }
+  });
+  FORM_KEY_HANDLERS['master-edit'] = handleMasterEditKeys;
+}
+
+/* ---------- The list pages: columns and dummy rows (from the demo data) ---------- */
+
+const ACTIVE_STATUSES = ['active', 'inactive'];
+const ITEM_STATUSES = ['ACTIVE / RELEASED', 'QUALITY HOLD', 'OBSOLETE', 'DRAFT'];
+const readCurrency = value => {
+  const code = (value || 'OMR').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(code)) throw new Error(`currency "${value}" must be a 3-letter code`);
+  return code;
+};
+const readEmail = value => {
+  if (value && !EMAIL.test(value)) throw new Error(`"${value}" is not a valid email`);
+  return value;
+};
+// Blank takes the first status; "active" matches "ACTIVE / RELEASED".
+const readStatus = statuses => value => {
+  if (!value) return statuses[0];
+  const status = statuses.find(option => sameText(option, value) || option.toLowerCase().startsWith(value.trim().toLowerCase()));
+  if (!status) throw new Error(`status "${value}" must be one of: ${statuses.join(', ')}`);
+  return status;
+};
+const readWholeNumber = name => value => {
+  if (!value) return '';
+  if (!/^\d{1,5}$/.test(value)) throw new Error(`${name} "${value}" must be a whole number of days`);
+  return String(Number(value));
+};
+const readAmount = name => value => {
+  if (!value) return '0.00';
+  const amount = value.replace(/,/g, '');
+  if (!/^-?\d{1,13}(\.\d{1,2})?$/.test(amount)) throw new Error(`${name} "${value}" must be an amount with up to 2 decimals`);
+  return Number(amount).toFixed(2);
+};
+const readPercent = value => {
+  if (!value) return '0.00';
+  const percent = value.replace(/%$/, '').trim();
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(percent) || Number(percent) > 100) throw new Error(`discount "${value}" must be a percentage from 0 to 100`);
+  return Number(percent).toFixed(2);
+};
+const readDecimals = value => {
+  if (!value) return '0';
+  if (!/^\d+$/.test(value) || Number(value) > UOM_MAX_DECIMALS) throw new Error(`decimal allowed "${value}" must be a whole number from 0 to ${UOM_MAX_DECIMALS}`);
+  return String(Number(value));
+};
+const readFactor = value => {
+  if (!value) return '1.0000';
+  if (!isValidUomFactor(value)) throw new Error(`conversion factor "${value}" must be above 0, with up to 4 decimals`);
+  return Number(value).toFixed(4);
+};
+
+const codeColumn = (...headers) => ({ key: 'code', label: 'Code', type: 'code', headers });
+const nameColumn = (noun, ...headers) => ({ key: 'name', label: `${noun} Name`, type: 'name', headers });
+const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', choices: statuses, read: readStatus(statuses) });
+// Every country's currency, then the common trading ones.
+const CURRENCIES = [...new Set([...COUNTRIES.map(country => country.currency), 'USD', 'EUR', 'GBP'])];
+const partyColumns = () => [
+  { key: 'currency', label: 'Currency', type: 'pill', headers: ['currency code', 'curr'], choices: CURRENCIES, compactList: true, skipEnter: true, read: readCurrency },
+  { key: 'mobile', label: 'Mobile', phone: true, headers: ['mobile no', 'mobile number', 'phone', 'phone no', 'phone number', 'contact', 'contact no', 'contact number', 'telephone', 'tel'] },
+  { key: 'email', label: 'Email', type: 'upper', headers: ['email address', 'email id', 'mail'], read: readEmail },
+];
+const codeYear = today.getFullYear();
+
+// Supplier fields beyond the table columns (the suppliers table in the data model).
+const supplierDetailColumns = [
+  { key: 'organization', label: 'Organization Name', headers: ['organisation', 'organization', 'legal name'] },
+  { key: 'owner', label: 'Owner Details', headers: ['owner', 'proprietor'] },
+  { key: 'taxRegNo', label: 'Tax Reg. No', headers: ['vat no', 'vat number', 'tax number', 'trn', 'cr no'] },
+  { key: 'contactPerson', label: 'Contact Person', headers: ['contact name', 'attention'] },
+  { key: 'telephone', label: 'Telephone', phone: true, headers: ['landline', 'office phone'] },
+  { key: 'address', label: 'Address', type: 'wrap', headers: ['street', 'address line'] },
+  { key: 'location', label: 'Location', headers: ['area'] },
+  { key: 'city', label: 'City', headers: ['town'] },
+  { key: 'zipCode', label: 'ZIP Code', headers: ['zip', 'postal code', 'po box', 'pin code'] },
+  { key: 'country', label: 'Country', lookup: 'country' },
+  { key: 'paymentTerms', label: 'Payment Terms', headers: ['terms'], options: () => ['Advance', 'Cash on Delivery', 'Net 15', 'Net 30', 'Net 45', 'Net 60'] },
+  { key: 'leadTimeDays', label: 'Lead Time (Days)', headers: ['lead time'], read: readWholeNumber('lead time') },
+  { key: 'openingBalance', label: 'Opening Balance', type: 'mono', headers: ['opening'], read: readAmount('opening balance') },
+  { key: 'debitLimit', label: 'Debit Limit', type: 'mono', headers: ['credit limit'], read: readAmount('debit limit') },
+  { key: 'debitDays', label: 'Debit Days', headers: ['credit days'], read: readWholeNumber('debit days') },
+  { key: 'discountPercent', label: 'Discount %', headers: ['discount'], read: readPercent },
+  { key: 'accountDetails', label: 'Account Details', type: 'wrap', headers: ['bank details', 'bank account', 'iban'] },
+  statusColumn(),
+  { key: 'remarks', label: 'Remarks', type: 'wrap', headers: ['notes', 'comments'] },
+].map(column => ({ ...column, inTable: false }));
+
+const supplierList = createMasterList({
+  key: 'supplier', route: 'masters/supplier', newRoute: '#/masters/party/new', noun: 'Supplier', nouns: 'Suppliers',
+  codePrefix: 'SUP', codeDigits: 3,
+  columns: [codeColumn('supplier code', 'vendor code', 'party code'),
+    nameColumn('Supplier', 'supplier', 'vendor', 'vendor name', 'company', 'company name', 'party name'), ...partyColumns(),
+    ...supplierDetailColumns],
+  sample: { name: 'Gulf Valves LLC', currency: 'OMR', mobile: '+968 9123 4567', email: 'sales@gulfvalves.om', city: 'Muscat', country: 'Oman', paymentTerms: 'Net 30', status: 'active' },
+  rows: [
+    {
+      code: 'SUP006', name: 'Sanjay', currency: 'OMR', mobile: '+968 9123 4455', email: 'sanjay@sanjaysupplies.om',
+      organization: 'Sanjay Industrial Supplies LLC', owner: 'Sanjay', taxRegNo: 'OM1100234567', contactPerson: 'Sanjay',
+      telephone: '+968 2470 1234', location: 'Ruwi', address: 'Building 214, Way 3021, Ruwi High Street', city: 'Muscat',
+      zipCode: '112', country: 'Oman', paymentTerms: 'Net 30', leadTimeDays: '7', openingBalance: '1250.00',
+      debitLimit: '5000.00', debitDays: '45', discountPercent: '2.50',
+      accountDetails: 'Bank Muscat · A/C 0312 0456 7890 · IBAN OM81 0270 0312 0456 7890', status: 'active',
+      remarks: 'Preferred supplier for valves, pipes and fittings. Delivers within Muscat in 2 days.',
+    },
+    { code: 'SUP005', name: 'Sohar Industrial Supply', currency: 'OMR', mobile: '+968 9988 7766', email: 'sohar@indsupply.om' },
+    { code: 'SUP004', name: 'Kerala Pipes & Fittings', currency: 'INR', mobile: '+91 94470 12345', email: 'kpf@gmail.com' },
+    { code: 'SUP003', name: 'Desert Fasteners', currency: 'SAR', mobile: '+966 55 234 5678', email: 'sales@desertfast.sa' },
+    { code: 'SUP002', name: 'Nizwa Spare Parts', currency: 'OMR', mobile: '', email: 'nizwa.sp@gmail.com' },
+    { code: 'SUP001', name: 'ABC Traders', currency: 'OMR', mobile: '', email: '' },
+  ],
+});
+
+const customerList = createMasterList({
+  key: 'customer', route: 'masters/customer', newRoute: '#/masters/customer/new', noun: 'Customer', nouns: 'Customers',
+  codePrefix: 'CUS', codeDigits: 3,
+  columns: [codeColumn('customer code', 'client code', 'party code'),
+    nameColumn('Customer', 'customer', 'client', 'client name', 'company', 'company name', 'party name'), ...partyColumns()],
+  sample: { name: 'Oman Oil Services LLC', currency: 'OMR', mobile: '+968 2456 1100', email: 'procurement@omanoil.om' },
+  rows: [
+    { code: 'CUS003', name: 'Oman Oil Services LLC', currency: 'OMR', mobile: '+968 2456 1100', email: 'procurement@omanoil.om' },
+    { code: 'CUS002', name: 'Al Jazeera Steel Products', currency: 'OMR', mobile: '+968 9911 2233', email: 'purchase@jazeerasteel.om' },
+    { code: 'CUS001', name: 'Gulf Engineering Contractors', currency: 'AED', mobile: '+971 4 555 0199', email: 'accounts@gulfeng.ae' },
+  ],
+});
+
+const itemList = createMasterList({
+  key: 'item', route: 'masters/item', newRoute: `#/${ITEM_ROUTE}`, noun: 'Item', nouns: 'Items',
+  codePrefix: `ITM-${codeYear}-`, codeDigits: 4,
+  columns: [codeColumn('item code', 'sku', 'part no', 'part number'),
+    nameColumn('Item', 'item', 'product', 'product name', 'item description'),
+    { key: 'category', label: 'Category', headers: ['item category', 'group', 'item group'], lookup: 'master-category' },
+    { key: 'subCategory', label: 'Sub Category', headers: ['subcategory', 'sub group', 'subgroup'], lookup: 'master-subcategory' },
+    { key: 'unit', label: 'Unit', type: 'pill', headers: ['uom', 'unit name', 'unit of measure'], lookup: 'master-uom' },
+    { key: 'brand', label: 'Brand', headers: ['brand name', 'make', 'manufacturer'], lookup: 'master-brand' },
+    { key: 'stockPoint', label: 'Stock Point', headers: ['warehouse', 'store', 'location'], lookup: 'master-stock-point' },
+    statusColumn(ITEM_STATUSES)],
+  sample: { name: 'Gate Valve 2" Cast Iron', category: 'Pneumatics & Hydraulics', subCategory: 'Ball Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
+  rows: [
+    { code: 'ITM-2026-0006', name: 'Nitrile Gloves Size L', category: 'Safety & Protective', subCategory: 'Gloves', unit: 'Pair', brand: '3M', stockPoint: 'Secondary WH South', status: 'ACTIVE / RELEASED' },
+    { code: 'ITM-2026-0005', name: 'Hex Bolt M10 x 50', category: 'Mechanical Hardware', subCategory: 'Fasteners', unit: 'Box', brand: '', stockPoint: 'Spare Parts Store', status: 'ACTIVE / RELEASED' },
+    { code: 'ITM-2026-0004', name: 'Deep Groove Bearing 6205-2RS', category: 'Mechanical Hardware', subCategory: 'Bearings', unit: 'Pieces', brand: 'SKF', stockPoint: 'Spare Parts Store', status: 'ACTIVE / RELEASED' },
+    { code: 'ITM-2026-0003', name: 'MCB 32A 3-Pole', category: 'Electrical Switchgear', subCategory: 'Circuit Breakers', unit: 'Pieces', brand: 'Schneider Electric', stockPoint: 'Secondary WH South', status: 'ACTIVE / RELEASED' },
+    { code: 'ITM-2026-0002', name: 'Solenoid Valve 24V DC 1/4"', category: 'Pneumatics & Hydraulics', subCategory: 'Solenoid Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
+    { code: 'ITM-2026-0001', name: 'Ball Valve 1/2" SS316', category: 'Pneumatics & Hydraulics', subCategory: 'Ball Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
+  ],
+});
+
+const uomList = createMasterList({
+  key: 'uom', route: 'masters/uom', newRoute: '#/masters/uom/new', noun: 'UOM', nouns: 'UOMs',
+  codePrefix: 'UOM-', codeDigits: 4,
+  columns: [codeColumn('uom code', 'unit code'),
+    nameColumn('Unit', 'unit', 'uom', 'uom name', 'unit of measure'),
+    { key: 'decimals', label: 'Decimal Allowed', headers: ['decimals', 'decimal places'], choices: ['0', '1', '2', '3', '4', '5', '6'], read: readDecimals },
+    { key: 'baseUnit', label: 'Base Unit', headers: ['base', 'base uom', 'conversion base'], lookup: 'master-uom' },
+    { key: 'factor', label: 'Conversion Factor', type: 'mono', headers: ['factor', 'conversion'], read: readFactor },
+    statusColumn()],
+  sample: { name: 'Dozen', decimals: '0', baseUnit: 'Pieces', factor: '12.0000', status: 'active' },
+  rows: [
+    { code: 'UOM-0012', name: 'Metric Tonne', decimals: '3', baseUnit: 'Kilogram', factor: '1000.0000', status: 'active' },
+    { code: 'UOM-0011', name: 'Gram', decimals: '0', baseUnit: 'Kilogram', factor: '0.0010', status: 'active' },
+    { code: 'UOM-0009', name: 'Metre', decimals: '2', baseUnit: '', factor: '1.0000', status: 'active' },
+    { code: 'UOM-0007', name: 'Kilogram', decimals: '3', baseUnit: '', factor: '1.0000', status: 'active' },
+    { code: 'UOM-0003', name: 'Box', decimals: '0', baseUnit: '', factor: '1.0000', status: 'active' },
+    { code: 'UOM-0001', name: 'Pieces', decimals: '0', baseUnit: '', factor: '1.0000', status: 'active' },
+  ],
+});
+
+const brandList = createMasterList({
+  key: 'brand', route: 'masters/brand', newRoute: '#/masters/brand/new', noun: 'Brand', nouns: 'Brands',
+  codePrefix: `BRD-${codeYear}-`, codeDigits: 4,
+  columns: [codeColumn('brand code'), nameColumn('Brand', 'brand', 'make', 'manufacturer'), statusColumn()],
+  sample: { name: 'Parker Hannifin', status: 'active' },
+  rows: [
+    { code: 'BRD-2026-0004', name: '3M', status: 'active' },
+    { code: 'BRD-2026-0003', name: 'SKF', status: 'active' },
+    { code: 'BRD-2026-0002', name: 'Schneider Electric', status: 'active' },
+    { code: 'BRD-2026-0001', name: 'Festo', status: 'active' },
+  ],
+});
+
+const categoryList = createMasterList({
+  key: 'category', route: 'masters/category', newRoute: '#/masters/category/new', noun: 'Category', nouns: 'Categories',
+  codePrefix: `CAT-${codeYear}-`, codeDigits: 4,
+  columns: [codeColumn('category code', 'group code'), nameColumn('Category', 'category', 'group', 'group name'),
+    { key: 'subCategories', label: 'Sub Categories', type: 'wrap', headers: ['sub category', 'subcategory', 'subcategories', 'sub groups'] },
+    statusColumn()],
+  sample: { name: 'Power Tools', subCategories: 'Drills, Grinders', status: 'active' },
+  rows: [
+    { code: 'CAT-2026-0005', name: 'Instrumentation', subCategories: 'Pressure Gauges, Temperature Sensors', status: 'active' },
+    { code: 'CAT-2026-0004', name: 'Safety & Protective', subCategories: 'Helmets & Headgear, Gloves, Safety Footwear', status: 'active' },
+    { code: 'CAT-2026-0003', name: 'Mechanical Hardware', subCategories: 'Bearings, Fasteners, Couplings', status: 'active' },
+    { code: 'CAT-2026-0002', name: 'Electrical Switchgear', subCategories: 'Circuit Breakers, Contactors, Cables & Wires', status: 'active' },
+    { code: 'CAT-2026-0001', name: 'Pneumatics & Hydraulics', subCategories: 'Ball Valves, Solenoid Valves, Pressure Regulators, Hydraulic Hoses', status: 'active' },
+  ],
+});
+
+const stockPointList = createMasterList({
+  key: 'stock-point', route: 'masters/stock-point', newRoute: '#/masters/stock-point/new', noun: 'Stock Point', nouns: 'Stock Points',
+  codePrefix: `WH-${codeYear}-`, codeDigits: 4,
+  columns: [codeColumn('stock point code', 'warehouse code', 'store code'),
+    nameColumn('Stock Point', 'stock point', 'warehouse', 'warehouse name', 'store', 'store name', 'location'),
+    { key: 'type', label: 'Type', type: 'pill', headers: ['warehouse type', 'store type'], options: () => ['Finished Goods', 'Spare Parts', 'Raw Materials', 'Consumables'] },
+    { key: 'city', label: 'City', headers: ['town'] },
+    { key: 'country', label: 'Country', lookup: 'country' },
+    { key: 'contactPerson', label: 'Contact Person', headers: ['contact', 'in charge', 'incharge', 'store keeper'] },
+    { key: 'phone', label: 'Phone', phone: true, headers: ['mobile', 'phone no', 'phone number', 'telephone', 'tel'] },
+    statusColumn()],
+  sample: { name: 'Sohar Port Store', type: 'Finished Goods', city: 'Sohar', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2685 0000', status: 'active' },
+  rows: [
+    { code: 'WH-2026-0003', name: 'Spare Parts Store', type: 'Spare Parts', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
+    { code: 'WH-2026-0002', name: 'Secondary WH South', type: 'Finished Goods', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
+    { code: 'WH-2026-0001', name: 'Central WH North', type: 'Finished Goods', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
+  ],
+});
+
+const MASTER_LISTS = [supplierList, customerList, itemList, uomList, brandList, categoryList, stockPointList];
+
+// New Customer: the party form with Under set to Debtors, not as an undo step.
+FORM_PAGES['masters/customer/new'] = {
+  page: 'party',
+  reset() {
+    FORM_PAGES['masters/party/new'].reset();
+    partyEl('under').value = 'debtors';
+    syncPartyVariant();
+    partyForm.absorb();
+  },
+  firstField: FORM_PAGES['masters/party/new'].firstField,
+};
+
 const MASTER_FORMS = [uomForm, brandForm, categoryForm, warehouseForm, partyForm];
 
 /* =====================================================================
-   Hash router: #/home (dashboard) and the form pages in FORM_PAGES.
+   Hash router: #/home (dashboard), the form pages in FORM_PAGES and the
+   master edit pages (#/masters/<list>/edit/<code>, see masterEditPage).
    Routes for screens not built yet fall back to the dashboard.
    ===================================================================== */
 
@@ -2237,9 +3505,9 @@ function showPage(page) {
 
 function renderRoute() {
   const route = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
-  const formPage = FORM_PAGES[route];
+  const formPage = FORM_PAGES[route] || masterEditPage(route);
   if (formPage) {
-    if (currentPage !== formPage.page) {
+    if (currentPage !== formPage.page || formPage.alwaysReset) {
       showPage(formPage.page);
       formPage.reset();
     }
@@ -2283,11 +3551,19 @@ async function loadDashboard() {
 
 document.addEventListener('DOMContentLoaded', () => {
   byId('footer-year').textContent = String(today.getFullYear());
+  for (const select of [...document.querySelectorAll('select[data-phone-code]'),
+    ...[...document.querySelectorAll('template')].flatMap(template => [...template.content.querySelectorAll('select[data-phone-code]')])]) fillPhoneCodes(select);
   initKeyboardNavigation();
   initQuickMenu();
   initLookups();
   initItemPage();
   for (const form of MASTER_FORMS) form.init();
+  initMasterFilter();
+  initMasterImport();
+  initMasterView();
+  initMasterConfirm();
+  initMasterEdit();
+  for (const list of MASTER_LISTS) list.init();
   loadDashboard();
   window.addEventListener('hashchange', renderRoute);
   renderRoute();

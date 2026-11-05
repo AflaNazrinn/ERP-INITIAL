@@ -414,6 +414,488 @@
   </form>
 </section>
 
+<!-- SUPPLIER MASTER  (#/masters/supplier · Masters › Supplier): list of suppliers -->
+<section id="supplier-list-page" class="form-page form-page-auto" aria-labelledby="supplier-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg></div>
+      <h1 id="supplier-list-title" class="fp-title">Supplier Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Supplier</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="supplier-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Suppliers</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="supplier-list-search" type="search" placeholder="Search suppliers..." autocomplete="off" aria-label="Search suppliers" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="supplier-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="supplier-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/party/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Supplier</span>
+        </a>
+        <button type="button" id="supplier-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="supplier-list-head"></tr></thead>
+        <tbody id="supplier-list-body"></tbody>
+      </table>
+      <div id="supplier-list-empty" class="table-state" hidden>No suppliers match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="supplier-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CUSTOMER MASTER  (#/masters/customer · Masters › Customer): list of customers -->
+<section id="customer-list-page" class="form-page form-page-auto" aria-labelledby="customer-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></div>
+      <h1 id="customer-list-title" class="fp-title">Customer Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Customer</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="customer-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Customers</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="customer-list-search" type="search" placeholder="Search customers..." autocomplete="off" aria-label="Search customers" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="customer-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="customer-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/customer/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Customer</span>
+        </a>
+        <button type="button" id="customer-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="customer-list-head"></tr></thead>
+        <tbody id="customer-list-body"></tbody>
+      </table>
+      <div id="customer-list-empty" class="table-state" hidden>No customers match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="customer-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ITEM MASTER  (#/masters/item · Masters › Item): list of items -->
+<section id="item-list-page" class="form-page form-page-auto" aria-labelledby="item-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="m3 8 9 5 9-5M12 13v8"></path></svg></div>
+      <h1 id="item-list-title" class="fp-title">Item Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Item</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="item-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Items</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="item-list-search" type="search" placeholder="Search items..." autocomplete="off" aria-label="Search items" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="item-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="item-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/item/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Item</span>
+        </a>
+        <button type="button" id="item-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="item-list-head"></tr></thead>
+        <tbody id="item-list-body"></tbody>
+      </table>
+      <div id="item-list-empty" class="table-state" hidden>No items match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="item-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- UOM MASTER  (#/masters/uom · Masters › UOM): list of UOMs -->
+<section id="uom-list-page" class="form-page form-page-auto" aria-labelledby="uom-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"></path><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"></path></svg></div>
+      <h1 id="uom-list-title" class="fp-title">UOM Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New UOM</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="uom-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All UOMs</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="uom-list-search" type="search" placeholder="Search UOMs..." autocomplete="off" aria-label="Search UOMs" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="uom-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="uom-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/uom/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New UOM</span>
+        </a>
+        <button type="button" id="uom-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="uom-list-head"></tr></thead>
+        <tbody id="uom-list-body"></tbody>
+      </table>
+      <div id="uom-list-empty" class="table-state" hidden>No UOMs match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="uom-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRAND MASTER  (#/masters/brand · Masters › Brand): list of brands -->
+<section id="brand-list-page" class="form-page form-page-auto" aria-labelledby="brand-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r="1"></circle></svg></div>
+      <h1 id="brand-list-title" class="fp-title">Brand Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Brand</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="brand-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Brands</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="brand-list-search" type="search" placeholder="Search brands..." autocomplete="off" aria-label="Search brands" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="brand-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="brand-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/brand/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Brand</span>
+        </a>
+        <button type="button" id="brand-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="brand-list-head"></tr></thead>
+        <tbody id="brand-list-body"></tbody>
+      </table>
+      <div id="brand-list-empty" class="table-state" hidden>No brands match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="brand-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORY MASTER  (#/masters/category · Masters › Category): list of categories -->
+<section id="category-list-page" class="form-page form-page-auto" aria-labelledby="category-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></div>
+      <h1 id="category-list-title" class="fp-title">Category Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Category</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="category-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Categories</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="category-list-search" type="search" placeholder="Search categories..." autocomplete="off" aria-label="Search categories" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="category-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="category-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/category/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Category</span>
+        </a>
+        <button type="button" id="category-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="category-list-head"></tr></thead>
+        <tbody id="category-list-body"></tbody>
+      </table>
+      <div id="category-list-empty" class="table-state" hidden>No categories match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="category-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STOCK POINT MASTER  (#/masters/stock-point · Masters › Stock Point): list of stock points -->
+<section id="stock-point-list-page" class="form-page form-page-auto" aria-labelledby="stock-point-list-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"></path><path d="M7 21v-9h10v9M7 15h10M7 18h10"></path></svg></div>
+      <h1 id="stock-point-list-title" class="fp-title">Stock Point Master</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Stock Point</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="stock-point-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Stock Points</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="stock-point-list-search" type="search" placeholder="Search stock points..." autocomplete="off" aria-label="Search stock points" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="stock-point-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="stock-point-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/masters/stock-point/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Stock Point</span>
+        </a>
+        <button type="button" id="stock-point-list-import" class="ml-btn ml-btn-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table">
+        <thead><tr id="stock-point-list-head"></tr></thead>
+        <tbody id="stock-point-list-body"></tbody>
+      </table>
+      <div id="stock-point-list-empty" class="table-state" hidden>No stock points match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="stock-point-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MASTER EDIT  (#/masters/<list>/edit/<code> · a list page › Edit): one page for every master list; fields come from the list's columns -->
+<section id="master-edit-page" class="form-page form-page-auto" aria-labelledby="master-edit-title" hidden>
+
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div id="master-edit-icon" class="fp-brand-icon" aria-hidden="true"></div>
+      <div>
+        <h1 id="master-edit-title" class="fp-title"></h1>
+        <p id="master-edit-sub" class="me-sub"></p>
+      </div>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="master-edit-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="master-edit-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 id="master-edit-section" class="fp-section-title"></h2>
+      <div id="master-edit-fields" class="fp-grid-12"></div>
+    </section>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="master-edit-cancel" class="fp-btn fp-btn-secondary">Back to List</button>
+        <button type="button" id="master-edit-save" class="fp-btn fp-btn-primary" aria-keyshortcuts="Control+S"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span>Save Changes</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
 <!-- PARTY CREATION  (#/masters/party/new · Masters › Create › Parties) -->
 <section id="party-page" class="form-page form-page-auto" aria-labelledby="party-title" hidden>
   <header class="fp-header">
@@ -463,7 +945,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-currency">Currency</label>
-          <select id="party-sup-currency" class="fp-input fp-select"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option></select>
+          <select id="party-sup-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-tax">Tax Reg Number</label>
@@ -488,11 +970,11 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-mobile">Mobile Number</label>
-          <input id="party-sup-mobile" class="fp-input" type="text" autocomplete="off" placeholder="+968 9XXX XXXX">
+          <div class="fp-phone"><select id="party-sup-mobile-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Mobile number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="party-sup-mobile" class="fp-input" type="text" autocomplete="off" inputmode="tel" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-phone">Telephone Number</label>
-          <input id="party-sup-phone" class="fp-input" type="text" autocomplete="off" placeholder="+968 2XXX XXXX">
+          <div class="fp-phone"><select id="party-sup-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Telephone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="party-sup-phone" class="fp-input" type="text" autocomplete="off" inputmode="tel" placeholder="2XXX XXXX"></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-email">Email ID</label>
@@ -589,11 +1071,11 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-mobile">Mobile Number</label>
-          <input id="party-cus-mobile" class="fp-input" type="text" autocomplete="off" placeholder="+968 9XXX XXXX">
+          <div class="fp-phone"><select id="party-cus-mobile-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Mobile number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="party-cus-mobile" class="fp-input" type="text" autocomplete="off" inputmode="tel" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-phone">Telephone Number</label>
-          <input id="party-cus-phone" class="fp-input" type="text" autocomplete="off" placeholder="+968 2XXX XXXX">
+          <div class="fp-phone"><select id="party-cus-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Telephone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="party-cus-phone" class="fp-input" type="text" autocomplete="off" inputmode="tel" placeholder="2XXX XXXX"></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-email">Email ID</label>
@@ -732,7 +1214,7 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     </div>
   </form>
   <template id="party-doc-row"><tr class="fp-row"><td><div class="fp-doc"><span class="fp-doc-badge" data-doc-badge></span><div class="fp-doc-text"><strong class="fp-doc-name" data-doc-name></strong><span class="fp-doc-size" data-doc-size></span></div></div></td><td><select class="fp-cell fp-select fp-cell-select" data-field="type" aria-label="Document type"><option value="">Select type</option><option>Commercial Registration</option><option>VAT Certificate</option><option>Trade Licence</option><option>Bank Letter</option><option>Agreement</option><option>Other</option></select></td><td><input class="fp-cell fp-cell-date" data-field="expiry" type="date" aria-label="Expiry date"></td><td><input class="fp-cell" data-field="uploadedOn" type="text" readonly tabindex="-1" aria-label="Uploaded on"></td><td class="fp-col-del"><button type="button" class="fp-del" data-doc-preview title="View file" aria-label="View file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="fp-del" data-doc-remove title="Remove file" aria-label="Remove file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" placeholder="+968 9XXX XXXX" aria-label="Mobile number"></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><div class="fp-phone fp-phone-cell"><select class="fp-cell fp-select fp-select-list fp-phone-code" data-field="mobileCode" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" inputmode="tel" placeholder="9XXX XXXX" aria-label="Mobile number"></div></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><input class="fp-cell" data-field="unit" type="text" autocomplete="off" placeholder="PCS" aria-label="Unit"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-order-row"><tr class="fp-row"><td><input class="fp-cell fp-mono" data-field="number" type="text" autocomplete="off" placeholder="Order number" aria-label="Order number"></td><td><input class="fp-cell fp-cell-date" data-field="date" type="date" aria-label="Order date"></td><td><input class="fp-cell fp-cell-num" data-field="value" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Total value (OMR)"></td><td><input class="fp-cell fp-cell-num" data-field="items" type="text" autocomplete="off" inputmode="numeric" placeholder="0" aria-label="Total items"></td><td><select class="fp-cell fp-select fp-cell-select" data-field="status" aria-label="Status"><option>Pending</option><option>Fulfilled</option><option>Cancelled</option></select></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
 </section>
@@ -1006,6 +1488,155 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
   <div class="lk-foot">
     <button type="button" class="fp-btn fp-btn-secondary" data-lookup-action="cancel">Cancel</button>
     <button type="button" id="lookup-select" class="fp-btn fp-btn-primary" data-lookup-action="select"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="lookup-select-label"></span></button>
+  </div>
+</dialog>
+
+<!-- Filter popup shared by the master list pages (Filter button, or F); text and icon are set per page -->
+<dialog id="master-filter" class="lookup sf" aria-labelledby="master-filter-title" aria-describedby="master-filter-sub">
+  <div class="sf-head">
+    <span class="sf-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></span>
+    <div class="sf-heading">
+      <h2 id="master-filter-title" class="sf-title"></h2>
+      <p id="master-filter-sub" class="sf-sub"></p>
+    </div>
+    <button type="button" class="lk-close" data-sf="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="sf-body">
+    <div class="sf-label-row">
+      <h3 class="sf-label">Filter Records</h3>
+      <span id="master-filter-badge" class="sf-badge" aria-live="polite"></span>
+    </div>
+    <div class="sf-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <input id="master-filter-search" type="text" autocomplete="off" spellcheck="false" aria-controls="master-filter-list">
+    </div>
+    <div class="sf-bulk">
+      <label class="sf-check sf-check-strong"><input id="master-filter-all" type="checkbox" class="sf-radio"><span>Select All</span></label>
+      <div class="sf-bulk-side">
+        <button type="button" class="sf-link" data-sf="visible"><span class="sf-box" aria-hidden="true"></span>Select All Visible</button>
+        <button type="button" class="sf-link" data-sf="none"><span class="sf-box" aria-hidden="true"></span>Deselect All</button>
+      </div>
+    </div>
+    <div id="master-filter-list" class="sf-list" role="group"></div>
+    <div id="master-filter-empty" class="table-state" hidden>Nothing matches this search.</div>
+  </div>
+  <div class="sf-foot">
+    <button type="button" class="ml-btn ml-btn-green" data-sf="export">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>
+      <span>Export</span>
+    </button>
+    <span id="master-filter-summary" class="sf-summary"></span>
+    <button type="button" class="ml-btn ml-btn-plain" data-sf="reset">Reset Filters</button>
+    <button type="button" class="ml-btn ml-btn-primary" data-sf="apply" aria-keyshortcuts="Control+Enter">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+      <span>Apply Filters</span>
+    </button>
+  </div>
+</dialog>
+
+<!-- Import popup shared by the master list pages (Import button, or I); text and icon are set per page -->
+<dialog id="master-import" class="lookup sf si" aria-labelledby="master-import-title" aria-describedby="master-import-sub">
+  <div class="sf-head">
+    <span id="master-import-icon" class="sf-icon" aria-hidden="true"></span>
+    <div class="sf-heading">
+      <h2 id="master-import-title" class="sf-title"></h2>
+      <p id="master-import-sub" class="sf-sub"></p>
+    </div>
+    <button type="button" class="lk-close" data-si="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="si-body">
+    <div class="si-notice">
+      <svg class="si-notice-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg>
+      <div class="si-notice-text">
+        <strong>Importing from another company or spreadsheet?</strong>
+        <span>You can directly upload any exported sheet from another company, or download our blank template.</span>
+      </div>
+      <button type="button" class="ml-btn ml-btn-primary" data-si="template">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>
+        <span>Download Template</span>
+      </button>
+    </div>
+
+    <input id="master-import-input" type="file" accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
+    <button type="button" id="master-import-drop" class="si-drop" data-si="browse">
+      <span class="si-drop-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"></path><path d="M12 12v9M16 16l-4-4-4 4"></path></svg></span>
+      <span class="si-drop-title"><span class="si-link">Click to browse</span> or drag and drop your exported file here</span>
+      <span class="si-drop-note">Supports .XLS, .XLSX and .CSV spreadsheets exported from any company</span>
+    </button>
+    <div id="master-import-file" class="si-file" hidden>
+      <span class="si-file-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h2M8 17h2M14 13h2M14 17h2"></path></svg></span>
+      <div class="si-file-text">
+        <strong id="master-import-file-name"></strong>
+        <span id="master-import-file-summary"></span>
+        <ul id="master-import-file-issues" class="si-issues"></ul>
+      </div>
+      <button type="button" class="ml-act" data-si="browse">Change File</button>
+      <button type="button" class="ml-act ml-act-danger" data-si="clear" aria-label="Remove file">Remove</button>
+    </div>
+
+    <fieldset class="si-strategy">
+      <legend class="si-strategy-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg>
+        Duplicate Records Strategy
+      </legend>
+      <div class="si-options">
+        <label class="si-option">
+          <input type="radio" name="master-import-mode" value="skip" class="sf-radio" checked>
+          <span><strong>Skip Duplicates <em class="si-rec">(Recommended)</em></strong><span>Keep existing records if the code or name already exists.</span></span>
+        </label>
+        <label class="si-option">
+          <input type="radio" name="master-import-mode" value="overwrite" class="sf-radio">
+          <span><strong>Update / Overwrite</strong><span>Overwrite matching records with new details from the spreadsheet.</span></span>
+        </label>
+      </div>
+    </fieldset>
+  </div>
+  <div class="sf-foot si-foot">
+    <button type="button" class="ml-btn ml-btn-plain" data-si="close">Cancel</button>
+    <button type="button" id="master-import-start" class="ml-btn ml-btn-green" data-si="start" aria-keyshortcuts="Control+Enter" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+      <span>Start Import</span>
+    </button>
+  </div>
+</dialog>
+
+<!-- View popup shared by the master list pages (a row's View button); details come from the list's columns -->
+<dialog id="master-view" class="lookup sf mv" aria-labelledby="master-view-title" aria-describedby="master-view-sub">
+  <div class="sf-head">
+    <span id="master-view-icon" class="sf-icon" aria-hidden="true"></span>
+    <div class="sf-heading">
+      <h2 id="master-view-title" class="sf-title"></h2>
+      <p id="master-view-sub" class="sf-sub mv-code"></p>
+    </div>
+    <button type="button" class="lk-close" data-mv="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <dl id="master-view-fields" class="mv-fields"></dl>
+  <div class="sf-foot mv-foot">
+    <button type="button" class="ml-btn ml-btn-danger" data-mv="delete" aria-keyshortcuts="Delete">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      <span>Delete</span>
+    </button>
+    <span class="mv-keys" aria-hidden="true"><kbd>↑↓</kbd> Scroll · <kbd>E</kbd> Edit · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Close</span>
+    <button type="button" class="ml-btn ml-btn-plain" data-mv="close">Close</button>
+    <button type="button" class="ml-btn ml-btn-primary" data-mv="edit" aria-keyshortcuts="E">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+      <span>Edit</span>
+    </button>
+  </div>
+</dialog>
+
+<!-- Confirmation popup (delete a record, discard unsaved changes) -->
+<dialog id="master-confirm" class="lookup sf mc" role="alertdialog" aria-labelledby="master-confirm-title" aria-describedby="master-confirm-message">
+  <div class="mc-body">
+    <span class="mc-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></span>
+    <div>
+      <h2 id="master-confirm-title" class="sf-title"></h2>
+      <p id="master-confirm-message" class="mc-message"></p>
+    </div>
+  </div>
+  <div class="sf-foot mc-foot">
+    <button type="button" class="ml-btn ml-btn-plain" data-mc="cancel">Cancel</button>
+    <button type="button" id="master-confirm-ok" class="ml-btn ml-btn-danger-solid" data-mc="ok"></button>
   </div>
 </dialog>
 
