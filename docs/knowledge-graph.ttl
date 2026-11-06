@@ -394,13 +394,6 @@ res:project a ge:Project,
     ge:order 1 ;
     ge:shortcutKey "P" .
 
-<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/rack> a ge:MenuEntry ;
-    rdfs:label "Rack" ;
-    rdfs:comment "Shelf positions" ;
-    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack/new> ;
-    ge:order 7 ;
-    ge:shortcutKey "R" .
-
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/stock-point> a ge:MenuEntry ;
     rdfs:label "Stock Point" ;
     rdfs:comment "Storage locations" ;
@@ -453,14 +446,6 @@ res:project a ge:Project,
     ge:order 4 ;
     ge:sectionLabel "Masters" ;
     ge:shortcutKey "I" .
-
-<https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/rack> a ge:MenuEntry ;
-    rdfs:label "Rack" ;
-    rdfs:comment "Shelf positions" ;
-    ge:navigatesTo <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack> ;
-    ge:order 9 ;
-    ge:sectionLabel "Masters" ;
-    ge:shortcutKey "R" .
 
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/stock-point> a ge:MenuEntry ;
     rdfs:label "Stock Point" ;
@@ -991,16 +976,6 @@ res:project a ge:Project,
     ge:routePath "#/masters/party/new" ;
     ge:status "planned" .
 
-<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack> a ge:Route ;
-    rdfs:label "#/masters/rack" ;
-    ge:routePath "#/masters/rack" ;
-    ge:status "planned" .
-
-<https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/rack/new> a ge:Route ;
-    rdfs:label "#/masters/rack/new" ;
-    ge:routePath "#/masters/rack/new" ;
-    ge:status "planned" .
-
 <https://github.com/AflaNazrinn/ERP-INITIAL/resource/route/masters/stock-point> a ge:Route ;
     rdfs:label "#/masters/stock-point" ;
     ge:routePath "#/masters/stock-point" ;
@@ -1212,7 +1187,6 @@ ge:Commit a owl:Class ;
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/category>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/item>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/parties>,
-        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/rack>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/stock-point>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters-create/uom> ;
     ge:parentMenu <https://github.com/AflaNazrinn/ERP-INITIAL/resource/menu/masters> .
@@ -1403,7 +1377,6 @@ ge:Commit a owl:Class ;
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/create>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/customer>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/item>,
-        <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/rack>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/stock-point>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/supplier>,
         <https://github.com/AflaNazrinn/ERP-INITIAL/resource/entry/masters/uom> ;

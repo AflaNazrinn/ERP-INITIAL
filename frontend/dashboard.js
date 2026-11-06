@@ -701,8 +701,13 @@ function initQuickMenu() {
     if (menu.open) return;
     document.documentElement.classList.remove('has-modal');
     showQuickMenuView('main');             // next Ctrl+D starts on the main menu
-    const target = quickMenuReturnFocus && document.contains(quickMenuReturnFocus) ? quickMenuReturnFocus : byId('app');
-    target.focus({ preventScroll: true });
+    // 'close' can arrive after an entry has opened a page and focused its first field: keep that focus.
+    const active = document.activeElement;
+    const pageTookFocus = active && active !== document.body && active !== byId('app') && !menu.contains(active);
+    if (!pageTookFocus) {
+      const target = quickMenuReturnFocus && document.contains(quickMenuReturnFocus) ? quickMenuReturnFocus : byId('app');
+      target.focus({ preventScroll: true });
+    }
     quickMenuReturnFocus = null;
   });
 
@@ -1922,8 +1927,10 @@ function syncPartyPhoneCodes(under) {
 const partyDial = under => countryNamed(partyEl(under === 'debtors' ? 'cus-country' : 'sup-country').value)?.dial || '+968';
 
 // Show what the Under choice selects: the matching General panel, labels and placeholders.
+// Until Creditors or Debtors is chosen, the page shows only the Under box (data-pending; see CSS).
 function syncPartyVariant() {
   const under = partyEl('under').value;
+  partyEl('form').toggleAttribute('data-pending', under === '');
   for (const panel of partyEl('form').querySelectorAll('[data-under]')) panel.hidden = panel.dataset.under !== under;
   for (const label of partyEl('page').querySelectorAll('[data-creditors]')) label.textContent = label.dataset[under];
   partyEl('save-label').textContent = under === 'debtors' ? 'Save Customer Record' : 'Save Supplier Record';
@@ -2208,7 +2215,7 @@ const partyForm = createFormPage({
     ['openingBalance', 'sup-opening'], ['paymentTerms', 'sup-terms'], ['currency', 'sup-currency'], ['brandIds', 'sup-brand-entry'],
     ['creditLimit', 'cus-credit-limit'], ['creditDays', 'cus-credit-days'], ['discountPercent', 'cus-discount'],
   ].map(([key, suffix]) => [key, () => partyEl(typeof suffix === 'function' ? suffix() : suffix)])),
-  firstField: () => partyEl(`${partyVariant()}-name`),
+  firstField: () => (partyEl('under').value ? partyEl(`${partyVariant()}-name`) : partyEl('under')),
   setCode() {
     showNextCode(partyEl('sup-code'), 'api/suppliers.php');
     showNextCode(partyEl('cus-code'), 'api/customers.php');
@@ -2247,6 +2254,9 @@ const partyForm = createFormPage({
     if (panel) showPartyTab(panel.dataset.tabPanel);
   },
   read() {
+    if (partyEl('under').value === '') {
+      return { errors: [{ node: partyEl('under'), message: 'Choose Creditors or Debtors first.' }], payload: null };
+    }
     const variant = partyVariant();
     const check = formChecks(suffix => partyEl(`${variant}-${suffix}`));
     const contacts = partyForm.rowsOf(variant === 'cus' ? 'customerContacts' : 'supplierContacts');
@@ -2293,7 +2303,11 @@ const partyForm = createFormPage({
     return { errors: check.errors, payload };
   },
   init() {
-    partyEl('under').addEventListener('change', syncPartyVariant);
+    partyEl('under').addEventListener('change', () => {
+      const wasPending = partyEl('form').hasAttribute('data-pending');
+      syncPartyVariant();
+      if (wasPending) partyForm.el(`${partyVariant()}-name`).focus();   // first choice: go straight to the form
+    });
     // Picking the supplier's country sets its currency. This runs before the form records the edit,
     // so Ctrl+Z undoes both together.
     partyEl('sup-country').addEventListener('input', () => {
@@ -3478,7 +3492,7 @@ const supplierDetailColumns = [
 ].map(column => ({ ...column, inTable: false }));
 
 const supplierList = createMasterList({
-  key: 'supplier', route: 'masters/supplier', newRoute: '#/masters/party/new', noun: 'Supplier', nouns: 'Suppliers',
+  key: 'supplier', route: 'masters/supplier', newRoute: '#/masters/supplier/new', noun: 'Supplier', nouns: 'Suppliers',
   codePrefix: 'SUP', codeDigits: 3,
   columns: [codeColumn('supplier code', 'vendor code', 'party code'),
     nameColumn('Supplier', 'supplier', 'vendor', 'vendor name', 'company', 'company name', 'party name'), ...partyColumns(),
@@ -3607,17 +3621,19 @@ const stockPointList = createMasterList({
 
 const MASTER_LISTS = [supplierList, customerList, itemList, uomList, brandList, categoryList, stockPointList];
 
-// New Customer: the party form with Under set to Debtors, not as an undo step.
-FORM_PAGES['masters/customer/new'] = {
-  page: 'party',
-  reset() {
-    FORM_PAGES['masters/party/new'].reset();
-    partyEl('under').value = 'debtors';
-    syncPartyVariant();
-    partyForm.absorb();
-  },
-  firstField: FORM_PAGES['masters/party/new'].firstField,
-};
+// New Supplier / New Customer (from the list pages): the party form with Under already set, not as an undo step.
+for (const [route, under] of [['masters/supplier/new', 'creditors'], ['masters/customer/new', 'debtors']]) {
+  FORM_PAGES[route] = {
+    page: 'party',
+    reset() {
+      FORM_PAGES['masters/party/new'].reset();
+      partyEl('under').value = under;
+      syncPartyVariant();
+      partyForm.absorb();
+    },
+    firstField: FORM_PAGES['masters/party/new'].firstField,
+  };
+}
 
 const MASTER_FORMS = [uomForm, brandForm, categoryForm, warehouseForm, partyForm];
 

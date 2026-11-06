@@ -46,9 +46,9 @@
   --accent-line: #fde68a;
   --accent-ink: #92400e;
   --accent-ink-deep: #78350f;
-  --entry-bg: #fef08a;        /* Tally-style yellow on the field being edited */
-  --entry-line: #ca8a04;
-  --entry-ring: 0 0 0 3px rgba(202, 138, 4, .45);
+  --entry-bg: #fde047;        /* Tally-style yellow on the field being edited */
+  --entry-line: #a16207;
+  --entry-ring: 0 0 0 3px rgba(161, 98, 7, .5);
   --danger: #e11d48;
   --danger-soft: #fff1f2;
 
@@ -285,7 +285,7 @@ button, select { font-family: inherit; }
 html.has-modal { overflow: hidden; }
 .quick-menu {
   position: fixed; inset: 24px 36px auto auto; margin: 0;   /* every view (main menu and sub-menus) uses this one panel size */
-  width: min(700px, calc(100vw - 32px)); height: min(900px, calc(100vh - 40px)); overflow: hidden;
+  width: min(560px, calc(100vw - 32px)); height: min(900px, calc(100vh - 40px)); overflow: hidden;
   padding: 0; border: 0; border-radius: 12px; background: var(--surface); color: var(--ink-800);
   box-shadow: 0 24px 48px -12px rgba(15, 23, 42, .25), 0 0 0 1px rgba(15, 23, 42, .04);
 }
@@ -315,8 +315,11 @@ html.has-modal { overflow: hidden; }
   color: inherit; text-decoration: none; transition: border-color .15s ease, background-color .15s ease;
   flex: 1 0 auto; width: 100%; font: inherit; text-align: left; cursor: pointer;   /* also used on <button>; main-menu rows stretch to fill the panel */
 }
-.qm-item:hover, .qm-item:focus-visible { border-color: var(--ink-300); background: var(--surface-muted); color: inherit; }
-.qm-item:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(15, 23, 42, .08); }
+.qm-item:hover { border-color: var(--ink-300); background: var(--surface-muted); color: inherit; }
+/* The entry the keyboard is on: grey fill and a solid dark 2px frame, so it is plain to see. */
+.qm-item:focus-visible, .qm-item-sm:focus-visible { outline: none; border-color: var(--ink-900); background: var(--line); box-shadow: 0 0 0 1px var(--ink-900); color: inherit; }
+.qm-item:focus-visible .qm-desc { color: var(--ink-700); }
+.qm-item:focus-visible .qm-kbd { border-color: var(--ink-400); background: var(--surface); color: var(--ink-900); }
 .qm-item:hover .qm-chevron, .qm-item:focus-visible .qm-chevron { color: var(--ink-700); transform: translateX(2px); }
 .qm-icon {
   flex: none; width: 44px; height: 44px; border-radius: 8px; background: var(--ink-900); color: #fff;
@@ -324,6 +327,7 @@ html.has-modal { overflow: hidden; }
 }
 .qm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .qm-name { font-size: 22px; font-weight: 400; color: var(--ink-800); }   /* the shortcut letter (.qm-key) is the bold part */
+.qm-desc { font-size: 13px; font-weight: 400; line-height: 1.3; color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line under each entry's name */
 .qm-chevron { flex: none; color: var(--ink-400); transition: transform .15s ease, color .15s ease; }
 
 /* Sub-menus (Masters, Purchase Book, Trade, Entry, Returns, Supply, Employee) use compact rows, per the Masters design. */
@@ -335,7 +339,7 @@ html.has-modal { overflow: hidden; }
 }
 .qm-section:first-child { margin-top: 0; }
 .qm-item-sm { flex: 1 0 auto; min-height: 56px; border-radius: 10px; }
-.qm-item-sm:focus-visible { border-color: var(--ink-900); background: var(--surface); box-shadow: 0 0 0 .5px var(--ink-900); }
+
 .qm-icon-sm svg { width: 18px; height: 18px; }
 .qm-item-sm .qm-icon { width: 40px; height: 40px; }
 .qm-item-sm .qm-name-strong { font-weight: 700; color: var(--ink-900); }
@@ -554,6 +558,7 @@ kbd {
 .fp-under { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; }
 .fp-under-label { font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-500); }
 .fp-under-select { width: 200px; height: 38px; border-color: transparent; background-color: var(--surface-muted); font-weight: 700; color: var(--ink-900); box-shadow: none; }
+.fp-under-select:focus, .fp-under-select:focus-visible { background-color: var(--entry-bg); border-color: var(--entry-line); box-shadow: var(--entry-ring); }   /* same highlight as every other field */
 .fp-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line-soft); }
 .fp-tab {
   padding: 10px 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent; cursor: pointer;
@@ -684,10 +689,11 @@ kbd {
 .lk-table tbody tr + tr td { border-top: 1px solid var(--line-soft); }
 .lk-table tbody tr[data-index] { cursor: pointer; }
 .lk-table tbody tr[data-index]:hover { background: var(--surface-muted); }
-.lk-table tbody tr.is-active { background: var(--accent-soft); }
-.lk-table tbody tr.is-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.lk-table tbody tr.is-active { background: var(--accent-line); }   /* the row ↑/↓ is on */
+.lk-table tbody tr.is-active td:first-child { box-shadow: inset 4px 0 0 var(--accent-hover); }
+.lk-table tbody tr.is-active td { color: var(--ink-900); font-weight: 600; }
 .lk-code { width: 28%; font-family: var(--font-mono); font-weight: 700; color: var(--ink-900); }
-.lk-table tr.is-active .lk-code { color: var(--accent); }
+.lk-table tr.is-active .lk-code { color: var(--accent-ink-deep); }
 .lk-empty { padding: 28px 14px !important; text-align: center; color: var(--ink-500); }
 .lk-foot { flex: none; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line); }
 .lk-foot .fp-btn { white-space: nowrap; }
@@ -1046,3 +1052,7 @@ kbd {
   content: ''; width: 9px; height: 5px; margin-top: -2px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg);
 }
 .lk-table tbody tr.is-picked td { font-weight: 700; color: var(--ink-900); }
+
+/* Party Creation before Under is chosen: only the Under box shows. */
+#party-form[data-pending] > :not(.fp-party-bar),
+#party-form[data-pending] .fp-tabs { display: none; }
