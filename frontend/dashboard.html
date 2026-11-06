@@ -1463,7 +1463,8 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     <h2 id="lookup-title" class="lk-title"></h2>
     <div class="lk-keys" aria-hidden="true">
       <span class="lk-key"><kbd>↑↓</kbd> Navigate</span>
-      <span class="lk-key"><kbd>Enter</kbd> Select</span>
+      <span class="lk-key"><kbd>Enter</kbd> <span id="lookup-enter-hint">Select</span></span>
+      <span id="lookup-done-hint" class="lk-key" hidden><kbd>Tab</kbd> Done</span>
       <span class="lk-key"><kbd>Esc</kbd> Close</span>
     </div>
     <button type="button" class="lk-close" data-lookup-action="cancel" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
@@ -1486,7 +1487,7 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     </section>
   </div>
   <div class="lk-foot">
-    <button type="button" class="fp-btn fp-btn-secondary" data-lookup-action="cancel">Cancel</button>
+    <button type="button" id="lookup-cancel" class="fp-btn fp-btn-secondary" data-lookup-action="cancel">Cancel</button>
     <button type="button" id="lookup-select" class="fp-btn fp-btn-primary" data-lookup-action="select"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="lookup-select-label"></span></button>
   </div>
 </dialog>
@@ -1512,6 +1513,26 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     </div>
     <div class="sf-bulk">
       <label class="sf-check sf-check-strong"><input id="master-filter-all" type="checkbox" class="sf-radio"><span>Select All</span></label>
+      <span class="sf-divider" aria-hidden="true"></span>
+      <div class="sf-date-wrap">
+        <button type="button" id="master-filter-date" class="sf-date-btn" data-sf="date" aria-haspopup="dialog" aria-expanded="false" aria-controls="master-filter-date-pop">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+          <span id="master-filter-date-label">Date</span>
+          <svg class="sf-date-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+        <div id="master-filter-date-pop" class="sf-date-pop" role="dialog" aria-label="Filter by date" hidden>
+          <p class="sf-date-title">Created between</p>
+          <div class="sf-date-fields">
+            <label class="sf-date-field"><span>From</span><input id="master-filter-from" type="date" class="sf-date-input"></label>
+            <label class="sf-date-field"><span>To</span><input id="master-filter-to" type="date" class="sf-date-input"></label>
+          </div>
+          <p id="master-filter-date-error" class="sf-date-error" hidden>The From date must be on or before the To date.</p>
+          <div class="sf-date-actions">
+            <button type="button" class="ml-btn ml-btn-plain" data-sf="date-clear">Clear</button>
+            <button type="button" class="ml-btn ml-btn-primary" data-sf="date-apply">Set Dates</button>
+          </div>
+        </div>
+      </div>
       <div class="sf-bulk-side">
         <button type="button" class="sf-link" data-sf="visible"><span class="sf-box" aria-hidden="true"></span>Select All Visible</button>
         <button type="button" class="sf-link" data-sf="none"><span class="sf-box" aria-hidden="true"></span>Deselect All</button>
@@ -1527,7 +1548,7 @@ Ball Valve 1/2", Stainless steel 316, PCS, 12.500, 7 days, 12 months</pre>
     </button>
     <span id="master-filter-summary" class="sf-summary"></span>
     <button type="button" class="ml-btn ml-btn-plain" data-sf="reset">Reset Filters</button>
-    <button type="button" class="ml-btn ml-btn-primary" data-sf="apply" aria-keyshortcuts="Control+Enter">
+    <button type="button" class="ml-btn ml-btn-primary" data-sf="apply">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
       <span>Apply Filters</span>
     </button>

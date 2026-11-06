@@ -1,0 +1,2 @@
+# Nothing in this folder is ever served over the web (a second guard; the folder already sits outside public_html).
+Require all denied

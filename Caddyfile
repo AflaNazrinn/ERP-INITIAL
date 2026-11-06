@@ -26,6 +26,8 @@
 	}
 	handle @frontend {
 		root * {$APP_ROOT}/frontend
+		# The files keep their names between releases: browsers must check for a newer copy (a quick 304 when unchanged).
+		header Cache-Control "no-cache"
 		file_server
 	}
 

@@ -1,3 +1,4 @@
 backend/.env
 backend/storage/
 backend/vendor/
+dist/

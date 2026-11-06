@@ -994,7 +994,7 @@ function showServerErrors(error, fieldNode, reveal) {
   showToast('Could not save', error.message, true);
 }
 
-// Fields that pick into a list (chips) instead of holding one value: entry → { exclude, onPick, onClear }.
+// Fields that pick into a list (chips) instead of holding one value: entry → { picked, apply, onClear }.
 const lookupChipFields = new WeakMap();
 const lookup = { field: null, kind: '', rows: [], shown: [], active: 0, byKeyboard: false };
 const lookupIdInput = field => field.parentElement.querySelector('input[type="hidden"]');
@@ -1031,10 +1031,11 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   const parentId = parent ? lookupIdInput(parent).value : '';
   if (parentId) rows = rows.filter(row => String(row[config.parentKey]) === parentId);
   if (config.filterFor) rows = config.filterFor(rows, field);
-  const excluded = lookupChipFields.get(field)?.exclude() || [];
-  rows = rows.filter(row => !excluded.includes(row.id));
+  // Chip fields pick several: every row is listed and the ones already picked start ticked.
+  const chips = lookupChipFields.get(field);
+  const multi = chips ? new Map(chips.picked().map(row => [String(row.id), row])) : null;
 
-  Object.assign(lookup, { field, kind, rows, byKeyboard });
+  Object.assign(lookup, { field, kind, rows, byKeyboard, multi });
   const currentId = lookupIdInput(field)?.value ?? field.value;
   // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
   lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
@@ -1042,8 +1043,10 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-letter').textContent = config.letter;
   byId('lookup-title').textContent = config.title;
   byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
-  byId('lookup-select-label').textContent = config.title;
-  byId('lookup-head').replaceChildren(...config.columns.map(([, heading]) => el('th', '', heading)));
+  byId('lookup-head').replaceChildren(...(multi ? [el('th', 'lk-check', '')] : []), ...config.columns.map(([, heading]) => el('th', '', heading)));
+  byId('lookup-enter-hint').textContent = multi ? 'Tick / Untick' : 'Select';
+  byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
+  byId('lookup-done-hint').hidden = !multi;
   const search = byId('lookup-search');
   search.value = query;
   search.placeholder = `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
@@ -1070,13 +1073,21 @@ function renderLookupRows() {
     tr.id = `lookup-row-${index}`;
     tr.dataset.index = String(index);
     tr.setAttribute('role', 'option');
+    if (lookup.multi) {
+      const ticked = lookup.multi.has(String(row.id));
+      tr.classList.toggle('is-picked', ticked);
+      tr.setAttribute('aria-checked', String(ticked));
+      const box = el('td', 'lk-check');
+      box.append(el('span', 'lk-box'));
+      tr.append(box);
+    }
     config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
     return tr;
   });
   if (rows.length === 0) {
     const tr = el('tr');
     const td = el('td', 'lk-empty', query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`);
-    td.colSpan = config.columns.length;
+    td.colSpan = config.columns.length + (lookup.multi ? 1 : 0);
     tr.append(td);
     rows.push(tr);
   }
@@ -1084,8 +1095,29 @@ function renderLookupRows() {
   byId('lookup-count').textContent = query
     ? `${lookup.shown.length} of ${lookup.rows.length} ${config.plural}`
     : `${lookup.rows.length} ${config.plural}`;
-  byId('lookup-select').disabled = lookup.shown.length === 0;
+  // Multi-select: Select applies the ticks (even none, which clears the field).
+  byId('lookup-select').disabled = !lookup.multi && lookup.shown.length === 0;
+  byId('lookup-select-label').textContent = lookup.multi ? `${config.title} (${lookup.multi.size})` : config.title;
   syncLookupActive();
+}
+
+// Multi-select: Enter or a click ticks the highlighted row, and again unticks it. The popup stays open,
+// and the field shows the ticked rows straight away (kept ones first, in their order), so Esc, ✕,
+// Close and Select all close it without losing a tick.
+function toggleLookupRow() {
+  const row = lookup.shown[lookup.active];
+  if (!row) return;
+  const id = String(row.id);
+  if (lookup.multi.has(id)) lookup.multi.delete(id); else lookup.multi.set(id, row);
+  lookupChipFields.get(lookup.field).apply([...lookup.multi.values()]);
+  renderLookupRows();
+}
+
+// Multi-select: the Select button closes the popup and moves on to the next field.
+function applyLookupMulti() {
+  const { field } = lookup;
+  closeLookup();
+  focusNextField(field);
 }
 
 function syncLookupActive() {
@@ -1122,13 +1154,12 @@ function closeLookup({ advance = false } = {}) {
 
 // Picks the highlighted row. Enter (advance) and keyboard use move on to the next field.
 async function pickLookupRow({ advance = false } = {}) {
+  if (lookup.multi) { toggleLookupRow(); return; }
   const row = lookup.shown[lookup.active];
   if (!row) return;
   const { field } = lookup;
   const moveOn = advance || lookup.byKeyboard;
   closeLookup();
-  const chips = lookupChipFields.get(field);
-  if (chips) { chips.onPick(row); if (moveOn) focusNextField(field); return; }
   const parent = lookupParentField(field);
   if (parent && !lookupIdInput(parent).value) {   // picked a child first: fill in its parent too
     const parentRows = await loadLookup(parent.dataset.lookup);
@@ -1208,8 +1239,8 @@ function createLookupChips({ container, entry, onChange }) {
   };
   const change = next => { picked = next; render(); onChange(); };
   lookupChipFields.set(input, {
-    exclude: () => picked.map(row => row.id),
-    onPick(row) { clearFieldError(input); change([...picked, row]); input.focus(); },
+    picked: () => [...picked],
+    apply(rows) { clearFieldError(input); change(rows); },
     onClear() { if (picked.length) change(picked.slice(0, -1)); },
   });
   box.addEventListener('click', event => {
@@ -1249,7 +1280,8 @@ function initLookups() {
     if (!tr) return;
     lookup.active = Number(tr.dataset.index);
     syncLookupActive();
-    if (event.detail >= 2) pickLookupRow();   // double-click picks
+    if (lookup.multi) toggleLookupRow();        // multi-select: each click ticks or unticks
+    else if (event.detail >= 2) pickLookupRow();   // double-click picks
   });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) {           // the backdrop, outside the panel
@@ -1259,7 +1291,7 @@ function initLookups() {
     }
     const action = event.target.closest('[data-lookup-action]')?.dataset.lookupAction;
     if (action === 'cancel') closeLookup();
-    else if (action === 'select') pickLookupRow();
+    else if (action === 'select') { if (lookup.multi) applyLookupMulti(); else pickLookupRow(); }
   });
 }
 
@@ -2360,16 +2392,20 @@ function createMasterList(config) {
   const tableColumns = config.columns.filter(column => column.inTable !== false);
   const caps = config.noun === config.noun.toUpperCase();          // UOM stays UOM in sentences
   const list = {
-    config, rows: config.rows, applied: new Set(), $, render,
+    config, rows: config.rows, applied: new Set(), range: { from: '', to: '' }, $, render,
     one: caps ? config.noun : config.noun.toLowerCase(),
     many: caps ? config.nouns : config.nouns.toLowerCase(),
   };
   list.count = count => `${count} ${count === 1 ? list.one : list.many}`;
+  // Dummy rows get spread-out created dates (newest first); rows added later are stamped when first seen.
+  list.rows.forEach((row, index) => {
+    if (!row.createdOn) row.createdOn = dateInputValue(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3 - index * 11));
+  });
 
   function render() {
     const query = $('search').value.trim().toLowerCase();
     const { applied, rows: all } = list;
-    const rows = all.filter(row => (applied.size === 0 || applied.has(row.code))
+    const rows = all.filter(row => (applied.size === 0 || applied.has(row.code)) && inDateRange(row, list.range)
       && (!query || config.columns.some(column => String(row[column.key] ?? '').toLowerCase().includes(query))));
     $('body').replaceChildren(...rows.map(row => {
       const tr = el('tr');
@@ -2393,8 +2429,9 @@ function createMasterList(config) {
     const filtered = rows.length < all.length ? ` (filtered from ${all.length})` : '';
     $('count').textContent = rows.length
       ? `Showing 1 to ${rows.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
-    $('filter-label').textContent = applied.size ? `Filter (${applied.size})` : 'Filter';
-    $('filter').classList.toggle('is-on', applied.size > 0);
+    const active = applied.size + (list.range.from || list.range.to ? 1 : 0);
+    $('filter-label').textContent = active ? `Filter (${active})` : 'Filter';
+    $('filter').classList.toggle('is-on', active > 0);
   }
 
   // "/" search, F filter, I import, Shift+N new record, Esc back to the Masters popup (Esc in a filled search clears it first).
@@ -2480,11 +2517,18 @@ function createMasterList(config) {
    Keys: ↑/↓ move between the search box and the rows, Space ticks, Enter applies
    (Ctrl+Enter from anywhere), Esc closes without applying. */
 
-const masterFilter = { list: null, picked: new Set(), opener: null };
+const masterFilter = { list: null, picked: new Set(), range: { from: '', to: '' }, opener: null };
+
+// YYYY-MM-DD in local time, as a date input holds it; a record's created date (today when it has none yet).
+const dateInputValue = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const createdOn = row => (row.createdOn ??= dateInputValue(new Date()));
+const inDateRange = (row, { from, to }) => (!from || createdOn(row) >= from) && (!to || createdOn(row) <= to);
+const shortDate = value => new Date(`${value}T00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 const mfEl = suffix => byId(`master-filter-${suffix}`);
 const mfVisibleRows = () => {
   const query = mfEl('search').value.trim().toLowerCase();
   return [...masterFilter.list.rows].sort((a, b) => a.code.localeCompare(b.code))
+    .filter(row => inDateRange(row, masterFilter.range))
     .filter(row => !query || row.code.toLowerCase().includes(query) || row.name.toLowerCase().includes(query));
 };
 
@@ -2500,6 +2544,8 @@ function renderMasterFilterList() {
     return label;
   }));
   mfEl('empty').hidden = rows.length > 0;
+  // The code column fits the longest code of this master, so codes stay on one line and the names line up.
+  mfEl('list').style.setProperty('--sf-code-ch', Math.max(6, ...masterFilter.list.rows.map(row => row.code.length)));
   syncMasterFilterCounts();
 }
 
@@ -2515,7 +2561,9 @@ function syncMasterFilterCounts() {
 }
 
 function openMasterFilter(list) {
-  Object.assign(masterFilter, { list, picked: new Set(list.applied), opener: document.activeElement });
+  Object.assign(masterFilter, { list, picked: new Set(list.applied), range: { ...list.range }, opener: document.activeElement });
+  closeMasterDate(false);
+  syncMasterDateButton();
   mfEl('title').textContent = `Filter ${list.config.nouns}`;
   mfEl('sub').textContent = `Search and select the ${list.many} to show`;
   mfEl('search').placeholder = `Filter by ${list.one} code or name...`;
@@ -2540,15 +2588,21 @@ function closeMasterFilter() {
 function applyMasterFilter() {
   const { list } = masterFilter;
   list.applied = new Set(masterFilter.picked);
+  list.range = { ...masterFilter.range };
   list.render();
   closeMasterFilter();
-  const count = list.applied.size;
-  showToast('Filter applied', count ? `Showing ${list.count(count)}.` : `Showing all ${list.many}.`);
+  const count = list.rows.filter(row => (list.applied.size === 0 || list.applied.has(row.code)) && inDateRange(row, list.range)).length;
+  const filtered = list.applied.size || list.range.from || list.range.to;
+  showToast('Filter applied', filtered ? `Showing ${list.count(count)}.` : `Showing all ${list.many}.`);
 }
 
 function resetMasterFilter() {
   masterFilter.picked.clear();
   masterFilter.list.applied.clear();
+  masterFilter.range = { from: '', to: '' };
+  masterFilter.list.range = { from: '', to: '' };
+  closeMasterDate(false);
+  syncMasterDateButton();
   mfEl('search').value = '';
   renderMasterFilterList();
   masterFilter.list.render();
@@ -2572,20 +2626,110 @@ const masterFileName = (list, suffix) => `${list.config.nouns.toLowerCase().repl
 function exportMasterRows() {
   const { list, picked } = masterFilter;
   const { columns } = list.config;
-  const rows = list.rows.filter(row => picked.size === 0 || picked.has(row.code));
+  const rows = list.rows.filter(row => (picked.size === 0 || picked.has(row.code)) && inDateRange(row, masterFilter.range));
   downloadCsv(masterFileName(list, today.toISOString().slice(0, 10)),
     [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
   showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
 }
 
+/* Date panel inside the Filter popup: records created From ... To (either end may be left open). */
+const mfDatePop = () => mfEl('date-pop');
+
+function syncMasterDateButton() {
+  const { from, to } = masterFilter.range;
+  mfEl('date-label').textContent = from && to ? `${shortDate(from)} – ${shortDate(to)}`
+    : from ? `From ${shortDate(from)}` : to ? `Until ${shortDate(to)}` : 'Date';
+  mfEl('date').classList.toggle('is-on', Boolean(from || to));
+}
+
+function openMasterDate() {
+  mfEl('from').value = masterFilter.range.from;
+  mfEl('to').value = masterFilter.range.to;
+  mfEl('date-error').hidden = true;
+  mfDatePop().hidden = false;
+  mfEl('date').setAttribute('aria-expanded', 'true');
+  mfEl('from').focus();
+}
+
+function closeMasterDate(refocus = true) {
+  if (mfDatePop().hidden) return;
+  mfDatePop().hidden = true;
+  mfEl('date').setAttribute('aria-expanded', 'false');
+  if (refocus) mfEl('date').focus();
+}
+
+function setMasterDate(clear = false) {
+  const from = clear ? '' : mfEl('from').value;
+  const to = clear ? '' : mfEl('to').value;
+  if (from && to && from > to) {
+    mfEl('date-error').hidden = false;
+    mfEl('to').focus();
+    return;
+  }
+  masterFilter.range = { from, to };
+  syncMasterDateButton();
+  renderMasterFilterList();
+  closeMasterDate();
+}
+
+// Keys while the date panel is open: Esc closes it, Enter goes From -> To -> Set Dates, Tab cycles inside it,
+// and the arrows stay with the date input (up/down step the value, left/right move between day, month and year).
+function handleMasterDateKeys(event) {
+  const { key, target } = event;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeMasterDate(); return true; }
+  if (key === 'Tab') {
+    const stops = [mfEl('from'), mfEl('to'), ...mfDatePop().querySelectorAll('button')];
+    const index = stops.indexOf(target);
+    event.preventDefault();
+    stops[(index + (event.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
+    return true;
+  }
+  if (key === 'Enter' && target === mfEl('from')) { event.preventDefault(); mfEl('to').focus(); return true; }
+  if (key === 'Enter' && target === mfEl('to')) { event.preventDefault(); if (!event.repeat) setMasterDate(); return true; }
+  if (target.type === 'date' && key.startsWith('Arrow')) return true;
+  return false;
+}
+
 function handleMasterFilterKeys(event) {
+  if (!mfDatePop().hidden && (mfDatePop().contains(event.target) || event.key === 'Escape')) {
+    return handleMasterDateKeys(event);
+  }
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
   if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeMasterFilter(); return true; }
-  if (key === 'Enter' && (ctrl || target === mfEl('search') || target.classList.contains('sf-radio'))) {
+  // The popup stays open until Apply Filters, Esc or Close: Enter ticks/unticks a field,
+  // and from the search box moves to the first record.
+  if (key === 'Enter' && !ctrl && target.classList.contains('sf-radio')) {
     event.preventDefault();
-    if (!event.repeat) applyMasterFilter();
+    if (!event.repeat) target.click();
     return true;
+  }
+  if (key === 'Enter' && !ctrl && target === mfEl('search')) {
+    event.preventDefault();
+    (mfEl('list').querySelector('input[type="checkbox"]') ?? mfEl('all')).focus();
+    return true;
+  }
+  if (key === 'Enter' && ctrl) { event.preventDefault(); return true; }
+  // Typing anywhere else in the popup goes into the search box (Space still ticks; Backspace edits the search).
+  const search = mfEl('search');
+  if (target !== search && !ctrl && !event.altKey && ((key.length === 1 && key !== ' ') || key === 'Backspace')) {
+    event.preventDefault();
+    search.value = key === 'Backspace' ? search.value.slice(0, -1) : search.value + key;
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  // →/← leave the record list for the footer: → Reset Filters, ← Export. Select All → goes to its side links.
+  if (!ctrl && !event.altKey && (key === 'ArrowRight' || key === 'ArrowLeft')) {
+    const dialog = byId('master-filter');
+    let next = null;
+    if (mfEl('list').contains(target) && target.type === 'checkbox') {
+      next = dialog.querySelector(key === 'ArrowRight' ? '[data-sf="reset"]' : '[data-sf="export"]');
+    } else if (target === mfEl('all') && key === 'ArrowRight') {
+      next = mfEl('date');
+    }
+    if (next) { event.preventDefault(); next.focus(); return true; }
   }
   if (ctrl || event.altKey || (key !== 'ArrowDown' && key !== 'ArrowUp')) return false;
   // ↑/↓ walk search → Select All → each row → Apply Filters; other controls use the page's arrow navigation.
@@ -2601,13 +2745,16 @@ function handleMasterFilterKeys(event) {
 function initMasterFilter() {
   const dialog = byId('master-filter');
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeMasterFilter(); });
-  dialog.addEventListener('click', event => {
-    if (event.target === dialog) { closeMasterFilter(); return; }   // backdrop
+  dialog.addEventListener('click', event => {   // a backdrop click does not close the popup
+    if (!event.target.closest('.sf-date-wrap')) closeMasterDate(false);   // a click elsewhere folds the date panel
     const action = event.target.closest('[data-sf]')?.dataset.sf;
     if (action === 'close') closeMasterFilter();
     else if (action === 'apply') applyMasterFilter();
     else if (action === 'reset') resetMasterFilter();
     else if (action === 'export') exportMasterRows();
+    else if (action === 'date') { if (mfDatePop().hidden) openMasterDate(); else closeMasterDate(); }
+    else if (action === 'date-apply') setMasterDate();
+    else if (action === 'date-clear') setMasterDate(true);
     else if (action === 'visible' || action === 'none') {
       for (const row of action === 'visible' ? mfVisibleRows() : masterFilter.list.rows) {
         if (action === 'visible') masterFilter.picked.add(row.code); else masterFilter.picked.delete(row.code);

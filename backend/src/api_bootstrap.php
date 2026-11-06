@@ -77,6 +77,13 @@ function query_search(): string
     return is_string($q) ? trim(mb_substr($q, 0, 100)) : '';
 }
 
+// Outside development, PHP warnings go to the error log only, never into a JSON response
+// (shared hosts such as Hostinger often ship with display_errors on).
+if (env('APP_ENV', 'production') !== 'development') {
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
