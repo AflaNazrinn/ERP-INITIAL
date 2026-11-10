@@ -38,7 +38,8 @@ Your `backend/.env` is never put in the zip.
 2. Delete Hostinger's placeholder `public_html/default.php` (and any `index.html` / `index.php` there).
 3. Upload `growth-engine-hostinger.zip` into `domains/<your-domain>/` and **Extract** it there.
    `public_html/` merges with the existing one; `src/`, `config.php` and the rest land next to it.
-4. In the same folder, copy `.env.example` to `.env` and edit it:
+4. In the same folder, **rename** `.env.example` to **`.env`** (exactly that name: a dot, then `env`) and edit it.
+   Use the full database name and user from hPanel → Databases → Management, **with** the `u…_` prefix:
 
    ```
    APP_ENV=production
@@ -52,6 +53,10 @@ Your `backend/.env` is never put in the zip.
 5. Check that the `storage/` folder is writable (permissions 755 is enough on Hostinger). Uploaded
    supplier and customer documents are saved there.
 
+The program only reads `.env` from this folder (next to `config.php`). Without it, or with a wrong name,
+user or password, every page that needs the database fails; the API then answers
+`{"error":"Server setup: …"}` with what to fix (see **5. Check it**).
+
 ## 4. Create the tables
 
 **With SSH** (hPanel → Advanced → SSH Access; on Premium plans and above):
@@ -62,25 +67,45 @@ php bin/migrate.php
 php bin/seed-demo-data.php     # optional: sample units, categories, brands, warehouses, items
 ```
 
-**Without SSH**: open **phpMyAdmin** for the database, choose **Import**, and upload
-`migrations/2026_11_05_001_masters.sql` from the zip. Then run this in the **SQL** tab, so a later
-`php bin/migrate.php` knows the file is already applied:
+**Without SSH**: open **phpMyAdmin** for the database, choose **Import**, and upload every file in
+`migrations/` from the zip, **in name order** (oldest first):
+
+1. `migrations/2026_11_05_001_masters.sql`
+2. `migrations/2026_11_09_001_master_fixes.sql`
+
+Then run this in the **SQL** tab, so a later `php bin/migrate.php` knows the files are already applied:
 
 ```sql
 CREATE TABLE IF NOT EXISTS schema_migrations (
   migration  VARCHAR(190) NOT NULL PRIMARY KEY,
   applied_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT INTO schema_migrations (migration) VALUES ('2026_11_05_001_masters.sql');
+INSERT INTO schema_migrations (migration) VALUES ('2026_11_05_001_masters.sql'), ('2026_11_09_001_master_fixes.sql');
 ```
+
+A database that already has the first file only needs the second one (and its name in `schema_migrations`).
+Back the database up first (phpMyAdmin → Export): `2026_11_09_001_master_fixes.sql` changes data, it puts
+all record names in capitals and turns old stock point types into "Warehouse".
 
 ## 5. Check it
 
 - `https://<your-domain>/` opens the dashboard.
 - `https://<your-domain>/api/session.php` shows `{"data":{"csrfToken":"...","user":null}}`.
-- `https://<your-domain>/api/uoms.php` shows `{"data":[...]}`. A `{"error": ...}` here means the
-  `.env` database settings are wrong, or the tables are missing.
+- `https://<your-domain>/api/uoms.php` shows `{"data":[...]}`. An error names the fix:
+
+  | `{"error": "Server setup: …"}` says | Fix |
+  |---|---|
+  | the .env file … is missing or incomplete | Rename `.env.example` to `.env` next to `config.php` and fill it in |
+  | this database user may not open that database | `DB_NAME` / `DB_USER` are wrong: use the full names with the `u…_` prefix |
+  | the database refused the login | `DB_USER` / `DB_PASS` are wrong |
+  | a database table is missing / the database is not up to date | Import the files in `migrations/` (section 4) |
+
 - `http://` redirects to `https://`.
+
+**Still stuck?** Upload `deploy/hostinger/check-install.php` (from the repository, not the zip) to
+`public_html/api/`, open `https://<your-domain>/api/check-install.php`, and read the `FAIL` lines: it checks the
+PHP version, every backend file (missing or an old copy), the database login, the tables and columns,
+and the `storage/` folder, without showing any password. **Delete it afterwards.**
 
 ## Updating later
 

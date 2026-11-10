@@ -58,11 +58,48 @@ final class Input
         return mb_substr($value, 0, $max);
     }
 
+    /* A record name: stored in capitals, whatever case it was typed in. */
+    public function name(string $key, string $label, int $max, bool $required = true): string
+    {
+        return mb_substr(mb_strtoupper($this->text($key, $label, $max, $required)), 0, $max);
+    }
+
+    /* A YYYY-MM-DD date, or null when blank. */
+    public function date(string $key, string $label): ?string
+    {
+        $value = trim((string) ($this->raw($key) ?? ''));
+        if ($value === '') {
+            return null;
+        }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if (!$date || $date->format('Y-m-d') !== $value) {
+            $this->fail($key, "$label must be a date (YYYY-MM-DD).");
+            return null;
+        }
+        return $value;
+    }
+
     public function email(string $key, string $label, int $max = 150, bool $required = false): string
     {
         $value = $this->text($key, $label, $max, $required);
-        if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+        // A real address: name@domain with a domain ending such as .com or .om.
+        if ($value !== '' && (filter_var($value, FILTER_VALIDATE_EMAIL) === false || !preg_match('/@[^@]+\.[a-z]{2,}$/i', $value))) {
             $this->fail($key, 'Enter a valid email address.');
+        }
+        return $value;
+    }
+
+    /*
+     * A phone number, checked against its country: "+968 9123 4455" must have the digits Oman uses after
+     * +968 (PHONE_DIGITS). Spaces, dashes, dots and brackets are allowed; one leading 0 (a trunk prefix,
+     * "+971 050 …") is ignored. A number without a + code, or with a code not in the list, needs 6 to 15
+     * digits. $allowExtension also takes a short extension (up to 5 digits) on its own.
+     */
+    public function phone(string $key, string $label, int $max = 40, bool $allowExtension = false): string
+    {
+        $value = $this->text($key, $label, $max);
+        if ($value !== '' && ($message = phone_problem($value, $allowExtension)) !== null) {
+            $this->fail($key, "$label: $message");
         }
         return $value;
     }
@@ -182,6 +219,53 @@ final class Input
     }
 }
 
+/* Calling code => [country, fewest, most digits after the code]. The same list as COUNTRIES in dashboard.js. */
+const PHONE_DIGITS = [
+    '+968' => ['Oman', 8, 8], '+971' => ['United Arab Emirates', 8, 9], '+966' => ['Saudi Arabia', 8, 9],
+    '+974' => ['Qatar', 8, 8], '+965' => ['Kuwait', 8, 8], '+973' => ['Bahrain', 8, 8], '+91' => ['India', 10, 10],
+    '+92' => ['Pakistan', 9, 10], '+20' => ['Egypt', 8, 10], '+962' => ['Jordan', 8, 9], '+90' => ['Türkiye', 10, 10],
+    '+86' => ['China', 10, 11], '+81' => ['Japan', 9, 10], '+82' => ['South Korea', 8, 10], '+49' => ['Germany', 6, 11],
+    '+39' => ['Italy', 6, 11], '+44' => ['United Kingdom', 9, 10], '+1' => ['United States', 10, 10],
+];
+
+/* Why a phone number is not valid for its country, or null when it is. See Input::phone(). */
+function phone_problem(string $value, bool $allowExtension = false): ?string
+{
+    $text = trim($value);
+    $code = null;
+    if (str_starts_with($text, '+')) {
+        $codes = array_keys(PHONE_DIGITS);
+        usort($codes, static fn ($a, $b) => strlen($b) <=> strlen($a));   // +968 before +9…
+        foreach ($codes as $candidate) {
+            if (str_starts_with($text, $candidate)) {
+                $code = $candidate;
+                $text = substr($text, strlen($candidate));
+                break;
+            }
+        }
+        if ($code === null) {
+            $text = substr($text, 1);
+        }
+    }
+    $digits = preg_replace('/[\s\-().]/', '', $text);
+    if ($digits === '' || !ctype_digit($digits)) {
+        return 'use digits only (spaces and dashes are fine).';
+    }
+    if ($allowExtension && $code === null && strlen($digits) <= 5) {
+        return null;   // an extension such as 204
+    }
+    if ($code === null) {
+        return strlen($digits) >= 6 && strlen($digits) <= 15 ? null : 'enter 6 to 15 digits, or start with a country code such as +968.';
+    }
+    [$country, $min, $max] = PHONE_DIGITS[$code];
+    $national = strlen($digits) > $max && $digits[0] === '0' ? substr($digits, 1) : $digits;
+    if (strlen($national) < $min || strlen($national) > $max) {
+        $range = $min === $max ? "$min digits" : "$min to $max digits";
+        return "numbers in $country have $range after $code.";
+    }
+    return null;
+}
+
 /* $table is always a constant from module code, never user input. */
 function row_exists(string $table, int $id): bool
 {
@@ -202,6 +286,20 @@ function next_code(string $table, string $column, string $prefix, bool $withYear
     )->fetchColumn();
     $number = $last === false ? 1 : ((int) substr((string) $last, strlen($stem))) + 1;
     return $stem . str_pad((string) $number, 4, '0', STR_PAD_LEFT);
+}
+
+/* Deletes one row; NotFound when it is not there. A foreign key that still points at it ends as 409 (api_bootstrap.php). */
+function delete_row(string $table, int $id, string $notFound): void
+{
+    if (query("DELETE FROM `$table` WHERE id = ?", [$id])->rowCount() === 0) {
+        throw new NotFound($notFound);
+    }
+}
+
+/* The date part of a TIMESTAMP column (YYYY-MM-DD), for the list pages' date filter. */
+function date_only(?string $timestamp): string
+{
+    return $timestamp === null ? '' : substr($timestamp, 0, 10);
 }
 
 /* "WHERE a LIKE ? OR b LIKE ?" parameters for a search box. */

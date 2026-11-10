@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/master_validation.php';
+require_once __DIR__ . '/party_records.php';
 
-/* Suppliers (Party › Creditors), their contacts and the brands they sell (supplier_brands). */
+/*
+ * Suppliers (Party › Creditors): their contacts, quotation lines, previous purchase orders and
+ * documents (party_records.php), and the brands they sell (supplier_brands).
+ */
 
-const SUPPLIER_CURRENCIES = ['OMR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'USD', 'EUR', 'INR'];
 const SUPPLIER_PAYMENT_TERMS = ['Cash', 'Advance', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'];
 
 function supplier_format(array $row): array
@@ -20,6 +22,7 @@ function supplier_format(array $row): array
         'address'        => $row['address'],
         'taxRegNo'       => $row['tax_reg_no'],
         'ownerDetails'   => $row['owner_details'],
+        'contactPerson'  => $row['contact_person'],
         'phone'          => $row['phone'],
         'telephone'      => $row['telephone'],
         'email'          => $row['email'],
@@ -30,18 +33,20 @@ function supplier_format(array $row): array
         'accountDetails' => $row['account_details'] ?? '',
         'remarks'        => $row['remarks'] ?? '',
         'status'         => $row['status'],
+        'createdAt'      => date_only($row['created_at']),
     ];
 }
 
-function suppliers_list(string $search = ''): array
+/* Active suppliers for the lookups; every supplier when $all (the Supplier list page). */
+function suppliers_list(string $search = '', bool $all = false): array
 {
-    $sql = "SELECT * FROM suppliers WHERE status = 'active'";
+    $sql = 'SELECT * FROM suppliers' . ($all ? ' WHERE 1 = 1' : " WHERE status = 'active'");
     $params = [];
     if ($search !== '') {
         $sql .= ' AND (supplier_code LIKE ? OR supplier_name LIKE ?)';
         $params = [like($search), like($search)];
     }
-    return array_map('supplier_format', query($sql . ' ORDER BY supplier_name', $params)->fetchAll());
+    return array_map('supplier_format', query($sql . ' ORDER BY id DESC', $params)->fetchAll());
 }
 
 function supplier_find(int $id): array
@@ -50,14 +55,12 @@ function supplier_find(int $id): array
     if (!$row) {
         throw new NotFound('Supplier not found.');
     }
-    $contacts = query('SELECT contact_name, contact_number FROM supplier_contacts WHERE supplier_id = ? ORDER BY sort_order', [$id])->fetchAll();
     $brands = query(
         'SELECT b.id, b.brand_code, b.brand_name FROM supplier_brands sb JOIN brands b ON b.id = sb.brand_id WHERE sb.supplier_id = ? ORDER BY b.brand_name',
         [$id]
     )->fetchAll();
-    return supplier_format($row) + [
-        'contacts' => array_map(static fn ($c) => ['name' => $c['contact_name'], 'number' => $c['contact_number']], $contacts),
-        'brands'   => array_map(static fn ($b) => ['id' => (int) $b['id'], 'code' => $b['brand_code'], 'name' => $b['brand_name']], $brands),
+    return supplier_format($row) + party_rows_find('supplier', $id) + [
+        'brands' => array_map(static fn ($b) => ['id' => (int) $b['id'], 'code' => $b['brand_code'], 'name' => $b['brand_name']], $brands),
     ];
 }
 
@@ -66,73 +69,90 @@ function supplier_next_code(): string
     return next_code('suppliers', 'supplier_code', 'SUP');
 }
 
-/* Contact rows [{ name, number }] → clean rows; blank rows are dropped. */
-function contact_rows(Input $in, array $rows): array
+function supplier_input(array $s): array
 {
-    $clean = [];
-    foreach ($rows as $row) {
-        $name = trim(is_scalar($row['name'] ?? null) ? (string) $row['name'] : '');
-        $number = trim(is_scalar($row['number'] ?? null) ? (string) $row['number'] : '');
-        if ($name === '' && $number === '') {
-            continue;
-        }
-        if (mb_strlen($name) > 100 || mb_strlen($number) > 40) {
-            $in->fail('contacts', 'Contact names are at most 100 characters and numbers at most 40.');
-        }
-        $clean[] = ['name' => mb_substr($name, 0, 100), 'number' => mb_substr($number, 0, 40)];
-    }
-    return $clean;
+    return [
+        'supplierName' => $s['name'], 'address' => $s['address'], 'country' => $s['country'], 'city' => $s['city'], 'currency' => $s['currency'],
+        'taxRegNo' => $s['taxRegNo'], 'remarks' => $s['remarks'], 'ownerDetails' => $s['ownerDetails'], 'phone' => $s['phone'],
+        'telephone' => $s['telephone'], 'email' => $s['email'], 'debitLimit' => $s['debitLimit'], 'debitDays' => $s['debitDays'],
+        'paymentTerms' => $s['paymentTerms'], 'openingBalance' => $s['openingBalance'], 'accountDetails' => $s['accountDetails'],
+        'status' => $s['status'], 'brandIds' => array_column($s['brands'], 'id'),
+    ] + party_rows_as_input($s);
 }
 
 /*
- * Payload: supplierName, address, country, currency, taxRegNo, remarks, ownerDetails, phone,
- * telephone, email, debitLimit, debitDays, paymentTerms, openingBalance, accountDetails,
- * brandIds: [id, …], contacts: [{ name, number }, …].
+ * Payload: supplierName, address, country, city, currency, taxRegNo, remarks, ownerDetails, phone,
+ * telephone, email, debitLimit, debitDays, paymentTerms, openingBalance, accountDetails, status,
+ * brandIds: [id, …], contacts: [{ name, designation, number, email }, …],
+ * quotations: [{ itemName, description, unit, rate, deliveryTime, warranty }, …],
+ * orders: [{ number, date, value, items, status }, …], documents (update only): [{ id, type, expiry }, …].
  */
-function supplier_create(array $data): array
+function supplier_save(array $data, ?int $id = null): array
 {
+    if ($id !== null) {
+        $data = array_replace(supplier_input(supplier_find($id)), $data);
+    }
     $in = new Input($data);
     $row = [
-        'supplier_name'   => $in->text('supplierName', 'Name', 150, true),
+        'supplier_name'   => $in->name('supplierName', 'Name', 150),
         'address'         => $in->text('address', 'Address', 255),
         'country'         => $in->text('country', 'Country', 80),
-        'currency'        => $in->choice('currency', 'Currency', SUPPLIER_CURRENCIES, 'OMR'),
+        'city'            => $in->text('city', 'City', 100),
+        'currency'        => $in->choice('currency', 'Currency', PARTY_CURRENCIES, 'OMR'),
         'tax_reg_no'      => $in->text('taxRegNo', 'Tax reg number', 50),
         'remarks'         => $in->text('remarks', 'Comments', 65535),
         'owner_details'   => $in->text('ownerDetails', 'Owner name', 150),
-        'phone'           => $in->text('phone', 'Mobile number', 40),
-        'telephone'       => $in->text('telephone', 'Telephone number', 40),
+        'phone'           => $in->phone('phone', 'Mobile number'),
+        'telephone'       => $in->phone('telephone', 'Telephone number'),
         'email'           => $in->email('email', 'Email', 150),
         'debit_limit'     => $in->decimal('debitLimit', 'Credit limit', 12, 2) ?? '0',
         'debit_days'      => $in->whole('debitDays', 'Credit period'),
         'payment_terms'   => $in->choice('paymentTerms', 'Payment terms', SUPPLIER_PAYMENT_TERMS, ''),
         'opening_balance' => $in->decimal('openingBalance', 'Opening balance', 15, 2) ?? '0',
         'account_details' => $in->text('accountDetails', 'Bank details', 65535),
+        'status'          => $in->choice('status', 'Status', PARTY_STATUSES, 'active'),
     ];
     $brandIds = $in->ids('brandIds', 'brand', 'brands');
-    $contacts = contact_rows($in, $in->rows('contacts'));
+    $rows = party_rows_input($in);
     $in->done();
 
     // The model keeps the first three contact names on the supplier row as well.
     foreach (['contact_person', 'contact_person2', 'contact_person3'] as $i => $column) {
-        $row[$column] = mb_substr($contacts[$i]['name'] ?? '', 0, $column === 'contact_person' ? 120 : 100);
+        $row[$column] = mb_substr($rows['contacts'][$i]['name'] ?? '', 0, $column === 'contact_person' ? 120 : 100);
     }
 
-    $id = transaction(static function () use ($row, $brandIds, $contacts): int {
-        $row['supplier_code'] = supplier_next_code();
-        query(
-            'INSERT INTO suppliers (' . implode(', ', array_keys($row)) . ') VALUES (' . implode(', ', array_fill(0, count($row), '?')) . ')',
-            array_values($row)
-        );
-        $id = (int) db()->lastInsertId();
+    $removedFiles = [];
+    $id = transaction(static function () use ($id, $row, $brandIds, $rows, &$removedFiles): int {
+        $isUpdate = $id !== null;
+        if ($isUpdate) {
+            query('UPDATE suppliers SET ' . implode(' = ?, ', array_keys($row)) . ' = ? WHERE id = ?', [...array_values($row), $id]);
+            query('DELETE FROM supplier_brands WHERE supplier_id = ?', [$id]);
+        } else {
+            $row['supplier_code'] = supplier_next_code();
+            query(
+                'INSERT INTO suppliers (' . implode(', ', array_keys($row)) . ') VALUES (' . implode(', ', array_fill(0, count($row), '?')) . ')',
+                array_values($row)
+            );
+            $id = (int) db()->lastInsertId();
+        }
         foreach ($brandIds as $brandId) {
             query('INSERT INTO supplier_brands (supplier_id, brand_id) VALUES (?, ?)', [$id, $brandId]);
         }
-        foreach ($contacts as $order => $contact) {
-            query('INSERT INTO supplier_contacts (supplier_id, contact_name, contact_number, sort_order) VALUES (?, ?, ?, ?)',
-                [$id, $contact['name'], $contact['number'], $order + 1]);
-        }
+        $removedFiles = party_rows_save('supplier', $id, $rows, $isUpdate);
         return $id;
     });
+    foreach ($removedFiles as $path) {
+        delete_stored($path);
+    }
     return supplier_find($id);
+}
+
+function supplier_create(array $data): array
+{
+    return supplier_save($data);
+}
+
+function supplier_delete(int $id): void
+{
+    party_delete('supplier', 'suppliers', $id, 'Supplier not found.');
 }

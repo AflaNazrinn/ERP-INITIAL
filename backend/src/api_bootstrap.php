@@ -77,6 +77,58 @@ function query_search(): string
     return is_string($q) ? trim(mb_substr($q, 0, 100)) : '';
 }
 
+/*
+ * The standard master endpoint:
+ *   GET            → list (?q= search; ?all=1 also lists inactive records, for the list pages)
+ *   GET ?id=N      → one record
+ *   GET ?nextCode  → the code the next save will get (preview only)
+ *   POST (JSON)    → create; 201 with the saved record, 422 with field errors
+ *   PUT ?id=N      → update; only the keys sent change (an import can send a few columns)
+ *   DELETE ?id=N   → delete; 409 when other records still use it
+ * $save(array $data, ?int $id) creates when $id is null.
+ */
+function serve_master(callable $list, callable $find, callable $nextCode, callable $save, callable $delete): never
+{
+    $method = allow_methods('GET', 'POST', 'PUT', 'DELETE');
+    if ($method === 'POST') {
+        json_out($save(json_input(), null), 201);
+    }
+    if ($method === 'PUT' || $method === 'DELETE') {
+        $id = query_id('id') ?? json_error('id is required.', 400);
+        if ($method === 'DELETE') {
+            $delete($id);
+            json_out(['id' => $id]);
+        }
+        json_out($save(json_input(), $id));
+    }
+    if (isset($_GET['nextCode'])) {
+        json_out(['code' => $nextCode()]);
+    }
+    $id = query_id('id');
+    json_out($id !== null ? $find($id) : $list(query_search(), isset($_GET['all'])));
+}
+
+/* What to fix when $e comes from a missing .env, a database that cannot be reached, or a schema that is not up to date; null otherwise. */
+function setup_problem(Throwable $e): ?string
+{
+    if ($e instanceof RuntimeException && str_starts_with($e->getMessage(), 'Missing required setting')) {
+        return 'the .env file next to config.php is missing or incomplete (DB_NAME, DB_USER and DB_PASS are needed).';
+    }
+    if (!$e instanceof PDOException) {
+        return null;
+    }
+    $code = (int) ($e->errorInfo[1] ?? $e->getCode());
+    return match ($code) {
+        1044       => 'this database user may not open that database: check DB_NAME and DB_USER in .env (full names, with the hosting prefix).',
+        1045       => 'the database refused the login: check DB_USER and DB_PASS in .env (full names, with the hosting prefix).',
+        1049       => 'the database was not found: check DB_NAME in .env (the full name, with the hosting prefix).',
+        2002, 2005 => 'the database server cannot be reached: check DB_HOST in .env (localhost on Hostinger).',
+        1146       => 'a database table is missing: import the files in migrations/ (see the deploy guide).',
+        1054       => 'the database is not up to date: import the newest file in migrations/ (see the deploy guide).',
+        default    => null,
+    };
+}
+
 // Outside development, PHP warnings go to the error log only, never into a JSON response
 // (shared hosts such as Hostinger often ship with display_errors on).
 if (env('APP_ENV', 'production') !== 'development') {
@@ -98,6 +150,16 @@ set_exception_handler(static function (Throwable $e): void {
     // MySQL duplicate key: two people saved the same unique value at once.
     if ($e instanceof PDOException && ($e->errorInfo[1] ?? null) === 1062) {
         json_error('A record with the same code or name already exists.', 409);
+    }
+    // Server setup problems name the fix (no secrets: no names, hosts or passwords), so a fresh install on
+    // Hostinger does not just say "Something went wrong". The full error still goes to the PHP log.
+    if ($setup = setup_problem($e)) {
+        error_log((string) $e);
+        json_error("Server setup: $setup", 500);
+    }
+    // MySQL foreign key: the record is still used by other records (an item's unit, a stock point's racks ...).
+    if ($e instanceof PDOException && ($e->errorInfo[1] ?? null) === 1451) {
+        json_error('This record is used by other records, so it cannot be deleted or changed this way.', 409);
     }
     error_log((string) $e);
     json_error('Something went wrong. Please try again.', 500);

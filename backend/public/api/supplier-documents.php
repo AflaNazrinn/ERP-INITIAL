@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Supplier documents (supplier_documents).
  *   GET ?supplierId=N         → the supplier's documents
  *   GET ?id=N               → download one file
- *   POST (multipart/form-data: supplierId, files[]) → upload; 201 with the supplier's documents
+ *   POST (multipart/form-data: supplierId, files[], types[], expiries[]) → upload; 201 with the supplier's documents
  */
 
 require_once __DIR__ . '/../../src/api_bootstrap.php';
@@ -17,7 +17,7 @@ if ($method === 'POST') {
     if (!is_string($ownerId) || !ctype_digit($ownerId)) {
         json_error('supplierId is required.', 400);
     }
-    json_out(party_documents_upload('supplier', (int) $ownerId, uploaded_files('files')), 201);
+    json_out(party_documents_upload('supplier', (int) $ownerId, uploaded_files('files'), post_list('types'), post_list('expiries')), 201);
 }
 $id = query_id('id');
 if ($id !== null) {

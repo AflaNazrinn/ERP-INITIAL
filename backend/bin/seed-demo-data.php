@@ -48,7 +48,7 @@ try {
 
     $warehouses = [];
     $racks = [];
-    foreach ([['Central WH North', 'Finished Goods', 'N'], ['Secondary WH South', 'Finished Goods', 'S'], ['Spare Parts Store', 'Spare Parts', 'SP']] as [$name, $type, $prefix]) {
+    foreach ([['Central WH North', 'Warehouse', 'N'], ['Secondary WH South', 'Warehouse', 'S'], ['Spare Parts Store', 'Warehouse', 'SP']] as [$name, $type, $prefix]) {
         // Rack / bin locations have no form yet, so they are inserted directly. A warehouse needs
         // at least one item, which does not exist yet: create the row here instead of warehouse_create().
         query("INSERT INTO warehouses (warehouse_code, warehouse_name, warehouse_type, address, country, city, contact_person, phone, email, manager, capacity)

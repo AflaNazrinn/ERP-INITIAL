@@ -18,22 +18,25 @@ function uom_format(array $row): array
         'decimalAllowed'   => (int) $row['decimal_allowed'],
         'conversionBaseId' => $row['conversion_base_id'] === null ? null : (int) $row['conversion_base_id'],
         'baseCode'         => $row['base_code'] ?? null,
+        'baseName'         => $row['base_name'] ?? '',
         'conversionFactor' => $row['conversion_factor'],
         'status'           => $row['status'],
+        'createdAt'        => date_only($row['created_at']),
     ];
 }
 
-const UOM_SELECT = 'SELECT u.*, b.uom_code AS base_code FROM uoms u LEFT JOIN uoms b ON b.id = u.conversion_base_id';
+const UOM_SELECT = 'SELECT u.*, b.uom_code AS base_code, b.uom_name AS base_name FROM uoms u LEFT JOIN uoms b ON b.id = u.conversion_base_id';
 
-function uoms_list(string $search = ''): array
+/* Active units for the lookups; every unit when $all (the UOM list page). */
+function uoms_list(string $search = '', bool $all = false): array
 {
-    $sql = UOM_SELECT . " WHERE u.status = 'active'";
+    $sql = UOM_SELECT . ($all ? ' WHERE 1 = 1' : " WHERE u.status = 'active'");
     $params = [];
     if ($search !== '') {
         $sql .= ' AND (u.uom_code LIKE ? OR u.uom_name LIKE ?)';
         $params = [like($search), like($search)];
     }
-    return array_map('uom_format', query($sql . ' ORDER BY u.uom_name', $params)->fetchAll());
+    return array_map('uom_format', query($sql . ' ORDER BY u.id DESC', $params)->fetchAll());
 }
 
 function uom_find(int $id): array
@@ -50,31 +53,67 @@ function uom_next_code(): string
     return next_code('uoms', 'uom_code', 'UOM', false);
 }
 
-/* Payload: unitName, decimalAllowed, status, conversionBaseId, conversionFactor, description. */
-function uom_create(array $data): array
+/* A saved unit as a save payload, so an update only has to send what changes. */
+function uom_input(array $uom): array
 {
+    return [
+        'unitName' => $uom['name'], 'decimalAllowed' => $uom['decimalAllowed'], 'status' => $uom['status'],
+        'conversionBaseId' => $uom['conversionBaseId'], 'conversionFactor' => $uom['conversionFactor'], 'description' => $uom['description'],
+    ];
+}
+
+/*
+ * Payload: unitName, decimalAllowed, status, conversionBaseId, conversionFactor, description.
+ * Only the name is required: decimals default to 0, the factor to 1, the status to active.
+ * Creates when $id is null, otherwise updates that unit.
+ */
+function uom_save(array $data, ?int $id = null): array
+{
+    if ($id !== null) {
+        $data = array_replace(uom_input(uom_find($id)), $data);
+    }
     $in = new Input($data);
-    $name = $in->text('unitName', 'Unit of measure', 80, true);
-    $decimals = $in->whole('decimalAllowed', 'Decimal allowed', true, UOM_MAX_DECIMALS);
+    $name = $in->name('unitName', 'Unit of measure', 80);
+    $decimals = $in->whole('decimalAllowed', 'Decimal allowed', false, UOM_MAX_DECIMALS) ?? 0;
     $status = $in->choice('status', 'Record status', UOM_STATUSES, 'active');
     $baseId = $in->id('conversionBaseId', 'base unit', 'uoms');
-    $factor = $in->decimal('conversionFactor', 'Conversion factor', 14, 4, true);
-    if ($factor !== null && (float) $factor <= 0) {
+    if ($id !== null && $baseId === $id) {
+        $in->fail('conversionBaseId', 'A unit cannot convert to itself.');
+    }
+    $factor = $in->decimal('conversionFactor', 'Conversion factor', 14, 4) ?? '1';
+    if ((float) $factor <= 0) {
         $in->fail('conversionFactor', 'Conversion factor must be above 0.');
     }
     $description = $in->text('description', 'Description', 255);
-    if ($name !== '' && query('SELECT 1 FROM uoms WHERE uom_name = ?', [$name])->fetchColumn()) {
+    if ($name !== '' && query('SELECT 1 FROM uoms WHERE uom_name = ? AND id <> ?', [$name, $id ?? 0])->fetchColumn()) {
         $in->fail('unitName', 'A unit with this name already exists.');
     }
     $in->done();
 
-    $id = transaction(static function () use ($name, $decimals, $status, $baseId, $factor, $description): int {
+    $values = [$name, $description, $decimals, $baseId, $factor, $status];
+    $id = transaction(static function () use ($id, $values): int {
+        if ($id !== null) {
+            query('UPDATE uoms SET uom_name = ?, description = ?, decimal_allowed = ?, conversion_base_id = ?, conversion_factor = ?, status = ? WHERE id = ?',
+                [...$values, $id]);
+            return $id;
+        }
         query(
             'INSERT INTO uoms (uom_code, uom_name, description, decimal_allowed, conversion_base_id, conversion_factor, status)
              VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [uom_next_code(), $name, $description, $decimals, $baseId, $factor, $status]
+            [uom_next_code(), ...$values]
         );
         return (int) db()->lastInsertId();
     });
     return uom_find($id);
+}
+
+function uom_create(array $data): array
+{
+    return uom_save($data);
+}
+
+/* 409 while items or other units still use it. */
+function uom_delete(int $id): void
+{
+    delete_row('uoms', $id, 'Unit of measure not found.');
 }

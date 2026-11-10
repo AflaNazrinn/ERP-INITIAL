@@ -28,10 +28,10 @@ Writes need the `X-CSRF-Token` header from `GET /api/session.php`.
 | Endpoint | GET | POST |
 |---|---|---|
 | `session.php` | CSRF token | |
-| `uoms.php`, `categories.php`, `brands.php`, `warehouses.php`, `suppliers.php`, `customers.php`, `items.php` | list (`?q=`), one (`?id=`), next code (`?nextCode`) | create (JSON) |
+| `uoms.php`, `categories.php`, `brands.php`, `warehouses.php`, `suppliers.php`, `customers.php`, `items.php` | list (`?q=`; `?all=1` adds inactive records), one (`?id=`), next code (`?nextCode`) | create (JSON); also `PUT ?id=` update (only the keys sent change) and `DELETE ?id=` (409 while in use) |
 | `sub-categories.php` | list, `?categoryId=` | |
 | `rack-bins.php` | list, `?warehouseId=` | |
-| `supplier-documents.php`, `customer-documents.php` | list (`?supplierId=` / `?customerId=`), download (`?id=`) | upload (multipart: owner id + `files[]`) |
+| `supplier-documents.php`, `customer-documents.php` | list (`?supplierId=` / `?customerId=`), download (`?id=`) | upload (multipart: owner id + `files[]`, `types[]`, `expiries[]`) |
 
 ## Run it locally
 

@@ -1,7 +1,9 @@
 # Growth Engine ERP
 
 A web ERP for a trading business: dashboard, masters (items, units, categories, brands,
-warehouses, suppliers, customers), and later purchase, sales and stock.
+stock points, suppliers, customers), and later purchase, sales and stock.
+
+Stock points (offices, warehouses and shops) are kept in the `warehouses` table; the screens say "Stock Point".
 
 Status: the dashboard and the master forms work in the browser. The PHP backend and the MySQL
 schema for the masters are written but **have not been run against a real database yet**:
@@ -70,14 +72,19 @@ Conventions:
 - **Never edit a migration that has already run.** Add a new dated file (`2026_11_20_001_add_x.sql`); `php backend/bin/migrate.php` applies the new ones and records them in `schema_migrations`.
 - Statements in a migration end with `;` at the end of a line (that is how `migrate.php` splits them).
 
-Every foreign key in the diagram is a **lookup popup** in the UI ("Select UOM", "Select Warehouse" …).
+Every foreign key in the diagram is a **lookup popup** in the UI ("Select UOM", "Select Stock Point" …).
 The popup loads its list from the matching endpoint (`api/uoms.php`, `api/warehouses.php` …), and the
 form sends the chosen id (`uomId`, `warehouseId` …). Adding a new foreign key means: a column + FK in a
 migration, a list endpoint, and a `data-lookup` field on the form (see `LOOKUPS` in `dashboard.js`).
 
+Record names (item, customer, supplier, unit, brand, category, sub-category, stock point) are stored in
+capitals: the forms capitalise them as they are typed and the server saves them that way.
+
+The master list pages read the database (`GET ?all=1`); Edit opens the creation form filled with the
+record and saves with `PUT ?id=`; Delete sends `DELETE ?id=` (refused with 409 while other records use it).
+
 Form fields that have no column in the data model yet, and are accepted but not stored:
-item batch expiry and PDF spec link; contact designation and email; document type and expiry;
-the Quotations and Previous Purchases tabs; brand and category descriptions.
+item batch expiry and PDF spec link; brand and category descriptions.
 
 ## The API contract
 

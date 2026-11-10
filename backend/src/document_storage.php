@@ -37,6 +37,13 @@ function uploaded_files(string $field): array
     return $list;
 }
 
+/* A list field of a multipart form (name[] = ...) as a list of strings; [] when absent. */
+function post_list(string $field): array
+{
+    $values = $_POST[$field] ?? [];
+    return is_array($values) ? array_values(array_map(static fn ($v) => is_scalar($v) ? (string) $v : '', $values)) : [];
+}
+
 /* Checks every file before any is stored; throws ValidationError on the first bad one. */
 function validate_uploads(array $files): void
 {

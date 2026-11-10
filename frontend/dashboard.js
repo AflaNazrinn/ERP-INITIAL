@@ -108,24 +108,36 @@ function renderRange() {
    KPI tiles
    ===================================================================== */
 
+// Grouped by module, each in its module colour: sales blue, purchase green, masters amber, employees violet.
+const KPI_ICONS = {
+  sales: '<path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path>',
+  purchase: '<circle cx="9" cy="20" r="1.5"></circle><circle cx="18" cy="20" r="1.5"></circle><path d="M2 3h3l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 7H6"></path>',
+  pending: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+  items: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="m3 8 9 5 9-5M12 13v8"></path>',
+  creditors: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle>',
+  debtors: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>',
+  employees: '<circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
+};
 const KPI_TILES = [
-  { key: 'totalSales', label: 'Total Sales', money: true },
-  { key: 'totalPurchase', label: 'Total Purchase', money: true },
-  { key: 'pendingPurchase', label: 'Pending Purchase', money: true },
-  { key: 'totalItems', label: 'Total Items', money: false },
-  { key: 'totalEmployees', label: 'Total Employees', money: false },
-  { key: 'creditors', label: 'Creditors', money: true },
-  { key: 'debtors', label: 'Debtors', money: true },
+  { key: 'totalSales', label: 'Total Sales', money: true, tone: 'sales', icon: 'sales' },
+  { key: 'totalPurchase', label: 'Total Purchase', money: true, tone: 'purchase', icon: 'purchase' },
+  { key: 'pendingPurchase', label: 'Pending Purchase', money: true, tone: 'purchase', icon: 'pending' },
+  { key: 'totalItems', label: 'Total Items', money: false, tone: 'masters', icon: 'items' },
+  { key: 'creditors', label: 'Creditors', money: true, tone: 'masters', icon: 'creditors' },
+  { key: 'debtors', label: 'Debtors', money: true, tone: 'masters', icon: 'debtors' },
+  { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees' },
 ];
 
 function renderKpis(kpis) {
   const grid = byId('dashboard-kpis');
   grid.replaceChildren(...KPI_TILES.map(tile => {
-    const card = el('div', 'metric-card');
-    card.append(
-      el('span', 'card-label', tile.label),
-      el('div', 'kpi-value', tile.money ? formatOmr(kpis[tile.key]) : formatCount(kpis[tile.key])),
-    );
+    const card = el('div', `metric-card kpi-card tone-${tile.tone}`);
+    const head = el('div', 'card-head');
+    const icon = el('div', 'card-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${KPI_ICONS[tile.icon]}</svg>`;
+    head.append(el('span', 'card-label', tile.label), icon);
+    card.append(head, el('div', 'kpi-value', tile.money ? formatOmr(kpis[tile.key]) : formatCount(kpis[tile.key])));
     return card;
   }));
 }
@@ -258,7 +270,9 @@ function renderQuotations(q) {
    Audit trail
    ===================================================================== */
 
-const MODULE_TONES = { 'Sales Portal': 'blue', 'Sales Orders': 'green', 'Logistics': 'amber' };
+// Module pills use the dashboard's module colours: sales blue, purchase green, masters amber, employees violet.
+const MODULE_TONE_RULES = [[/sales|quotation|trade/i, 'blue'], [/purchase|grn/i, 'green'], [/master|supplier|customer|item|party/i, 'amber'], [/employee|staff|hr/i, 'violet']];
+const moduleToneOf = name => MODULE_TONE_RULES.find(([re]) => re.test(String(name ?? '')))?.[1];
 const STATUS_TONES = { Completed: 'green', Updated: 'blue' };
 
 function avatarClass(name) {
@@ -287,7 +301,7 @@ function activityRow(a) {
   what.append(el('span', 'audit-activity', a.title), detail);
 
   const mod = el('td', 'nowrap');
-  const moduleTone = MODULE_TONES[a.module];
+  const moduleTone = moduleToneOf(a.module);
   mod.append(el('span', moduleTone ? `pill pill-${moduleTone}` : 'pill', a.module));
 
   const status = el('td', 'col-edge col-right nowrap');
@@ -509,9 +523,9 @@ function initKeyboardNavigation() {
     // An open styled dropdown (.fp-select-list) keeps focus on its options and handles its own keys.
     // After Enter picks an option of a dropdown that Enter opened (data-enter-opens), move on like a lookup pick.
     const openSelect = event.target.closest?.('select');
-    if (openSelect?.matches(':open')) {
+    if (openSelect && isOpenSelect(openSelect)) {
       if (event.key === 'Enter' && openSelect.dataset.enterOpens !== undefined && openSelect.closest('form')) {
-        setTimeout(() => { if (!openSelect.matches(':open')) focusNextField(openSelect); }, 0);
+        setTimeout(() => { if (!isOpenSelect(openSelect)) focusNextField(openSelect); }, 0);
       }
       return;
     }
@@ -522,12 +536,12 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
-    if (handleLookupFieldKeys(event)) {
+    if (handleSuggestKeys(event) || handleLookupFieldKeys(event)) {
       event.stopPropagation();
       return;
     }
 
-    // The open form's own keys (Esc, Ctrl+S, Enter …) come first, unless the menu is over it.
+    // The open form's own keys (Esc, Shift+Enter, Enter …) come first, unless the menu is over it.
     const pageKeys = FORM_KEY_HANDLERS[currentPage];
     if (pageKeys && !byId('quick-menu').open && pageKeys(event)) {
       event.stopPropagation();
@@ -563,6 +577,73 @@ function initKeyboardNavigation() {
   }, true);
 }
 
+// Shift+Enter saves the open form, from any field. Ctrl+S no longer saves; isBrowserSaveKey() lets the
+// pages swallow it, so the browser's "Save page as" dialog does not open instead.
+const isSaveKey = event => event.key === 'Enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+const isBrowserSaveKey = event => (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's';
+
+// ':open' (an open dropdown list) is recent: where the browser does not know it, matches() throws.
+function isOpenSelect(select) {
+  try { return select.matches(':open'); } catch { return false; }
+}
+
+// Name fields (input[data-upper]) hold capitals whatever the Caps Lock state; the caret stays where it was.
+// Runs in the capture phase, before the forms record the edit for undo.
+function initUppercaseFields() {
+  document.addEventListener('input', event => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.dataset.upper === undefined) return;
+    const upper = field.value.toUpperCase();
+    if (upper === field.value) return;
+    const { selectionStart, selectionEnd } = field;
+    field.value = upper;
+    field.setSelectionRange(selectionStart, selectionEnd);
+  }, true);
+}
+
+// Characters a field does not take are dropped as they are typed or pasted (the caret stays where it was):
+//   inputmode="numeric"  digits (Decimal Allowed, Credit Days, Total Items, Capacity)
+//   inputmode="decimal"  digits and one decimal point (amounts, rates, stock, discount, conversion factor)
+//   inputmode="tel"      digits, spaces, + - ( ) (phone numbers)
+//   data-letters         letters of any language, spaces and . ' - (person names, designations, cities)
+// Record names and codes are not filtered: they hold digits and symbols ("BALL VALVE 1/2\" SS316").
+const INPUT_FILTERS = {
+  numeric: /[0-9]/,
+  decimal: /[0-9.]/,
+  tel: /[0-9+\-\s()]/,
+  letters: /[\p{L}\p{M}\s.'-]/u,
+};
+function initInputFilters() {
+  document.addEventListener('input', event => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.type !== 'text') return;
+    const kind = field.dataset.letters !== undefined ? 'letters' : field.inputMode;
+    const allowed = INPUT_FILTERS[kind];
+    if (!allowed) return;
+    const caret = field.selectionStart ?? field.value.length;
+    let kept = '', removedBeforeCaret = 0, seenDot = false;
+    [...field.value].forEach((char, index) => {
+      let ok = allowed.test(char);
+      if (ok && kind === 'decimal' && char === '.') { ok = !seenDot; seenDot = true; }   // one decimal point
+      if (ok) kept += char;
+      else if (index < caret) removedBeforeCaret += char.length;
+    });
+    if (kept === field.value) return;
+    field.value = kept;
+    field.setSelectionRange(caret - removedBeforeCaret, caret - removedBeforeCaret);
+  }, true);
+}
+
+// On the form pages a field that takes focus scrolls into view with room below it for its dropdown
+// (scroll-margin in the CSS), so the next field is never hidden under the bottom of the screen.
+function initFocusScrolling() {
+  document.addEventListener('focusin', event => {
+    const field = event.target;
+    if (!(field instanceof Element) || !field.matches('input, select, textarea') || !field.closest('.form-page')) return;
+    field.scrollIntoView({ block: 'nearest' });
+  });
+}
+
 // Re-rendering replaces buttons; keep focus on the equivalent control.
 function refocusWithin(container, selector) {
   const target = container.querySelector(selector);
@@ -572,8 +653,10 @@ function refocusWithin(container, selector) {
 /* =====================================================================
    Quick menu (Ctrl+D) and its sub-menus
    One <dialog>: the main view plus one view per card (and nested views
-   such as Masters › Create). Esc / ← step back one level; from the main
-   menu they close it.
+   such as Masters › Create). ↑/↓ move through the view's entries and Quit
+   (wrapping), Home/End jump to the first/last, → or Enter opens the focused
+   entry's sub-menu, ← steps back one level (to the entry it came from).
+   Esc steps back too; from the main menu it closes the menu.
    The bold letter on each entry is its shortcut. On the dashboard, a
    main-menu letter alone (M P T E R S L) opens that sub-menu.
    Inside an open view, the plain letter or Alt + letter picks the entry.
@@ -664,6 +747,7 @@ function handleQuickMenuKeys(event) {
     if (!event.repeat) quickMenuBack();    // holding Esc must not run through every level
     return true;
   }
+  if (!event.altKey && !event.shiftKey && QUICK_MENU_NAV_KEYS.includes(key)) return handleQuickMenuArrows(event, key);
   // A plain letter, or Alt + letter ("Create (Alt)"), picks the entry with that bold letter.
   // Alt uses the physical key, since Option+letter on a Mac types a symbol.
   const letter = event.altKey
@@ -679,6 +763,38 @@ function handleQuickMenuKeys(event) {
     }
   }
   return false;
+}
+
+const QUICK_MENU_NAV_KEYS = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+
+// Arrow keys in the open menu. They stay on the view's entries (never the Back / Close buttons in its
+// header, which Tab still reaches). Every arrow is handled here, so the page's own arrow navigation
+// never takes over inside the menu.
+function handleQuickMenuArrows(event, key) {
+  event.preventDefault();
+  const view = quickMenuViewEl(quickMenuView);
+  const entries = [...view.querySelectorAll('.qm-list .qm-item, .qm-quit')].filter(node => node.getClientRects().length > 0);
+  if (entries.length === 0) return true;
+  const index = entries.indexOf(document.activeElement);
+  if (key === 'ArrowRight') {               // open the focused entry's sub-menu (links open with Enter)
+    const opener = index === -1 ? null : entries[index].closest('[data-qm-open]');
+    if (opener && !event.repeat) opener.click();
+    return true;
+  }
+  if (key === 'ArrowLeft') {
+    if (quickMenuView !== 'main' && !event.repeat) quickMenuBack();
+    return true;
+  }
+  const last = entries.length - 1;
+  const next = {
+    ArrowDown: index === -1 ? 0 : (index + 1) % entries.length,
+    ArrowUp: index === -1 ? last : (index - 1 + entries.length) % entries.length,
+    Home: 0,
+    End: last,
+  }[key];
+  entries[next].focus();
+  entries[next].scrollIntoView({ block: 'nearest' });
+  return true;
 }
 
 // Fires on Alt release, so Alt + letter (the "Create (Alt)" entries) still works.
@@ -780,8 +896,22 @@ function showFormErrors(errors, reveal) {
 function formEnterOrder(form, saveButton) {
   const fields = [...form.querySelectorAll('input:not([readonly]):not([disabled]):not([type="file"]), select, textarea')]
     .filter(node => node.dataset.enterSkip === undefined)
-    .filter(node => node.getClientRects().length > 0);
+    .filter(node => node.getClientRects().length > 0)
+    .filter(node => !childLookupIsEmpty(node));
   return [...fields, saveButton];
+}
+
+// A child lookup (Subcategory under Category, Rack / Bin under Stock Point) has nothing to pick while its
+// parent is empty, or when the parent's choice has no child rows (known once that list has loaded):
+// Enter passes it by. Tab, arrows and clicks still reach it.
+function childLookupIsEmpty(node) {
+  const parent = isLookupField(node) ? lookupParentField(node) : null;
+  if (!parent) return false;
+  const parentId = lookupIdInput(parent)?.value;
+  if (!parentId) return true;
+  const rows = lookupCache[node.dataset.lookup];
+  const key = LOOKUPS[node.dataset.lookup].parentKey;
+  return Array.isArray(rows) && !rows.some(row => String(row[key]) === parentId);
 }
 
 // The stop after node in an Enter order. A field Enter skips (data-enter-skip) is not in the order
@@ -811,10 +941,27 @@ function focusField(node) {
 function enterField(node) {
   focusField(node);
   if (isLookupField(node)) openLookup(node, { byKeyboard: true });
-  else if (node instanceof HTMLInputElement && node.list) {
-    try { node.showPicker(); } catch { /* not supported here: typing still shows the suggestions */ }
-  }
+  else if (node instanceof HTMLInputElement && node.list) showDropdown(node);
 }
+
+// Dropdowns on the forms: a <select>, or an input with a suggestion list (Inventory Status). Enter on one that
+// has choices opens it; Enter again, once a choice is made, moves on to the next field. data-picker-open marks
+// a dropdown that has been opened, until focus leaves it. A dropdown with nothing to choose just moves on.
+function hasDropdownChoices(field) {
+  if (field instanceof HTMLSelectElement) return [...field.options].some(option => option.value !== '' && !option.disabled);
+  return field instanceof HTMLInputElement && Boolean(field.list?.options.length);
+}
+function showDropdown(field) {
+  try { field.showPicker(); } catch { return false; }   // not supported: Space / Alt+↓ still open it
+  field.dataset.pickerOpen = '';
+  return true;
+}
+// Called on Enter: true when it opened the dropdown (the caller stays on the field).
+function openDropdownOnEnter(field) {
+  if (field.dataset.pickerOpen !== undefined || !hasDropdownChoices(field)) return false;
+  return showDropdown(field);
+}
+document.addEventListener('focusout', event => { if (event.target instanceof HTMLElement) delete event.target.dataset.pickerOpen; });
 
 
 /* =====================================================================
@@ -869,7 +1016,7 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
    in the data model (database model/Growth-Engine-Masters-HD.png):
      items.uom_id → uoms, items.category_id → categories,
      items.sub_category_id → sub_categories, items.brand_id → brands,
-     items.warehouse_id → warehouses, items.rack_id → rack_bins,
+     items.warehouse_id → warehouses (stock points), items.rack_id → rack_bins,
      item_brands / item_brand_suppliers → brands, suppliers,
      uoms.conversion_base_id → uoms, supplier_brands → brands,
      and the country pickers on the supplier, customer and warehouse forms.
@@ -886,12 +1033,14 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
 // Countries are a fixed list, not a table; the record keeps the name (customers.country).
 // Each carries its currency and calling code, which the forms fill in when the country is picked.
 const COUNTRIES = [
-  ['OM', 'Oman', 'OMR', '+968'], ['AE', 'United Arab Emirates', 'AED', '+971'], ['SA', 'Saudi Arabia', 'SAR', '+966'],
-  ['QA', 'Qatar', 'QAR', '+974'], ['KW', 'Kuwait', 'KWD', '+965'], ['BH', 'Bahrain', 'BHD', '+973'], ['IN', 'India', 'INR', '+91'],
-  ['PK', 'Pakistan', 'PKR', '+92'], ['EG', 'Egypt', 'EGP', '+20'], ['JO', 'Jordan', 'JOD', '+962'], ['TR', 'Türkiye', 'TRY', '+90'],
-  ['CN', 'China', 'CNY', '+86'], ['JP', 'Japan', 'JPY', '+81'], ['KR', 'South Korea', 'KRW', '+82'], ['DE', 'Germany', 'EUR', '+49'],
-  ['IT', 'Italy', 'EUR', '+39'], ['GB', 'United Kingdom', 'GBP', '+44'], ['US', 'United States', 'USD', '+1'],
-].map(([code, name, currency, dial]) => ({ id: name, code, name, currency, dial }));
+// The last two numbers are the fewest and most digits a phone number has after the calling code
+// (PHONE_DIGITS in backend/src/master_validation.php is the same list).
+  ['OM', 'Oman', 'OMR', '+968', 8, 8], ['AE', 'United Arab Emirates', 'AED', '+971', 8, 9], ['SA', 'Saudi Arabia', 'SAR', '+966', 8, 9],
+  ['QA', 'Qatar', 'QAR', '+974', 8, 8], ['KW', 'Kuwait', 'KWD', '+965', 8, 8], ['BH', 'Bahrain', 'BHD', '+973', 8, 8], ['IN', 'India', 'INR', '+91', 10, 10],
+  ['PK', 'Pakistan', 'PKR', '+92', 9, 10], ['EG', 'Egypt', 'EGP', '+20', 8, 10], ['JO', 'Jordan', 'JOD', '+962', 8, 9], ['TR', 'Türkiye', 'TRY', '+90', 10, 10],
+  ['CN', 'China', 'CNY', '+86', 10, 11], ['JP', 'Japan', 'JPY', '+81', 9, 10], ['KR', 'South Korea', 'KRW', '+82', 8, 10], ['DE', 'Germany', 'EUR', '+49', 6, 11],
+  ['IT', 'Italy', 'EUR', '+39', 6, 11], ['GB', 'United Kingdom', 'GBP', '+44', 9, 10], ['US', 'United States', 'USD', '+1', 10, 10],
+].map(([code, name, currency, dial, min, max]) => ({ id: name, code, name, currency, dial, min, max }));
 const countryNamed = name => COUNTRIES.find(country => country.name === name);
 
 /* Phone fields: a calling-code dropdown (select[data-phone-code]) in front of the number. The code
@@ -917,6 +1066,76 @@ function splitPhone(value, fallback) {
   return dial ? [dial, text.slice(dial.length).trim()] : [fallback, text];
 }
 
+/* ---------- Email and phone checks ----------
+   Fields with data-check="email" or data-check="phone" are checked when the user leaves them (marked red,
+   with a message) and again on Save; the server repeats the same checks.
+   A phone number must have the digits its country uses after the calling code (COUNTRIES min / max).
+   The code comes from the field's calling-code dropdown, a "+code" typed in the number itself, or the
+   country field named by data-country-field. data-allow-extension also takes a short extension (204). */
+
+// Why a phone number is not valid for its country ('' when it is). Spaces, dashes, dots and brackets are fine;
+// one leading 0 (a trunk prefix: "+971 050 …") is ignored.
+function phoneProblem(value, dial, { allowExtension = false } = {}) {
+  let text = String(value ?? '').trim();
+  if (!text) return '';
+  let country = COUNTRIES.find(entry => entry.dial === dial) || null;
+  if (text.startsWith('+')) {
+    country = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length).find(entry => text.startsWith(entry.dial)) || null;
+    text = country ? text.slice(country.dial.length) : text.slice(1);
+  }
+  const digits = text.replace(/[\s\-().]/g, '');
+  if (!/^\d+$/.test(digits)) return 'Use digits only (spaces and dashes are fine).';
+  if (allowExtension && digits.length <= 5) return '';                 // an extension such as 204
+  if (!country) return digits.length >= 6 && digits.length <= 15 ? '' : 'Enter 6 to 15 digits, or start with a country code such as +968.';
+  const national = digits.length > country.max && digits.startsWith('0') ? digits.slice(1) : digits;
+  if (national.length >= country.min && national.length <= country.max) return '';
+  const range = country.min === country.max ? `${country.min} digits` : `${country.min} to ${country.max} digits`;
+  return `Numbers in ${country.name} have ${range} after ${country.dial}.`;
+}
+
+const emailProblem = value => (!value.trim() || EMAIL.test(value.trim()) ? '' : 'Enter a valid email address, like name@company.com.');
+
+// The calling code a phone field's number belongs to.
+function phoneDialFor(field) {
+  const code = field.closest('.fp-phone')?.querySelector('select[data-phone-code]');
+  if (code) return code.value;
+  const countryField = field.dataset.countryField && byId(field.dataset.countryField);
+  return countryNamed(countryField?.value)?.dial || '';
+}
+
+// The message for a data-check field ('' when its value is fine or empty).
+function fieldCheckProblem(field) {
+  if (field.dataset.check === 'email') return emailProblem(field.value);
+  if (field.dataset.check === 'phone') return phoneProblem(field.value, phoneDialFor(field), { allowExtension: field.dataset.allowExtension !== undefined });
+  return '';
+}
+
+// Every failing data-check field of a form, for Save. Fields on the other side of the party form are skipped.
+function fieldCheckErrors(form) {
+  return [...form.querySelectorAll('[data-check]')]
+    .filter(field => !field.disabled && !field.closest('[data-under][hidden]'))
+    .map(field => ({ node: field, message: fieldCheckProblem(field) }))
+    .filter(entry => entry.message);
+}
+
+function initFieldChecks() {
+  document.addEventListener('focusout', event => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.dataset.check === undefined) return;
+    // Moving between a number and its own calling code is not leaving the field.
+    if (event.relatedTarget && field.closest('.fp-phone')?.contains(event.relatedTarget)) return;
+    const message = fieldCheckProblem(field);
+    if (message) {
+      field.classList.add('is-invalid');
+      field.setAttribute('aria-invalid', 'true');
+      field.title = message;
+      showToast(field.dataset.check === 'email' ? 'Check the email address' : 'Check the phone number', message, true);
+    } else if (field.classList.contains('is-invalid')) {
+      clearFieldError(field);
+    }
+  });
+}
+
 // title and list name the popup; plural counts its rows; columns are [rowKey, heading], the first shown as the code.
 const codeAndName = row => `${row.code} · ${row.name}`;
 const LOOKUPS = {
@@ -930,37 +1149,15 @@ const LOOKUPS = {
     columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
   supplier: { title: 'Select Supplier', letter: 'S', list: 'Supplier List', plural: 'suppliers', api: 'api/suppliers.php',
     columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name },
-  warehouse: { title: 'Select Warehouse', letter: 'W', list: 'Warehouse List', plural: 'warehouses', api: 'api/warehouses.php',
-    columns: [['code', 'Code'], ['name', 'Warehouse Name'], ['type', 'Type']], display: codeAndName },
+  warehouse: { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points', api: 'api/warehouses.php',
+    columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: codeAndName },
   rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
-  // The master Edit pages pick from the master lists on this page (the rows those lists show).
-  'master-category': { title: 'Select Category', letter: 'C', list: 'Category List', plural: 'categories',
-    rows: () => masterLookupRows(categoryList), columns: [['code', 'Code'], ['name', 'Category Name']], display: row => row.name },
-  'master-subcategory': { title: 'Select Sub-category', letter: 'S', list: 'Sub-category List', plural: 'sub-categories',
-    rows: () => categoryList.rows.flatMap(category => category.subCategories.split(',').map(name => name.trim()).filter(Boolean)
-      .map(name => ({ id: `${category.code}:${name}`, name, categoryName: category.name }))),
-    // Only the chosen category's sub-categories, once a category is filled in on the page.
-    filterFor: (rows, field) => {
-      const category = field.form?.querySelector('[data-key="category"]')?.value;
-      const own = rows.filter(row => row.categoryName === category);
-      return own.length ? own : rows;
-    },
-    columns: [['name', 'Sub-category Name'], ['categoryName', 'Category']], plainFirst: true, display: row => row.name },
-  'master-uom': { title: 'Select UOM', letter: 'U', list: 'UOM List', plural: 'units',
-    rows: () => masterLookupRows(uomList), columns: [['code', 'Code'], ['name', 'UOM Name']], display: row => row.name },
-  'master-brand': { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands',
-    rows: () => masterLookupRows(brandList), columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
-  'master-stock-point': { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points',
-    rows: () => masterLookupRows(stockPointList), columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: row => row.name },
 };
-
-// A master list's rows as lookup rows (its code is the id).
-const masterLookupRows = list => list.rows.map(row => ({ ...row, id: row.code }));
 
 // Each list is fetched once per page load; forgetLookups() drops lists after a save changes them.
 const lookupCache = {};
@@ -982,12 +1179,36 @@ function forgetLookups(...kinds) {
 }
 
 // Shows the code the next save will get. Only a preview: the server assigns the code on save.
+// A field showing a saved record's code (data-record-code, the Edit pages) keeps it.
 async function showNextCode(input, api) {
+  input.placeholder = 'Loading…';
   try {
-    input.value = (await apiRequest(`${api}?nextCode=1`)).code;
-  } catch {
-    input.value = '';                          // no backend: leave it blank rather than guess
+    const { code } = await apiRequest(`${api}?nextCode=1`);
+    if (input.dataset.recordCode === undefined) input.value = code;
+  } catch (error) {
+    if (input.dataset.recordCode !== undefined) return;
+    input.value = '';
+    input.placeholder = 'Not available';
+    showToast('The next code could not be loaded', error.message, true);
   }
+}
+
+// Shows a saved record's code in a form's code field (edit mode); clearRecordCode() hands it back to showNextCode.
+function showRecordCode(input, code) {
+  input.dataset.recordCode = code;
+  input.value = code;
+}
+function clearRecordCode(input) {
+  delete input.dataset.recordCode;
+  input.value = '';
+}
+
+// Fills a lookup (or type-to-search) field and the hidden id beside it, without the change events.
+function fillLookup(field, row) {
+  const config = LOOKUPS[field.dataset.lookup ?? field.dataset.suggest];
+  field.value = row ? config.display(row) : '';
+  const hidden = lookupIdInput(field);
+  if (hidden) hidden.value = row ? String(row.id) : '';
 }
 
 // Marks the fields a 422 response named; fieldNode(key) maps a payload key to its input.
@@ -1212,9 +1433,31 @@ function handleLookupDialogKeys(event) {
   if (key === 'Tab' && !ctrl && !event.altKey) { event.preventDefault(); moveFocusByTab(event.shiftKey); return; }
   if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // page shortcuts wait until it closes
   if (ctrl || event.altKey) return;
-  // On the Cancel / Select buttons the arrows move between controls (↑ goes back to the search box).
-  if (target !== byId('lookup-search')) {
-    if (key.startsWith('Arrow')) { event.preventDefault(); moveFocusByArrow(key); }
+  const search = byId('lookup-search');
+  const [cancel, select] = [byId('lookup-cancel'), byId('lookup-select')];
+  // Typing while a button has focus goes on in the search box (Space and Enter still press the button).
+  if (target !== search && ((key.length === 1 && key !== ' ') || key === 'Backspace')) {
+    event.preventDefault();
+    search.focus();
+    search.value = key === 'Backspace' ? search.value.slice(0, -1) : search.value + key;
+    search.setSelectionRange(search.value.length, search.value.length);
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // On the Close / Select buttons: → Close to Select, ← Select to Close, ← from Close or ↑ back to the list.
+  if (target !== search) {
+    if (!key.startsWith('Arrow')) return;
+    event.preventDefault();
+    if (key === 'ArrowRight' && target === cancel && !select.disabled) select.focus();
+    else if (key === 'ArrowLeft' && target === select) cancel.focus();
+    else if ((key === 'ArrowLeft' && target === cancel) || key === 'ArrowUp') search.focus();
+    else moveFocusByArrow(key);
+    return;
+  }
+  // → leaves the list for the Close button, once the caret is at the end of the search text.
+  if (key === 'ArrowRight' && search.selectionStart === search.value.length && search.selectionEnd === search.value.length) {
+    event.preventDefault();
+    cancel.focus();
     return;
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
@@ -1301,10 +1544,161 @@ function initLookups() {
 }
 
 /* =====================================================================
-   Item Creation  (#/masters/item/new · Masters › Create › Item)
+   Type-to-search dropdowns: input[data-suggest="KIND"] with a hidden id input and a <ul class="fp-suggest">
+   list beside it (the Item form's Unit of Measure, the quotation rows' Unit). The list stays hidden until the user types: then it shows the KIND
+   rows matching the text, names starting with it first ("P" → Pair, Packet, Pieces). ↓/↑ move, Enter or a
+   click picks (the list closes and focus moves on), Esc or clearing the text closes it.
+   Leaving the field takes an exact match; other text is cleared, or kept as typed with data-suggest-free
+   (a quotation's unit may not be in the UOM master).
+   Leaving the field keeps a picked row, takes an exact name match, or clears text that matches nothing.
+   ===================================================================== */
+
+const suggest = { field: null, rows: [], shown: [], active: 0, picking: false };
+const isSuggestField = node => node instanceof HTMLInputElement && node.dataset.suggest !== undefined;
+const suggestListOf = field => field.parentElement.querySelector('.fp-suggest');
+
+async function openSuggest(field) {
+  const rows = await loadLookup(field.dataset.suggest);
+  if (document.activeElement !== field || field.value.trim() === '') return;   // only while there is typed text
+  Object.assign(suggest, { field, rows, active: -1 });
+  renderSuggest();
+}
+
+function closeSuggest() {
+  const { field } = suggest;
+  if (!field) return;
+  suggestListOf(field).hidden = true;
+  field.setAttribute('aria-expanded', 'false');
+  field.removeAttribute('aria-activedescendant');
+  suggest.field = null;
+}
+
+function renderSuggest() {
+  const { field } = suggest;
+  const config = LOOKUPS[field.dataset.suggest];
+  const pickedId = lookupIdInput(field).value;
+  // A field still showing its picked row lists everything, with that row highlighted.
+  const query = pickedId ? '' : field.value.trim().toLowerCase();
+  const name = row => config.display(row).toLowerCase();
+  const code = row => String(row.code ?? '').toLowerCase();
+  // Names starting with the text ("P" → Pair, Packet, Pieces); only when none do, names or codes containing it.
+  const starting = suggest.rows.filter(row => name(row).startsWith(query));
+  suggest.shown = !query ? suggest.rows
+    : starting.length ? starting
+    : suggest.rows.filter(row => name(row).includes(query) || code(row).includes(query));
+  if (suggest.active < 0) suggest.active = Math.max(0, suggest.shown.findIndex(row => String(row.id) === pickedId));
+  suggest.active = Math.min(suggest.active, Math.max(0, suggest.shown.length - 1));
+  const list = suggestListOf(field);
+  list.replaceChildren(...suggest.shown.map((row, index) => {
+    const item = el('li', 'fp-suggest-item');
+    item.id = `${field.id || 'suggest'}-option-${index}`;
+    item.dataset.index = String(index);
+    item.setAttribute('role', 'option');
+    item.append(el('span', 'fp-suggest-name', config.display(row)));
+    if (row.code) item.append(el('span', 'fp-suggest-code', row.code));
+    return item;
+  }));
+  if (suggest.shown.length === 0) list.append(el('li', 'fp-suggest-empty', `No ${config.plural} match “${field.value.trim()}”.`));
+  list.hidden = false;
+  field.setAttribute('aria-expanded', 'true');
+  syncSuggestActive();
+}
+
+function syncSuggestActive() {
+  const { field } = suggest;
+  for (const item of suggestListOf(field).querySelectorAll('[data-index]')) {
+    const active = Number(item.dataset.index) === suggest.active;
+    item.classList.toggle('is-active', active);
+    item.setAttribute('aria-selected', String(active));
+    if (active) {
+      field.setAttribute('aria-activedescendant', item.id);
+      item.scrollIntoView({ block: 'nearest' });
+    }
+  }
+}
+
+function pickSuggest(row, { advance = false } = {}) {
+  const { field } = suggest;
+  fillLookup(field, row);
+  clearFieldError(field);
+  closeSuggest();
+  // Let the form record the pick (undo); the field's own input handler ignores it.
+  suggest.picking = true;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  suggest.picking = false;
+  if (advance) focusNextField(field);
+}
+
+// Leaving the field: keep a picked row, take an exact name or code match, or clear what matches nothing.
+async function settleSuggest(field) {
+  if (lookupIdInput(field).value || !field.value.trim()) { if (!field.value.trim()) fillLookup(field, null); return; }
+  const config = LOOKUPS[field.dataset.suggest];
+  const rows = await loadLookup(field.dataset.suggest);
+  const match = rows.find(row => sameText(config.display(row), field.value) || sameText(String(row.code ?? ''), field.value));
+  if (match) fillLookup(field, match);
+  else if (field.dataset.suggestFree === undefined) fillLookup(field, null);   // free fields keep the typed text
+}
+
+// Keys on a type-to-search field. Returns true when handled.
+function handleSuggestKeys(event) {
+  const field = event.target;
+  if (!isSuggestField(field) || event.ctrlKey || event.metaKey || event.altKey) return false;
+  const open = suggest.field === field;
+  const { key } = event;
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    if (!open) return false;                                 // no list: the arrows move between fields
+    event.preventDefault();
+    if (suggest.shown.length) {
+      suggest.active = Math.min(suggest.shown.length - 1, Math.max(0, suggest.active + (key === 'ArrowDown' ? 1 : -1)));
+      syncSuggestActive();
+    }
+    return true;
+  }
+  if (key === 'Enter' && !event.shiftKey && open && suggest.shown[suggest.active]) {
+    event.preventDefault();
+    if (!event.repeat) pickSuggest(suggest.shown[suggest.active], { advance: true });
+    return true;
+  }
+  if (key === 'Escape' && open) {
+    event.preventDefault();
+    closeSuggest();
+    return true;
+  }
+  return false;
+}
+
+function initSuggestFields() {
+  document.addEventListener('input', event => {
+    const field = event.target;
+    if (!isSuggestField(field) || suggest.picking) return;
+    lookupIdInput(field).value = '';                          // typed text: nothing picked until a row is chosen
+    if (field.value.trim() === '') closeSuggest();           // cleared: hide the list again
+    else if (suggest.field === field) { suggest.active = 0; renderSuggest(); } else openSuggest(field);
+  });
+  document.addEventListener('focusout', event => {
+    const field = event.target;
+    if (!isSuggestField(field)) return;
+    setTimeout(() => {
+      if (document.activeElement === field) return;
+      if (suggest.field === field) closeSuggest();
+      settleSuggest(field);
+    }, 0);
+  });
+  // On the document, so lists in table rows added later work too.
+  document.addEventListener('mousedown', event => {
+    if (event.target.closest?.('.fp-suggest')) event.preventDefault();   // keep focus (and typing) in the field
+  });
+  document.addEventListener('click', event => {
+    const item = event.target.closest?.('.fp-suggest [data-index]');
+    if (item && suggest.field) pickSuggest(suggest.shown[Number(item.dataset.index)]);
+  });
+}
+
+/* =====================================================================
+   Item Creation  (#/masters/item/new · Masters › Create › Item), and Edit Item (#/masters/item/edit/<id>)
    Enter moves to the next field; Enter on a row's Batch Expiry adds a
-   row. Shift+X (outside text fields) or Alt+A adds a row, Ctrl+S saves,
-   Esc returns to the popup that opened the page. Arrow keys move between table cells.
+   row. Shift+X (outside text fields, or anywhere in the sourcing table) or Alt+A adds a row,
+   Shift+Enter saves, Esc goes back to the previous page. Arrow keys move between table cells.
    ===================================================================== */
 
 const ITEM_ROUTE = 'masters/item/new';
@@ -1329,13 +1723,62 @@ function removeSourceRow(row) {
   neighbour.querySelector('input').focus();
 }
 
+let itemEditing = null;                     // { id } while an item is being edited; null on Item Creation
+
 function resetItemForm() {
+  itemEditing = null;
   itemEl('form').reset();
   clearLookupIds(itemEl('form'));
   clearFormErrors(itemEl('form'));
+  clearRecordCode(itemEl('code'));
   showNextCode(itemEl('code'), 'api/items.php');
+  itemEl('title').textContent = 'Item Creation';
+  itemEl('save-label').textContent = 'Save Item Record';
   itemEl('source-body').replaceChildren();
   addSourceRow({ focus: false });
+  // Enter skips Subcategory / Rack when the chosen category / stock point has none: that needs these lists.
+  loadLookup('subcategory');
+  loadLookup('rack');
+}
+
+// Edit Item: the creation form filled with the saved item; Save updates it.
+async function editItem(id) {
+  resetItemForm();
+  itemEditing = { id };
+  itemEl('title').textContent = 'Edit Item';
+  itemEl('save-label').textContent = 'Update Item Record';
+  let item;
+  try {
+    item = await apiRequest(`api/items.php?id=${id}`);
+  } catch (error) {
+    showToast('The item could not be opened', error.message, true);
+    goBack();
+    return;
+  }
+  if (itemEditing?.id !== id) return;          // another page was opened meanwhile
+  showRecordCode(itemEl('code'), item.code);
+  itemEl('name').value = item.name;
+  fillLookup(itemEl('uom'), item.uomId && { id: item.uomId, name: item.unit });
+  fillLookup(itemEl('category'), item.categoryId && { id: item.categoryId, name: item.category });
+  fillLookup(itemEl('subcategory'), item.subCategoryId && { id: item.subCategoryId, name: item.subCategory });
+  fillLookup(itemEl('warehouse'), item.warehouseId && { id: item.warehouseId, code: item.warehouseCode, name: item.warehouseName });
+  fillLookup(itemEl('rack'), item.rackId && { id: item.rackId, code: item.rackCode });
+  itemEl('comments').value = item.description;
+  itemEl('status').value = item.status;
+  itemEl('image-link').value = item.imagePath;
+  itemEl('supplier-url').value = item.webLink;
+  if (item.sourcing.length) itemEl('source-body').replaceChildren();
+  item.sourcing.forEach((source, index) => {
+    const row = addSourceRow({ focus: false });
+    const cell = field => row.querySelector(`[data-field="${field}"]`);
+    fillLookup(cell('brand'), source.brandId && { id: source.brandId, name: source.brandName });
+    fillLookup(cell('supplier'), source.supplierId && { id: source.supplierId, name: source.supplierName });
+    cell('cost').value = source.cost ?? '';
+    if (index === 0) {                          // selling price and opening stock are kept per item
+      cell('sellingPrice').value = item.sellingPrice ?? '';
+      cell('openingStock').value = item.availableStock ?? '';
+    }
+  });
 }
 
 function isHttpUrl(value) {
@@ -1354,7 +1797,6 @@ function readItemForm() {
     uomId: id('uom-id'),
     categoryId: id('category-id'),
     subCategoryId: id('subcategory-id'),
-    brandId: id('brand-id'),
     comments: text('comments'),
     sourcing: [],
     warehouseId: id('warehouse-id'),
@@ -1385,13 +1827,15 @@ function readItemForm() {
 }
 
 const ITEM_FIELD_NODES = {
-  itemName: 'name', uomId: 'uom', categoryId: 'category', subCategoryId: 'subcategory', brandId: 'brand',
+  itemName: 'name', uomId: 'uom', categoryId: 'category', subCategoryId: 'subcategory',
   warehouseId: 'warehouse', rackId: 'rack', status: 'status', comments: 'comments', imageLink: 'image-link', supplierUrl: 'supplier-url',
 };
 let itemSaving = false;
 
 async function saveItem() {
   if (itemSaving) return;
+  closeSuggest();
+  for (const field of itemEl('form').querySelectorAll('[data-suggest]')) await settleSuggest(field);
   clearFormErrors(itemEl('form'));
   const { payload, errors } = readItemForm();
   if (errors.length) {
@@ -1400,11 +1844,13 @@ async function saveItem() {
   }
   itemSaving = true;
   itemEl('save').disabled = true;
+  const editing = itemEditing;
   try {
-    const item = await apiRequest('api/items.php', { method: 'POST', json: payload });
+    const item = await apiRequest(editing ? `api/items.php?id=${editing.id}` : 'api/items.php', { method: editing ? 'PUT' : 'POST', json: payload });
     forgetLookups('item');
-    showToast('Item saved', `${item.code} · ${item.name}`);
-    resetItemForm();
+    showToast(editing ? 'Item updated' : 'Item saved', `${item.code} · ${item.name}`);
+    if (showSavedInList('masters/item', item.code, { edited: Boolean(editing) })) return;
+    resetItemForm();                       // opened from Masters › Create: stay for the next item
     itemEl('name').focus();
   } catch (error) {
     showServerErrors(error, key => (ITEM_FIELD_NODES[key] ? itemEl(ITEM_FIELD_NODES[key]) : null));
@@ -1423,17 +1869,17 @@ function handleItemPageKeys(event) {
   if (key === 'Escape' && !ctrl && !event.altKey) {
     event.preventDefault();
     if (event.repeat) return true;
-    leavePageToMenu();
+    goBack();
     return true;
   }
-  if (ctrl && !event.altKey && !event.shiftKey && key.toLowerCase() === 's') {
+  if (isSaveKey(event)) {
     event.preventDefault();
-    if (event.repeat) return true;
-    saveItem();
+    if (!event.repeat) saveItem();
     return true;
   }
-  // Shift+X adds a row, except where X is something you'd type (text fields).
-  const typingText = target.tagName === 'INPUT' && target.type === 'text' && !target.inputMode;
+  if (isBrowserSaveKey(event)) { event.preventDefault(); return true; }
+  // Shift+X adds a row, except in text fields outside the sourcing table, where X is something you'd type.
+  const typingText = target.tagName === 'INPUT' && target.type === 'text' && !target.inputMode && !target.closest('.fp-source-row');
   if ((event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && key.toLowerCase() === 'x' && !typingText)
       || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
     event.preventDefault();
@@ -1444,6 +1890,7 @@ function handleItemPageKeys(event) {
       && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
     event.preventDefault();
     if (target.type === 'date' && target.closest('.fp-source-row')) { addSourceRow(); return true; }
+    if (openDropdownOnEnter(target)) return true;
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
     const next = fieldAfter(order, target);
     if (next) enterField(next); else saveItem();
@@ -1506,22 +1953,26 @@ function initItemPage() {
 /* =====================================================================
    Form page engine (UOM, Party, Brand, Category, Warehouse)
    Each page is <section id="KEY-page"> holding #KEY-form, #KEY-undo,
-   #KEY-back and #KEY-save. Enter moves to the next field (Shift+Enter:
-   new line; textareas with data-enter-newline take Enter themselves, and
-   dropdowns with data-enter-opens open on it),
-   Ctrl+S saves, Ctrl+Z undoes the last edit (including added and removed
-   rows), Shift+X or Alt+A adds a row, Esc returns to the popup that
-   opened the page.
+   #KEY-back and #KEY-save. Enter moves to the next field (textareas with
+   data-enter-newline take Enter themselves, and dropdowns with
+   data-enter-opens open on it; other dropdowns with choices open on the
+   first Enter and move on with the next), Shift+Enter saves, Ctrl+Z undoes the last edit (including added and removed
+   rows), Shift+X or Alt+A adds a row (Shift+X also inside a row table's
+   text cells; type a capital X there with Caps Lock), Esc goes back to the
+   previous page.
+   Each page also edits saved records (#/masters/<list>/edit/<id>): edit(id)
+   fills the form through config.fill(record) and Save sends PUT ?id=.
    ===================================================================== */
 
 const FORM_KEY_HANDLERS = { item: handleItemPageKeys };
 const FORM_PAGES = {};
 const FORM_EDIT_GROUP_MS = 800;               // quick typing in one field undoes as one step
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[a-z]{2,}$/i;   // name@domain.tld
 const WHOLE_NUMBER = /^\d{1,12}$/;
 const DECIMAL_2 = /^\d{1,3}(\.\d{1,2})?$/;
 
-// config: key, route, noun, api, code(), firstField, read() → { payload, errors },
+// config: key, route, noun, api, listRoute (the list page a save returns to), code(), firstField,
+// read() → { payload, errors }, fill(record) (edit mode),
 // optional lists { name: { body, template, initial, label(i), defaults() } }, extra { read, write, reset },
 // onEnter(event), refresh(), onReset(), afterRestore(), reveal(node), addRowList(), init().
 function createFormPage(config) {
@@ -1530,6 +1981,10 @@ function createFormPage(config) {
   let history = [];                           // states before each edit, newest last
   let current = null;
   let lastEdit = { key: null, time: 0 };
+  let editing = null;                         // { id } while a saved record is open; null while creating
+  const noun = () => (typeof config.noun === 'function' ? config.noun() : config.noun);
+  const baseApi = () => (typeof config.api === 'function' ? config.api() : config.api);
+  const titles = { create: el('title').textContent, save: el('save-label').textContent };
 
   const fields = () => [...el('form').querySelectorAll('input, select, textarea')].filter(node =>
     node.id && !node.readOnly && node.type !== 'file' && !node.dataset.transient);
@@ -1588,6 +2043,13 @@ function createFormPage(config) {
     addRow(name).querySelector('input').focus();
   }
 
+  // Replaces a list's rows (edit mode); an empty list keeps one blank row.
+  function setRows(name, valuesList) {
+    byId(lists[name].body).replaceChildren();
+    for (const values of valuesList) appendRow(name, values);
+    if (valuesList.length === 0) appendRow(name);
+  }
+
   function deleteRow(row) {
     const siblings = [...row.parentElement.rows];
     if (siblings.length <= 1) {
@@ -1629,10 +2091,17 @@ function createFormPage(config) {
     focusField(target);
   }
 
+  function showMode() {
+    el('title').textContent = editing ? `Edit ${noun()}` : titles.create;
+    el('save-label').textContent = editing ? `Update ${noun()} Record` : (config.saveLabel?.() ?? titles.save);
+  }
+
   function reset() {
+    editing = null;
     el('form').reset();
     clearLookupIds(el('form'));
     clearFormErrors(el('form'));
+    for (const code of el('form').querySelectorAll('[data-record-code]')) clearRecordCode(code);
     config.setCode?.();
     for (const [name, list] of Object.entries(lists)) {
       byId(list.body).replaceChildren();
@@ -1645,6 +2114,31 @@ function createFormPage(config) {
     current = snapshot();
     syncUndoButton();
     refresh();
+    showMode();
+  }
+
+  // Opens a saved record: prepare() runs after the reset (e.g. the party form's Creditors / Debtors).
+  async function edit(id, prepare) {
+    reset();
+    prepare?.();
+    editing = { id };
+    showMode();
+    let record;
+    try {
+      record = await apiRequest(`${baseApi()}?id=${id}`);
+    } catch (error) {
+      showToast(`The ${noun().toLowerCase()} could not be opened`, error.message, true);
+      goBack();
+      return;
+    }
+    if (editing?.id !== id) return;           // another page was opened meanwhile
+    config.fill(record);
+    history = [];
+    lastEdit = { key: null, time: 0 };
+    current = snapshot();
+    syncUndoButton();
+    refresh();
+    showMode();
   }
 
   let saving = false;
@@ -1652,20 +2146,25 @@ function createFormPage(config) {
     if (saving) return;
     clearFormErrors(el('form'));
     const { payload, errors } = config.read();
+    errors.push(...fieldCheckErrors(el('form')));      // email and phone fields (data-check)
     if (errors.length) {
       showFormErrors(errors, config.reveal);
       return;
     }
     saving = true;
     el('save').disabled = true;
+    const wasEditing = editing;
     try {
-      const api = typeof config.api === 'function' ? config.api() : config.api;
-      const record = await apiRequest(api, { method: 'POST', json: payload });
+      const record = wasEditing
+        ? await apiRequest(`${baseApi()}?id=${wasEditing.id}`, { method: 'PUT', json: payload })
+        : await apiRequest(baseApi(), { method: 'POST', json: payload });
       const warning = await config.afterSave?.(record);   // e.g. upload the party's documents; a message if that failed
       forgetLookups(...(config.lookups || []));
       if (warning) showToast(`${record.code} saved, but its documents were not uploaded`, warning, true);
-      else showToast(`${typeof config.noun === 'function' ? config.noun() : config.noun} saved`, `${record.code} · ${record.name}`);
-      reset();
+      else showToast(`${noun()} ${wasEditing ? 'updated' : 'saved'}`, `${record.code} · ${record.name}`);
+      const listRoute = typeof config.listRoute === 'function' ? config.listRoute() : config.listRoute;
+      if (showSavedInList(listRoute, record.code, { edited: Boolean(wasEditing) })) return;
+      reset();                             // opened from Masters › Create: stay for the next record
       config.firstField().focus();
     } catch (error) {
       showServerErrors(error, key => config.fieldNodes?.[key]?.(), config.reveal);
@@ -1681,14 +2180,15 @@ function createFormPage(config) {
     const plainCtrl = ctrl && !event.altKey && !event.shiftKey;
     if (key === 'Escape' && !ctrl && !event.altKey) {
       event.preventDefault();
-      if (!event.repeat) leavePageToMenu();
+      if (!event.repeat) goBack();
       return true;
     }
-    if (plainCtrl && key.toLowerCase() === 's') {
+    if (isSaveKey(event)) {
       event.preventDefault();
       if (!event.repeat) save();
       return true;
     }
+    if (isBrowserSaveKey(event)) { event.preventDefault(); return true; }
     if (plainCtrl && key.toLowerCase() === 'z') {
       event.preventDefault();                 // the form's undo replaces the browser's per-field one
       undo();
@@ -1696,8 +2196,9 @@ function createFormPage(config) {
     }
     const list = config.addRowList?.();
     if (list) {
-      // Shift+X adds a row, except where X is something you'd type (text fields).
-      const typingText = isTextEntry(target) && !target.inputMode && target.type !== 'date';
+      // Shift+X adds a row, except in text fields outside the row table, where X is something you'd type.
+      const inRows = Boolean(target.closest?.('.fp-row')) && byId(lists[list].body).contains(target);
+      const typingText = isTextEntry(target) && !target.inputMode && target.type !== 'date' && !inRows;
       const shiftX = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && key.toLowerCase() === 'x' && !typingText;
       if (shiftX || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
         event.preventDefault();
@@ -1708,10 +2209,11 @@ function createFormPage(config) {
     if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
       if (target.dataset.enterNewline) return false;
       event.preventDefault();
-      if (target.dataset.enterOpens) {        // a dropdown that opens on Enter instead of moving on
+      if (target.dataset.enterOpens) {        // a dropdown that always opens on Enter (Enter passes it by in the order)
         try { target.showPicker(); } catch { /* unsupported: Space still works */ }
         return true;
       }
+      if (openDropdownOnEnter(target)) return true;   // other dropdowns: Enter opens, Enter again moves on
       if (config.onEnter?.(event)) return true;
       const order = formEnterOrder(el('form'), el('save'));
       enterField(fieldAfter(order, target) || el('save'));
@@ -1744,9 +2246,9 @@ function createFormPage(config) {
     config.init?.();
   }
 
-  const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, el };
+  const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, setRows, edit, el, isEditing: () => editing !== null };
   FORM_KEY_HANDLERS[config.key] = handleKeys;
-  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField };
+  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing };
   return page;
 }
 
@@ -1777,29 +2279,41 @@ const uomEl = suffix => byId(`uom-${suffix}`);
 const isValidUomFactor = value => UOM_FACTOR.test(value) && Number(value) > 0;
 
 const uomForm = createFormPage({
-  key: 'uom', route: 'masters/uom/new', noun: 'UOM', api: 'api/uoms.php', lookups: ['uom'],
+  key: 'uom', route: 'masters/uom/new', listRoute: 'masters/uom', noun: 'UOM', api: 'api/uoms.php', lookups: ['uom'],
   firstField: () => uomEl('name'),
   setCode: () => showNextCode(uomEl('code'), 'api/uoms.php'),
   fieldNodes: {
     unitName: () => uomEl('name'), decimalAllowed: () => uomEl('decimals'), status: () => uomEl('status'),
     conversionBaseId: () => uomEl('base'), conversionFactor: () => uomEl('factor'), description: () => uomEl('description'),
   },
+  // Only the name is required. Blank decimals save 0, a blank factor 1.0000 (the server's defaults).
   read() {
     const check = formChecks(uomEl);
     check.required('name', 'Unit of measure');
-    if (!/^\d+$/.test(check.text('decimals')) || Number(check.text('decimals')) > UOM_MAX_DECIMALS) {
+    const decimals = check.text('decimals');
+    if (decimals !== '' && (!/^\d+$/.test(decimals) || Number(decimals) > UOM_MAX_DECIMALS)) {
       check.fail(uomEl('decimals'), `Decimal allowed must be a whole number from 0 to ${UOM_MAX_DECIMALS}.`);
     }
-    if (!isValidUomFactor(check.text('factor'))) check.fail(uomEl('factor'), 'Conversion factor must be above 0, with up to 4 decimals.');
+    const factor = check.text('factor');
+    if (factor !== '' && !isValidUomFactor(factor)) check.fail(uomEl('factor'), 'Conversion factor must be above 0, with up to 4 decimals.');
     return {
       errors: check.errors,
       payload: {
-        unitName: check.text('name'), decimalAllowed: Number(check.text('decimals')), status: check.text('status'),
+        unitName: check.text('name'), decimalAllowed: decimals, status: check.text('status'),
         // No base unit: this unit is a base unit itself.
         conversionBaseId: check.text('base-id') === '' ? null : Number(check.text('base-id')),
-        conversionFactor: Number(check.text('factor')), description: check.text('description'),
+        conversionFactor: factor, description: check.text('description'),
       },
     };
+  },
+  fill(uom) {
+    showRecordCode(uomEl('code'), uom.code);
+    uomEl('name').value = uom.name;
+    uomEl('decimals').value = String(uom.decimalAllowed);
+    uomEl('status').value = uom.status;
+    fillLookup(uomEl('base'), uom.conversionBaseId && { id: uom.conversionBaseId, name: uom.baseName });
+    uomEl('factor').value = uom.conversionFactor;
+    uomEl('description').value = uom.description;
   },
   init() {
     // Show the factor in its full format once the user leaves the field. Not an undo step.
@@ -1818,7 +2332,7 @@ const brandEl = suffix => byId(`brand-${suffix}`);
 // item_brands: the items sold under this brand.
 const brandItems = createLookupChips({ container: 'brand-items', entry: 'brand-item-entry', onChange: () => brandForm.record() });
 const brandForm = createFormPage({
-  key: 'brand', route: 'masters/brand/new', noun: 'Brand', api: 'api/brands.php', lookups: ['brand'],
+  key: 'brand', route: 'masters/brand/new', listRoute: 'masters/brand', noun: 'Brand', api: 'api/brands.php', lookups: ['brand'],
   firstField: () => brandEl('name'),
   setCode: () => showNextCode(brandEl('code'), 'api/brands.php'),
   fieldNodes: { brandName: () => brandEl('name'), status: () => brandEl('status'), itemIds: () => brandItems.input },
@@ -1827,7 +2341,6 @@ const brandForm = createFormPage({
   read() {
     const check = formChecks(brandEl);
     check.required('name', 'Brand name');
-    if (brandItems.ids().length === 0) check.fail(brandItems.input, 'Add at least one item.');
     return {
       errors: check.errors,
       payload: {
@@ -1836,13 +2349,19 @@ const brandForm = createFormPage({
       },
     };
   },
+  fill(brand) {
+    showRecordCode(brandEl('code'), brand.code);
+    brandEl('name').value = brand.name;
+    brandEl('status').value = brand.status;
+    brandItems.set(brand.items);
+  },
 });
 
 /* ---------- Category Creation  (#/masters/category/new) ---------- */
 
 const categoryEl = suffix => byId(`category-${suffix}`);
 const categoryForm = createFormPage({
-  key: 'category', route: 'masters/category/new', noun: 'Category', api: 'api/categories.php', lookups: ['category', 'subcategory'],
+  key: 'category', route: 'masters/category/new', listRoute: 'masters/category', noun: 'Category', api: 'api/categories.php', lookups: ['category', 'subcategory'],
   firstField: () => categoryEl('name'),
   setCode: () => showNextCode(categoryEl('code'), 'api/categories.php'),
   fieldNodes: {
@@ -1856,9 +2375,7 @@ const categoryForm = createFormPage({
   read() {
     const check = formChecks(categoryEl);
     check.required('name', 'Category name');
-    const rows = categoryForm.rowsOf('subcategories');
-    const filled = rows.filter(row => !isBlankRow(row));
-    if (filled.length === 0) check.fail(rows[0].querySelector('input'), 'Add at least one subcategory.');
+    const filled = categoryForm.rowsOf('subcategories').filter(row => !isBlankRow(row));
     return {
       errors: check.errors,
       payload: {
@@ -1867,15 +2384,21 @@ const categoryForm = createFormPage({
       },
     };
   },
+  fill(category) {
+    showRecordCode(categoryEl('code'), category.code);
+    categoryEl('name').value = category.name;
+    categoryEl('status').value = category.status;
+    categoryForm.setRows('subcategories', category.subcategories.map(sub => ({ name: sub.name })));
+  },
 });
 
-/* ---------- Warehouse Creation  (#/masters/stock-point/new) ---------- */
+/* ---------- Stock Point Creation  (#/masters/stock-point/new). Ids keep the "warehouse" prefix: the table is warehouses. ---------- */
 
 const warehouseEl = suffix => byId(`warehouse-${suffix}`);
 const warehouseItems = createLookupChips({ container: 'warehouse-chips', entry: 'warehouse-item-entry', onChange: () => warehouseForm.record() });
 
 const warehouseForm = createFormPage({
-  key: 'warehouse', route: 'masters/stock-point/new', noun: 'Warehouse', api: 'api/warehouses.php', lookups: ['warehouse', 'item'],
+  key: 'warehouse', route: 'masters/stock-point/new', listRoute: 'masters/stock-point', noun: 'Stock Point', api: 'api/warehouses.php', lookups: ['warehouse', 'item'],
   firstField: () => warehouseEl('name'),
   setCode: () => showNextCode(warehouseEl('code'), 'api/warehouses.php'),
   fieldNodes: Object.fromEntries([
@@ -1885,23 +2408,27 @@ const warehouseForm = createFormPage({
   ].map(([key, suffix]) => [key, () => warehouseEl(suffix)])),
   extra: { read: warehouseItems.get, write: warehouseItems.set, reset: () => warehouseItems.set([]) },
   extraFocus: () => warehouseItems.input,
+  // Only the name is required (the code is automatic); every other field is optional.
   read() {
     const check = formChecks(warehouseEl);
-    for (const [suffix, label] of [['name', 'Warehouse name'], ['address', 'Address'], ['city', 'City / municipality'], ['contact', 'Contact person'], ['phone', 'Phone / extension'], ['email', 'Email address'], ['manager', 'Assigned manager'], ['capacity', 'Total storage capacity']]) {
-      check.required(suffix, label);
-    }
-    check.matches('email', EMAIL, 'Enter a valid email address.');
-    check.required('country', 'Country');
-    if (warehouseItems.ids().length === 0) check.fail(warehouseItems.input, 'Add at least one item.');
+    check.required('name', 'Stock point name');
     check.matches('capacity', WHOLE_NUMBER, 'Total storage capacity must be a whole number.');
     return {
       errors: check.errors,
       payload: {
         warehouseName: check.text('name'), type: check.text('type'), address: check.text('address'), country: check.text('country'), city: check.text('city'),
         contactPerson: check.text('contact'), phone: check.text('phone'), email: check.text('email'), manager: check.text('manager'),
-        itemIds: warehouseItems.ids(), capacity: Number(check.text('capacity')), status: check.text('status'), remarks: check.text('remarks'),
+        itemIds: warehouseItems.ids(), capacity: check.text('capacity'), status: check.text('status'), remarks: check.text('remarks'),
       },
     };
+  },
+  fill(point) {
+    showRecordCode(warehouseEl('code'), point.code);
+    const values = { name: point.name, address: point.address, country: point.country, city: point.city, contact: point.contactPerson,
+      phone: point.phone, email: point.email, manager: point.manager, capacity: point.capacity ?? '', status: point.status, remarks: point.remarks };
+    for (const [suffix, value] of Object.entries(values)) warehouseEl(suffix).value = value;
+    warehouseEl('type').value = ['Office', 'Warehouse', 'Shop'].includes(point.type) ? point.type : 'Warehouse';
+    warehouseItems.set(point.items);
   },
 });
 
@@ -1932,9 +2459,13 @@ function syncPartyVariant() {
   const under = partyEl('under').value;
   partyEl('form').toggleAttribute('data-pending', under === '');
   for (const panel of partyEl('form').querySelectorAll('[data-under]')) panel.hidden = panel.dataset.under !== under;
-  for (const label of partyEl('page').querySelectorAll('[data-creditors]')) label.textContent = label.dataset[under];
-  partyEl('save-label').textContent = under === 'debtors' ? 'Save Customer Record' : 'Save Supplier Record';
+  for (const label of partyEl('page').querySelectorAll('[data-creditors]')) label.textContent = label.dataset[under || 'creditors'];
+  partyEl('save-label').textContent = partySaveLabel();
+  const noun = under === 'debtors' ? 'Customer' : 'Supplier';
+  if (partyForm?.isEditing()) partyEl('title').textContent = `Edit ${noun}`;
+  else if (partyEl('form').hasAttribute('data-fixed-under')) partyEl('title').textContent = `${noun} Creation`;
 }
+const partySaveLabel = () => `${partyForm?.isEditing() ? 'Update' : 'Save'} ${partyEl('under').value === 'debtors' ? 'Customer' : 'Supplier'} Record`;
 
 function refreshPartyTotals() {
   const prefix = partyVariant() === 'cus' ? 'SO' : 'PO';
@@ -2020,9 +2551,28 @@ function parseQuotationText(source) {
   return rows;
 }
 
+// Spreadsheet rows (Excel or CSV) as quotation rows. The header row is the first of the top five naming two
+// known columns (Item Name, Description, Unit, Rate, Delivery Time, Warranty); without one the columns are
+// read in that order and only rows with a numeric rate count.
+function quotationRowsFromSheet(sheet) {
+  const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.filter(headerKey).length >= 2);
+  const columns = headerIndex === -1 ? QUOTE_COLUMNS : sheet[headerIndex].map(headerKey);
+  const rows = [];
+  for (const cells of sheet.slice(headerIndex + 1)) {
+    const row = {};
+    columns.forEach((column, index) => {
+      const value = String(cells[index] ?? '').trim();
+      if (column && value) row[column] = value;
+    });
+    if (/^\d+(\.\d+)?$/.test(row.rate || '')) row.rate = String(Number(Number(row.rate).toFixed(3)));   // spreadsheet floats
+    if (Object.keys(row).length && (headerIndex !== -1 || /^\d+(\.\d+)?$/.test(row.rate || ''))) rows.push(row);
+  }
+  return rows;
+}
+
 function addParsedQuotations(rows, sourceName) {
   if (rows.length === 0) {
-    showToast('No items found', `Nothing could be read from ${sourceName}. See View Sample Formats.`, true);
+    showToast('No items found', `Nothing could be read from ${sourceName}. Use columns Item Name, Description, Unit, Rate, Delivery Time and Warranty.`, true);
     return false;
   }
   const existing = partyForm.rowsOf('quotations');
@@ -2033,13 +2583,25 @@ function addParsedQuotations(rows, sourceName) {
   return true;
 }
 
+// Excel (.xlsx), CSV, TXT and JSON are read into the table. PDF and Word layouts cannot be read reliably
+// in the browser, so they get a message saying what to do instead.
 async function readQuotationFile(file) {
-  if (/\.pdf$/i.test(file.name)) {
-    showToast('PDF not read yet', 'Reading PDF quotations needs the server. Use JSON, CSV or TXT for now.', true);
+  const extension = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+  if (['pdf', 'doc', 'docx'].includes(extension)) {
+    showToast('This file cannot be read automatically',
+      'PDF and Word quotations cannot be read. Save the quotation as Excel (.xlsx) or CSV, or paste its lines into Attach & Parse Email.', true);
     return;
   }
-  if (!/\.(json|csv|txt)$/i.test(file.name)) {
-    showToast('File type not supported', 'Use a JSON, CSV, TXT or PDF quotation.', true);
+  if (['xlsx', 'xls', 'csv'].includes(extension)) {
+    try {
+      addParsedQuotations(quotationRowsFromSheet(await readSpreadsheet(file)), file.name);
+    } catch (error) {
+      showToast('Could not read the file', error.message || 'The file could not be read.', true);
+    }
+    return;
+  }
+  if (!['json', 'txt'].includes(extension)) {
+    showToast('File type not supported', 'Use an Excel (.xlsx), CSV, TXT or JSON quotation.', true);
     return;
   }
   addParsedQuotations(parseQuotationText(await file.text()), file.name);
@@ -2084,12 +2646,15 @@ function initFilePicker({ button, input, list, bucket, drop }) {
   if (drop) enableFileDrop(byId(drop), add);
 }
 
-/* Document Upload tab. Files stay in memory until the upload API exists. */
+/* Document Upload tab. New files are uploaded after the record is saved; stored ones (edit mode) come from the server. */
 const DOC_MAX_BYTES = 10 * 1024 * 1024;
 const DOC_KINDS = { pdf: ['PDF', 'pdf'], jpg: ['JPG', 'image'], jpeg: ['JPG', 'image'], png: ['PNG', 'image'], doc: ['DOC', 'word'], docx: ['DOC', 'word'], xls: ['XLS', 'excel'], xlsx: ['XLS', 'excel'] };
 const DOCS_WITHOUT_EXPIRY = ['VAT Certificate'];
-const docFiles = new WeakMap();               // table row → { file, uploadedOn }
-const docExtension = file => file.name.split('.').pop().toLowerCase();
+const docFiles = new WeakMap();               // table row → { file, uploadedOn } for a new file, { stored, uploadedOn } for a saved one
+const docName = doc => doc.file?.name ?? doc.stored.originalName;
+const docSize = doc => doc.file?.size ?? doc.stored.size;
+const docExtension = name => name.split('.').pop().toLowerCase();
+const partyOwner = () => (partyVariant() === 'cus' ? 'customer' : 'supplier');
 const docRows = () => [...partyEl('doc-rows').querySelectorAll('.fp-row')];
 
 function formatFileSize(bytes) {
@@ -2114,18 +2679,22 @@ function syncDocExpiry(row) {
   expiry.title = expired ? 'This document has expired' : '';
 }
 
-function createDocRow({ file, uploadedOn, type = '', expiry = '' }) {
+function createDocRow({ file, stored, uploadedOn, type = '', expiry = '' }) {
   const row = byId('party-doc-row').content.firstElementChild.cloneNode(true);
-  const [badge, kind] = DOC_KINDS[docExtension(file)];
+  const name = docName({ file, stored });
+  const [badge, kind] = DOC_KINDS[docExtension(name)] || ['FILE', 'other'];
   const badgeEl = row.querySelector('[data-doc-badge]');
   badgeEl.textContent = badge;
   badgeEl.dataset.kind = kind;
-  row.querySelector('[data-doc-name]').textContent = file.name;
-  row.querySelector('[data-doc-size]').textContent = formatFileSize(file.size);
-  row.querySelector('[data-field="type"]').value = type;
+  row.querySelector('[data-doc-name]').textContent = name;
+  const size = docSize({ file, stored });
+  row.querySelector('[data-doc-size]').textContent = size == null ? (stored ? 'Saved' : '') : `${formatFileSize(size)}${stored ? ' · saved' : ''}`;
+  const typeSelect = row.querySelector('[data-field="type"]');
+  if (type && ![...typeSelect.options].some(option => option.value === type)) typeSelect.append(new Option(type, type));
+  typeSelect.value = type;
   row.querySelector('[data-field="expiry"]').value = expiry;
   row.querySelector('[data-field="uploadedOn"]').value = formatDate(uploadedOn);
-  docFiles.set(row, { file, uploadedOn });
+  docFiles.set(row, { file, stored, uploadedOn });
   syncDocExpiry(row);
   return row;
 }
@@ -2150,11 +2719,11 @@ function updateDocCount() {
 
 function addDocuments(files) {
   const current = docRows().map(readDocRow);
-  const isDuplicate = file => current.some(({ file: other }) => other.name === file.name && other.size === file.size);
+  const isDuplicate = file => current.some(doc => docName(doc) === file.name && docSize(doc) === file.size);
   const accepted = [];
   const rejected = [];
   for (const file of files) {
-    if (!DOC_KINDS[docExtension(file)]) rejected.push(`${file.name} is not a supported file type.`);
+    if (!DOC_KINDS[docExtension(file.name)]) rejected.push(`${file.name} is not a supported file type.`);
     else if (file.size > DOC_MAX_BYTES) rejected.push(`${file.name} is larger than 10 MB.`);
     else if (!isDuplicate(file) && !accepted.some(other => other.name === file.name && other.size === file.size)) accepted.push(file);
   }
@@ -2181,7 +2750,12 @@ function removeDocument(row) {
 }
 
 function previewDocument(row) {
-  const url = URL.createObjectURL(docFiles.get(row).file);
+  const { file, stored } = docFiles.get(row);
+  if (stored) {                                // a saved document: the server sends it as a download
+    window.open(`api/${partyOwner()}-documents.php?id=${stored.id}`, '_blank', 'noopener');
+    return;
+  }
+  const url = URL.createObjectURL(file);
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60000);   // long enough for the new tab to load it
 }
@@ -2191,16 +2765,25 @@ const supplierBrands = createLookupChips({ container: 'party-sup-brands', entry:
 
 const partyForm = createFormPage({
   key: 'party', route: 'masters/party/new', noun: () => (partyVariant() === 'cus' ? 'Customer' : 'Supplier'), lookups: ['supplier'],
+  listRoute: () => (partyVariant() === 'cus' ? 'masters/customer' : 'masters/supplier'),
   // Creditors are suppliers, debtors are customers: each has its own table and endpoint.
   api: () => (partyVariant() === 'cus' ? 'api/customers.php' : 'api/suppliers.php'),
+  saveLabel: partySaveLabel,
+  // New documents (with their type and expiry) and customer agreements are uploaded once the record is saved.
   async afterSave(record) {
-    const variant = partyVariant();
-    const files = [...docRows().map(row => docFiles.get(row).file), ...(variant === 'cus' ? partyFiles.agreements : [])];
-    if (files.length === 0) return;
-    const owner = variant === 'cus' ? 'customer' : 'supplier';
+    const uploads = [
+      ...docRows().map(readDocRow).filter(doc => doc.file).map(doc => ({ file: doc.file, type: doc.type, expiry: doc.expiry })),
+      ...(partyVariant() === 'cus' ? partyFiles.agreements.map(file => ({ file, type: 'Agreement', expiry: '' })) : []),
+    ];
+    if (uploads.length === 0) return;
+    const owner = partyOwner();
     const form = new FormData();
     form.append(`${owner}Id`, String(record.id));
-    for (const file of files) form.append('files[]', file, file.name);
+    for (const { file, type, expiry } of uploads) {
+      form.append('files[]', file, file.name);
+      form.append('types[]', type);
+      form.append('expiries[]', expiry);
+    }
     try {
       await apiRequest(`api/${owner}-documents.php`, { method: 'POST', body: form });
       return null;
@@ -2211,6 +2794,7 @@ const partyForm = createFormPage({
   fieldNodes: Object.fromEntries([
     ['supplierName', 'sup-name'], ['customerName', 'cus-name'], ['organizationName', 'cus-organization'],
     ['email', () => `${partyVariant()}-email`], ['country', () => `${partyVariant()}-country`], ['address', () => `${partyVariant()}-address`],
+    ['phone', () => `${partyVariant()}-mobile`], ['telephone', () => `${partyVariant()}-phone`],
     ['taxRegNo', () => `${partyVariant()}-tax`], ['debitLimit', 'sup-credit-limit'], ['debitDays', 'sup-credit-days'],
     ['openingBalance', 'sup-opening'], ['paymentTerms', 'sup-terms'], ['currency', 'sup-currency'], ['brandIds', 'sup-brand-entry'],
     ['creditLimit', 'cus-credit-limit'], ['creditDays', 'cus-credit-days'], ['discountPercent', 'cus-discount'],
@@ -2221,9 +2805,10 @@ const partyForm = createFormPage({
     showNextCode(partyEl('cus-code'), 'api/customers.php');
   },
   lists: {
-    supplierContacts: { body: 'party-sup-contacts', template: 'party-contact-row', initial: 2, label: index => `Contact Person ${index + 1}`,
+    // One contact row to start; Add Row (Shift+X) adds more.
+    supplierContacts: { body: 'party-sup-contacts', template: 'party-contact-row', initial: 1, label: index => String(index + 1).padStart(2, '0'),
       defaults: () => ({ mobileCode: partyDial('creditors') }) },
-    customerContacts: { body: 'party-cus-contacts', template: 'party-contact-row', initial: 1, label: index => `Contact Person ${index + 1}`,
+    customerContacts: { body: 'party-cus-contacts', template: 'party-contact-row', initial: 1, label: index => String(index + 1).padStart(2, '0'),
       defaults: () => ({ mobileCode: partyDial('debtors') }) },
     quotations: { body: 'party-quote-rows', template: 'party-quote-row', initial: 1 },
     orders: { body: 'party-order-rows', template: 'party-order-row', initial: 1, defaults: () => ({ date: todayInputValue() }) },
@@ -2242,8 +2827,9 @@ const partyForm = createFormPage({
   onReset() {
     partyFiles.agreements = [];
     renderFileList('party-agreement-files', []);
+    partyEl('under').disabled = false;
+    partyEl('form').removeAttribute('data-fixed-under');   // Masters › Create › Parties: Under is chosen on the page
     partyEl('email-panel').hidden = true;
-    partyEl('samples').hidden = true;
     partyEl('email-text').value = '';
     syncPartyVariant();
     showPartyTab('general');
@@ -2261,10 +2847,8 @@ const partyForm = createFormPage({
     const check = formChecks(suffix => partyEl(`${variant}-${suffix}`));
     const contacts = partyForm.rowsOf(variant === 'cus' ? 'customerContacts' : 'supplierContacts');
     const NUMBER_3 = 'Enter a number with up to 3 decimals.';
-    const VALID_EMAIL = 'Enter a valid email address.';
     const WHOLE = 'Enter a whole number.';
     check.required('name', 'Name');
-    check.matches('email', EMAIL, VALID_EMAIL);
     // suppliers.debit_limit / opening_balance hold 2 decimals; customers.credit_limit holds 3.
     const MONEY_2 = /^\d{1,10}(\.\d{1,2})?$/;
     const NUMBER_2 = 'Enter a number with up to 2 decimals.';
@@ -2274,7 +2858,6 @@ const partyForm = createFormPage({
     if (variant === 'cus' && (check.text('discount') !== '') && (!DECIMAL_2.test(check.text('discount')) || Number(check.text('discount')) > 100)) {
       check.fail(partyEl('cus-discount'), 'Discount must be from 0 to 100, with up to 2 decimals.');
     }
-    for (const row of contacts) check.rowCell(row, 'email', EMAIL, VALID_EMAIL);
     for (const row of partyForm.rowsOf('quotations')) check.rowCell(row, 'rate', DECIMAL_3, NUMBER_3);
     for (const row of partyForm.rowsOf('orders')) {
       check.rowCell(row, 'value', DECIMAL_3, NUMBER_3);
@@ -2285,23 +2868,35 @@ const partyForm = createFormPage({
     const filledRows = rows => rows.filter(row => !isBlankRow(row)).map(partyForm.readRow);
     const d = Object.fromEntries(generalFields.map(node => [node.id.replace(`party-${variant}-`, ''), node.value.trim()]));
     const lines = (...values) => values.filter(Boolean).join('\n');
-    // supplier_contacts / customer_contacts keep a name and one number per contact.
-    const contactRows = filledRows(contacts).map(row => ({ name: row.name.trim(), number: joinPhone(row.mobileCode, row.mobile) }));
+    // supplier_contacts / customer_contacts keep a name, designation, one number and an email per contact.
+    const contactRows = filledRows(contacts).map(row => ({
+      name: row.name.trim(), designation: row.designation.trim(), number: joinPhone(row.mobileCode, row.mobile), email: row.email.trim(),
+    }));
+    // The Quotations and Previous Purchases tabs and the documents already on the server (edit mode).
+    const rowsOfTabs = {
+      contacts: contactRows,
+      quotations: filledRows(partyForm.rowsOf('quotations')).map(row => Object.fromEntries(QUOTE_COLUMNS.map(key => [key, row[key].trim()]))),
+      orders: filledRows(partyForm.rowsOf('orders')).map(row => ({
+        number: row.number.trim(), date: row.date, value: row.value.trim(), items: row.items.trim(), status: row.status,
+      })),
+      documents: docRows().map(readDocRow).filter(doc => doc.stored).map(doc => ({ id: doc.stored.id, type: doc.type, expiry: doc.expiry })),
+    };
     // Mapped onto the suppliers / customers columns of the data model.
     const payload = variant === 'sup' ? {
       supplierName: d.name, address: d.address, country: d.country, currency: d.currency, taxRegNo: d.tax, remarks: d.comments,
       ownerDetails: d.owner, phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email,
       debitLimit: d['credit-limit'], debitDays: d['credit-days'], paymentTerms: d.terms, openingBalance: d.opening,
       accountDetails: lines(d.bank && `Bank: ${d.bank}`, d.branch && `Branch: ${d.branch}`, d.iban && `Account / IBAN: ${d.iban}`, d.website && `Website: ${d.website}`),
-      brandIds: supplierBrands.ids(), contacts: contactRows,
+      brandIds: supplierBrands.ids(), ...rowsOfTabs,
     } : {
       customerName: d.name, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip,
       phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email, ownerDetails: d.owner,
       creditLimit: d['credit-limit'], creditDays: d['credit-days'], discountPercent: d.discount, salesman: d.salesman, taxRegNo: d.tax,
-      accountDetails: lines(d.other1, d.other2, d.other3), comments: d.comments, contacts: contactRows,
+      accountDetails: lines(d.other1, d.other2, d.other3), comments: d.comments, ...rowsOfTabs,
     };
     return { errors: check.errors, payload };
   },
+  fill: fillPartyForm,
   init() {
     partyEl('under').addEventListener('change', () => {
       const wasPending = partyEl('form').hasAttribute('data-pending');
@@ -2347,7 +2942,6 @@ const partyForm = createFormPage({
       if (file) readQuotationFile(file);
     });
     enableFileDrop(partyEl('quote-drop'), files => { if (files[0]) readQuotationFile(files[0]); });
-    partyEl('samples-btn').addEventListener('click', () => { partyEl('samples').hidden = !partyEl('samples').hidden; });
     partyEl('email-open').addEventListener('click', () => {
       partyEl('email-panel').hidden = false;
       partyEl('email-text').focus();
@@ -2365,17 +2959,81 @@ const partyForm = createFormPage({
   },
 });
 
+// Fills the party form from a saved supplier or customer (edit mode); Under is already set and locked.
+function fillPartyForm(party) {
+  const variant = partyVariant();
+  const set = (suffix, value) => { partyEl(`${variant}-${suffix}`).value = value ?? ''; };
+  const ensureOption = (select, value) => {
+    if (value && ![...select.options].some(option => option.value === value)) select.append(new Option(value, value));
+  };
+  showRecordCode(partyEl(`${variant}-code`), party.code);
+  set('name', party.name);
+  set('address', party.address);
+  set('country', party.country);
+  set('tax', party.taxRegNo);
+  set('owner', party.ownerDetails);
+  set('email', party.email);
+  const dial = countryNamed(party.country)?.dial || '+968';
+  for (const [field, value] of [['mobile', party.phone], ['phone', party.telephone]]) {
+    const [code, number] = splitPhone(value, dial);
+    set(`${field}-code`, code);
+    set(field, number);
+  }
+  // Lines saved as "Label: value" (see read()) go back to their fields.
+  const accountLines = String(party.accountDetails ?? '').split('\n').filter(Boolean);
+  if (variant === 'sup') {
+    ensureOption(partyEl('sup-currency'), party.currency);
+    set('currency', party.currency);
+    set('comments', party.remarks);
+    set('credit-limit', party.debitLimit);
+    set('credit-days', party.debitDays);
+    set('terms', party.paymentTerms);
+    set('opening', party.openingBalance);
+    const labelled = { 'Bank: ': 'bank', 'Branch: ': 'branch', 'Account / IBAN: ': 'iban', 'Website: ': 'website' };
+    const other = [];
+    for (const line of accountLines) {
+      const prefix = Object.keys(labelled).find(label => line.startsWith(label));
+      if (prefix) set(labelled[prefix], line.slice(prefix.length)); else other.push(line);
+    }
+    if (other.length) set('bank', [partyEl('sup-bank').value, ...other].filter(Boolean).join(' · '));
+    supplierBrands.set(party.brands);
+  } else {
+    set('organization', party.organizationName);
+    set('city', party.city);
+    set('zip', party.zipCode);
+    set('credit-limit', party.creditLimit);
+    set('credit-days', party.creditDays);
+    set('discount', party.discountPercent);
+    ensureOption(partyEl('cus-salesman'), party.salesman);
+    set('salesman', party.salesman);
+    set('comments', party.comments);
+    ['other1', 'other2', 'other3'].forEach((suffix, index) => set(suffix, index < 2 ? accountLines[index] : accountLines.slice(2).join(' · ')));
+  }
+  partyForm.setRows(variant === 'cus' ? 'customerContacts' : 'supplierContacts', party.contacts.map(contact => {
+    const [mobileCode, mobile] = splitPhone(contact.number, dial);
+    return { name: contact.name, designation: contact.designation, mobileCode, mobile, email: contact.email };
+  }));
+  partyForm.setRows('quotations', party.quotations.map(quote => ({ ...quote, rate: quote.rate ?? '' })));
+  partyForm.setRows('orders', party.orders.map(order => ({
+    number: order.number, date: order.date ?? '', value: order.value ?? '', items: order.items ?? '', status: order.status,
+  })));
+  renderDocRows(party.documents.map(doc => ({
+    stored: doc, uploadedOn: new Date(String(doc.uploadedAt).replace(' ', 'T')), type: doc.docType, expiry: doc.expiryDate ?? '',
+  })));
+}
+
 /* ---------- Master list pages  (#/masters/supplier, customer, item, uom, brand, category, stock-point) ----------
    One builder for every "<Noun> Master" list: table, search, Filter popup, Import popup, CSV export.
-   Each page declares its columns; rows are dummy data held in memory until the pages read the API.
-   View, Edit and Delete are not built yet: they show a "coming soon" toast. */
+   Each page declares its columns and reads its rows from the API (GET ?all=1, inactive records too)
+   every time it is opened. View shows the record in sections; Edit opens the creation form with the
+   record filled in (#/masters/<list>/edit/<id>); Delete and Import write through the API. */
 
 const ML_ICONS = {
   view: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
   edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>',
   delete: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"></path></svg>',
 };
-const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 const normalHeader = text => String(text).toLowerCase().replace(/[^a-z]/g, '');
 
 // Column cell styles: code (amber mono), name (bold capitals), pill, status (green when active), upper, mono, wrap (long text), text.
@@ -2396,25 +3054,38 @@ function masterCell(column, value) {
   return td;
 }
 
-// config: key ('item' → #item-list-page), route, newRoute, noun, nouns (plural), codePrefix + codeDigits
-// (auto-numbering), columns [{ key, label, type, headers (spreadsheet aliases), read(value) → value or throws,
-// inTable: false for detail columns shown only in View, Edit, import and export }],
-// sample (template row values by key), rows (newest first; every row has code and name).
+// config: key ('item' → #item-list-page), route, newRoute, noun, nouns (plural), api, lookups (lookup lists a change
+// makes stale), fromApi(record) → row, toPayload(row) → save payload (import; may be async),
+// edit(id) and formPage (Edit), related(record) → extra View sections (the party lists),
+// columns [{ key, label, type, group (View section), headers (spreadsheet aliases), read(value) → value or throws,
+// inTable: false for detail columns shown only in View, import and export }], sample (template row values by key).
 function createMasterList(config) {
   const page = `${config.key}-list`;
   const $ = suffix => byId(`${page}-${suffix}`);
   const tableColumns = config.columns.filter(column => column.inTable !== false);
   const caps = config.noun === config.noun.toUpperCase();          // UOM stays UOM in sentences
   const list = {
-    config, rows: config.rows, applied: new Set(), range: { from: '', to: '' }, $, render,
+    config, rows: [], applied: new Set(), range: { from: '', to: '' }, $, render, loaded: false,
     one: caps ? config.noun : config.noun.toLowerCase(),
     many: caps ? config.nouns : config.nouns.toLowerCase(),
   };
   list.count = count => `${count} ${count === 1 ? list.one : list.many}`;
-  // Dummy rows get spread-out created dates (newest first); rows added later are stamped when first seen.
-  list.rows.forEach((row, index) => {
-    if (!row.createdOn) row.createdOn = dateInputValue(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3 - index * 11));
-  });
+
+  // Every record from the API, newest first. A failed load shows an empty list and says why.
+  list.load = async () => {
+    $('empty').textContent = `Loading ${list.many}…`;
+    try {
+      const records = await apiRequest(`${config.api}?all=1`);
+      list.rows = records.map(record => ({ ...config.fromApi(record), id: record.id, code: record.code, createdOn: record.createdAt || '' }));
+      $('empty').textContent = `No ${list.many} match your search.`;
+    } catch (error) {
+      list.rows = [];
+      $('empty').textContent = `The ${list.many} could not be loaded: ${error.message}`;
+      showToast(`Could not load ${list.many}`, error.message, true);
+    }
+    list.loaded = true;
+    render();
+  };
 
   function render() {
     const query = $('search').value.trim().toLowerCase();
@@ -2448,7 +3119,7 @@ function createMasterList(config) {
     $('filter').classList.toggle('is-on', active > 0);
   }
 
-  // "/" search, F filter, I import, Shift+N new record, Esc back to the Masters popup (Esc in a filled search clears it first).
+  // "/" search, F filter, I import, Shift+N new record, Esc back (Esc in a filled search clears it first).
   function handleKeys(event) {
     if (byId('master-filter').open) return handleMasterFilterKeys(event);
     if (byId('master-import').open) return handleMasterImportKeys(event);
@@ -2463,7 +3134,7 @@ function createMasterList(config) {
         search.value = '';
         render();
       } else {
-        leavePageToMenu();
+        goBack();
       }
       return true;
     }
@@ -2490,7 +3161,7 @@ function createMasterList(config) {
   list.init = () => {
     $('head').replaceChildren(...tableColumns.map(column => el('th', '', column.label)), el('th', 'ml-col-actions', 'Actions'));
     $('search').addEventListener('input', render);
-    $('back').addEventListener('click', leavePageToMenu);
+    $('back').addEventListener('click', goBack);
     $('filter').addEventListener('click', () => openMasterFilter(list));
     $('import').addEventListener('click', () => openMasterImport(list));
     $('body').addEventListener('click', event => {
@@ -2498,14 +3169,20 @@ function createMasterList(config) {
       const row = button && list.rows.find(entry => entry.code === button.closest('tr').dataset.code);
       if (!row) return;
       if (button.dataset.action === 'view') openMasterView(list, row);
-      else if (button.dataset.action === 'edit') location.hash = masterEditHash(list, row);
+      else if (button.dataset.action === 'edit') openMasterEdit(list, row);
       else deleteMasterRow(list, row);
     });
   };
-  // After Save on the Edit page or a delete, focus lands back on that row (or the row now in its place).
+  // After an edit or a delete, focus lands back on that row (or the row now in its place).
   list.focusRow = code => {
     const tr = [...$('body').rows].find(entry => entry.dataset.code === code) || $('body').rows[0];
     (tr?.querySelector('[data-action="edit"]') || $('search')).focus();
+  };
+  const firstField = () => {
+    const code = list.returnTo;
+    const tr = code && [...$('body').rows].find(entry => entry.dataset.code === code);
+    if (tr) list.returnTo = null;
+    return tr?.querySelector('[data-action="edit"]') || $('body').querySelector('button') || $('search');
   };
 
   FORM_KEY_HANDLERS[page] = handleKeys;
@@ -2514,16 +3191,24 @@ function createMasterList(config) {
     reset() {
       $('search').value = '';
       list.applied.clear();
+      list.range = { from: '', to: '' };
+      list.rows = [];
       render();
+      // Once the rows are in, focus the row last opened (or the first), unless the user has moved on.
+      list.load().then(() => {
+        const active = document.activeElement;
+        if (currentPage === page && (active === $('search') && !$('search').value || active === byId('app') || active === document.body)) firstField().focus();
+      });
     },
-    firstField() {
-      const code = list.returnTo;
-      list.returnTo = null;
-      const tr = code && [...$('body').rows].find(entry => entry.dataset.code === code);
-      return tr?.querySelector('[data-action="edit"]') || $('body').querySelector('button') || $('search');
-    },
+    firstField,
   };
   return list;
+}
+
+// Edit: the creation form with the record filled in. Coming back, the list focuses this row again.
+function openMasterEdit(list, row) {
+  list.returnTo = row.code;
+  location.hash = `#/${list.config.route}/edit/${row.id}`;
 }
 
 /* ---------- Filter popup (#master-filter, shared by the list pages) ----------
@@ -2541,7 +3226,7 @@ const shortDate = value => new Date(`${value}T00:00`).toLocaleDateString('en-GB'
 const mfEl = suffix => byId(`master-filter-${suffix}`);
 const mfVisibleRows = () => {
   const query = mfEl('search').value.trim().toLowerCase();
-  return [...masterFilter.list.rows].sort((a, b) => a.code.localeCompare(b.code))
+  return masterFilter.list.rows                       // newest first, as the list page shows them
     .filter(row => inDateRange(row, masterFilter.range))
     .filter(row => !query || row.code.toLowerCase().includes(query) || row.name.toLowerCase().includes(query));
 };
@@ -2734,7 +3419,7 @@ function handleMasterFilterKeys(event) {
     search.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
-  // →/← leave the record list for the footer: → Reset Filters, ← Export. Select All → goes to its side links.
+  // →/← leave the record list for the footer: → Reset Filters, ← Export. Select All → goes to the Date button.
   if (!ctrl && !event.altKey && (key === 'ArrowRight' || key === 'ArrowLeft')) {
     const dialog = byId('master-filter');
     let next = null;
@@ -2769,12 +3454,6 @@ function initMasterFilter() {
     else if (action === 'date') { if (mfDatePop().hidden) openMasterDate(); else closeMasterDate(); }
     else if (action === 'date-apply') setMasterDate();
     else if (action === 'date-clear') setMasterDate(true);
-    else if (action === 'visible' || action === 'none') {
-      for (const row of action === 'visible' ? mfVisibleRows() : masterFilter.list.rows) {
-        if (action === 'visible') masterFilter.picked.add(row.code); else masterFilter.picked.delete(row.code);
-      }
-      renderMasterFilterList();
-    }
   });
   mfEl('search').addEventListener('input', renderMasterFilterList);
   mfEl('all').addEventListener('change', event => {
@@ -2895,9 +3574,10 @@ async function readSpreadsheet(file) {
    Reads the file as soon as it is chosen and shows what will happen; Start Import applies it.
    Spreadsheet headings match a column by its key, its label or one of its aliases (case, spaces
    and punctuation ignored). A duplicate matches an existing record by code or by name (ignoring case).
-   Rows are added to the page's in-memory list until the pages read and write the API. */
+   New rows are saved with POST (the server numbers them); Update / Overwrite sends PUT with only the
+   cells the sheet fills in, so blank cells keep what the record already has. */
 
-const masterImport = { list: null, rows: [], opener: null };
+const masterImport = { list: null, rows: [], opener: null, busy: false };
 const miEl = suffix => byId(`master-import-${suffix}`);
 const miMode = () => byId('master-import').querySelector('input[name="master-import-mode"]:checked').value;
 const findMasterRow = (rows, row) => rows.find(existing => (row.code && sameText(existing.code, row.code)) || sameText(existing.name, row.name));
@@ -2983,33 +3663,46 @@ function closeMasterImport() {
   (back && document.contains(back) && back !== document.body ? back : masterImport.list.$('import')).focus();
 }
 
-function startMasterImport() {
+async function startMasterImport() {
   const { list } = masterImport;
-  if (!masterImport.rows.length) return;
+  if (!masterImport.rows.length || masterImport.busy) return;
   const overwrite = miMode() === 'overwrite';
-  const { codePrefix, codeDigits } = list.config;
-  // Auto-numbering continues the page's series (SUP005 → SUP006, ITM-2026-0006 → ITM-2026-0007);
-  // imported codes in other formats (V-77) do not move it.
-  const series = new RegExp(`^${codePrefix.replace(/[-]/g, '\\-')}(\\d+)$`, 'i');
-  let next = Math.max(0, ...list.rows.map(row => Number(series.exec(row.code)?.[1] ?? 0))) + 1;
-  const added = [];
-  let updated = 0, skipped = 0;
+  masterImport.busy = true;
+  miEl('start').disabled = true;
+  miEl('file-summary').textContent = `Importing ${list.count(masterImport.rows.length)}…`;
+  let added = 0, updated = 0, skipped = 0;
+  const failures = [];
+  const filled = payload => Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== null && value !== undefined
+    && !(Array.isArray(value) && value.length === 0)));
+  const seen = [];                                   // rows of this file already handled: a name twice is one record
   for (const row of masterImport.rows) {
-    const existing = findMasterRow(list.rows, row) || findMasterRow(added, row);
-    if (existing && overwrite) {
-      const { code, ...details } = row;
-      Object.assign(existing, details);
-      updated++;
-    } else if (existing) {
-      skipped++;
-    } else {
-      added.push({ ...row, code: row.code ? row.code.toUpperCase() : `${codePrefix}${String(next++).padStart(codeDigits, '0')}` });
+    const existing = findMasterRow(list.rows, row);
+    try {
+      if (findMasterRow(seen, row) || (existing && !overwrite)) { skipped++; continue; }
+      seen.push(row);
+      const payload = await list.config.toPayload(row);
+      if (existing) {
+        await apiRequest(`${list.config.api}?id=${existing.id}`, { method: 'PUT', json: filled(payload) });
+        updated++;
+      } else {
+        await apiRequest(list.config.api, { method: 'POST', json: payload });
+        added++;
+      }
+    } catch (error) {
+      failures.push(`${row.name}: ${error.message}`);
     }
   }
-  list.rows.unshift(...added);                     // newest first, in the file's order
-  list.render();
+  masterImport.busy = false;
+  forgetLookups(...list.config.lookups);
   closeMasterImport();
-  showToast('Import complete', `${added.length} added, ${overwrite ? `${updated} updated` : `${skipped} skipped`}.`);
+  await list.load();
+  const summary = `${added} added, ${overwrite ? `${updated} updated` : `${skipped} skipped`}`;
+  if (failures.length) {
+    const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : '';
+    showToast(`Import finished: ${summary}, ${failures.length} failed`, `${failures[0]}${more}`, true);
+  } else {
+    showToast('Import complete', `${summary}.`);
+  }
 }
 
 function handleMasterImportKeys(event) {
@@ -3118,9 +3811,16 @@ async function deleteMasterRow(list, row) {
     confirm: `Delete ${list.config.noun}`,
   });
   if (!ok) return;
+  try {
+    await apiRequest(`${list.config.api}?id=${row.id}`, { method: 'DELETE' });
+  } catch (error) {
+    showToast(`${row.code} was not deleted`, error.message, true);
+    list.focusRow(row.code);
+    return;
+  }
+  forgetLookups(...list.config.lookups);
   const index = list.rows.indexOf(row);
-  if (index === -1) return;
-  list.rows.splice(index, 1);
+  if (index !== -1) list.rows.splice(index, 1);
   list.applied.delete(row.code);
   list.render();
   showToast(`${list.config.noun} deleted`, `${row.code} · ${row.name} was removed.`);
@@ -3129,25 +3829,85 @@ async function deleteMasterRow(list, row) {
 }
 
 /* ---------- View popup (#master-view) ----------
-   Every column of the record. Keys: E edit, Delete removes, Esc closes. */
+   The record in titled sections of label / value rows (each column's group). The party lists also show
+   the record's contacts, documents, quotations and previous orders, fetched when the popup opens.
+   Keys: E edit, Delete removes, ↑/↓ scroll, Esc closes. */
 
 const masterView = { list: null, row: null, opener: null };
 
-function openMasterView(list, row) {
+function viewSection(title, ...content) {
+  const section = el('section', 'mv-section');
+  section.append(el('h3', 'mv-section-title', title), ...content);
+  return section;
+}
+
+// Label / value rows; wide values (addresses, remarks) take the whole row.
+function viewFields(entries) {
+  const dl = el('dl', 'mv-grid');
+  for (const { label, value, column = {} } of entries) {
+    const item = el('div', `mv-item${column.type === 'wrap' ? ' mv-item-wide' : ''}`);
+    const dd = el('dd', `mv-value${column.type === 'name' ? ' mv-value-name' : ''}`);
+    dd.append(column.key ? masterValue(column, value) : document.createTextNode(String(value ?? '') || '—'));
+    item.append(el('dt', 'mv-label', label), dd);
+    dl.append(item);
+  }
+  return dl;
+}
+
+// A small table; cells may be nodes (a document link). Empty: a note instead.
+function viewTable(headings, rows, empty) {
+  if (rows.length === 0) return el('p', 'mv-empty', empty);
+  const wrap = el('div', 'mv-table-wrap');
+  const table = el('table', 'mv-table');
+  const head = el('tr');
+  head.append(...headings.map(heading => el('th', '', heading)));
+  const thead = el('thead');
+  thead.append(head);
+  const tbody = el('tbody');
+  for (const cells of rows) {
+    const tr = el('tr');
+    for (const cell of cells) {
+      const td = el('td');
+      if (cell instanceof Node) td.append(cell); else td.textContent = String(cell ?? '') || '—';
+      tr.append(td);
+    }
+    tbody.append(tr);
+  }
+  table.append(thead, tbody);
+  wrap.append(table);
+  return wrap;
+}
+
+function renderMasterView(list, row, record, loadError) {
+  const groups = new Map();
+  for (const column of list.config.columns) {
+    if (column.key === 'code') continue;
+    const group = column.group || 'Details';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push({ label: column.label, value: row[column.key], column });
+  }
+  const sections = [...groups].map(([title, entries]) => viewSection(title, viewFields(entries)));
+  if (list.config.related) {
+    if (record) sections.push(...list.config.related(record));
+    else sections.push(viewSection('More', el('p', 'mv-empty', loadError ? `Could not load the rest of the record: ${loadError}` : 'Loading contacts, documents, quotations and orders…')));
+  }
+  byId('master-view-fields').replaceChildren(...sections);
+}
+
+async function openMasterView(list, row) {
   Object.assign(masterView, { list, row, opener: document.activeElement });
-  byId('master-view-icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg').cloneNode(true));
+  byId('master-view-icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg, .fp-brand-icon span').cloneNode(true));
   byId('master-view-title').textContent = `${list.config.noun} Details`;
-  byId('master-view-sub').textContent = row.code;
-  byId('master-view-fields').replaceChildren(...list.config.columns.filter(column => column.key !== 'code').map(column => {
-    const item = el('div', `mv-item${column.type === 'wrap' || column.key === 'name' ? ' mv-item-wide' : ''}`);
-    const value = el('dd', `mv-value${column.key === 'name' ? ' mv-value-name' : ''}`);
-    value.append(masterValue(column, row[column.key]));
-    item.append(el('dt', 'mv-label', column.label), value);
-    return item;
-  }));
+  byId('master-view-sub').textContent = `${row.code} · ${row.name}`;
+  renderMasterView(list, row, null);
   document.documentElement.classList.add('has-modal');
   byId('master-view').showModal();
+  byId('master-view-fields').scrollTop = 0;
   byId('master-view').querySelector('[data-mv="edit"]').focus();
+  if (!list.config.related) return;
+  let record = null, loadError = '';
+  try { record = await apiRequest(`${list.config.api}?id=${row.id}`); } catch (error) { loadError = error.message; }
+  if (byId('master-view').open && masterView.row === row) renderMasterView(list, row, record, loadError);
 }
 
 function closeMasterView({ restoreFocus = true } = {}) {
@@ -3162,7 +3922,7 @@ function closeMasterView({ restoreFocus = true } = {}) {
 function masterViewAction(action) {
   const { list, row } = masterView;
   if (action === 'close') closeMasterView();
-  else if (action === 'edit') { closeMasterView({ restoreFocus: false }); location.hash = masterEditHash(list, row); }
+  else if (action === 'edit') { closeMasterView({ restoreFocus: false }); openMasterEdit(list, row); }
   else if (action === 'delete') { closeMasterView(); deleteMasterRow(list, row); }
 }
 
@@ -3193,227 +3953,44 @@ function initMasterView() {
   });
 }
 
-/* ---------- Edit page (#/masters/<list>/edit/<code>, #master-edit-page) ----------
-   One full page for every list, built from the list's columns: the code is read-only,
-   columns with choices are dropdowns, columns with options suggest values (datalist).
-   Save checks each value with the column's read() and keeps names unique. */
-
-const masterEdit = { list: null, row: null, saved: '' };
-const meEl = suffix => byId(`master-edit-${suffix}`);
-const masterEditHash = (list, row) => `#/${list.config.route}/edit/${encodeURIComponent(row.code)}`;
-const meFields = () => [...meEl('fields').querySelectorAll('[data-key], [data-code-for]')];
-const meSnapshot = () => meFields().map(field => field.value).join('\u0000');
-
-function buildMasterEditField(list, column, row) {
-  const id = `master-edit-field-${column.key}`;
-  const isCode = column.key === 'code';
-  const span = isCode ? 'fp-span-3' : column.key === 'name' ? 'fp-span-9' : column.type === 'wrap' ? 'fp-span-12' : 'fp-span-4';
-  const field = el('div', `fp-field ${span}`);
-  const label = el('label', 'fp-label', isCode ? `${list.config.noun} Code` : column.label);
-  label.htmlFor = id;
-  if (column.key === 'name') label.append(' ', el('span', 'fp-req', '*'));
-  let input;
-  if (column.lookup) {
-    // Same markup as the creation forms' lookup fields: picked values only, the "Select …" popup on Enter.
-    input = el('input', 'fp-input fp-lookup');
-    Object.assign(input, { type: 'text', autocomplete: 'off', spellcheck: false, placeholder: `Select ${column.label.toLowerCase()}...` });
-    input.inputMode = 'none';
-    input.dataset.lookup = column.lookup;
-    input.setAttribute('aria-haspopup', 'dialog');
-    const wrap = el('div', 'fp-input-wrap fp-lookup-wrap');
-    const icon = el('span', 'fp-lookup-icon');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>';
-    wrap.append(input, icon);
-    input.id = id;
-    input.dataset.key = column.key;
-    input.value = String(row[column.key] ?? '');
-    field.prepend(label, wrap);
-    return field;
-  }
-  if (column.phone) {
-    // Calling code + number; the code comes from the record's number, else from its country.
-    const country = countryNamed(String(row.country ?? ''));
-    const [dial, number] = splitPhone(row[column.key], country?.dial || '+968');
-    const code = el('select', 'fp-input fp-select fp-select-list fp-phone-code');
-    fillPhoneCodes(code);
-    Object.assign(code, { id: `${id}-code`, value: dial });
-    code.dataset.phoneCode = '';
-    code.dataset.codeFor = column.key;
-    code.dataset.enterSkip = '';
-    code.dataset.enterOpens = 'true';
-    code.setAttribute('aria-label', `${column.label} country code`);
-    input = el('input', 'fp-input');
-    Object.assign(input, { type: 'text', autocomplete: 'off', id, value: number });
-    input.dataset.key = column.key;
-    const wrap = el('div', 'fp-phone');
-    wrap.append(code, input);
-    field.prepend(label, wrap);
-    return field;
-  }
-  if (column.choices) {
-    // compactList: the styled option list, opened by Enter (Currency); skipEnter: Enter passes it by.
-    input = el('select', `fp-input fp-select${column.compactList ? ' fp-select-list' : ''}`);
-    if (column.compactList) input.dataset.enterOpens = 'true';
-    if (column.skipEnter) input.dataset.enterSkip = '';
-    const current = String(row[column.key] ?? '');
-    const choices = column.choices.includes(current) || !current ? column.choices : [current, ...column.choices];
-    input.append(...choices.map(choice => { const option = el('option', '', choice); option.value = choice; return option; }));
-  } else {
-    input = el('input', `fp-input${isCode ? ' fp-input-code' : ''}`);
-    input.type = 'text';
-    input.autocomplete = 'off';
-    if (isCode) { input.readOnly = true; input.tabIndex = -1; input.title = 'Codes cannot be changed'; }
-    const options = column.options?.();
-    if (options?.length) {
-      const datalist = el('datalist');
-      datalist.id = `${id}-options`;
-      datalist.append(...[...new Set(options)].map(option => { const node = el('option'); node.value = option; return node; }));
-      input.setAttribute('list', datalist.id);
-      field.append(datalist);
+// The party lists' extra View sections: contacts, (supplier) brands, documents, quotations, previous orders.
+function partyViewSections(kind) {
+  return record => {
+    const docLink = doc => {
+      const link = el('a', 'mv-link', doc.originalName);
+      link.href = `api/${kind}-documents.php?id=${doc.id}`;
+      link.download = doc.originalName;
+      return link;
+    };
+    const date = value => (value ? shortDate(String(value).slice(0, 10)) : '');
+    const sections = [
+      viewSection('Contact Persons', viewTable(['Name', 'Designation', 'Mobile', 'Email'],
+        record.contacts.map(c => [c.name, c.designation, c.number, c.email]), 'No contact persons.')),
+    ];
+    if (kind === 'supplier') {
+      sections.push(viewSection('Brands Supplied', viewFields([{ label: 'Brands', value: record.brands.map(b => b.name).join(', ') }])));
     }
-  }
-  input.id = id;
-  input.dataset.key = column.key;
-  input.value = String(row[column.key] ?? '');
-  field.prepend(label, input);
-  return field;
-}
-
-// Route resolver used by renderRoute: a known list and code open the page; an unknown code returns to the list.
-function masterEditPage(route) {
-  const match = /^(masters\/[a-z-]+)\/edit\/(.+)$/.exec(route);
-  const list = match && MASTER_LISTS.find(entry => entry.config.route === match[1]);
-  if (!list) return null;
-  const row = list.rows.find(entry => entry.code === decodeURIComponent(match[2]));
-  if (!row) {
-    history.replaceState(null, '', `#/${list.config.route}`);
-    showToast(`${list.config.noun} not found`, `No ${list.one} has the code ${decodeURIComponent(match[2])}.`, true);
-    return FORM_PAGES[list.config.route];
-  }
-  return {
-    page: 'master-edit',
-    alwaysReset: true,                     // another record may be opened while this page is showing
-    reset: () => openMasterEdit(list, row),
-    firstField: () => meEl('fields').querySelector('[data-key="name"]'),
+    sections.push(
+      viewSection('Documents', viewTable(['File', 'Type', 'Expiry', 'Uploaded'],
+        record.documents.map(d => [docLink(d), d.docType, date(d.expiryDate), date(d.uploadedAt)]), 'No documents uploaded.')),
+      viewSection('Quotations', viewTable(['Item', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
+        record.quotations.map(q => [q.itemName, q.description, q.unit, q.rate == null ? '' : formatAmount(q.rate), q.deliveryTime, q.warranty]), 'No quotations.')),
+      viewSection(kind === 'supplier' ? 'Previous Purchase Orders' : 'Previous Sales Orders',
+        viewTable([kind === 'supplier' ? 'PO Number' : 'SO Number', 'Date', 'Value (OMR)', 'Items', 'Status'],
+          record.orders.map(o => [o.number, date(o.date), o.value == null ? '' : formatAmount(o.value), o.items, o.status]), 'No previous orders.')),
+    );
+    return sections;
   };
 }
 
-function openMasterEdit(list, row) {
-  Object.assign(masterEdit, { list, row });
-  meEl('icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg').cloneNode(true));
-  meEl('title').textContent = `Edit ${list.config.noun}`;
-  meEl('sub').textContent = `${row.code} · ${row.name}`;
-  meEl('section').textContent = `${list.config.noun} Details`;
-  meEl('cancel').textContent = `Back to ${list.config.nouns}`;
-  meEl('fields').replaceChildren(...list.config.columns.map(column => buildMasterEditField(list, column, row)));
-  masterEdit.saved = meSnapshot();
-}
-
-function leaveMasterEdit() {
-  const { list, row } = masterEdit;
-  list.returnTo = row.code;
-  location.hash = `#/${list.config.route}`;
-}
-
-async function backFromMasterEdit() {
-  if (meSnapshot() !== masterEdit.saved) {
-    const discard = await confirmAction({
-      title: 'Discard your changes?',
-      message: `The changes to ${masterEdit.row.code} have not been saved.`,
-      confirm: 'Discard Changes',
-    });
-    if (!discard) return;
-  }
-  leaveMasterEdit();
-}
-
-function saveMasterEdit() {
-  const { list, row } = masterEdit;
-  clearFormErrors(meEl('form'));
-  const errors = [];
-  const values = {};
-  for (const column of list.config.columns) {
-    if (column.key === 'code') continue;
-    const node = meEl('fields').querySelector(`[data-key="${column.key}"]`);
-    const code = meEl('fields').querySelector(`[data-code-for="${column.key}"]`);
-    const raw = code ? joinPhone(code.value, node.value) : node.value.trim();
-    try {
-      if (column.key === 'name' && !raw) throw new Error(`${column.label} is required`);
-      values[column.key] = column.read ? column.read(raw) : raw;
-    } catch (error) {
-      errors.push({ node, message: `${error.message[0].toUpperCase()}${error.message.slice(1)}.` });
-    }
-  }
-  const nameNode = meEl('fields').querySelector('[data-key="name"]');
-  if (values.name && list.rows.some(other => other !== row && sameText(other.name, values.name))) {
-    errors.push({ node: nameNode, message: `Another ${list.one} is already named “${values.name}”.` });
-  }
-  if (errors.length) { showFormErrors(errors); return; }
-  Object.assign(row, values);
-  masterEdit.saved = meSnapshot();
-  showToast(`${list.config.noun} updated`, `${row.code} · ${row.name} was saved.`);
-  leaveMasterEdit();
-}
-
-// Enter: next field (the last one goes to Save). Ctrl+S saves. Esc goes back (asking first if anything changed).
-function handleMasterEditKeys(event) {
-  if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
-  const { key, target } = event;
-  const ctrl = event.ctrlKey && !event.metaKey;
-  if (key === 'Escape' && !ctrl && !event.altKey) {
-    event.preventDefault();
-    if (!event.repeat) backFromMasterEdit();
-    return true;
-  }
-  if (ctrl && !event.altKey && !event.shiftKey && key.toLowerCase() === 's') {
-    event.preventDefault();
-    if (!event.repeat) saveMasterEdit();
-    return true;
-  }
-  if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && target.dataset.key) {
-    event.preventDefault();
-    if (target.dataset.enterOpens) {
-      try { target.showPicker(); } catch { /* unsupported: Space still opens it */ }
-      return true;
-    }
-    const order = formEnterOrder(meEl('form'), meEl('save'));
-    enterField(fieldAfter(order, target) || meEl('save'));
-    return true;
-  }
-  return false;
-}
-
-function initMasterEdit() {
-  meEl('save').addEventListener('click', saveMasterEdit);
-  meEl('cancel').addEventListener('click', backFromMasterEdit);
-  meEl('back').addEventListener('click', backFromMasterEdit);
-  meEl('form').addEventListener('submit', event => event.preventDefault());
-  meEl('form').addEventListener('input', event => {
-    if (event.target.classList.contains('is-invalid')) clearFieldError(event.target);
-    // A new category clears a sub-category that is not one of its own, as on the Item creation form.
-    const subCategoryField = meEl('fields').querySelector('[data-key="subCategory"]');
-    if (event.target.dataset.key === 'category' && subCategoryField?.value) {
-      const own = categoryList.rows.find(row => row.name === event.target.value)?.subCategories.split(',').map(name => name.trim());
-      if (!own?.includes(subCategoryField.value)) subCategoryField.value = '';
-    }
-    // A known country fills in its currency and calling codes, as on the party form.
-    const country = event.target.dataset.key === 'country' && countryNamed(event.target.value);
-    if (country) {
-      const currencyField = meEl('fields').querySelector('[data-key="currency"]');
-      if (currencyField) currencyField.value = country.currency;
-      for (const code of meEl('fields').querySelectorAll('[data-code-for]')) code.value = country.dial;
-    }
-  });
-  FORM_KEY_HANDLERS['master-edit'] = handleMasterEditKeys;
-}
-
-/* ---------- The list pages: columns and dummy rows (from the demo data) ---------- */
+/* ---------- The list pages: columns, API mapping and import ---------- */
 
 const ACTIVE_STATUSES = ['active', 'inactive'];
 const ITEM_STATUSES = ['ACTIVE / RELEASED', 'QUALITY HOLD', 'OBSOLETE', 'DRAFT'];
+// Import readers: a blank cell stays blank (the server default on a new record; kept as it is on an update).
 const readCurrency = value => {
-  const code = (value || 'OMR').toUpperCase();
+  if (!value) return '';
+  const code = value.toUpperCase();
   if (!/^[A-Z]{3}$/.test(code)) throw new Error(`currency "${value}" must be a 3-letter code`);
   return code;
 };
@@ -3421,217 +3998,245 @@ const readEmail = value => {
   if (value && !EMAIL.test(value)) throw new Error(`"${value}" is not a valid email`);
   return value;
 };
-// Blank takes the first status; "active" matches "ACTIVE / RELEASED".
-const readStatus = statuses => value => {
-  if (!value) return statuses[0];
-  const status = statuses.find(option => sameText(option, value) || option.toLowerCase().startsWith(value.trim().toLowerCase()));
-  if (!status) throw new Error(`status "${value}" must be one of: ${statuses.join(', ')}`);
-  return status;
+// One of a fixed list, matched without case; "active" matches "ACTIVE / RELEASED".
+const readChoice = (name, choices) => value => {
+  if (!value) return '';
+  const choice = choices.find(option => sameText(option, value) || option.toLowerCase().startsWith(value.trim().toLowerCase()));
+  if (!choice) throw new Error(`${name} "${value}" must be one of: ${choices.join(', ')}`);
+  return choice;
 };
 const readWholeNumber = name => value => {
   if (!value) return '';
-  if (!/^\d{1,5}$/.test(value)) throw new Error(`${name} "${value}" must be a whole number of days`);
+  if (!/^\d{1,9}$/.test(value)) throw new Error(`${name} "${value}" must be a whole number`);
   return String(Number(value));
 };
 const readAmount = name => value => {
-  if (!value) return '0.00';
+  if (!value) return '';
   const amount = value.replace(/,/g, '');
-  if (!/^-?\d{1,13}(\.\d{1,2})?$/.test(amount)) throw new Error(`${name} "${value}" must be an amount with up to 2 decimals`);
-  return Number(amount).toFixed(2);
+  if (!/^\d{1,10}(\.\d{1,3})?$/.test(amount)) throw new Error(`${name} "${value}" must be an amount with up to 3 decimals`);
+  return amount;
 };
 const readPercent = value => {
-  if (!value) return '0.00';
+  if (!value) return '';
   const percent = value.replace(/%$/, '').trim();
   if (!/^\d{1,3}(\.\d{1,2})?$/.test(percent) || Number(percent) > 100) throw new Error(`discount "${value}" must be a percentage from 0 to 100`);
-  return Number(percent).toFixed(2);
+  return percent;
 };
 const readDecimals = value => {
-  if (!value) return '0';
+  if (!value) return '';
   if (!/^\d+$/.test(value) || Number(value) > UOM_MAX_DECIMALS) throw new Error(`decimal allowed "${value}" must be a whole number from 0 to ${UOM_MAX_DECIMALS}`);
   return String(Number(value));
 };
 const readFactor = value => {
-  if (!value) return '1.0000';
+  if (!value) return '';
   if (!isValidUomFactor(value)) throw new Error(`conversion factor "${value}" must be above 0, with up to 4 decimals`);
-  return Number(value).toFixed(4);
+  return value;
 };
 
-const codeColumn = (...headers) => ({ key: 'code', label: 'Code', type: 'code', headers });
-const nameColumn = (noun, ...headers) => ({ key: 'name', label: `${noun} Name`, type: 'name', headers });
-const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', choices: statuses, read: readStatus(statuses) });
-// Every country's currency, then the common trading ones.
-const CURRENCIES = [...new Set([...COUNTRIES.map(country => country.currency), 'USD', 'EUR', 'GBP'])];
-const partyColumns = () => [
-  { key: 'currency', label: 'Currency', type: 'pill', headers: ['currency code', 'curr'], choices: CURRENCIES, compactList: true, skipEnter: true, read: readCurrency },
-  { key: 'mobile', label: 'Mobile', phone: true, headers: ['mobile no', 'mobile number', 'phone', 'phone no', 'phone number', 'contact', 'contact no', 'contact number', 'telephone', 'tel'] },
-  { key: 'email', label: 'Email', type: 'upper', headers: ['email address', 'email id', 'mail'], read: readEmail },
-];
-const codeYear = today.getFullYear();
+// The id of the lookup row named (or coded) `name`, for import; null when blank. rows narrows the search (sub-categories).
+async function importLookupId(kind, name, narrow = rows => rows) {
+  if (!name) return null;
+  const rows = narrow(await loadLookup(kind));
+  const row = rows.find(other => sameText(other.name, name) || sameText(other.code, name));
+  if (!row) throw new Error(`there is no ${LOOKUPS[kind].plural.replace(/ies$/, 'y').replace(/s$/, '')} "${name}"`);
+  return row.id;
+}
 
-// Supplier fields beyond the table columns (the suppliers table in the data model).
-const supplierDetailColumns = [
-  { key: 'organization', label: 'Organization Name', headers: ['organisation', 'organization', 'legal name'] },
-  { key: 'owner', label: 'Owner Details', headers: ['owner', 'proprietor'] },
-  { key: 'taxRegNo', label: 'Tax Reg. No', headers: ['vat no', 'vat number', 'tax number', 'trn', 'cr no'] },
-  { key: 'contactPerson', label: 'Contact Person', headers: ['contact name', 'attention'] },
-  { key: 'telephone', label: 'Telephone', phone: true, headers: ['landline', 'office phone'] },
-  { key: 'address', label: 'Address', type: 'wrap', headers: ['street', 'address line'] },
-  { key: 'location', label: 'Location', headers: ['area'] },
-  { key: 'city', label: 'City', headers: ['town'] },
-  { key: 'zipCode', label: 'ZIP Code', headers: ['zip', 'postal code', 'po box', 'pin code'] },
-  { key: 'country', label: 'Country', lookup: 'country' },
-  { key: 'paymentTerms', label: 'Payment Terms', headers: ['terms'], options: () => ['Advance', 'Cash on Delivery', 'Net 15', 'Net 30', 'Net 45', 'Net 60'] },
-  { key: 'leadTimeDays', label: 'Lead Time (Days)', headers: ['lead time'], read: readWholeNumber('lead time') },
-  { key: 'openingBalance', label: 'Opening Balance', type: 'mono', headers: ['opening'], read: readAmount('opening balance') },
-  { key: 'debitLimit', label: 'Debit Limit', type: 'mono', headers: ['credit limit'], read: readAmount('debit limit') },
-  { key: 'debitDays', label: 'Debit Days', headers: ['credit days'], read: readWholeNumber('debit days') },
-  { key: 'discountPercent', label: 'Discount %', headers: ['discount'], read: readPercent },
-  { key: 'accountDetails', label: 'Account Details', type: 'wrap', headers: ['bank details', 'bank account', 'iban'] },
-  statusColumn(),
-  { key: 'remarks', label: 'Remarks', type: 'wrap', headers: ['notes', 'comments'] },
-].map(column => ({ ...column, inTable: false }));
+const codeColumn = (...headers) => ({ key: 'code', label: 'Code', type: 'code', group: 'Identification', headers });
+const nameColumn = (noun, ...headers) => ({ key: 'name', label: `${noun} Name`, type: 'name', group: 'Identification', headers, read: value => value.toUpperCase() });
+const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', group: 'Identification', read: readChoice('status', statuses) });
+const detail = column => ({ ...column, inTable: false });
+const PHONE_HEADERS = ['mobile', 'mobile no', 'mobile number', 'phone', 'phone no', 'phone number', 'contact no', 'contact number'];
+const TERMS = ['Cash', 'Advance', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'];
 
 const supplierList = createMasterList({
   key: 'supplier', route: 'masters/supplier', newRoute: '#/masters/supplier/new', noun: 'Supplier', nouns: 'Suppliers',
-  codePrefix: 'SUP', codeDigits: 3,
+  api: 'api/suppliers.php', lookups: ['supplier'], formPage: 'party',
+  edit: id => partyForm.edit(id, () => preparePartyEdit('creditors')),
+  related: partyViewSections('supplier'),
   columns: [codeColumn('supplier code', 'vendor code', 'party code'),
-    nameColumn('Supplier', 'supplier', 'vendor', 'vendor name', 'company', 'company name', 'party name'), ...partyColumns(),
-    ...supplierDetailColumns],
-  sample: { name: 'Gulf Valves LLC', currency: 'OMR', mobile: '+968 9123 4567', email: 'sales@gulfvalves.om', city: 'Muscat', country: 'Oman', paymentTerms: 'Net 30', status: 'active' },
-  rows: [
-    {
-      code: 'SUP006', name: 'Sanjay', currency: 'OMR', mobile: '+968 9123 4455', email: 'sanjay@sanjaysupplies.om',
-      organization: 'Sanjay Industrial Supplies LLC', owner: 'Sanjay', taxRegNo: 'OM1100234567', contactPerson: 'Sanjay',
-      telephone: '+968 2470 1234', location: 'Ruwi', address: 'Building 214, Way 3021, Ruwi High Street', city: 'Muscat',
-      zipCode: '112', country: 'Oman', paymentTerms: 'Net 30', leadTimeDays: '7', openingBalance: '1250.00',
-      debitLimit: '5000.00', debitDays: '45', discountPercent: '2.50',
-      accountDetails: 'Bank Muscat · A/C 0312 0456 7890 · IBAN OM81 0270 0312 0456 7890', status: 'active',
-      remarks: 'Preferred supplier for valves, pipes and fittings. Delivers within Muscat in 2 days.',
-    },
-    { code: 'SUP005', name: 'Sohar Industrial Supply', currency: 'OMR', mobile: '+968 9988 7766', email: 'sohar@indsupply.om' },
-    { code: 'SUP004', name: 'Kerala Pipes & Fittings', currency: 'INR', mobile: '+91 94470 12345', email: 'kpf@gmail.com' },
-    { code: 'SUP003', name: 'Desert Fasteners', currency: 'SAR', mobile: '+966 55 234 5678', email: 'sales@desertfast.sa' },
-    { code: 'SUP002', name: 'Nizwa Spare Parts', currency: 'OMR', mobile: '', email: 'nizwa.sp@gmail.com' },
-    { code: 'SUP001', name: 'ABC Traders', currency: 'OMR', mobile: '', email: '' },
-  ],
+    nameColumn('Supplier', 'supplier', 'vendor', 'vendor name', 'company', 'company name', 'party name'),
+    { key: 'currency', label: 'Currency', type: 'pill', group: 'Financial Terms', headers: ['currency code', 'curr'], read: readCurrency },
+    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS },
+    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail'], read: readEmail },
+    { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
+    statusColumn(),
+    detail({ key: 'ownerDetails', label: 'Owner Name', group: 'Contact', headers: ['owner', 'proprietor'] }),
+    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'] }),
+    detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
+    detail({ key: 'country', label: 'Country', group: 'Location' }),
+    detail({ key: 'taxRegNo', label: 'Tax Reg. No', group: 'Financial Terms', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
+    detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Financial Terms', headers: ['terms'], read: readChoice('payment terms', TERMS) }),
+    detail({ key: 'debitLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Financial Terms', headers: ['debit limit'], read: readAmount('credit limit') }),
+    detail({ key: 'debitDays', label: 'Credit Period (Days)', group: 'Financial Terms', headers: ['credit days', 'debit days'], read: readWholeNumber('credit period') }),
+    detail({ key: 'openingBalance', label: 'Opening Balance (OMR)', type: 'mono', group: 'Financial Terms', headers: ['opening'], read: readAmount('opening balance') }),
+    detail({ key: 'accountDetails', label: 'Bank / Other Details', type: 'wrap', group: 'Other Details', headers: ['bank details', 'bank account', 'iban'] }),
+    detail({ key: 'remarks', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
+  fromApi: record => ({ ...record, debitDays: record.debitDays ?? '' }),
+  toPayload: row => ({
+    supplierName: row.name, currency: row.currency, phone: row.phone, email: row.email, city: row.city, status: row.status,
+    ownerDetails: row.ownerDetails, telephone: row.telephone, address: row.address, country: row.country, taxRegNo: row.taxRegNo,
+    paymentTerms: row.paymentTerms, debitLimit: row.debitLimit, debitDays: row.debitDays, openingBalance: row.openingBalance,
+    accountDetails: row.accountDetails, remarks: row.remarks,
+  }),
+  sample: { name: 'GULF VALVES LLC', currency: 'OMR', phone: '+968 9123 4567', email: 'sales@gulfvalves.om', city: 'Muscat', country: 'Oman', paymentTerms: 'Net 30', status: 'active' },
 });
 
 const customerList = createMasterList({
   key: 'customer', route: 'masters/customer', newRoute: '#/masters/customer/new', noun: 'Customer', nouns: 'Customers',
-  codePrefix: 'CUS', codeDigits: 3,
+  api: 'api/customers.php', lookups: [], formPage: 'party',
+  edit: id => partyForm.edit(id, () => preparePartyEdit('debtors')),
+  related: partyViewSections('customer'),
   columns: [codeColumn('customer code', 'client code', 'party code'),
-    nameColumn('Customer', 'customer', 'client', 'client name', 'company', 'company name', 'party name'), ...partyColumns()],
-  sample: { name: 'Oman Oil Services LLC', currency: 'OMR', mobile: '+968 2456 1100', email: 'procurement@omanoil.om' },
-  rows: [
-    { code: 'CUS003', name: 'Oman Oil Services LLC', currency: 'OMR', mobile: '+968 2456 1100', email: 'procurement@omanoil.om' },
-    { code: 'CUS002', name: 'Al Jazeera Steel Products', currency: 'OMR', mobile: '+968 9911 2233', email: 'purchase@jazeerasteel.om' },
-    { code: 'CUS001', name: 'Gulf Engineering Contractors', currency: 'AED', mobile: '+971 4 555 0199', email: 'accounts@gulfeng.ae' },
-  ],
+    nameColumn('Customer', 'customer', 'client', 'client name', 'company', 'company name', 'party name'),
+    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS },
+    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail'], read: readEmail },
+    { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
+    statusColumn(),
+    detail({ key: 'organizationName', label: 'Organization Name', group: 'Identification', headers: ['organisation', 'organization', 'group'] }),
+    detail({ key: 'ownerDetails', label: 'Owner Details', group: 'Contact', headers: ['owner', 'proprietor'] }),
+    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'] }),
+    detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
+    detail({ key: 'zipCode', label: 'Zip Code', group: 'Location', headers: ['zip', 'postal code', 'po box', 'pin code'] }),
+    detail({ key: 'country', label: 'Country', group: 'Location' }),
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Credit & Sales', read: readCurrency }),
+    detail({ key: 'creditLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Credit & Sales', read: readAmount('credit limit') }),
+    detail({ key: 'creditDays', label: 'Credit Days', group: 'Credit & Sales', read: readWholeNumber('credit days') }),
+    detail({ key: 'discountPercent', label: 'Discount %', group: 'Credit & Sales', headers: ['discount'], read: readPercent }),
+    detail({ key: 'salesman', label: 'Salesman', group: 'Credit & Sales', headers: ['sales person', 'salesperson'] }),
+    detail({ key: 'taxRegNo', label: 'Tax Registration No', group: 'Credit & Sales', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
+    detail({ key: 'accountDetails', label: 'Additional Info', type: 'wrap', group: 'Other Details', headers: ['other details'] }),
+    detail({ key: 'comments', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
+  fromApi: record => ({ ...record, creditDays: record.creditDays ?? '' }),
+  toPayload: row => ({
+    customerName: row.name, phone: row.phone, email: row.email, city: row.city, status: row.status, organizationName: row.organizationName,
+    ownerDetails: row.ownerDetails, telephone: row.telephone, address: row.address, zipCode: row.zipCode, country: row.country,
+    currency: row.currency, creditLimit: row.creditLimit, creditDays: row.creditDays, discountPercent: row.discountPercent,
+    salesman: row.salesman, taxRegNo: row.taxRegNo, accountDetails: row.accountDetails, comments: row.comments,
+  }),
+  sample: { name: 'OMAN OIL SERVICES LLC', phone: '+968 2456 1100', email: 'procurement@omanoil.om', city: 'Muscat', country: 'Oman', status: 'active' },
 });
 
 const itemList = createMasterList({
   key: 'item', route: 'masters/item', newRoute: `#/${ITEM_ROUTE}`, noun: 'Item', nouns: 'Items',
-  codePrefix: `ITM-${codeYear}-`, codeDigits: 4,
+  api: 'api/items.php', lookups: ['item'], formPage: 'item', edit: id => editItem(id),
+  // No Brand column: an item's brands are its sourcing rows.
   columns: [codeColumn('item code', 'sku', 'part no', 'part number'),
     nameColumn('Item', 'item', 'product', 'product name', 'item description'),
-    { key: 'category', label: 'Category', headers: ['item category', 'group', 'item group'], lookup: 'master-category' },
-    { key: 'subCategory', label: 'Sub Category', headers: ['subcategory', 'sub group', 'subgroup'], lookup: 'master-subcategory' },
-    { key: 'unit', label: 'Unit', type: 'pill', headers: ['uom', 'unit name', 'unit of measure'], lookup: 'master-uom' },
-    { key: 'brand', label: 'Brand', headers: ['brand name', 'make', 'manufacturer'], lookup: 'master-brand' },
-    { key: 'stockPoint', label: 'Stock Point', headers: ['warehouse', 'store', 'location'], lookup: 'master-stock-point' },
-    statusColumn(ITEM_STATUSES)],
-  sample: { name: 'Gate Valve 2" Cast Iron', category: 'Pneumatics & Hydraulics', subCategory: 'Ball Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
-  rows: [
-    { code: 'ITM-2026-0006', name: 'Nitrile Gloves Size L', category: 'Safety & Protective', subCategory: 'Gloves', unit: 'Pair', brand: '3M', stockPoint: 'Secondary WH South', status: 'ACTIVE / RELEASED' },
-    { code: 'ITM-2026-0005', name: 'Hex Bolt M10 x 50', category: 'Mechanical Hardware', subCategory: 'Fasteners', unit: 'Box', brand: '', stockPoint: 'Spare Parts Store', status: 'ACTIVE / RELEASED' },
-    { code: 'ITM-2026-0004', name: 'Deep Groove Bearing 6205-2RS', category: 'Mechanical Hardware', subCategory: 'Bearings', unit: 'Pieces', brand: 'SKF', stockPoint: 'Spare Parts Store', status: 'ACTIVE / RELEASED' },
-    { code: 'ITM-2026-0003', name: 'MCB 32A 3-Pole', category: 'Electrical Switchgear', subCategory: 'Circuit Breakers', unit: 'Pieces', brand: 'Schneider Electric', stockPoint: 'Secondary WH South', status: 'ACTIVE / RELEASED' },
-    { code: 'ITM-2026-0002', name: 'Solenoid Valve 24V DC 1/4"', category: 'Pneumatics & Hydraulics', subCategory: 'Solenoid Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
-    { code: 'ITM-2026-0001', name: 'Ball Valve 1/2" SS316', category: 'Pneumatics & Hydraulics', subCategory: 'Ball Valves', unit: 'Pieces', brand: 'Festo', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
-  ],
+    { key: 'category', label: 'Category', group: 'Classification', headers: ['item category', 'group', 'item group'] },
+    { key: 'subCategory', label: 'Sub Category', group: 'Classification', headers: ['subcategory', 'sub group', 'subgroup'] },
+    { key: 'unit', label: 'Unit', type: 'pill', group: 'Classification', headers: ['uom', 'unit name', 'unit of measure'] },
+    { key: 'stockPoint', label: 'Stock Point', group: 'Storage', headers: ['warehouse', 'store', 'location'] },
+    statusColumn(ITEM_STATUSES),
+    detail({ key: 'rack', label: 'Rack / Bin', group: 'Storage', headers: ['rack', 'bin'] }),
+    detail({ key: 'availableStock', label: 'Available Stock', group: 'Storage' }),
+    detail({ key: 'buyingRate', label: 'Buying Rate (OMR)', type: 'mono', group: 'Pricing' }),
+    detail({ key: 'sellingPrice', label: 'Selling Price (OMR)', type: 'mono', group: 'Pricing' }),
+    detail({ key: 'description', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['comments', 'remarks', 'notes'] })],
+  fromApi: record => ({ ...record, stockPoint: record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
+  async toPayload(row) {
+    const categoryId = await importLookupId('category', row.category);
+    return {
+      itemName: row.name, status: row.status, comments: row.description, categoryId,
+      subCategoryId: await importLookupId('subcategory', row.subCategory, rows => (categoryId ? rows.filter(sub => sub.categoryId === categoryId) : rows)),
+      uomId: await importLookupId('uom', row.unit),
+      warehouseId: await importLookupId('warehouse', row.stockPoint),
+    };
+  },
+  sample: { name: 'GATE VALVE 2" CAST IRON', category: 'Pneumatics & Hydraulics', subCategory: 'Ball Valves', unit: 'Pieces', stockPoint: 'Central WH North', status: 'ACTIVE / RELEASED' },
 });
 
 const uomList = createMasterList({
   key: 'uom', route: 'masters/uom', newRoute: '#/masters/uom/new', noun: 'UOM', nouns: 'UOMs',
-  codePrefix: 'UOM-', codeDigits: 4,
+  api: 'api/uoms.php', lookups: ['uom'], formPage: 'uom', edit: id => uomForm.edit(id),
   columns: [codeColumn('uom code', 'unit code'),
     nameColumn('Unit', 'unit', 'uom', 'uom name', 'unit of measure'),
-    { key: 'decimals', label: 'Decimal Allowed', headers: ['decimals', 'decimal places'], choices: ['0', '1', '2', '3', '4', '5', '6'], read: readDecimals },
-    { key: 'baseUnit', label: 'Base Unit', headers: ['base', 'base uom', 'conversion base'], lookup: 'master-uom' },
-    { key: 'factor', label: 'Conversion Factor', type: 'mono', headers: ['factor', 'conversion'], read: readFactor },
-    statusColumn()],
-  sample: { name: 'Dozen', decimals: '0', baseUnit: 'Pieces', factor: '12.0000', status: 'active' },
-  rows: [
-    { code: 'UOM-0012', name: 'Metric Tonne', decimals: '3', baseUnit: 'Kilogram', factor: '1000.0000', status: 'active' },
-    { code: 'UOM-0011', name: 'Gram', decimals: '0', baseUnit: 'Kilogram', factor: '0.0010', status: 'active' },
-    { code: 'UOM-0009', name: 'Metre', decimals: '2', baseUnit: '', factor: '1.0000', status: 'active' },
-    { code: 'UOM-0007', name: 'Kilogram', decimals: '3', baseUnit: '', factor: '1.0000', status: 'active' },
-    { code: 'UOM-0003', name: 'Box', decimals: '0', baseUnit: '', factor: '1.0000', status: 'active' },
-    { code: 'UOM-0001', name: 'Pieces', decimals: '0', baseUnit: '', factor: '1.0000', status: 'active' },
-  ],
+    { key: 'decimals', label: 'Decimal Allowed', group: 'Conversion & Precision', headers: ['decimals', 'decimal places'], read: readDecimals },
+    { key: 'baseUnit', label: 'Base Unit', group: 'Conversion & Precision', headers: ['base', 'base uom', 'conversion base'] },
+    { key: 'factor', label: 'Conversion Factor', type: 'mono', group: 'Conversion & Precision', headers: ['factor', 'conversion'], read: readFactor },
+    statusColumn(),
+    detail({ key: 'description', label: 'Description', type: 'wrap', group: 'Other Details', headers: ['remarks', 'notes'] })],
+  fromApi: record => ({ ...record, decimals: String(record.decimalAllowed), baseUnit: record.baseName, factor: record.conversionFactor }),
+  async toPayload(row) {
+    return {
+      unitName: row.name, decimalAllowed: row.decimals, conversionFactor: row.factor, status: row.status, description: row.description,
+      conversionBaseId: await importLookupId('uom', row.baseUnit),
+    };
+  },
+  sample: { name: 'DOZEN', decimals: '0', baseUnit: 'Pieces', factor: '12.0000', status: 'active' },
 });
 
 const brandList = createMasterList({
   key: 'brand', route: 'masters/brand', newRoute: '#/masters/brand/new', noun: 'Brand', nouns: 'Brands',
-  codePrefix: `BRD-${codeYear}-`, codeDigits: 4,
+  api: 'api/brands.php', lookups: ['brand'], formPage: 'brand', edit: id => brandForm.edit(id),
   columns: [codeColumn('brand code'), nameColumn('Brand', 'brand', 'make', 'manufacturer'), statusColumn()],
-  sample: { name: 'Parker Hannifin', status: 'active' },
-  rows: [
-    { code: 'BRD-2026-0004', name: '3M', status: 'active' },
-    { code: 'BRD-2026-0003', name: 'SKF', status: 'active' },
-    { code: 'BRD-2026-0002', name: 'Schneider Electric', status: 'active' },
-    { code: 'BRD-2026-0001', name: 'Festo', status: 'active' },
-  ],
+  fromApi: record => ({ ...record }),
+  toPayload: row => ({ brandName: row.name, status: row.status }),
+  sample: { name: 'PARKER HANNIFIN', status: 'active' },
 });
 
 const categoryList = createMasterList({
   key: 'category', route: 'masters/category', newRoute: '#/masters/category/new', noun: 'Category', nouns: 'Categories',
-  codePrefix: `CAT-${codeYear}-`, codeDigits: 4,
+  api: 'api/categories.php', lookups: ['category', 'subcategory'], formPage: 'category', edit: id => categoryForm.edit(id),
   columns: [codeColumn('category code', 'group code'), nameColumn('Category', 'category', 'group', 'group name'),
-    { key: 'subCategories', label: 'Sub Categories', type: 'wrap', headers: ['sub category', 'subcategory', 'subcategories', 'sub groups'] },
+    { key: 'subCategories', label: 'Sub Categories', type: 'wrap', group: 'Sub Categories', headers: ['sub category', 'subcategory', 'subcategories', 'sub groups'] },
     statusColumn()],
-  sample: { name: 'Power Tools', subCategories: 'Drills, Grinders', status: 'active' },
-  rows: [
-    { code: 'CAT-2026-0005', name: 'Instrumentation', subCategories: 'Pressure Gauges, Temperature Sensors', status: 'active' },
-    { code: 'CAT-2026-0004', name: 'Safety & Protective', subCategories: 'Helmets & Headgear, Gloves, Safety Footwear', status: 'active' },
-    { code: 'CAT-2026-0003', name: 'Mechanical Hardware', subCategories: 'Bearings, Fasteners, Couplings', status: 'active' },
-    { code: 'CAT-2026-0002', name: 'Electrical Switchgear', subCategories: 'Circuit Breakers, Contactors, Cables & Wires', status: 'active' },
-    { code: 'CAT-2026-0001', name: 'Pneumatics & Hydraulics', subCategories: 'Ball Valves, Solenoid Valves, Pressure Regulators, Hydraulic Hoses', status: 'active' },
-  ],
+  fromApi: record => ({ ...record }),
+  toPayload: row => ({
+    categoryName: row.name, status: row.status,
+    subcategories: row.subCategories ? row.subCategories.split(',').map(name => name.trim()).filter(Boolean) : [],
+  }),
+  sample: { name: 'POWER TOOLS', subCategories: 'Drills, Grinders', status: 'active' },
 });
 
 const stockPointList = createMasterList({
   key: 'stock-point', route: 'masters/stock-point', newRoute: '#/masters/stock-point/new', noun: 'Stock Point', nouns: 'Stock Points',
-  codePrefix: `WH-${codeYear}-`, codeDigits: 4,
+  api: 'api/warehouses.php', lookups: ['warehouse', 'item'], formPage: 'warehouse', edit: id => warehouseForm.edit(id),
   columns: [codeColumn('stock point code', 'warehouse code', 'store code'),
     nameColumn('Stock Point', 'stock point', 'warehouse', 'warehouse name', 'store', 'store name', 'location'),
-    { key: 'type', label: 'Type', type: 'pill', headers: ['warehouse type', 'store type'], options: () => ['Finished Goods', 'Spare Parts', 'Raw Materials', 'Consumables'] },
-    { key: 'city', label: 'City', headers: ['town'] },
-    { key: 'country', label: 'Country', lookup: 'country' },
-    { key: 'contactPerson', label: 'Contact Person', headers: ['contact', 'in charge', 'incharge', 'store keeper'] },
-    { key: 'phone', label: 'Phone', phone: true, headers: ['mobile', 'phone no', 'phone number', 'telephone', 'tel'] },
-    statusColumn()],
-  sample: { name: 'Sohar Port Store', type: 'Finished Goods', city: 'Sohar', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2685 0000', status: 'active' },
-  rows: [
-    { code: 'WH-2026-0003', name: 'Spare Parts Store', type: 'Spare Parts', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
-    { code: 'WH-2026-0002', name: 'Secondary WH South', type: 'Finished Goods', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
-    { code: 'WH-2026-0001', name: 'Central WH North', type: 'Finished Goods', city: 'Muscat', country: 'Oman', contactPerson: 'Store Keeper', phone: '+968 2400 0000', status: 'active' },
-  ],
+    { key: 'type', label: 'Type', type: 'pill', group: 'Identification', headers: ['stock point type', 'warehouse type', 'store type'], read: readChoice('type', ['Office', 'Warehouse', 'Shop']) },
+    { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
+    { key: 'country', label: 'Country', group: 'Location' },
+    { key: 'contactPerson', label: 'Contact Person', group: 'Contact & Management', headers: ['contact', 'in charge', 'incharge', 'store keeper'] },
+    { key: 'phone', label: 'Phone', group: 'Contact & Management', headers: ['mobile', 'phone no', 'phone number', 'telephone', 'tel', 'extension'] },
+    statusColumn(),
+    detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
+    detail({ key: 'email', label: 'Email', type: 'upper', group: 'Contact & Management', headers: ['email address', 'mail'], read: readEmail }),
+    detail({ key: 'manager', label: 'Assigned Manager', group: 'Contact & Management', headers: ['manager'] }),
+    detail({ key: 'capacity', label: 'Total Storage Capacity', type: 'mono', group: 'Capacity & Remarks', headers: ['capacity'], read: readWholeNumber('capacity') }),
+    detail({ key: 'remarks', label: 'Remarks', type: 'wrap', group: 'Capacity & Remarks', headers: ['notes', 'comments'] })],
+  fromApi: record => ({ ...record, capacity: record.capacity ?? '' }),
+  toPayload: row => ({
+    warehouseName: row.name, type: row.type, city: row.city, country: row.country, contactPerson: row.contactPerson, phone: row.phone,
+    status: row.status, address: row.address, email: row.email, manager: row.manager, capacity: row.capacity, remarks: row.remarks,
+  }),
+  sample: { name: 'SOHAR PORT STORE', type: 'Warehouse', city: 'Sohar', country: 'Oman', address: 'Sohar Port, Gate 3', contactPerson: 'Store Keeper', phone: '+968 2685 0000', status: 'active' },
 });
 
 const MASTER_LISTS = [supplierList, customerList, itemList, uomList, brandList, categoryList, stockPointList];
 
-// New Supplier / New Customer (from the list pages): the party form with Under already set, not as an undo step.
+// Edit Supplier / Edit Customer: Under is set for the record and locked (a supplier cannot become a customer).
+function preparePartyEdit(under) {
+  partyEl('under').value = under;
+  partyEl('under').disabled = true;
+  syncPartyVariant();
+}
+
+// New Supplier / New Customer (the list pages' New button): only the supplier (Creditors) or customer (Debtors)
+// form, titled Supplier / Customer Creation, without the Under choice. Not an undo step.
 for (const [route, under] of [['masters/supplier/new', 'creditors'], ['masters/customer/new', 'debtors']]) {
   FORM_PAGES[route] = {
     page: 'party',
+    alwaysReset: true,                     // coming from Parties (same page) must still hide Under
     reset() {
       FORM_PAGES['masters/party/new'].reset();
       partyEl('under').value = under;
+      partyEl('form').setAttribute('data-fixed-under', '');
       syncPartyVariant();
       partyForm.absorb();
     },
     firstField: FORM_PAGES['masters/party/new'].firstField,
+    isEditing: partyForm.isEditing,
   };
 }
 
@@ -3639,17 +4244,67 @@ const MASTER_FORMS = [uomForm, brandForm, categoryForm, warehouseForm, partyForm
 
 /* =====================================================================
    Hash router: #/home (dashboard), the form pages in FORM_PAGES and the
-   master edit pages (#/masters/<list>/edit/<code>, see masterEditPage).
-   Routes for screens not built yet fall back to the dashboard.
+   edit pages (#/masters/<list>/edit/<id>: the creation form in edit mode,
+   see masterEditPage). Routes for screens not built yet fall back to the dashboard.
    ===================================================================== */
 
-FORM_PAGES[ITEM_ROUTE] = { page: 'item', reset: resetItemForm, firstField: () => itemEl('name') };
+FORM_PAGES[ITEM_ROUTE] = { page: 'item', reset: resetItemForm, firstField: () => itemEl('name'), isEditing: () => itemEditing !== null };
 
 let currentPage = 'dashboard';
 let pageOriginView = null;                // quick-menu view the open page was launched from
 let pendingMenuReturn = null;             // { view, focusSelector } to open once the dashboard is back
+const routeTrail = [];                    // routes visited before the current one, oldest first
+let currentRoute = null;
+let routeGoingBack = false;               // the next route change is goBack(): do not add to the trail
 
-// Esc on a page: back to the dashboard with the popup that opened the page.
+// Esc (and the list pages' Back button): back to the page before this one, e.g. New Supplier → Supplier Master,
+// Edit Item → Item Master. When the page before was the dashboard (or there is none, after a reload),
+// back to the dashboard with the popup that opened the page.
+function goBack() {
+  while (routeTrail.length) {
+    const previous = routeTrail.pop();
+    if (previous === currentRoute) continue;
+    if (previous === '' || previous === 'home') break;
+    routeGoingBack = true;
+    location.hash = `#/${previous}`;
+    return;
+  }
+  leavePageToMenu();
+}
+
+// After a save, back to the master's list page with focus on the saved record's row, when the form was
+// opened from that list (New … on the list page) or is an edit. A form opened from Masters › Create stays
+// open for the next record instead: returns false and the caller resets the form.
+function showSavedInList(route, code, { edited = false } = {}) {
+  const fromList = routeTrail.at(-1) === route;
+  if (!fromList && !edited) return false;
+  const list = MASTER_LISTS.find(entry => entry.config.route === route);
+  if (list) list.returnTo = code;
+  if (fromList) {
+    goBack();
+  } else {                                 // an edit opened by a link: open its list in the form's place
+    routeGoingBack = true;
+    location.hash = `#/${route}`;
+  }
+  return true;
+}
+
+// An edit route opens the list's creation form with the record (see the lists' edit()).
+function masterEditPage(route) {
+  const match = /^(masters\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
+  const list = match && MASTER_LISTS.find(entry => entry.config.route === match[1]);
+  if (!list) return null;
+  const id = Number(match[2]);
+  return {
+    page: list.config.formPage,
+    alwaysReset: true,                     // another record may be opened while this page is showing
+    reset: () => list.config.edit(id),
+    firstField: () => [...byId(`${list.config.formPage}-form`).querySelectorAll('input:not([readonly]):not([type="hidden"]):not([disabled]), select:not([disabled])')]
+      .find(node => node.getClientRects().length > 0) || byId('app'),
+  };
+}
+
+// Back to the dashboard with the popup that opened the page.
 // After a reload or a pasted link there is no origin, so use the first view linking to this page.
 function leavePageToMenu() {
   const href = `#/${location.hash.replace(/^#\/?/, '').replace(/\/+$/, '')}`;
@@ -3668,9 +4323,17 @@ function showPage(page) {
 
 function renderRoute() {
   const route = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+  if (routeGoingBack) routeGoingBack = false;
+  else if (currentRoute !== null && currentRoute !== route) {
+    routeTrail.push(currentRoute);
+    if (routeTrail.length > 50) routeTrail.shift();
+  }
+  currentRoute = route;
+  closeSuggest();
   const formPage = FORM_PAGES[route] || masterEditPage(route);
   if (formPage) {
-    if (currentPage !== formPage.page || formPage.alwaysReset) {
+    // A form left open in edit mode starts over as a new record.
+    if (currentPage !== formPage.page || formPage.alwaysReset || formPage.isEditing?.()) {
       showPage(formPage.page);
       formPage.reset();
     }
@@ -3681,6 +4344,7 @@ function renderRoute() {
   showPage('dashboard');
   if (route !== '' && route !== 'home') {
     history.replaceState(null, '', '#/home');
+    currentRoute = 'home';
     showToast('Not built yet', `The screen for “${route}” is coming soon.`);
   }
   if (wasElsewhere) focusPageAnchor();    // first, so closing the popup returns focus here
@@ -3717,15 +4381,19 @@ document.addEventListener('DOMContentLoaded', () => {
   for (const select of [...document.querySelectorAll('select[data-phone-code]'),
     ...[...document.querySelectorAll('template')].flatMap(template => [...template.content.querySelectorAll('select[data-phone-code]')])]) fillPhoneCodes(select);
   initKeyboardNavigation();
+  initInputFilters();
+  initUppercaseFields();
+  initFieldChecks();
+  initFocusScrolling();
   initQuickMenu();
   initLookups();
+  initSuggestFields();
   initItemPage();
   for (const form of MASTER_FORMS) form.init();
   initMasterFilter();
   initMasterImport();
   initMasterView();
   initMasterConfirm();
-  initMasterEdit();
   for (const list of MASTER_LISTS) list.init();
   loadDashboard();
   window.addEventListener('hashchange', renderRoute);

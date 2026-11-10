@@ -15,9 +15,13 @@ const PARTY_DOCUMENTS = [
 
 function party_document_format(array $row): array
 {
+    $path = rtrim(config()['storage'], '/') . '/' . $row['file_path'];
     return [
         'id'           => (int) $row['id'],
         'originalName' => $row['original_name'],
+        'docType'      => $row['doc_type'],
+        'expiryDate'   => $row['expiry_date'],
+        'size'         => is_file($path) ? filesize($path) : null,
         'uploadedAt'   => $row['uploaded_at'],
     ];
 }
@@ -29,21 +33,31 @@ function party_documents_list(string $kind, int $ownerId): array
         query("SELECT * FROM `{$t['table']}` WHERE `{$t['owner']}` = ? ORDER BY uploaded_at, id", [$ownerId])->fetchAll());
 }
 
-/* Stores every file in $files for one supplier or customer; all or nothing. */
-function party_documents_upload(string $kind, int $ownerId, array $files): array
+/*
+ * Stores every file in $files for one supplier or customer; all or nothing. $types and $expiries hold
+ * each file's document type and expiry date (YYYY-MM-DD or ''), in the same order as the files.
+ */
+function party_documents_upload(string $kind, int $ownerId, array $files, array $types = [], array $expiries = []): array
 {
     $t = PARTY_DOCUMENTS[$kind];
     if (!row_exists($t['parent'], $ownerId)) {
         throw new NotFound(ucfirst($kind) . ' not found.');
     }
     validate_uploads($files);
+    $meta = [];
+    foreach (array_keys($files) as $i) {
+        $in = new Input(['type' => $types[$i] ?? '', 'expiry' => $expiries[$i] ?? '']);
+        $meta[$i] = [$in->text('type', 'Document type', 60), $in->date('expiry', 'Expiry date')];
+        $in->done();
+    }
     $stored = [];
     try {
-        transaction(static function () use ($t, $ownerId, $files, &$stored): void {
-            foreach ($files as $file) {
+        transaction(static function () use ($t, $ownerId, $files, $meta, &$stored): void {
+            foreach ($files as $i => $file) {
                 [$path, $original] = store_upload($file, $t['folder']);
                 $stored[] = $path;
-                query("INSERT INTO `{$t['table']}` (`{$t['owner']}`, file_path, original_name) VALUES (?, ?, ?)", [$ownerId, $path, $original]);
+                query("INSERT INTO `{$t['table']}` (`{$t['owner']}`, file_path, original_name, doc_type, expiry_date) VALUES (?, ?, ?, ?, ?)",
+                    [$ownerId, $path, $original, $meta[$i][0], $meta[$i][1]]);
             }
         });
     } catch (Throwable $e) {
