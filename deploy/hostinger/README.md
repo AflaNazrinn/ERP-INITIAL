@@ -72,6 +72,8 @@ php bin/seed-demo-data.php     # optional: sample units, categories, brands, war
 
 1. `migrations/2026_11_05_001_masters.sql`
 2. `migrations/2026_11_09_001_master_fixes.sql`
+3. `migrations/2026_11_10_001_purchase_book.sql` (Purchase Book: purchase requests, quotation requests,
+   purchase orders and GRNs; it only adds tables)
 
 Then run this in the **SQL** tab, so a later `php bin/migrate.php` knows the files are already applied:
 
@@ -80,10 +82,11 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   migration  VARCHAR(190) NOT NULL PRIMARY KEY,
   applied_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-INSERT INTO schema_migrations (migration) VALUES ('2026_11_05_001_masters.sql'), ('2026_11_09_001_master_fixes.sql');
+INSERT INTO schema_migrations (migration) VALUES ('2026_11_05_001_masters.sql'), ('2026_11_09_001_master_fixes.sql'),
+  ('2026_11_10_001_purchase_book.sql');
 ```
 
-A database that already has the first file only needs the second one (and its name in `schema_migrations`).
+A database that already has the earlier files only needs the newer ones (and their names in `schema_migrations`).
 Back the database up first (phpMyAdmin → Export): `2026_11_09_001_master_fixes.sql` changes data, it puts
 all record names in capitals and turns old stock point types into "Warehouse".
 

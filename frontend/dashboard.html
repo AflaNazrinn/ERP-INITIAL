@@ -1402,6 +1402,792 @@
     </div>
   </form>
 </section>
+
+<!-- =====================================================================
+     PURCHASE BOOK  (Quick Menu › Purchase Book › Create): Purchase Request, Quotation Request (RFQ),
+     Purchase Order and Goods Receipt Note. Green theme (fp-theme-purchase). Shared row cells:
+     Item Code and Item Name search the item master (picking one fills the other, the brand list and
+     the unit); selects with data-bind write the hidden data-field next to them (see dashboard.js).
+     ===================================================================== -->
+
+
+<!-- =====================================================================
+     PURCHASE BOOK LISTS: what Quick Menu › Purchase Book opens. New … opens the empty form.
+     ===================================================================== -->
+<!-- PURCHASE REQUEST LIST  (#/purchase-book/purchase-request · Quick Menu › Purchase Book) -->
+<section id="pr-list-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="pr-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"></path></svg></div>
+      <h1 id="pr-list-title" class="fp-title pb-list-title">Purchase Request</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New PR</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="pr-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Purchase Requests</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="pr-list-search" type="search" placeholder="Search PR, reference, type..." autocomplete="off" aria-label="Search purchase requests" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="pr-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="pr-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/purchase-book/purchase-request/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New PR</span>
+        </a>
+        <button type="button" id="pr-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="pr-list-head"></tr></thead>
+        <tbody id="pr-list-body"></tbody>
+      </table>
+      <div id="pr-list-empty" class="table-state" hidden>No purchase requests match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="pr-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTATION REQUEST LIST  (#/purchase-book/quotation-request · Quick Menu › Purchase Book) -->
+<section id="rfq-list-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="rfq-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg></div>
+      <h1 id="rfq-list-title" class="fp-title pb-list-title">Quotation Request</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New RFQ</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="rfq-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Quotation Requests</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="rfq-list-search" type="search" placeholder="Search RFQ, PR, supplier..." autocomplete="off" aria-label="Search quotation requests" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="rfq-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="rfq-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/purchase-book/quotation-request/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New RFQ</span>
+        </a>
+        <button type="button" id="rfq-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="rfq-list-head"></tr></thead>
+        <tbody id="rfq-list-body"></tbody>
+      </table>
+      <div id="rfq-list-empty" class="table-state" hidden>No quotation requests match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="rfq-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PURCHASE ORDER LIST  (#/purchase-book/purchase-order · Quick Menu › Purchase Book) -->
+<section id="po-list-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="po-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></div>
+      <h1 id="po-list-title" class="fp-title pb-list-title">Purchase Order</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New PO</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="po-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Purchase Orders</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="po-list-search" type="search" placeholder="Search PO, supplier, status..." autocomplete="off" aria-label="Search purchase orders" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="po-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="po-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/purchase-book/purchase-order/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New PO</span>
+        </a>
+        <button type="button" id="po-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="po-list-head"></tr></thead>
+        <tbody id="po-list-body"></tbody>
+      </table>
+      <div id="po-list-empty" class="table-state" hidden>No purchase orders match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="po-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GOODS RECEIPT NOTE (GRN) LIST  (#/purchase-book/grn · Quick Menu › Purchase Book) -->
+<section id="grn-list-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="grn-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5M12 22V12"></path></svg></div>
+      <h1 id="grn-list-title" class="fp-title pb-list-title">Goods Receipt Note (GRN)</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New GRN</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="grn-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All GRNs</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="grn-list-search" type="search" placeholder="Search GRN, PO, supplier..." autocomplete="off" aria-label="Search grns" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="grn-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="grn-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/purchase-book/grn/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New GRN</span>
+        </a>
+        <button type="button" id="grn-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="grn-list-head"></tr></thead>
+        <tbody id="grn-list-body"></tbody>
+      </table>
+      <div id="grn-list-empty" class="table-state" hidden>No grns match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="grn-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- PURCHASE REQUEST  (#/purchase-book/purchase-request/new) -->
+<section id="pr-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="pr-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"></path></svg></div>
+      <h1 id="pr-title" class="fp-title">Purchase Request</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="pr-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
+        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      </button>
+    </div>
+  </header>
+
+  <form id="pr-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Request Identification</h2>
+      <div class="pb-grid pb-grid-pr">
+        <div class="fp-field">
+          <label class="fp-label pb-label-row" for="pr-code"><span>PR ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
+          <div class="fp-input-wrap">
+            <input id="pr-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the request is saved">
+            <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pr-reference">Reference ID</label>
+          <input id="pr-reference" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="Enter reference ID (e.g. SO / quotation no.)">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pr-type">Purchase Type</label>
+          <select id="pr-type" class="fp-input fp-select">
+            <option selected>Against Order</option><option>Stock Replenishment</option><option>Direct Purchase</option><option>Urgent</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <div class="fp-pair">
+      <section class="fp-card">
+        <h2 class="fp-section-title">2. Schedule</h2>
+        <div class="pb-grid pb-grid-2">
+          <div class="fp-field">
+            <label class="fp-label" for="pr-date">Requested Date</label>
+            <input id="pr-date" class="fp-input" type="date" required>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label" for="pr-required">Required Delivery Date</label>
+            <input id="pr-required" class="fp-input" type="date">
+          </div>
+        </div>
+      </section>
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Requester &amp; Delivery</h2>
+        <div class="pb-grid pb-grid-2">
+          <div class="fp-field">
+            <label class="fp-label" for="pr-requested-by">Requested By</label>
+            <div class="fp-input-wrap">
+              <input id="pr-requested-by" class="fp-input" type="text" readonly tabindex="-1" value="admin">
+              <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
+            </div>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label" for="pr-location">Delivery Location</label>
+            <input id="pr-location" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="Enter delivery location">
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">4. Requested Items</h2>
+        <div class="pb-head-actions">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-simple">
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act"><span class="visually-hidden">Remove</span></th></tr></thead>
+          <tbody id="pr-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Remarks &amp; PDF Print Configuration</h2>
+      <div class="fp-field">
+        <label class="fp-label" for="pr-remarks">Remarks</label>
+        <textarea id="pr-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="e.g. Urgent requirement"></textarea>
+      </div>
+      <div class="pb-print" data-print="pr"></div>
+    </section>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="pr-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="pr-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="pr-save-label">Save Purchase Request</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- QUOTATION REQUEST / RFQ  (#/purchase-book/quotation-request/new) -->
+<section id="rfq-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="rfq-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg></div>
+      <h1 id="rfq-title" class="fp-title">New Quotation Request</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="rfq-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
+        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      </button>
+    </div>
+  </header>
+
+  <form id="rfq-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Request Identification</h2>
+      <div class="pb-grid pb-grid-rfq">
+        <div class="fp-field">
+          <label class="fp-label pb-label-row" for="rfq-code"><span>RFQ ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
+          <div class="fp-input-wrap">
+            <input id="rfq-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the request is saved">
+            <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rfq-pr">PR ID</label>
+          <select id="rfq-pr" class="fp-input fp-select" data-enter-opens="true"><option value="">Select purchase request</option></select>
+        </div>
+      </div>
+    </section>
+
+    <div class="fp-pair">
+      <section class="fp-card">
+        <h2 class="fp-section-title">2. Schedule</h2>
+        <div class="pb-grid pb-grid-2">
+          <div class="fp-field">
+            <label class="fp-label" for="rfq-date">Quotation Req Date</label>
+            <input id="rfq-date" class="fp-input" type="date" required>
+          </div>
+          <div class="fp-field">
+            <label class="fp-label" for="rfq-deadline">Submission Deadline</label>
+            <input id="rfq-deadline" class="fp-input" type="date">
+          </div>
+        </div>
+      </section>
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Suppliers</h2>
+        <div class="fp-field">
+          <label class="fp-label" for="rfq-supplier-entry">Select Suppliers</label>
+          <div id="rfq-suppliers" class="fp-chips pb-chips">
+            <span class="pb-chips-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span>
+            <input id="rfq-supplier-entry" class="fp-chip-entry fp-lookup" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" data-transient="true" placeholder="Search and select supplier">
+          </div>
+          <p id="rfq-supplier-note" class="pb-help"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg><span>No suppliers selected.</span></p>
+        </div>
+      </section>
+    </div>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">4. Items to Quote For</h2>
+        <div class="pb-head-actions">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-simple">
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act"><span class="visually-hidden">Remove</span></th></tr></thead>
+          <tbody id="rfq-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Remarks &amp; PDF Print Configuration</h2>
+      <div class="fp-field">
+        <label class="fp-label" for="rfq-remarks">Remarks</label>
+        <textarea id="rfq-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="e.g. Urgent RFQ"></textarea>
+      </div>
+      <div class="pb-print" data-print="rfq"></div>
+    </section>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="rfq-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="rfq-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="rfq-save-label">Save Quotation Request</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- PURCHASE ORDER  (#/purchase-book/purchase-order/new) -->
+<section id="po-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="po-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></div>
+      <h1 id="po-title" class="fp-title">Purchase Order</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="po-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
+        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      </button>
+    </div>
+  </header>
+
+  <form id="po-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Order Identification</h2>
+      <div class="pb-grid pb-grid-5">
+        <div class="fp-field">
+          <label class="fp-label pb-label-row" for="po-code"><span>PO ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
+          <div class="fp-input-wrap">
+            <input id="po-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the order is saved">
+            <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          </div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-date">PO Date</label>
+          <input id="po-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-reference">Reference Type</label>
+          <select id="po-reference" class="fp-input fp-select" data-enter-opens="true"><option value="">None (direct order)</option></select>
+          <p class="pb-hint">What this order is raised against; its items are fetched from it.</p>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-quotation-no">Quotation Number</label>
+          <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-status">Status</label>
+          <select id="po-status" class="fp-input fp-select">
+            <option selected>Draft</option><option>Sent</option><option>Confirmed</option><option>Partially Received</option><option>Received</option><option>Cancelled</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Delivery &amp; Payment</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <label class="fp-label" for="po-delivery-date">Delivery Date</label>
+          <input id="po-delivery-date" class="fp-input" type="date">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-location">Delivery Location</label>
+          <input id="po-location" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="Enter delivery location">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-terms">Delivery Terms</label>
+          <input id="po-terms" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="e.g. 2–3 weeks from PO date, DAP Muscat">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-payment">Payment Mode</label>
+          <select id="po-payment" class="fp-input fp-select">
+            <option value="">Select payment mode</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Credit</option><option>Card</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Supplier</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <label class="fp-label" for="po-supplier">Supplier Name</label>
+          <select id="po-supplier" class="fp-input fp-select" data-enter-opens="true"><option value="">Select supplier</option></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-contact-select">Contact Person</label>
+          <select id="po-contact-select" class="fp-input fp-select" data-bind-id="po-contact" data-transient="true"><option value="">Select contact person</option></select>
+          <input id="po-contact" type="hidden">
+          <p class="pb-hint" id="po-contact-hint">Select a supplier to list its contacts.</p>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-email">Email ID</label>
+          <input id="po-email" class="fp-input" type="text" inputmode="email" data-check="email" maxlength="150" autocomplete="off" placeholder="e.g. sales@supplier.com">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-currency">Currency</label>
+          <select id="po-currency" class="fp-input fp-select" disabled data-transient="true" tabindex="-1"><option value="">Select a supplier first</option></select>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">4. Ordered Items</h2>
+        <div class="pb-head-actions">
+          <div class="pb-toggle" role="group" aria-label="Prices" data-vat-toggle="po-vat-mode">
+            <button type="button" data-vat="include" aria-pressed="true">Include VAT</button><button type="button" data-vat="exclude" aria-pressed="false">Exclude VAT</button>
+          </div>
+          <input id="po-vat-mode" type="hidden" value="include">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced">
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-foc">FOC</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="po-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="pb-pair-summary">
+      <section class="fp-card">
+        <h2 class="fp-section-title">5. Remarks &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <label class="fp-label" for="po-remarks">Remarks</label>
+          <textarea id="po-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="e.g. Urgent delivery required"></textarea>
+        </div>
+        <div class="pb-print" data-print="po"></div>
+      </section>
+      <section class="fp-card pb-summary" aria-live="polite">
+        <h2 class="fp-section-title">6. Summary</h2>
+        <dl class="pb-sum">
+          <div><dt>Subtotal</dt><dd id="po-subtotal">0.000</dd></div>
+          <div><dt id="po-vat-label">VAT (included)</dt><dd id="po-vat">0.000</dd></div>
+          <div><dt><label for="po-discount">Discount Amount</label></dt><dd><input id="po-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt><label for="po-shipping">Shipping Price</label></dt><dd><input id="po-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total</dt><dd id="po-grand">0.000</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="po-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="po-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="po-save-label">Save Purchase Order</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- GOODS RECEIPT NOTE  (#/purchase-book/grn/new) -->
+<section id="grn-page" class="form-page form-page-auto fp-theme-purchase" aria-labelledby="grn-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5M12 22V12"></path></svg></div>
+      <h1 id="grn-title" class="fp-title">New Goods Receipt Note (GRN)</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="grn-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
+        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      </button>
+    </div>
+  </header>
+
+  <form id="grn-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Document Details</h2>
+      <div class="pb-grid pb-grid-5">
+        <div class="fp-field">
+          <label class="fp-label pb-label-row" for="grn-code"><span>GRN ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
+          <div class="fp-input-wrap">
+            <input id="grn-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the GRN is saved">
+            <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          </div>
+          <p class="pb-hint">Assigned automatically on save.</p>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="grn-date">GRN Date</label>
+          <input id="grn-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="grn-supplier">Supplier</label>
+          <select id="grn-supplier" class="fp-input fp-select" data-enter-opens="true"><option value="">No supplier selected</option></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="grn-warehouse">Warehouse</label>
+          <select id="grn-warehouse" class="fp-input fp-select" data-enter-opens="true"><option value="">No warehouse selected</option></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="grn-po">PO Number</label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="grn-po" class="fp-input" type="text" data-suggest="purchaseorder" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="grn-po-options" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Optional PO / reference number"><input id="grn-po-id" type="hidden"><ul id="grn-po-options" class="fp-suggest" role="listbox" aria-label="Purchase orders" hidden></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. GRN Line Items</h2>
+        <div class="pb-head-actions">
+          <div class="pb-toggle" role="group" aria-label="Costs" data-vat-toggle="grn-vat-mode">
+            <button type="button" data-vat="include" aria-pressed="true">Include VAT</button><button type="button" data-vat="exclude" aria-pressed="false">Exclude VAT</button>
+          </div>
+          <input id="grn-vat-mode" type="hidden" value="include">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-grn">
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-num">Received Qty</th><th class="pb-col-num">Accepted Qty</th><th class="pb-col-num">Rejected Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-date">Expiry</th><th class="pb-col-rack">Rack</th><th class="pb-col-num">Unit Cost</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-total">Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="grn-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="pb-pair-summary">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <label class="fp-label" for="grn-remarks">Remarks</label>
+          <textarea id="grn-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="Enter transaction remarks or additional internal notes..."></textarea>
+        </div>
+        <div class="pb-print" data-print="grn"></div>
+      </section>
+      <section class="fp-card pb-summary" aria-live="polite">
+        <h2 class="fp-section-title">4. Summary</h2>
+        <p class="pb-note">A Discount Amount typed here is shared across the lines by value, before tax. VAT uses each line's VAT % (5% unless changed) on its value after its Disc %. Shipping is one charge for the whole GRN, added after tax.</p>
+        <dl class="pb-sum">
+          <div><dt>Subtotal</dt><dd id="grn-subtotal">0.000</dd></div>
+          <div><dt id="grn-vat-label">Total VAT Amount</dt><dd id="grn-vat">0.000</dd></div>
+          <div><dt><label for="grn-discount">Discount Amount</label></dt><dd><input id="grn-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt><label for="grn-shipping">Shipping Price</label></dt><dd><input id="grn-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total</dt><dd id="grn-grand">0.000</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="grn-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="grn-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="grn-save-label">Save GRN</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- Purchase Book row templates. Cells shared by every document come first. -->
+<template id="pb-cell-item">
+  <td class="pb-col-sno" data-row-label></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><span class="fp-input-icon-left" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span><input class="fp-cell fp-has-icon pb-cell-code" data-field="itemCode" type="text" data-suggest="itemcode" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="Search code..." aria-label="Item code"><input type="hidden" data-code-id><ul class="fp-suggest" role="listbox" aria-label="Items" hidden></ul></div></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-name" data-field="itemName" type="text" data-suggest="item" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Type item name..." aria-label="Item name"><input type="hidden" data-field="itemId"><ul class="fp-suggest" role="listbox" aria-label="Items" hidden></ul></div></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-bind="brandId" data-options="brand" disabled aria-label="Brand"><option value="">Select item first</option></select><input type="hidden" data-field="brandId"><input type="hidden" data-field="brandName"></td>
+</template>
+<template id="pb-cell-unit">
+  <td><select class="fp-cell fp-select pb-cell-select" data-bind="uomId" data-options="uom" aria-label="Unit"><option value="">Unit</option></select><input type="hidden" data-field="uomId"><input type="hidden" data-field="unit"></td>
+</template>
+<template id="pb-cell-remove">
+  <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
+</template>
+
+<!-- PR / RFQ line: item cells, quantity, unit, remove -->
+<template id="pb-line-simple"><tr class="fp-row" data-pb-row="simple">
+  <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
+</tr></template>
+
+<!-- PO line -->
+<template id="pb-line-po"><tr class="fp-row" data-pb-row="po">
+  <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
+  <td data-unit-cell></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Price"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5.00" aria-label="VAT %"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-label="Discount %"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="discountAmount" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Discount amount"></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-field="foc" aria-label="Free of charge"><option value="No" selected>No</option><option value="Yes">Yes</option></select></td>
+  <td><output class="pb-line-total" data-total>—</output></td>
+  <td class="pb-col-act"><div class="pb-row-actions">
+    <button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+    <button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
+    <button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button>
+  </div></td>
+</tr></template>
+
+<!-- GRN line -->
+<template id="pb-line-grn"><tr class="fp-row" data-pb-row="grn">
+  <td><input class="fp-cell fp-cell-num" data-field="receivedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Received quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-accept" data-field="acceptedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Accepted quantity"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="rejectedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Rejected quantity"></td>
+  <td data-unit-cell></td>
+  <td><input class="fp-cell fp-cell-date" data-field="expiryDate" type="date" aria-label="Expiry date"></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-bind="rackId" data-options="rack" aria-label="Rack"><option value="">—</option></select><input type="hidden" data-field="rackId"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="unitCost" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Unit cost"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Discount %"></td>
+  <td><output class="pb-line-total pb-line-total-plain" data-total>0.000</output></td>
+  <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></td>
+</tr></template>
+
+<!-- PDF print configuration, copied into each .pb-print -->
+<template id="pb-print-box">
+  <span class="fp-label">PDF Print Configuration</span>
+  <div class="pb-print-box">
+    <label class="pb-check"><input type="checkbox" data-print-field="includeSignatory"><span>Include Signatory Slots</span></label>
+    <div class="pb-check-row">
+      <label class="pb-check"><input type="checkbox" data-print-field="attachSeal"><span>Attach Seal</span></label>
+      <button type="button" class="pb-link" data-seal="replace">Replace</button>
+      <button type="button" class="pb-link" data-seal="remove">Remove</button>
+      <span class="pb-seal-name" data-seal-name></span>
+    </div>
+  </div>
+</template>
+<input id="pb-seal-file" type="file" accept="image/png,image/jpeg" hidden>
 </div>
 
 <!-- LOOKUP POPUP ("Select UOM", "Select Stock Point" …): one dialog serves every lookup field. Layout: design/masters/popup_reference.png -->
@@ -1827,26 +2613,26 @@
         <kbd class="qm-kbd">Alt</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
-      <h3 class="qm-section">Create (Alt)</h3>
-      <a class="qm-item qm-item-sm" href="#/purchase-book/purchase-request/new" data-key="r" aria-keyshortcuts="Alt+R R">
+      <h3 class="qm-section">Purchase Book</h3>
+      <a class="qm-item qm-item-sm" href="#/purchase-book/purchase-request" data-key="r" aria-keyshortcuts="R">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"></path></svg></span>
         <span class="qm-text"><span class="qm-name">Purchase <span class="qm-key">R</span>eq</span><span class="qm-desc">Internal requests to buy items</span></span>
         <kbd class="qm-kbd">R</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/purchase-book/quotation-request/new" data-key="u" aria-keyshortcuts="Alt+U U">
+      <a class="qm-item qm-item-sm" href="#/purchase-book/quotation-request" data-key="u" aria-keyshortcuts="U">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><circle cx="11.5" cy="14.5" r="2.5"></circle><path d="m13.3 16.3 1.7 1.7"></path></svg></span>
         <span class="qm-text"><span class="qm-name">Q<span class="qm-key">u</span>otation req</span><span class="qm-desc">Price quotes asked from suppliers</span></span>
         <kbd class="qm-kbd">U</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/purchase-book/purchase-order/new" data-key="p" aria-keyshortcuts="Alt+P P">
+      <a class="qm-item qm-item-sm" href="#/purchase-book/purchase-order" data-key="p" aria-keyshortcuts="P">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">P</span>urchase order</span><span class="qm-desc">Confirmed orders to suppliers</span></span>
         <kbd class="qm-kbd">P</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/purchase-book/grn/new" data-key="g" aria-keyshortcuts="Alt+G G">
+      <a class="qm-item qm-item-sm" href="#/purchase-book/grn" data-key="g" aria-keyshortcuts="G">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 2 2 4-4"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="M3.3 7 12 12l8.7-5M12 22V12"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">G</span>rn</span><span class="qm-desc">Goods received against purchase orders</span></span>
         <kbd class="qm-kbd">G</kbd>
@@ -2324,5 +3110,7 @@
     </div>
   </section>
 </dialog>
+<!-- Purchase Book PDF: filled by printPurchaseDocument() just before the print dialog; hidden on screen. -->
+<div id="pb-print-sheet" class="print-sheet"></div>
 </body>
 </html>

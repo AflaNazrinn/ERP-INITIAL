@@ -894,7 +894,7 @@ function showFormErrors(errors, reveal) {
 
 // Fields Enter walks through, in page order, ending on the Save button.
 function formEnterOrder(form, saveButton) {
-  const fields = [...form.querySelectorAll('input:not([readonly]):not([disabled]):not([type="file"]), select, textarea')]
+  const fields = [...form.querySelectorAll('input:not([readonly]):not([disabled]):not([type="file"]), select:not([disabled]), textarea')]
     .filter(node => node.dataset.enterSkip === undefined)
     .filter(node => node.getClientRects().length > 0)
     .filter(node => !childLookupIsEmpty(node));
@@ -1155,6 +1155,11 @@ const LOOKUPS = {
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
+  // Purchase Book rows: the Item Code cell searches codes (the name shows beside each).
+  itemcode: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
+    columns: [['code', 'Code'], ['name', 'Item Name']], display: row => row.code, meta: row => row.name },
+  purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
+    columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
 };
@@ -1595,7 +1600,8 @@ function renderSuggest() {
     item.dataset.index = String(index);
     item.setAttribute('role', 'option');
     item.append(el('span', 'fp-suggest-name', config.display(row)));
-    if (row.code) item.append(el('span', 'fp-suggest-code', row.code));
+    const meta = config.meta ? config.meta(row) : row.code;   // e.g. the item name beside a searched code
+    if (meta) item.append(el('span', 'fp-suggest-code', meta));
     return item;
   }));
   if (suggest.shown.length === 0) list.append(el('li', 'fp-suggest-empty', `No ${config.plural} match “${field.value.trim()}”.`));
@@ -2163,7 +2169,8 @@ function createFormPage(config) {
       if (warning) showToast(`${record.code} saved, but its documents were not uploaded`, warning, true);
       else showToast(`${noun()} ${wasEditing ? 'updated' : 'saved'}`, `${record.code} · ${record.name}`);
       const listRoute = typeof config.listRoute === 'function' ? config.listRoute() : config.listRoute;
-      if (showSavedInList(listRoute, record.code, { edited: Boolean(wasEditing) })) return;
+      // Pages without a list (the Purchase Book documents) always stay for the next record.
+      if (listRoute && showSavedInList(listRoute, record.code, { edited: Boolean(wasEditing) })) return;
       reset();                             // opened from Masters › Create: stay for the next record
       config.firstField().focus();
     } catch (error) {
@@ -2188,7 +2195,11 @@ function createFormPage(config) {
       if (!event.repeat) save();
       return true;
     }
-    if (isBrowserSaveKey(event)) { event.preventDefault(); return true; }
+    if (isBrowserSaveKey(event)) {
+      event.preventDefault();                 // the browser's "Save page"; pages with ctrlSave save the form instead
+      if (config.ctrlSave && !event.repeat) save();
+      return true;
+    }
     if (plainCtrl && key.toLowerCase() === 'z') {
       event.preventDefault();                 // the form's undo replaces the browser's per-field one
       undo();
@@ -3033,11 +3044,13 @@ const ML_ICONS = {
   edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>',
   delete: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"></path></svg>',
 };
+ML_ICONS.pdf = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>';
 const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 const normalHeader = text => String(text).toLowerCase().replace(/[^a-z]/g, '');
 
-// Column cell styles: code (amber mono), name (bold capitals), pill, status (green when active), upper, mono, wrap (long text), text.
-const ML_CELL_CLASS = { code: 'ml-code', name: 'ml-name', upper: 'ml-email', mono: 'ml-mono', wrap: 'ml-wrap' };
+// Column cell styles: code (amber mono), name (bold capitals), pill, status (green when active), upper, mono, wrap (long text),
+// qty (bold right-aligned number), qty-ok (the same in the page colour), text.
+const ML_CELL_CLASS = { code: 'ml-code', name: 'ml-name', upper: 'ml-email', mono: 'ml-mono', wrap: 'ml-wrap', qty: 'ml-qty', 'qty-ok': 'ml-qty ml-qty-ok' };
 
 // A column's value as shown in the table and the View popup ("—" when empty).
 function masterValue(column, value) {
@@ -3076,7 +3089,8 @@ function createMasterList(config) {
     $('empty').textContent = `Loading ${list.many}…`;
     try {
       const records = await apiRequest(`${config.api}?all=1`);
-      list.rows = records.map(record => ({ ...config.fromApi(record), id: record.id, code: record.code, createdOn: record.createdAt || '' }));
+      // createdOn drives the Filter's date range: a document's own date (config.dateOf), else the day it was created.
+      list.rows = records.map(record => ({ ...config.fromApi(record), id: record.id, code: record.code, createdOn: config.dateOf?.(record) || record.createdAt || '' }));
       $('empty').textContent = `No ${list.many} match your search.`;
     } catch (error) {
       list.rows = [];
@@ -3097,7 +3111,7 @@ function createMasterList(config) {
       tr.dataset.code = row.code;
       const actions = el('td', 'ml-col-actions');
       const group = el('div', 'ml-actions');
-      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ['delete', 'Delete']]) {
+      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ['delete', 'Delete']]) {
         const button = el('button', `ml-act${action === 'delete' ? ' ml-act-danger' : ''}`);
         button.type = 'button';
         button.dataset.action = action;
@@ -3170,6 +3184,7 @@ function createMasterList(config) {
       if (!row) return;
       if (button.dataset.action === 'view') openMasterView(list, row);
       else if (button.dataset.action === 'edit') openMasterEdit(list, row);
+      else if (button.dataset.action === 'pdf') config.pdf(row);
       else deleteMasterRow(list, row);
     });
   };
@@ -3580,17 +3595,24 @@ async function readSpreadsheet(file) {
 const masterImport = { list: null, rows: [], opener: null, busy: false };
 const miEl = suffix => byId(`master-import-${suffix}`);
 const miMode = () => byId('master-import').querySelector('input[name="master-import-mode"]:checked').value;
-const findMasterRow = (rows, row) => rows.find(existing => (row.code && sameText(existing.code, row.code)) || sameText(existing.name, row.name));
+// A sheet row that is already a record: by code or name, or the list's own rule (documents: by code only).
+const findMasterRow = (rows, row, list = masterImport.list) => (list?.config.matchRow
+  ? list.config.matchRow(rows, row)
+  : rows.find(existing => (row.code && sameText(existing.code, row.code)) || sameText(existing.name, row.name)));
 
-// Header row: the first of the top five rows naming the name column.
+// Header row: the first of the top five rows naming the required column (the name; a document's Item Name).
+// Documents read one item line per sheet row; config.groupRows() then joins the lines into documents.
 function masterRowsFromSheet(list, sheet) {
-  const { columns, noun } = list.config;
+  const { noun } = list.config;
+  const columns = list.config.importColumns || list.config.columns;
+  const required = list.config.importKey || 'name';
+  const requiredLabel = columns.find(column => column.key === required)?.label || `${noun} Name`;
   const byHeader = {};
   for (const column of columns) {
     for (const header of [column.key, column.label, ...(column.headers || [])]) byHeader[normalHeader(header)] ??= column;
   }
-  const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.some(cell => byHeader[normalHeader(cell)]?.key === 'name'));
-  if (headerIndex === -1) throw new Error(`No "${noun} Name" column was found. Download the template to see the expected columns.`);
+  const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.some(cell => byHeader[normalHeader(cell)]?.key === required));
+  if (headerIndex === -1) throw new Error(`No "${requiredLabel}" column was found. Download the template to see the expected columns.`);
   const sheetColumns = sheet[headerIndex].map(cell => byHeader[normalHeader(cell)]);
   const rows = [], issues = [];
   sheet.slice(headerIndex + 1).forEach((cells, index) => {
@@ -3598,14 +3620,14 @@ function masterRowsFromSheet(list, sheet) {
     const line = headerIndex + index + 2;
     const raw = {};
     sheetColumns.forEach((column, at) => { if (column && !raw[column.key]) raw[column.key] = String(cells[at] ?? '').trim(); });
-    if (!raw.name) { issues.push(`Row ${line}: ${list.one} name is empty`); return; }
+    if (!raw[required]) { issues.push(`Row ${line}: ${requiredLabel.toLowerCase()} is empty`); return; }
     try {
-      rows.push(Object.fromEntries(columns.map(column => [column.key, column.read ? column.read(raw[column.key] || '') : raw[column.key] || ''])));
+      rows.push({ ...Object.fromEntries(columns.map(column => [column.key, column.read ? column.read(raw[column.key] || '') : raw[column.key] || ''])), sheetLine: line });
     } catch (error) {
       issues.push(`Row ${line}: ${error.message}`);
     }
   });
-  return { rows, issues };
+  return { rows: list.config.groupRows ? list.config.groupRows(rows) : rows, issues };
 }
 
 function renderMasterImportPreview(fileName, { rows, issues }) {
@@ -3748,9 +3770,10 @@ function initMasterImport() {
     else if (action === 'start') startMasterImport();
     else if (action === 'template') {
       const { list } = masterImport;
-      const { columns, sample } = list.config;
-      downloadCsv(masterFileName(list, 'import-template'), [columns.map(column => column.label), columns.map(column => sample[column.key] ?? '')]);
-      showToast('Template downloaded', `Fill one ${list.one} per row. Leave Code blank to number it automatically.`);
+      const columns = list.config.importColumns || list.config.columns;
+      const samples = list.config.importSamples || [list.config.sample];
+      downloadCsv(masterFileName(list, 'import-template'), [columns.map(column => column.label), ...samples.map(sample => columns.map(column => sample[column.key] ?? ''))]);
+      showToast('Template downloaded', list.config.importHint || `Fill one ${list.one} per row. Leave Code blank to number it automatically.`);
     }
   });
   miEl('input').addEventListener('change', event => loadMasterImportFile(event.target.files[0]));
@@ -4278,7 +4301,7 @@ function goBack() {
 function showSavedInList(route, code, { edited = false } = {}) {
   const fromList = routeTrail.at(-1) === route;
   if (!fromList && !edited) return false;
-  const list = MASTER_LISTS.find(entry => entry.config.route === route);
+  const list = allLists().find(entry => entry.config.route === route);
   if (list) list.returnTo = code;
   if (fromList) {
     goBack();
@@ -4289,10 +4312,13 @@ function showSavedInList(route, code, { edited = false } = {}) {
   return true;
 }
 
+// Every list page: the masters and the Purchase Book documents.
+const allLists = () => [...MASTER_LISTS, ...PURCHASE_LISTS];
+
 // An edit route opens the list's creation form with the record (see the lists' edit()).
 function masterEditPage(route) {
-  const match = /^(masters\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
-  const list = match && MASTER_LISTS.find(entry => entry.config.route === match[1]);
+  const match = /^((?:masters|purchase-book)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
+  const list = match && allLists().find(entry => entry.config.route === match[1]);
   if (!list) return null;
   const id = Number(match[2]);
   return {
@@ -4357,6 +4383,1187 @@ function renderRoute() {
 }
 
 /* =====================================================================
+   Purchase Book  (Quick Menu › Purchase Book): Purchase Request, Quotation Request (RFQ),
+   Purchase Order and Goods Receipt Note (GRN). Each is a createFormPage() form with item lines.
+
+   A line's Item Code and Item Name search the item master; picking either fills the other, the
+   item's brands (Brand) and its unit. A name typed without picking is kept as a free-text item.
+   Selects with data-bind (row) or data-bind-id (header) show a hidden input that holds the value,
+   so undo restores them even when their options load later (a row's brands, a supplier's contacts).
+   Purchase orders and GRNs total their lines as the server does (backend/src/purchase_book.php):
+   the Discount Amount is shared across the lines by value before tax; VAT is each line's VAT % on
+   what is left, included in the prices or added on top (Include / Exclude VAT); Shipping is added last.
+   Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Ctrl+Z undo, Esc back.
+   ===================================================================== */
+
+const pbData = { items: new Map(), suppliers: new Map(), racks: [] };
+const pbNum = value => {
+  const number = parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(number) ? number : 0;
+};
+const pbMoney = number => (Number.isFinite(number) ? number : 0).toFixed(3);
+const pbQty = number => String(Math.round(number * 1000) / 1000);
+const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
+
+// The row templates share their item, unit and remove cells (index.html keeps them once).
+function composePurchaseTemplates() {
+  const cells = id => [...byId(id).content.cloneNode(true).children];
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) {
+    const row = byId(id).content.firstElementChild;
+    row.prepend(...cells('pb-cell-item'));
+    const unitSlot = row.querySelector('[data-unit-cell]');
+    if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
+    else row.append(...cells('pb-cell-unit'), ...cells('pb-cell-remove'));
+  }
+}
+
+function fillSelect(select, options, placeholder) {
+  const keep = select.value;
+  select.replaceChildren(...(placeholder === undefined ? [] : [new Option(placeholder, '')]),
+    ...options.map(option => new Option(option.label, String(option.value))));
+  select.value = keep;
+  if (select.value !== keep) select.value = '';
+}
+
+const boundHidden = select => (select.dataset.bindId
+  ? byId(select.dataset.bindId)
+  : select.closest('td').querySelector(`input[type="hidden"][data-field="${select.dataset.bind}"]`));
+
+function syncBoundSelects(root) {
+  for (const select of root.querySelectorAll('select[data-bind], select[data-bind-id]')) {
+    const value = boundHidden(select).value;
+    select.value = value;
+    if (select.value !== value) select.value = '';
+  }
+}
+
+// Cached master records the rows need: an item's brands, a supplier's contacts and currency.
+function pbItem(id) {
+  if (!pbData.items.has(id)) {
+    pbData.items.set(id, apiRequest(`api/items.php?id=${id}`).catch(error => { pbData.items.delete(id); throw error; }));
+  }
+  return pbData.items.get(id);
+}
+function pbSupplier(id) {
+  if (!pbData.suppliers.has(id)) {
+    pbData.suppliers.set(id, apiRequest(`api/suppliers.php?id=${id}`).catch(error => { pbData.suppliers.delete(id); throw error; }));
+  }
+  return pbData.suppliers.get(id);
+}
+
+const itemBrands = item => {
+  const seen = new Map();
+  for (const source of item.sourcing || []) if (source.brandId && !seen.has(source.brandId)) seen.set(source.brandId, source.brandName);
+  if (item.brandId && !seen.has(item.brandId)) seen.set(item.brandId, item.brandName);
+  return [...seen].map(([value, label]) => ({ value, label }));
+};
+
+function setRowBrands(row, item) {
+  const select = row.querySelector('select[data-bind="brandId"]');
+  if (!item) {
+    fillSelect(select, [], 'Select item first');
+    select.disabled = true;
+    return;
+  }
+  const brands = itemBrands(item);
+  fillSelect(select, brands, brands.length ? 'Select brand' : 'No brand');
+  select.disabled = brands.length === 0;
+  select.value = pbCell(row, 'brandId').value;
+  if (select.value !== pbCell(row, 'brandId').value) select.value = '';
+}
+
+function setRowRacks(row, warehouseId) {
+  const select = row.querySelector('select[data-bind="rackId"]');
+  if (!select) return;
+  const racks = pbData.racks.filter(rack => String(rack.warehouseId) === String(warehouseId));
+  fillSelect(select, racks.map(rack => ({ value: rack.id, label: rack.code })), '—');
+  const hidden = pbCell(row, 'rackId');
+  select.value = hidden.value;
+  if (select.value !== hidden.value) { select.value = ''; hidden.value = ''; }
+}
+
+// Shows a row's selects from its hidden values (after undo, a fetched document, or a new row).
+async function syncPurchaseRow(row, warehouseId) {
+  syncBoundSelects(row);
+  const itemId = pbCell(row, 'itemId').value;
+  row.querySelector('[data-code-id]').value = itemId;
+  row.dataset.itemApplied = itemId;
+  setRowRacks(row, warehouseId);
+  if (!itemId) { setRowBrands(row, null); return; }
+  try {
+    const item = await pbItem(itemId);
+    if (pbCell(row, 'itemId').value === itemId) setRowBrands(row, item);
+  } catch { setRowBrands(row, null); }
+}
+
+// Fills a row from a picked item: code, name, brand list (one brand is picked for you), unit and cost.
+async function applyPurchaseItem(form, row, itemId) {
+  row.dataset.itemApplied = itemId;
+  let item;
+  try {
+    item = await pbItem(itemId);
+  } catch (error) {
+    showToast('The item could not be loaded', error.message, true);
+    return;
+  }
+  if (row.dataset.itemApplied !== itemId || !row.isConnected) return;
+  pbCell(row, 'itemCode').value = item.code;
+  row.querySelector('[data-code-id]').value = String(item.id);
+  pbCell(row, 'itemName').value = item.name;
+  pbCell(row, 'itemId').value = String(item.id);
+  const brands = itemBrands(item);
+  pbCell(row, 'brandId').value = brands.length === 1 ? String(brands[0].value) : '';
+  pbCell(row, 'brandName').value = brands.length === 1 ? brands[0].label : '';
+  setRowBrands(row, item);
+  pbCell(row, 'uomId').value = item.uomId ? String(item.uomId) : '';
+  pbCell(row, 'unit').value = item.unit || '';
+  syncBoundSelects(row);
+  for (const field of ['price', 'unitCost']) {
+    const cell = pbCell(row, field);
+    if (cell && pbNum(cell.value) === 0 && pbNum(item.buyingRate) > 0) cell.value = pbMoney(pbNum(item.buyingRate));
+  }
+  form.page.absorb();
+  form.refresh();
+}
+
+// A document's lines (from a purchase request, quotation request or purchase order) into the item table.
+async function loadPurchaseLines(form, lines, toRow) {
+  form.page.setRows('items', lines.map(toRow));
+  const rows = form.page.rowsOf('items');
+  await Promise.all(rows.map(row => syncPurchaseRow(row, form.warehouseId?.())));
+  form.page.record();
+}
+
+/* Line maths, the same as pb_totals() on the server. */
+function purchaseTotals(rows, kind, vatMode, discount, shipping) {
+  const nets = rows.map(row => {
+    const value = field => pbNum(pbCell(row, field)?.value);
+    if (kind === 'grn') {
+      const gross = value('acceptedQty') * value('unitCost');
+      return gross - gross * value('discountPct') / 100;
+    }
+    const gross = pbCell(row, 'foc').value === 'Yes' ? 0 : value('quantity') * value('price');
+    return Math.max(0, gross - value('discountAmount'));
+  });
+  const subtotal = nets.reduce((sum, net) => sum + net, 0);
+  const shared = Math.min(discount, subtotal);
+  let vat = 0;
+  const lineTotals = rows.map((row, i) => {
+    const rate = pbNum(pbCell(row, 'vatRate').value);
+    const taxable = nets[i] - (subtotal > 0 ? shared * nets[i] / subtotal : 0);
+    vat += vatMode === 'include' ? taxable * rate / (100 + rate) : taxable * rate / 100;
+    return vatMode === 'include' ? nets[i] : nets[i] * (1 + rate / 100);
+  });
+  return { lineTotals, subtotal, vat, discount: shared, grand: subtotal - shared + (vatMode === 'exclude' ? vat : 0) + shipping };
+}
+
+/*
+ * One Purchase Book form. spec: key, route, noun, api, firstField, kind ('simple' | 'po' | 'grn'),
+ * header() → payload keys, check(check, errors) adds header errors, fieldNodes, onReset(), init(form),
+ * extra (chips), lookups (dropped after a save).
+ */
+function createPurchaseForm(spec) {
+  const el = suffix => byId(`${spec.key}-${suffix}`);
+  const form = { el, spec };
+  const priced = spec.kind !== 'simple';
+  const printBox = () => byId(`${spec.key}-form`).querySelector('.pb-print');
+  const flags = () => ({
+    includeSignatory: printBox().querySelector('[data-print-field="includeSignatory"]').checked,
+    attachSeal: printBox().querySelector('[data-print-field="attachSeal"]').checked,
+  });
+  const rows = () => form.page.rowsOf('items');
+  const isBlankRow = row => !pbCell(row, 'itemName').value.trim() && !pbCell(row, 'itemId').value && !pbCell(row, 'itemCode').value.trim();
+  const vatMode = () => el('vat-mode')?.value || 'include';
+
+  form.refresh = function refresh() {
+    if (!priced) return;
+    const totals = purchaseTotals(rows(), spec.kind, vatMode(), pbNum(el('discount').value), pbNum(el('shipping').value));
+    rows().forEach((row, i) => {
+      const filled = !isBlankRow(row) || totals.lineTotals[i] > 0;
+      row.querySelector('[data-total]').textContent = spec.kind === 'po' && !filled ? '—' : pbMoney(totals.lineTotals[i]);
+    });
+    el('subtotal').textContent = pbMoney(totals.subtotal);
+    el('vat').textContent = pbMoney(totals.vat);
+    el('grand').textContent = pbMoney(totals.grand);
+    el('vat-label').textContent = spec.kind === 'po'
+      ? (vatMode() === 'include' ? 'VAT (included)' : 'VAT (added)')
+      : (vatMode() === 'include' ? 'Total VAT Amount (included)' : 'Total VAT Amount');
+  };
+
+  function syncVatToggle() {
+    const toggle = byId(`${spec.key}-form`).querySelector('[data-vat-toggle]');
+    if (!toggle) return;
+    for (const button of toggle.querySelectorAll('[data-vat]')) button.setAttribute('aria-pressed', String(button.dataset.vat === vatMode()));
+  }
+
+  function readLines(errors) {
+    const lines = [];
+    rows().forEach((row, index) => {
+      if (isBlankRow(row)) return;
+      const value = field => pbCell(row, field)?.value.trim() ?? '';
+      const line = {
+        itemId: value('itemId') || null, itemCode: value('itemCode'), itemName: value('itemName'),
+        brandId: value('brandId') || null, brandName: value('brandName'), uomId: value('uomId') || null, unit: value('unit'),
+      };
+      const fail = (field, message) => errors.push({ node: pbCell(row, field), message: `Row ${index + 1}: ${message}` });
+      if (!line.itemName) fail('itemName', 'enter the item name or pick an item.');
+      if (spec.kind === 'grn') {
+        Object.assign(line, {
+          receivedQty: value('receivedQty'), acceptedQty: value('acceptedQty'), rejectedQty: value('rejectedQty'),
+          expiryDate: value('expiryDate'), rackId: value('rackId') || null, unitCost: value('unitCost'),
+          vatRate: value('vatRate'), discountPct: value('discountPct'),
+        });
+        if (!(pbNum(line.receivedQty) > 0)) fail('receivedQty', 'enter the received quantity.');
+        else if (pbNum(line.acceptedQty) + pbNum(line.rejectedQty) > pbNum(line.receivedQty) + 0.0005) {
+          fail('acceptedQty', 'accepted and rejected together cannot be more than received.');
+        }
+      } else {
+        line.quantity = value('quantity');
+        if (!(pbNum(line.quantity) > 0)) fail('quantity', 'the quantity must be more than 0.');
+      }
+      if (spec.kind === 'po') {
+        Object.assign(line, {
+          price: value('price'), vatRate: value('vatRate'), discountPct: value('discountPct'),
+          discountAmount: value('discountAmount'), foc: value('foc') === 'Yes',
+        });
+      }
+      for (const [field, ok] of Object.entries(line)) {
+        if (['quantity', 'receivedQty', 'acceptedQty', 'rejectedQty', 'price', 'unitCost', 'discountAmount'].includes(field)
+          && ok !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(ok)) fail(field, 'enter a number with up to 3 decimals.');
+        if (['vatRate', 'discountPct'].includes(field) && ok !== '' && (!/^\d{1,3}(\.\d{1,2})?$/.test(ok) || pbNum(ok) > 100)) {
+          fail(field, 'enter a percentage from 0 to 100.');
+        }
+      }
+      lines.push(line);
+    });
+    if (!lines.length && !errors.length) {
+      errors.push({ node: pbCell(rows()[0], 'itemName'), message: 'Add at least one item.' });
+    }
+    return lines;
+  }
+
+  const extra = {
+    read: () => ({ flags: flags(), chips: spec.chips ? spec.chips.get() : null }),
+    write(state) {
+      printBox().querySelector('[data-print-field="includeSignatory"]').checked = state.flags.includeSignatory;
+      printBox().querySelector('[data-print-field="attachSeal"]').checked = state.flags.attachSeal;
+      if (spec.chips) { spec.chips.set(state.chips); spec.onChips?.(); }
+    },
+    reset() { if (spec.chips) { spec.chips.set([]); spec.onChips?.(); } },
+  };
+
+  // Edit mode (#/purchase-book/<list>/edit/<id>): the saved document back in the form, once the
+  // dropdowns it needs (suppliers, requests …) have loaded.
+  async function fillDocument(record) {
+    showRecordCode(el('code'), record.code);
+    await form.ready;
+    const formNode = byId(`${spec.key}-form`);
+    spec.fill(form, record);
+    el('remarks').value = record.remarks || '';
+    formNode.querySelector('[data-print-field="includeSignatory"]').checked = Boolean(record.includeSignatory);
+    formNode.querySelector('[data-print-field="attachSeal"]').checked = Boolean(record.attachSeal);
+    if (priced) {
+      el('vat-mode').value = record.vatMode || 'include';
+      el('discount').value = pbMoney(pbNum(record.discountAmount));
+      el('shipping').value = pbMoney(pbNum(record.shipping));
+      syncVatToggle();
+    }
+    form.page.setRows('items', record.items.map(line => purchaseLineValues(spec.kind, line)));
+    await Promise.all(rows().map(row => syncPurchaseRow(row, form.warehouseId?.())));
+    await spec.afterFill?.(form, record);
+    form.page.absorb();                       // the filled document is where undo stops
+    form.refresh();
+  }
+
+  form.page = createFormPage({
+    key: spec.key, route: spec.route, noun: spec.noun, api: spec.api, ctrlSave: true, lookups: spec.lookups, listRoute: spec.listRoute,
+    firstField: () => spec.firstField(),
+    setCode: () => showNextCode(el('code'), spec.api),
+    lists: { items: { body: `${spec.key}-items`, template: spec.template, initial: 1, label: i => String(i + 1) } },
+    addRowList: () => 'items',
+    extra,
+    extraFocus: () => spec.chips?.input,
+    fieldNodes: {
+      items: () => pbCell(rows()[0], 'itemName'),
+      remarks: () => el('remarks'),
+      ...Object.fromEntries(Object.entries(spec.fieldNodes || {}).map(([key, id]) => [key, () => byId(id)])),
+    },
+    refresh: () => form.refresh(),
+    afterRestore() {
+      syncBoundSelects(byId(`${spec.key}-form`));
+      syncVatToggle();
+      for (const row of rows()) syncPurchaseRow(row, form.warehouseId?.());
+      spec.afterRestore?.(form);
+    },
+    onReset() {
+      for (const input of byId(`${spec.key}-form`).querySelectorAll('input[type="hidden"][id]')) input.value = '';
+      if (el('vat-mode')) el('vat-mode').value = 'include';
+      syncVatToggle();
+      for (const row of rows()) syncPurchaseRow(row, form.warehouseId?.());
+      form.ready = Promise.resolve(spec.onReset?.(form)).catch(() => {});
+    },
+    read() {
+      const errors = [];
+      const header = spec.header(form);
+      spec.check?.(form, errors);
+      const lines = readLines(errors);
+      const payload = { ...header, ...flags(), remarks: el('remarks').value.trim(), items: lines };
+      if (priced) Object.assign(payload, { vatMode: vatMode(), discountAmount: el('discount').value.trim() || '0', shipping: el('shipping').value.trim() || '0' });
+      for (const id of ['discount', 'shipping']) {
+        if (priced && el(id).value.trim() !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(el(id).value.trim())) {
+          errors.push({ node: el(id), message: 'Enter an amount with up to 3 decimals.' });
+        }
+      }
+      return { payload, errors };
+    },
+    fill: fillDocument,
+    init() { initPurchaseForm(form); spec.init?.(form); },
+  });
+  return form;
+}
+
+function initPurchaseForm(form) {
+  const { spec, el } = form;
+  const formNode = el('form');
+  const body = el('items');
+
+  // The PDF print box: Include Signatory Slots, Attach Seal with Replace / Remove.
+  const box = formNode.querySelector('.pb-print');
+  box.append(byId('pb-print-box').content.cloneNode(true));
+  box.querySelector('[data-print-field="includeSignatory"]').id = `${spec.key}-signatory`;
+  box.querySelector('[data-print-field="attachSeal"]').id = `${spec.key}-seal`;
+
+  // Before the form's own input handler records the change: keep hidden values and linked cells in step.
+  formNode.addEventListener('input', event => {
+    const target = event.target;
+    if (target.matches('select[data-bind], select[data-bind-id]')) {
+      boundHidden(target).value = target.value;
+      if (target.dataset.bind === 'brandId') pbCell(target.closest('tr'), 'brandName').value = target.value ? target.selectedOptions[0].text : '';
+      if (target.dataset.bind === 'uomId') pbCell(target.closest('tr'), 'unit').value = target.value ? target.selectedOptions[0].text : '';
+    }
+    const row = target.closest('.fp-row');
+    if (!row) return;
+    const field = target.dataset.field;
+    if (isSuggestField(target)) {
+      if (suggest.picking) {
+        const id = lookupIdInput(target).value;
+        if (id) applyPurchaseItem(form, row, id);
+      } else if (field === 'itemName' || field === 'itemCode') {
+        // Typing over a picked item makes the row a typed item: the other cell and the brand let go of it.
+        const other = field === 'itemName' ? pbCell(row, 'itemCode') : pbCell(row, 'itemName');
+        if (row.dataset.itemApplied) {
+          if (field === 'itemName') other.value = '';
+          lookupIdInput(other).value = '';
+          pbCell(row, 'itemId').value = '';
+          pbCell(row, 'brandId').value = '';
+          pbCell(row, 'brandName').value = '';
+          row.dataset.itemApplied = '';
+          setRowBrands(row, null);
+        }
+      }
+    }
+    linkRowNumbers(row, field);
+  }, true);
+
+  // A code or name that matches an item exactly is taken when the cell is left (settleSuggest fills the id).
+  body.addEventListener('focusout', event => {
+    const row = event.target.closest('.fp-row');
+    if (!row || !isSuggestField(event.target)) return;
+    setTimeout(() => {
+      const id = lookupIdInput(event.target).value;
+      if (id && row.dataset.itemApplied !== id) applyPurchaseItem(form, row, id);
+    }, 40);
+  });
+
+  // Numbers read as money / percentages once a cell is left.
+  formNode.addEventListener('change', event => {
+    const target = event.target;
+    const field = target.dataset.field;
+    if (target.value.trim() === '' || !/^[\d.,]+$/.test(target.value.trim())) return;
+    const value = pbNum(target.value);
+    if (['price', 'unitCost', 'discountAmount'].includes(field) || target.classList.contains('pb-sum-input')) target.value = pbMoney(value);
+    else if (spec.kind === 'po' && ['vatRate', 'discountPct'].includes(field)) target.value = value.toFixed(2);
+    else if (['quantity', 'receivedQty', 'acceptedQty', 'rejectedQty', 'vatRate', 'discountPct'].includes(field)) target.value = pbQty(value);
+    else return;
+    form.page.absorb();
+    form.refresh();
+  });
+
+  formNode.addEventListener('click', event => {
+    const vat = event.target.closest('[data-vat]');
+    if (vat) {
+      el('vat-mode').value = vat.dataset.vat;
+      for (const button of vat.parentElement.querySelectorAll('[data-vat]')) button.setAttribute('aria-pressed', String(button === vat));
+      form.page.record();
+      return;
+    }
+    if (event.target.closest('[data-create-item]')) {
+      window.open(`${location.pathname}#/${ITEM_ROUTE}`, '_blank', 'noopener');
+      return;
+    }
+    const move = event.target.closest('[data-action="move-up"], [data-action="move-down"]');
+    if (move) {
+      const row = move.closest('tr');
+      const up = move.dataset.action === 'move-up';
+      const sibling = up ? row.previousElementSibling : row.nextElementSibling;
+      if (!sibling) return;
+      if (up) sibling.before(row); else sibling.after(row);
+      form.page.record();
+      move.focus();
+    }
+  });
+
+  function linkRowNumbers(row, field) {
+    const cell = name => pbCell(row, name);
+    if (spec.kind === 'grn') {
+      const received = pbNum(cell('receivedQty').value);
+      if (field === 'receivedQty' || field === 'rejectedQty') cell('acceptedQty').value = pbQty(Math.max(0, received - pbNum(cell('rejectedQty').value)));
+      if (field === 'acceptedQty') cell('rejectedQty').value = pbQty(Math.max(0, received - pbNum(cell('acceptedQty').value)));
+    }
+    if (spec.kind === 'po') {
+      const gross = cell('foc').value === 'Yes' ? 0 : pbNum(cell('quantity').value) * pbNum(cell('price').value);
+      if (['quantity', 'price', 'discountPct', 'foc'].includes(field)) cell('discountAmount').value = pbMoney(gross * pbNum(cell('discountPct').value) / 100);
+      if (field === 'discountAmount') cell('discountPct').value = gross > 0 ? (pbNum(cell('discountAmount').value) / gross * 100).toFixed(2) : '0.00';
+    }
+  }
+}
+
+// Units for every row's Unit list, racks for the GRN; the seal's name beside Replace / Remove.
+async function loadPurchaseMasters() {
+  const units = await loadLookup('uom');
+  const options = units.map(unit => ({ value: unit.id, label: unit.name }));
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) fillSelect(byId(id).content.querySelector('select[data-bind="uomId"]'), options, 'Unit');
+  for (const select of document.querySelectorAll('.fp-theme-purchase select[data-bind="uomId"]')) {
+    fillSelect(select, options, 'Unit');
+    select.value = boundHidden(select).value;
+  }
+  try { pbData.racks = await apiRequest('api/rack-bins.php'); } catch { pbData.racks = []; }
+  showSealName();
+}
+
+async function showSealName() {
+  let seal = null;
+  try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
+  for (const label of document.querySelectorAll('[data-seal-name]')) label.textContent = seal ? '(seal on file)' : '(no seal yet)';
+  for (const button of document.querySelectorAll('[data-seal="remove"]')) button.disabled = !seal;
+}
+
+function initSealButtons() {
+  const picker = byId('pb-seal-file');
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('[data-seal]');
+    if (!button) return;
+    if (button.dataset.seal === 'replace') { picker.click(); return; }
+    try {
+      await apiRequest('api/company-seal.php', { method: 'DELETE' });
+      showToast('Seal removed', 'Purchase Book PDFs will print without a seal.');
+    } catch (error) { showToast('The seal could not be removed', error.message, true); }
+    showSealName();
+  });
+  picker.addEventListener('change', async () => {
+    const file = picker.files[0];
+    picker.value = '';
+    if (!file) return;
+    const body = new FormData();
+    body.append('seal', file);
+    try {
+      await apiRequest('api/company-seal.php', { method: 'POST', body });
+      showToast('Seal saved', `${file.name} will be printed when Attach Seal is ticked.`);
+    } catch (error) { showToast('The seal could not be saved', error.message, true); }
+    showSealName();
+  });
+}
+
+const purchaseLineRow = line => ({
+  itemId: line.itemId ?? '', itemCode: line.itemCode, itemName: line.itemName, brandId: line.brandId ?? '', brandName: line.brandName,
+  uomId: line.uomId ?? '', unit: line.unit,
+});
+
+// A saved line as a row's cell values (edit mode), formatted as the form shows them.
+function purchaseLineValues(kind, line) {
+  const values = purchaseLineRow(line);
+  if (kind === 'grn') {
+    return { ...values, receivedQty: pbQty(pbNum(line.receivedQty)), acceptedQty: pbQty(pbNum(line.acceptedQty)), rejectedQty: pbQty(pbNum(line.rejectedQty)),
+      expiryDate: line.expiryDate || '', rackId: line.rackId ?? '', unitCost: pbMoney(pbNum(line.unitCost)),
+      vatRate: pbQty(pbNum(line.vatRate)), discountPct: pbQty(pbNum(line.discountPct)) };
+  }
+  values.quantity = pbQty(pbNum(line.quantity));
+  if (kind === 'po') {
+    Object.assign(values, { price: pbMoney(pbNum(line.price)), vatRate: pbNum(line.vatRate).toFixed(2), discountPct: pbNum(line.discountPct).toFixed(2),
+      discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No' });
+  }
+  return values;
+}
+
+// Sets a select, adding the option first when the list does not have it (an inactive supplier on an old document).
+function setSelectValue(select, value, label) {
+  const text = String(value ?? '');
+  if (text && ![...select.options].some(option => option.value === text)) select.append(new Option(label || text, text));
+  select.value = text;
+}
+
+async function purchaseOptions(select, api, label) {
+  try {
+    const rows = await apiRequest(api);
+    fillSelect(select, rows.map(row => ({ value: row.id, label: label(row) })), select.options[0]?.text ?? '');
+  } catch (error) {
+    showToast('A list could not be loaded', error.message, true);
+  }
+}
+
+/* ---------- Purchase Request ---------- */
+const prForm = createPurchaseForm({
+  key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php',
+  kind: 'simple', template: 'pb-line-simple', lookups: [],
+  firstField: () => byId('pr-reference'),
+  fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required', deliveryLocation: 'pr-location' },
+  header: () => ({
+    referenceNo: byId('pr-reference').value.trim(), purchaseType: byId('pr-type').value, requestedDate: byId('pr-date').value,
+    requiredDate: byId('pr-required').value, requestedBy: byId('pr-requested-by').value, deliveryLocation: byId('pr-location').value.trim(),
+  }),
+  check(form, errors) {
+    if (!byId('pr-date').value) errors.push({ node: byId('pr-date'), message: 'Enter the requested date.' });
+    if (byId('pr-required').value && byId('pr-required').value < byId('pr-date').value) {
+      errors.push({ node: byId('pr-required'), message: 'The required delivery date cannot be before the requested date.' });
+    }
+  },
+  onReset() { byId('pr-date').value = todayInputValue(); byId('pr-requested-by').value = 'admin'; },
+  listRoute: 'purchase-book/purchase-request',
+  fill(form, pr) {
+    byId('pr-reference').value = pr.referenceNo;
+    setSelectValue(byId('pr-type'), pr.purchaseType);
+    byId('pr-date').value = pr.requestedDate;
+    byId('pr-required').value = pr.requiredDate || '';
+    byId('pr-requested-by').value = pr.requestedBy || 'admin';
+    byId('pr-location').value = pr.deliveryLocation;
+  },
+});
+
+/* ---------- Quotation Request (RFQ) ---------- */
+const rfqSuppliers = createLookupChips({ container: 'rfq-suppliers', entry: 'rfq-supplier-entry', onChange: () => { rfqNote(); rfqForm.page.record(); } });
+function rfqNote() {
+  const count = rfqSuppliers.get().length;
+  byId('rfq-supplier-note').lastElementChild.textContent = count ? `${count} supplier${count === 1 ? '' : 's'} selected.` : 'No suppliers selected.';
+}
+const rfqForm = createPurchaseForm({
+  key: 'rfq', route: 'purchase-book/quotation-request/new', noun: 'Quotation Request', api: 'api/quotation-requests.php',
+  kind: 'simple', template: 'pb-line-simple', lookups: [], chips: rfqSuppliers, onChips: rfqNote,
+  firstField: () => byId('rfq-pr'),
+  fieldNodes: { purchaseRequestId: 'rfq-pr', requestDate: 'rfq-date', submissionDeadline: 'rfq-deadline', supplierIds: 'rfq-supplier-entry' },
+  header: () => ({
+    purchaseRequestId: byId('rfq-pr').value || null, requestDate: byId('rfq-date').value,
+    submissionDeadline: byId('rfq-deadline').value, supplierIds: rfqSuppliers.ids(),
+  }),
+  check(form, errors) {
+    if (!rfqSuppliers.get().length) errors.push({ node: rfqSuppliers.input, message: 'Select at least one supplier.' });
+    if (byId('rfq-deadline').value && byId('rfq-deadline').value < byId('rfq-date').value) {
+      errors.push({ node: byId('rfq-deadline'), message: 'The submission deadline cannot be before the request date.' });
+    }
+  },
+  onReset() {
+    byId('rfq-date').value = todayInputValue();
+    return purchaseOptions(byId('rfq-pr'), 'api/purchase-requests.php', row => `${row.code} · ${row.purchaseType} · ${row.itemCount} item${row.itemCount === 1 ? '' : 's'}`);
+  },
+  listRoute: 'purchase-book/quotation-request',
+  fill(form, rfq) {
+    setSelectValue(byId('rfq-pr'), rfq.purchaseRequestId, rfq.purchaseRequestCode);
+    byId('rfq-date').value = rfq.requestDate;
+    byId('rfq-deadline').value = rfq.submissionDeadline || '';
+    rfqSuppliers.set(rfq.suppliers);
+    rfqNote();
+  },
+  init(form) {
+    byId('rfq-pr').addEventListener('change', async () => {
+      const id = byId('rfq-pr').value;
+      if (!id) return;
+      try {
+        const pr = await apiRequest(`api/purchase-requests.php?id=${id}`);
+        await loadPurchaseLines(form, pr.items, line => ({ ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)) }));
+        showToast('Items fetched', `${pr.items.length} item${pr.items.length === 1 ? '' : 's'} from ${pr.code}.`);
+      } catch (error) { showToast('The purchase request could not be loaded', error.message, true); }
+    });
+  },
+});
+
+/* ---------- Purchase Order ---------- */
+async function poShowSupplier({ keepContact = true } = {}) {
+  const id = byId('po-supplier').value;
+  const contactSelect = byId('po-contact-select');
+  const currency = byId('po-currency');
+  if (!id) {
+    fillSelect(contactSelect, [], 'Select contact person');
+    fillSelect(currency, [], 'Select a supplier first');
+    byId('po-contact-hint').hidden = false;
+    return null;
+  }
+  let supplier;
+  try { supplier = await pbSupplier(id); } catch (error) { showToast('The supplier could not be loaded', error.message, true); return null; }
+  if (byId('po-supplier').value !== id) return null;
+  const contacts = (supplier.contacts || []).filter(contact => contact.name);
+  fillSelect(contactSelect, contacts.map(contact => ({ value: contact.name, label: contact.designation ? `${contact.name} · ${contact.designation}` : contact.name })),
+    contacts.length ? 'Select contact person' : 'No contacts on file');
+  if (!keepContact) byId('po-contact').value = '';
+  contactSelect.value = byId('po-contact').value;
+  fillSelect(currency, [{ value: supplier.currency, label: supplier.currency }]);
+  currency.value = supplier.currency;
+  byId('po-contact-hint').hidden = true;
+  return supplier;
+}
+
+const poForm = createPurchaseForm({
+  key: 'po', route: 'purchase-book/purchase-order/new', noun: 'Purchase Order', api: 'api/purchase-orders.php',
+  kind: 'po', template: 'pb-line-po', lookups: ['purchaseorder'],
+  firstField: () => byId('po-date'),
+  fieldNodes: { poDate: 'po-date', purchaseRequestId: 'po-reference', quotationRequestId: 'po-reference', quotationNumber: 'po-quotation-no',
+    status: 'po-status', deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
+    supplierId: 'po-supplier', contactName: 'po-contact-select', email: 'po-email', discountAmount: 'po-discount', shipping: 'po-shipping' },
+  header() {
+    const [kind, id] = byId('po-reference').value.split(':');
+    return {
+      poDate: byId('po-date').value, purchaseRequestId: kind === 'pr' ? id : null, quotationRequestId: kind === 'rfq' ? id : null,
+      quotationNumber: byId('po-quotation-no').value.trim(), status: byId('po-status').value, deliveryDate: byId('po-delivery-date').value,
+      deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
+      supplierId: byId('po-supplier').value || null, contactName: byId('po-contact').value, email: byId('po-email').value.trim(),
+    };
+  },
+  check(form, errors) {
+    if (!byId('po-supplier').value) errors.push({ node: byId('po-supplier'), message: 'Select the supplier.' });
+    if (byId('po-delivery-date').value && byId('po-delivery-date').value < byId('po-date').value) {
+      errors.push({ node: byId('po-delivery-date'), message: 'The delivery date cannot be before the PO date.' });
+    }
+  },
+  afterRestore: () => poShowSupplier(),
+  listRoute: 'purchase-book/purchase-order',
+  fill(form, po) {
+    byId('po-date').value = po.poDate;
+    const reference = po.purchaseRequestId ? [`pr:${po.purchaseRequestId}`, po.purchaseRequestCode]
+      : po.quotationRequestId ? [`rfq:${po.quotationRequestId}`, po.quotationRequestCode] : ['', ''];
+    setSelectValue(byId('po-reference'), ...reference);
+    byId('po-quotation-no').value = po.quotationNumber;
+    setSelectValue(byId('po-status'), po.status);
+    byId('po-delivery-date').value = po.deliveryDate || '';
+    byId('po-location').value = po.deliveryLocation;
+    byId('po-terms').value = po.deliveryTerms;
+    setSelectValue(byId('po-payment'), po.paymentMode);
+    setSelectValue(byId('po-supplier'), po.supplierId, po.supplierName);
+    byId('po-contact').value = po.contactName;
+    byId('po-email').value = po.email;
+  },
+  afterFill: () => poShowSupplier(),
+  async onReset() {
+    byId('po-date').value = todayInputValue();
+    poShowSupplier();
+    const suppliers = purchaseOptions(byId('po-supplier'), 'api/suppliers.php', row => row.name);
+    const reference = byId('po-reference');
+    try {
+      const [requests, quotations] = await Promise.all([apiRequest('api/purchase-requests.php'), apiRequest('api/quotation-requests.php')]);
+      const group = (label, rows, kind, text) => {
+        const node = document.createElement('optgroup');
+        node.label = label;
+        node.append(...rows.map(row => new Option(text(row), `${kind}:${row.id}`)));
+        return node;
+      };
+      const keep = reference.value;
+      reference.replaceChildren(new Option('None (direct order)', ''),
+        ...(requests.length ? [group('Purchase Request', requests, 'pr', row => `${row.code} · ${row.itemCount} item${row.itemCount === 1 ? '' : 's'}`)] : []),
+        ...(quotations.length ? [group('Quotation Request', quotations, 'rfq', row => `${row.code} · ${row.name}`)] : []));
+      reference.value = keep;
+    } catch (error) { showToast('Purchase and quotation requests could not be loaded', error.message, true); }
+    await suppliers;
+  },
+  init(form) {
+    byId('po-supplier').addEventListener('change', async () => {
+      byId('po-contact').value = '';
+      const supplier = await poShowSupplier({ keepContact: false });
+      if (supplier && !byId('po-email').value.trim() && supplier.email) byId('po-email').value = supplier.email;
+      form.page.absorb();
+    });
+    byId('po-contact-select').addEventListener('change', async () => {
+      const supplier = byId('po-supplier').value ? await pbSupplier(byId('po-supplier').value) : null;
+      const contact = supplier?.contacts?.find(entry => entry.name === byId('po-contact').value);
+      if (contact?.email) { byId('po-email').value = contact.email; form.page.absorb(); }
+    });
+    byId('po-reference').addEventListener('change', async () => {
+      const [kind, id] = byId('po-reference').value.split(':');
+      if (!id) return;
+      try {
+        const doc = await apiRequest(`api/${kind === 'pr' ? 'purchase-requests' : 'quotation-requests'}.php?id=${id}`);
+        if (kind === 'rfq' && doc.suppliers.length === 1 && !byId('po-supplier').value) {
+          byId('po-supplier').value = String(doc.suppliers[0].id);
+          const supplier = await poShowSupplier({ keepContact: false });
+          if (supplier?.email && !byId('po-email').value.trim()) byId('po-email').value = supplier.email;
+        }
+        await loadPurchaseLines(form, doc.items, line => ({ ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)) }));
+        // The item's buying rate as the starting price.
+        for (const row of form.page.rowsOf('items')) {
+          const itemId = pbCell(row, 'itemId').value;
+          if (!itemId) continue;
+          const item = await pbItem(itemId).catch(() => null);
+          if (item && pbNum(item.buyingRate) > 0) pbCell(row, 'price').value = pbMoney(pbNum(item.buyingRate));
+        }
+        form.page.absorb();
+        form.refresh();
+        showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+      } catch (error) { showToast('The items could not be fetched', error.message, true); }
+    });
+  },
+});
+
+/* ---------- Goods Receipt Note ---------- */
+const grnForm = createPurchaseForm({
+  key: 'grn', route: 'purchase-book/grn/new', noun: 'GRN', api: 'api/grns.php',
+  kind: 'grn', template: 'pb-line-grn', lookups: [],
+  firstField: () => byId('grn-date'),
+  fieldNodes: { grnDate: 'grn-date', supplierId: 'grn-supplier', warehouseId: 'grn-warehouse', poNumber: 'grn-po', purchaseOrderId: 'grn-po',
+    discountAmount: 'grn-discount', shipping: 'grn-shipping' },
+  header: () => ({
+    grnDate: byId('grn-date').value, supplierId: byId('grn-supplier').value || null, warehouseId: byId('grn-warehouse').value || null,
+    purchaseOrderId: byId('grn-po-id').value || null, poNumber: byId('grn-po').value.trim(),
+  }),
+  check(form, errors) {
+    if (!byId('grn-supplier').value) errors.push({ node: byId('grn-supplier'), message: 'Select the supplier.' });
+    if (!byId('grn-warehouse').value) errors.push({ node: byId('grn-warehouse'), message: 'Select the warehouse the goods are received into.' });
+  },
+  onReset() {
+    byId('grn-date').value = todayInputValue();
+    forgetLookups('purchaseorder');
+    return Promise.all([
+      purchaseOptions(byId('grn-supplier'), 'api/suppliers.php', row => row.name),
+      purchaseOptions(byId('grn-warehouse'), 'api/warehouses.php', row => `${row.name} (${row.type})`),
+    ]);
+  },
+  listRoute: 'purchase-book/grn',
+  fill(form, grn) {
+    byId('grn-date').value = grn.grnDate;
+    setSelectValue(byId('grn-supplier'), grn.supplierId, grn.supplierName);
+    setSelectValue(byId('grn-warehouse'), grn.warehouseId, grn.warehouseName);
+    byId('grn-po').value = grn.poNumber;
+    byId('grn-po-id').value = grn.purchaseOrderId ?? '';
+  },
+  init(form) {
+    form.warehouseId = () => byId('grn-warehouse').value;
+    byId('grn-warehouse').addEventListener('change', () => {
+      for (const row of form.page.rowsOf('items')) setRowRacks(row, byId('grn-warehouse').value);
+      form.page.absorb();
+    });
+    // Picking a purchase order fills the supplier and its lines (received = ordered, all accepted).
+    byId('grn-form').addEventListener('input', async event => {
+      if (event.target.id !== 'grn-po' || !suggest.picking) return;
+      const id = byId('grn-po-id').value;
+      if (!id) return;
+      try {
+        const po = await apiRequest(`api/purchase-orders.php?id=${id}`);
+        if (po.supplierId) byId('grn-supplier').value = String(po.supplierId);
+        byId('grn-vat-mode').value = po.vatMode;
+        await loadPurchaseLines(form, po.items, line => ({
+          ...purchaseLineRow(line), receivedQty: pbQty(pbNum(line.quantity)), acceptedQty: pbQty(pbNum(line.quantity)), rejectedQty: '0',
+          unitCost: pbMoney(pbNum(line.price)), vatRate: pbQty(pbNum(line.vatRate)), discountPct: pbQty(pbNum(line.discountPct)),
+        }));
+        form.page.el('form').querySelectorAll('[data-vat]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.vat === po.vatMode)));
+        showToast('Items fetched', `${po.items.length} item${po.items.length === 1 ? '' : 's'} from ${po.code}.`);
+      } catch (error) { showToast('The purchase order could not be loaded', error.message, true); }
+    });
+  },
+});
+
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm];
+
+/* ---------- Purchase Book list pages  (#/purchase-book/purchase-request, quotation-request, purchase-order, grn) ----------
+   The master list page (createMasterList) for each document: search, Filter (by document and date), View with the
+   item lines, Edit (the form with the document filled in), PDF, Delete, Import and CSV export. Quick Menu ›
+   Purchase Book opens these; Purchase Book › Create still opens the empty forms. */
+
+const pbDate = value => (value ? shortDate(String(value).slice(0, 10)) : '');
+const pbAmount = value => (value === null || value === undefined || value === '' ? '' : pbMoney(pbNum(value)));
+
+// The View popup's item table for one document kind.
+function purchaseItemsSection(kind) {
+  return record => {
+    const item = line => [line.itemCode, line.itemName, line.brandName];
+    const table = kind === 'grn'
+      ? viewTable(['Code', 'Item', 'Brand', 'Received', 'Accepted', 'Rejected', 'Unit', 'Expiry', 'Rack', 'Unit Cost', 'VAT %', 'Disc %', 'Total'],
+        record.items.map(l => [...item(l), pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit,
+          pbDate(l.expiryDate), l.rackCode, pbAmount(l.unitCost), pbQty(pbNum(l.vatRate)), pbQty(pbNum(l.discountPct)), pbAmount(l.lineTotal)]), 'No items.')
+      : kind === 'po'
+        ? viewTable(['Code', 'Item', 'Brand', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'FOC', 'Line Total'],
+          record.items.map(l => [...item(l), pbQty(pbNum(l.quantity)), l.unit, pbAmount(l.price), pbQty(pbNum(l.vatRate)), pbQty(pbNum(l.discountPct)),
+            pbAmount(l.discountAmount), l.foc ? 'Yes' : 'No', pbAmount(l.lineTotal)]), 'No items.')
+        : viewTable(['Code', 'Item', 'Brand', 'Quantity', 'Unit'],
+          record.items.map(l => [...item(l), pbQty(pbNum(l.quantity)), l.unit]), 'No items.');
+    const sections = [viewSection(`Items (${record.items.length})`, table)];
+    if (kind === 'po' || kind === 'grn') {
+      sections.push(viewSection('Summary', viewFields([
+        { label: 'Prices', value: record.vatMode === 'exclude' ? 'Exclude VAT (added on top)' : 'Include VAT' },
+        { label: 'Subtotal', value: pbAmount(record.subtotal) }, { label: 'VAT', value: pbAmount(record.vatAmount) },
+        { label: 'Discount Amount', value: pbAmount(record.discountAmount) }, { label: 'Shipping Price', value: pbAmount(record.shipping) },
+        { label: 'Grand Total', value: pbAmount(record.grandTotal) },
+      ])));
+    }
+    sections.push(viewSection('Remarks & Print', viewFields([
+      { label: 'Remarks', value: record.remarks, column: { type: 'wrap' } },
+      { label: 'Signatory Slots', value: record.includeSignatory ? 'Included' : 'Not included' },
+      { label: 'Seal', value: record.attachSeal ? 'Attached' : 'Not attached' },
+    ])));
+    return sections;
+  };
+}
+
+/* Import: one item line per sheet row. Rows with the same Document No become one document (a blank
+   Document No makes the row a document of its own); the first row of a group gives the header fields. */
+const readSheetDate = label => value => {
+  if (!value) return '';
+  if (/^\d{4,6}(\.\d+)?$/.test(value)) {               // an Excel date serial (days since 1899-12-30)
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.round(Number(value)) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+  let match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(value);
+  if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  match = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(value);   // day first (11/06/2026 is 11 June)
+  if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+  throw new Error(`${label} "${value}" is not a date (use YYYY-MM-DD or DD-MM-YYYY)`);
+};
+const readSheetNumber = (label, decimals = 3) => value => {
+  if (!value) return '';
+  const text = value.replace(/,/g, '');
+  if (!new RegExp(`^\\d{1,11}(\\.\\d{1,${decimals}})?$`).test(text)) throw new Error(`${label} "${value}" must be a number with up to ${decimals} decimals`);
+  return text;
+};
+const readVatMode = value => {
+  if (!value) return '';
+  if (/^incl/i.test(value)) return 'include';
+  if (/^excl/i.test(value)) return 'exclude';
+  throw new Error(`VAT "${value}" must be Include or Exclude`);
+};
+
+const PB_IMPORT_GROUP = { key: 'docNo', label: 'Document No', headers: ['document', 'document number', 'doc no', 'group', 'sl no'] };
+const PB_IMPORT_ITEM = [
+  { key: 'itemCode', label: 'Item Code', headers: ['code', 'sku', 'part no'] },
+  { key: 'itemName', label: 'Item Name', headers: ['item', 'description', 'item description', 'product'] },
+  { key: 'brand', label: 'Brand', headers: ['make', 'brand name'] },
+];
+const pbImportQty = { key: 'quantity', label: 'Quantity', headers: ['qty'], read: readSheetNumber('Quantity') };
+const pbImportUnit = { key: 'unit', label: 'Unit', headers: ['uom', 'unit of measure'] };
+const pbImportRemarks = { key: 'remarks', label: 'Remarks', headers: ['notes', 'comments'] };
+
+function groupSheetDocuments(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = row.docNo ? `doc:${row.docNo.toLowerCase()}` : `line:${row.sheetLine}`;
+    if (!groups.has(key)) groups.set(key, { ...row, code: '', name: row.docNo || row.itemName, lines: [] });
+    groups.get(key).lines.push(row);
+  }
+  return [...groups.values()];
+}
+
+// Looks a master record up by name or code; a typed item that is not in the master stays free text.
+async function optionalLookupId(kind, text) {
+  if (!text) return null;
+  try { return await importLookupId(kind, text); } catch { return null; }
+}
+async function importItemLine(row) {
+  const itemId = await optionalLookupId('item', row.itemName) ?? await optionalLookupId('itemcode', row.itemCode);
+  return {
+    itemId, itemCode: row.itemCode, itemName: row.itemName, brandId: await optionalLookupId('brand', row.brand), brandName: row.brand,
+    uomId: await optionalLookupId('uom', row.unit), unit: row.unit,
+  };
+}
+
+function purchaseList(spec) {
+  return createMasterList({
+    key: spec.key, route: spec.route, newRoute: `#/${spec.route}/new`, noun: spec.noun, nouns: spec.nouns,
+    api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
+    dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind),
+    columns: spec.columns, fromApi: spec.fromApi, sample: {},
+    importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
+    importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
+    matchRow: () => undefined,                  // every import adds new documents (the server numbers them)
+    groupRows: groupSheetDocuments,
+    async toPayload(group) {
+      const items = [];
+      for (const line of group.lines) items.push({ ...await importItemLine(line), ...spec.importLine(line) });
+      return { ...await spec.importHeader(group), remarks: group.remarks, items };
+    },
+  });
+}
+
+const prList = purchaseList({
+  key: 'pr', route: 'purchase-book/purchase-request', noun: 'Purchase Request', nouns: 'Purchase Requests', api: 'api/purchase-requests.php',
+  kind: 'simple', form: prForm, dateOf: record => record.requestedDate,
+  columns: [
+    { key: 'code', label: 'PR ID', type: 'code', group: 'Request' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Request' },
+    { key: 'referenceNo', label: 'Reference ID', type: 'mono', group: 'Request' },
+    { key: 'purchaseType', label: 'Purchase Type', type: 'pill', group: 'Request' },
+    { key: 'requestedBy', label: 'Requested By', type: 'name', group: 'Requester & Delivery' },
+    { key: 'requiredDate', label: 'Required By', type: 'mono', group: 'Schedule' },
+    { key: 'itemCount', label: 'Items', type: 'qty', group: 'Request' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty-ok', group: 'Request' },
+    detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Requester & Delivery' }),
+  ],
+  fromApi: r => ({ ...r, date: r.requestedDate, requiredDate: r.requiredDate || '' }),
+  importColumns: [{ key: 'referenceNo', label: 'Reference ID', headers: ['reference', 'ref'] },
+    { key: 'purchaseType', label: 'Purchase Type', headers: ['type'], read: value => (value ? readChoice('purchase type', ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'])(value) : '') },
+    { key: 'requestedDate', label: 'Requested Date', headers: ['date', 'request date'], read: readSheetDate('Requested date') },
+    { key: 'requiredDate', label: 'Required Delivery Date', headers: ['required date', 'required by'], read: readSheetDate('Required date') },
+    { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit, pbImportRemarks],
+  importSamples: [
+    { docNo: '1', referenceNo: 'SO-2026-014', purchaseType: 'Against Order', requestedDate: '2026-11-10', deliveryLocation: 'Main Store', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces' },
+  ],
+  importHeader: async g => ({ referenceNo: g.referenceNo, purchaseType: g.purchaseType, requestedDate: g.requestedDate, requiredDate: g.requiredDate, deliveryLocation: g.deliveryLocation }),
+  importLine: line => ({ quantity: line.quantity || '1' }),
+});
+
+const rfqList = purchaseList({
+  key: 'rfq', route: 'purchase-book/quotation-request', noun: 'Quotation Request', nouns: 'Quotation Requests', api: 'api/quotation-requests.php',
+  kind: 'simple', form: rfqForm, dateOf: record => record.requestDate,
+  columns: [
+    { key: 'code', label: 'RFQ ID', type: 'code', group: 'Request' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Request' },
+    { key: 'purchaseRequestCode', label: 'PR ID', type: 'mono', group: 'Request' },
+    { key: 'name', label: 'Suppliers', type: 'name', group: 'Suppliers' },
+    { key: 'submissionDeadline', label: 'Deadline', type: 'mono', group: 'Schedule' },
+    { key: 'itemCount', label: 'Items', type: 'qty', group: 'Request' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty-ok', group: 'Request' },
+  ],
+  fromApi: r => ({ ...r, date: r.requestDate, submissionDeadline: r.submissionDeadline || '' }),
+  importColumns: [{ key: 'prCode', label: 'PR ID', headers: ['purchase request', 'pr', 'pr no'] },
+    { key: 'requestDate', label: 'Quotation Req Date', headers: ['date', 'request date', 'rfq date'], read: readSheetDate('Request date') },
+    { key: 'deadline', label: 'Submission Deadline', headers: ['deadline'], read: readSheetDate('Submission deadline') },
+    { key: 'suppliers', label: 'Suppliers', headers: ['supplier', 'supplier names', 'vendors'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit, pbImportRemarks],
+  importSamples: [
+    { docNo: '1', requestDate: '2026-11-10', deadline: '2026-11-17', suppliers: 'GULF VALVES LLC, OMAN PIPES', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces' },
+  ],
+  async importHeader(g) {
+    const names = String(g.suppliers || '').split(/[,;]/).map(name => name.trim()).filter(Boolean);
+    const supplierIds = [];
+    for (const name of names) supplierIds.push(await importLookupId('supplier', name));
+    const prs = g.prCode ? await apiRequest('api/purchase-requests.php') : [];
+    const pr = prs.find(row => sameText(row.code, g.prCode));
+    if (g.prCode && !pr) throw new Error(`there is no purchase request "${g.prCode}"`);
+    return { purchaseRequestId: pr?.id ?? null, requestDate: g.requestDate, submissionDeadline: g.deadline, supplierIds };
+  },
+  importLine: line => ({ quantity: line.quantity || '1' }),
+});
+
+const poList = purchaseList({
+  key: 'po', route: 'purchase-book/purchase-order', noun: 'Purchase Order', nouns: 'Purchase Orders', api: 'api/purchase-orders.php',
+  kind: 'po', form: poForm, lookups: ['purchaseorder'], dateOf: record => record.poDate,
+  columns: [
+    { key: 'code', label: 'PO ID', type: 'code', group: 'Order' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Order' },
+    { key: 'name', label: 'Supplier', type: 'name', group: 'Supplier' },
+    { key: 'reference', label: 'Reference', type: 'mono', group: 'Order' },
+    { key: 'status', label: 'Status', type: 'pill', group: 'Order' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Order' },
+    { key: 'grandTotal', label: 'Grand Total', type: 'qty-ok', group: 'Order' },
+    detail({ key: 'quotationNumber', label: 'Quotation Number', group: 'Order' }),
+    detail({ key: 'deliveryDate', label: 'Delivery Date', group: 'Delivery & Payment' }),
+    detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Delivery & Payment' }),
+    detail({ key: 'deliveryTerms', label: 'Delivery Terms', group: 'Delivery & Payment' }),
+    detail({ key: 'paymentMode', label: 'Payment Mode', group: 'Delivery & Payment' }),
+    detail({ key: 'contactName', label: 'Contact Person', group: 'Supplier' }),
+    detail({ key: 'email', label: 'Email ID', type: 'upper', group: 'Supplier' }),
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
+  ],
+  fromApi: r => ({ ...r, date: r.poDate, reference: r.purchaseRequestCode || r.quotationRequestCode || '', grandTotal: pbAmount(r.grandTotal), deliveryDate: r.deliveryDate || '' }),
+  importColumns: [{ key: 'poDate', label: 'PO Date', headers: ['date', 'order date'], read: readSheetDate('PO date') },
+    { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor'] },
+    { key: 'status', label: 'Status', read: value => (value ? readChoice('status', ['Draft', 'Sent', 'Confirmed', 'Partially Received', 'Received', 'Cancelled'])(value) : '') },
+    { key: 'quotationNumber', label: 'Quotation Number', headers: ['quotation no', 'quote no'] },
+    { key: 'paymentMode', label: 'Payment Mode', headers: ['payment'], read: value => (value ? readChoice('payment mode', ['Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'])(value) : '') },
+    { key: 'deliveryDate', label: 'Delivery Date', read: readSheetDate('Delivery date') },
+    { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
+    { key: 'deliveryTerms', label: 'Delivery Terms', headers: ['terms'] },
+    { key: 'vatMode', label: 'VAT', headers: ['vat mode', 'prices'], read: readVatMode },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'price', label: 'Price', headers: ['rate', 'unit price'], read: readSheetNumber('Price') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate', 'vat percent'], read: readSheetNumber('VAT %', 2) },
+    { key: 'discountPct', label: 'Disc %', headers: ['discount', 'discount %'], read: readSheetNumber('Disc %', 2) },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', poDate: '2026-11-10', supplier: 'GULF VALVES LLC', status: 'Draft', paymentMode: 'Credit', vatMode: 'Include', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces', price: '12.500', vatRate: '5' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces', price: '0.350', vatRate: '5' },
+  ],
+  importHeader: async g => ({
+    poDate: g.poDate, supplierId: await importLookupId('supplier', g.supplier), status: g.status, quotationNumber: g.quotationNumber,
+    paymentMode: g.paymentMode, deliveryDate: g.deliveryDate, deliveryLocation: g.deliveryLocation, deliveryTerms: g.deliveryTerms, vatMode: g.vatMode || 'include',
+  }),
+  importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: line.discountPct || '0' }),
+});
+
+const grnList = purchaseList({
+  key: 'grn', route: 'purchase-book/grn', noun: 'GRN', nouns: 'GRNs', api: 'api/grns.php',
+  kind: 'grn', form: grnForm, dateOf: record => record.grnDate,
+  columns: [
+    { key: 'code', label: 'GRN ID', type: 'code', group: 'Document' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Document' },
+    { key: 'poNumber', label: 'PO Number', type: 'mono', group: 'Document' },
+    { key: 'name', label: 'Supplier', type: 'name', group: 'Document' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Quantities' },
+    { key: 'acceptedQty', label: 'Accepted Qty', type: 'qty-ok', group: 'Quantities' },
+    detail({ key: 'warehouseName', label: 'Warehouse', group: 'Document' }),
+    detail({ key: 'grandTotal', label: 'Grand Total', type: 'mono', group: 'Quantities' }),
+  ],
+  fromApi: r => ({ ...r, date: r.grnDate, grandTotal: pbAmount(r.grandTotal) }),
+  importColumns: [{ key: 'grnDate', label: 'GRN Date', headers: ['date', 'receipt date'], read: readSheetDate('GRN date') },
+    { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor'] },
+    { key: 'warehouse', label: 'Warehouse', headers: ['stock point', 'store'] },
+    { key: 'poNumber', label: 'PO Number', headers: ['po', 'po no', 'reference'] },
+    { key: 'vatMode', label: 'VAT', headers: ['vat mode', 'costs'], read: readVatMode },
+    ...PB_IMPORT_ITEM,
+    { key: 'receivedQty', label: 'Received Qty', headers: ['received', 'quantity', 'qty'], read: readSheetNumber('Received qty') },
+    { key: 'acceptedQty', label: 'Accepted Qty', headers: ['accepted'], read: readSheetNumber('Accepted qty') },
+    { key: 'rejectedQty', label: 'Rejected Qty', headers: ['rejected'], read: readSheetNumber('Rejected qty') },
+    pbImportUnit,
+    { key: 'expiryDate', label: 'Expiry', headers: ['expiry date', 'batch expiry'], read: readSheetDate('Expiry') },
+    { key: 'unitCost', label: 'Unit Cost', headers: ['cost', 'rate', 'price'], read: readSheetNumber('Unit cost') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate'], read: readSheetNumber('VAT %', 2) },
+    { key: 'discountPct', label: 'Disc %', headers: ['discount'], read: readSheetNumber('Disc %', 2) },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', grnDate: '2026-11-10', supplier: 'GULF VALVES LLC', warehouse: 'Central WH North', poNumber: 'PO-0001', vatMode: 'Include', itemName: 'GATE VALVE 2"', receivedQty: '10', acceptedQty: '9', rejectedQty: '1', unit: 'Pieces', unitCost: '12.500', vatRate: '5' },
+  ],
+  async importHeader(g) {
+    const pos = g.poNumber ? await apiRequest('api/purchase-orders.php') : [];
+    const po = pos.find(row => sameText(row.code, g.poNumber));
+    return {
+      grnDate: g.grnDate, supplierId: await importLookupId('supplier', g.supplier), warehouseId: await importLookupId('warehouse', g.warehouse),
+      purchaseOrderId: po?.id ?? null, poNumber: g.poNumber, vatMode: g.vatMode || 'include',
+    };
+  },
+  importLine(line) {
+    const received = pbNum(line.receivedQty);
+    const rejected = pbNum(line.rejectedQty);
+    const accepted = line.acceptedQty !== '' ? line.acceptedQty : pbQty(Math.max(0, received - rejected));
+    return { receivedQty: line.receivedQty || '0', acceptedQty: accepted, rejectedQty: line.rejectedQty || pbQty(Math.max(0, received - pbNum(accepted))),
+      expiryDate: line.expiryDate, unitCost: line.unitCost || '0', vatRate: line.vatRate || '5', discountPct: line.discountPct || '0' };
+  },
+});
+
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList];
+
+/* ---------- PDF: the document laid out on A4 and handed to the browser's print dialog ("Save as PDF") ----------
+   Ticked "Include Signatory Slots" adds Prepared / Checked / Approved boxes; "Attach Seal" prints the company seal. */
+async function printPurchaseDocument(spec, id) {
+  let doc;
+  try { doc = await apiRequest(`${spec.api}?id=${id}`); } catch (error) { showToast('The document could not be opened', error.message, true); return; }
+  const sheet = byId('pb-print-sheet');
+  const title = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Receipt Note' }[spec.key];
+  const cell = (tag, className, text) => el(tag, className, String(text ?? '') || '—');
+  const meta = {                     // functions: only the printed kind's fields are read
+    pr: () => [['PR ID', doc.code], ['Requested Date', pbDate(doc.requestedDate)], ['Required By', pbDate(doc.requiredDate)], ['Reference ID', doc.referenceNo],
+      ['Purchase Type', doc.purchaseType], ['Requested By', doc.requestedBy], ['Delivery Location', doc.deliveryLocation]],
+    rfq: () => [['RFQ ID', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)], ['PR ID', doc.purchaseRequestCode],
+      ['Suppliers', doc.suppliers.map(s => s.name).join(', ')]],
+    po: () => [['PO ID', doc.code], ['PO Date', pbDate(doc.poDate)], ['Status', doc.status], ['Supplier', doc.supplierName], ['Contact Person', doc.contactName],
+      ['Email', doc.email], ['Currency', doc.currency], ['Quotation No', doc.quotationNumber], ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode],
+      ['Delivery Date', pbDate(doc.deliveryDate)], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode]],
+    grn: () => [['GRN ID', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['Supplier', doc.supplierName], ['Warehouse', doc.warehouseName], ['PO Number', doc.poNumber]],
+  }[spec.key]();
+  const heads = {
+    simple: ['#', 'Item Code', 'Item', 'Brand', 'Qty', 'Unit'],
+    po: ['#', 'Item Code', 'Item', 'Brand', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc.', 'Total'],
+    grn: ['#', 'Item Code', 'Item', 'Received', 'Accepted', 'Rejected', 'Unit', 'Unit Cost', 'VAT %', 'Total'],
+  }[spec.kind];
+  const lineCells = (l, i) => ({
+    simple: [i + 1, l.itemCode, l.itemName, l.brandName, pbQty(pbNum(l.quantity)), l.unit],
+    po: [i + 1, l.itemCode, l.itemName, l.brandName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbQty(pbNum(l.vatRate)), pbAmount(l.discountAmount), pbAmount(l.lineTotal)],
+    grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbQty(pbNum(l.vatRate)), pbAmount(l.lineTotal)],
+  }[spec.kind]);
+
+  const head = el('header', 'ps-head');
+  const brand = el('div', 'ps-brand');
+  brand.append(el('div', 'ps-company', byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine'), el('div', 'ps-sub', 'Purchase Book'));
+  const titleBox = el('div', 'ps-title-box');
+  titleBox.append(el('h1', 'ps-title', title), el('div', 'ps-code', doc.code));
+  head.append(brand, titleBox);
+
+  const metaGrid = el('dl', 'ps-meta');
+  for (const [label, value] of meta) {
+    const item = el('div', 'ps-meta-item');
+    item.append(cell('dt', '', label), cell('dd', '', value));
+    metaGrid.append(item);
+  }
+
+  const table = el('table', 'ps-table');
+  const thead = el('thead');
+  const headRow = el('tr');
+  headRow.append(...heads.map(text => el('th', '', text)));
+  thead.append(headRow);
+  const tbody = el('tbody');
+  doc.items.forEach((line, i) => {
+    const tr = el('tr');
+    tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
+    tbody.append(tr);
+  });
+  table.append(thead, tbody);
+
+  const parts = [head, metaGrid, table];
+  if (spec.kind !== 'simple') {
+    const totals = el('dl', 'ps-totals');
+    for (const [label, value, strong] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT' : 'VAT (included)', doc.vatAmount],
+      ['Discount', doc.discountAmount], ['Shipping', doc.shipping], [`Grand Total${doc.currency ? ` (${doc.currency})` : ''}`, doc.grandTotal, true]]) {
+      const row = el('div', strong ? 'ps-total-grand' : '');
+      row.append(el('dt', '', label), el('dd', '', pbAmount(value)));
+      totals.append(row);
+    }
+    parts.push(totals);
+  }
+  if (doc.remarks) {
+    const remarks = el('div', 'ps-remarks');
+    remarks.append(el('strong', '', 'Remarks: '), document.createTextNode(doc.remarks));
+    parts.push(remarks);
+  }
+  const foot = el('footer', 'ps-foot');
+  if (doc.includeSignatory) {
+    const signs = el('div', 'ps-signs');
+    for (const label of ['Prepared By', 'Checked By', 'Approved By']) signs.append(el('div', 'ps-sign', label));
+    foot.append(signs);
+  }
+  let sealLoaded = Promise.resolve();
+  if (doc.attachSeal) {
+    const seal = el('img', 'ps-seal');
+    seal.alt = 'Company seal';
+    sealLoaded = new Promise(resolve => { seal.onload = resolve; seal.onerror = () => { seal.remove(); resolve(); }; });
+    seal.src = `api/company-seal.php?file=1&t=${Date.now()}`;
+    foot.append(seal);
+  }
+  parts.push(foot);
+  sheet.replaceChildren(...parts);
+  await sealLoaded;
+
+  const pageTitle = document.title;
+  document.title = `${doc.code} ${title}`;              // the browser's suggested PDF file name
+  document.body.classList.add('is-printing');
+  const done = () => {
+    document.body.classList.remove('is-printing');
+    document.title = pageTitle;
+    sheet.replaceChildren();
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+
+function initPurchaseBook() {
+  composePurchaseTemplates();
+  for (const form of PURCHASE_FORMS) form.page.init();
+  for (const list of PURCHASE_LISTS) list.init();
+  initSealButtons();
+  loadPurchaseMasters();
+  // Items made in another tab (Create Item) show up in the searches once this tab is back in front.
+  window.addEventListener('focus', () => {
+    if (!PURCHASE_FORMS.some(form => form.spec.key === currentPage)) return;
+    forgetLookups('item', 'itemcode');
+    pbData.items.clear();
+  });
+}
+
+/* =====================================================================
    Load + boot
    ===================================================================== */
 
@@ -4390,6 +5597,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSuggestFields();
   initItemPage();
   for (const form of MASTER_FORMS) form.init();
+  initPurchaseBook();
   initMasterFilter();
   initMasterImport();
   initMasterView();
