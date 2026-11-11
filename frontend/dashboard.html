@@ -204,7 +204,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="item-uom">Unit of Measure</label>
-          <div class="fp-input-wrap fp-suggest-wrap"><input id="item-uom" class="fp-input fp-suggest-input" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="item-uom-options" autocomplete="off" spellcheck="false" placeholder="Type to search units..."><input id="item-uom-id" type="hidden"><ul id="item-uom-options" class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-uom" class="fp-input fp-lookup" type="text" data-lookup="uom" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select unit..."><input id="item-uom-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="item-category">Primary Category</label>
@@ -1892,8 +1892,8 @@
 
   <form id="po-form" class="fp-form" novalidate>
     <section class="fp-card">
-      <h2 class="fp-section-title">1. Order Identification</h2>
-      <div class="pb-grid pb-grid-5">
+      <h2 class="fp-section-title">1. Document Details</h2>
+      <div class="pb-grid pb-grid-4">
         <div class="fp-field">
           <label class="fp-label pb-label-row" for="po-code"><span>PO ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
           <div class="fp-input-wrap">
@@ -1906,86 +1906,88 @@
           <input id="po-date" class="fp-input" type="date" required>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-reference">Reference Type</label>
-          <select id="po-reference" class="fp-input fp-select" data-enter-opens="true"><option value="">None (direct order)</option></select>
-          <p class="pb-hint">What this order is raised against; its items are fetched from it.</p>
-        </div>
-        <div class="fp-field">
           <label class="fp-label" for="po-quotation-no">Quotation Number</label>
-          <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001">
+          <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001 (optional)">
         </div>
-        <div class="fp-field">
-          <label class="fp-label" for="po-status">Status</label>
-          <select id="po-status" class="fp-input fp-select">
-            <option selected>Draft</option><option>Sent</option><option>Confirmed</option><option>Partially Received</option><option>Received</option><option>Cancelled</option>
-          </select>
-        </div>
-      </div>
-    </section>
-
-    <section class="fp-card">
-      <h2 class="fp-section-title">2. Delivery &amp; Payment</h2>
-      <div class="pb-grid pb-grid-4">
         <div class="fp-field">
           <label class="fp-label" for="po-delivery-date">Delivery Date</label>
           <input id="po-delivery-date" class="fp-input" type="date">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-location">Delivery Location</label>
-          <input id="po-location" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="Enter delivery location">
+          <input id="po-location" class="fp-input" type="text" maxlength="200" autocomplete="off" value="Muscat Main Warehouse" placeholder="Enter delivery location">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-terms">Delivery Terms</label>
-          <input id="po-terms" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="e.g. 2–3 weeks from PO date, DAP Muscat">
+          <input id="po-terms" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="e.g. 2–3 weeks from PO date, DAF">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-payment">Payment Mode</label>
           <select id="po-payment" class="fp-input fp-select">
-            <option value="">Select payment mode</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Credit</option><option>Card</option>
+            <option selected>As usual</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Credit</option><option>Card</option>
           </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-salesman">Salesman / Created By</label>
+          <input id="po-salesman" class="fp-input pb-input-strong" type="text" maxlength="100" autocomplete="off" data-upper value="ADMIN" placeholder="Salesman name">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
+          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="40" autocomplete="off" placeholder="Enter salesman contact number">
+        </div>
+      </div>
+      <div class="fp-field pb-cert">
+        <span class="fp-label" id="po-cert-label">Certification Required</span>
+        <input id="po-certifications" type="hidden" value="N/A">
+        <div class="pb-cert-box" role="group" aria-labelledby="po-cert-label">
+          <label class="pb-check"><input type="checkbox" data-cert="N/A" data-transient="true" checked><span>N/A</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="Pressure Test" data-transient="true"><span>Pressure Test</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="COC Certificate" data-transient="true"><span>COC Certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="MTC Certificate" data-transient="true"><span>MTC Certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="TPI Certificate" data-transient="true"><span>TPI Certificate</span></label>
         </div>
       </div>
     </section>
 
     <section class="fp-card">
-      <h2 class="fp-section-title">3. Supplier</h2>
+      <h2 class="fp-section-title">2. Supplier Details</h2>
       <div class="pb-grid pb-grid-4">
         <div class="fp-field">
           <label class="fp-label" for="po-supplier">Supplier Name</label>
-          <select id="po-supplier" class="fp-input fp-select" data-enter-opens="true"><option value="">Select supplier</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-supplier" class="fp-input fp-lookup" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select supplier..."><input id="po-supplier-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-contact-select">Contact Person</label>
-          <select id="po-contact-select" class="fp-input fp-select" data-bind-id="po-contact" data-transient="true"><option value="">Select contact person</option></select>
-          <input id="po-contact" type="hidden">
-          <p class="pb-hint" id="po-contact-hint">Select a supplier to list its contacts.</p>
+          <label class="fp-label" for="po-contact">Contact Person Name</label>
+          <input id="po-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="po-contact-list" placeholder="e.g. Contact person name">
+          <datalist id="po-contact-list"></datalist>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-email">Email ID</label>
-          <input id="po-email" class="fp-input" type="text" inputmode="email" data-check="email" maxlength="150" autocomplete="off" placeholder="e.g. sales@supplier.com">
+          <label class="fp-label" for="po-contact-number">Contact Person Number</label>
+          <input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="40" autocomplete="off" placeholder="e.g. +968 9123 4567">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-currency">Currency</label>
-          <select id="po-currency" class="fp-input fp-select" disabled data-transient="true" tabindex="-1"><option value="">Select a supplier first</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
       </div>
     </section>
 
     <section class="fp-card pb-card-items">
       <div class="fp-section-head">
-        <h2 class="fp-section-title">4. Ordered Items</h2>
+        <h2 class="fp-section-title">3. Purchase Order Line Items</h2>
         <div class="pb-head-actions">
-          <div class="pb-toggle" role="group" aria-label="Prices" data-vat-toggle="po-vat-mode">
-            <button type="button" data-vat="include" aria-pressed="true">Include VAT</button><button type="button" data-vat="exclude" aria-pressed="false">Exclude VAT</button>
-          </div>
-          <input id="po-vat-mode" type="hidden" value="include">
+          <input id="po-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-vat-switch" data-vat-switch aria-pressed="true" title="VAT Enabled: VAT % is added on top of the prices. Click for prices that already include VAT.">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+            <span data-vat-label>VAT Enabled</span>
+          </button>
           <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
           <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
         </div>
       </div>
       <div class="fp-table-wrap pb-table-wrap">
-        <table class="fp-table pb-table pb-table-priced">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-foc">FOC</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+        <table class="fp-table pb-table pb-table-priced pb-table-po">
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="po-items"></tbody>
         </table>
       </div>
@@ -1993,22 +1995,48 @@
 
     <div class="pb-pair-summary">
       <section class="fp-card">
-        <h2 class="fp-section-title">5. Remarks &amp; PDF Print Configuration</h2>
+        <h2 class="fp-section-title">4. Remarks &amp; Notes</h2>
         <div class="fp-field">
-          <label class="fp-label" for="po-remarks">Remarks</label>
-          <textarea id="po-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="e.g. Urgent delivery required"></textarea>
+          <div class="pb-label-row">
+            <label class="fp-label" id="po-remarks-label" for="po-remarks-editor">Remarks</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">◆</span> Select text to make it bold or change its colour</span>
+          </div>
+          <input id="po-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks formatting" aria-controls="po-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Colour</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="po-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="po-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Urgent delivery required"></div>
+          </div>
         </div>
         <div class="pb-print" data-print="po"></div>
       </section>
-      <section class="fp-card pb-summary" aria-live="polite">
-        <h2 class="fp-section-title">6. Summary</h2>
-        <dl class="pb-sum">
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">5. Financial Summary</h2>
+        <dl class="pb-sum pb-sum-box">
           <div><dt>Subtotal</dt><dd id="po-subtotal">0.000</dd></div>
-          <div><dt id="po-vat-label">VAT (included)</dt><dd id="po-vat">0.000</dd></div>
+          <div><dt id="po-vat-label">VAT</dt><dd id="po-vat">0.000</dd></div>
           <div><dt><label for="po-discount">Discount Amount</label></dt><dd><input id="po-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
           <div><dt><label for="po-shipping">Shipping Price</label></dt><dd><input id="po-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
-          <div class="pb-sum-grand"><dt>Grand Total</dt><dd id="po-grand">0.000</dd></div>
         </dl>
+        <div class="pb-grand-box"><span>Grand Total (<span id="po-grand-currency">OMR</span>)</span><strong id="po-grand">0.000</strong></div>
       </section>
     </div>
 
@@ -2059,11 +2087,11 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="grn-supplier">Supplier</label>
-          <select id="grn-supplier" class="fp-input fp-select" data-enter-opens="true"><option value="">No supplier selected</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="grn-supplier" class="fp-input fp-lookup" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select supplier..."><input id="grn-supplier-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="grn-warehouse">Warehouse</label>
-          <select id="grn-warehouse" class="fp-input fp-select" data-enter-opens="true"><option value="">No warehouse selected</option></select>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="grn-warehouse" class="fp-input fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select warehouse..."><input id="grn-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="grn-po">PO Number</label>
@@ -2076,10 +2104,11 @@
       <div class="fp-section-head">
         <h2 class="fp-section-title">2. GRN Line Items</h2>
         <div class="pb-head-actions">
-          <div class="pb-toggle" role="group" aria-label="Costs" data-vat-toggle="grn-vat-mode">
-            <button type="button" data-vat="include" aria-pressed="true">Include VAT</button><button type="button" data-vat="exclude" aria-pressed="false">Exclude VAT</button>
-          </div>
-          <input id="grn-vat-mode" type="hidden" value="include">
+          <input id="grn-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-vat-switch" data-vat-switch aria-pressed="true" title="VAT Enabled: VAT % is added on top of the costs. Click for costs that already include VAT.">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+            <span data-vat-label>VAT Enabled</span>
+          </button>
           <button type="button" class="pb-btn pb-btn-outline" data-create-item><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
           <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
         </div>
@@ -2128,10 +2157,10 @@
   <td class="pb-col-sno" data-row-label></td>
   <td><div class="fp-input-wrap fp-suggest-wrap"><span class="fp-input-icon-left" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span><input class="fp-cell fp-has-icon pb-cell-code" data-field="itemCode" type="text" data-suggest="itemcode" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="Search code..." aria-label="Item code"><input type="hidden" data-code-id><ul class="fp-suggest" role="listbox" aria-label="Items" hidden></ul></div></td>
   <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-name" data-field="itemName" type="text" data-suggest="item" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Type item name..." aria-label="Item name"><input type="hidden" data-field="itemId"><ul class="fp-suggest" role="listbox" aria-label="Items" hidden></ul></div></td>
-  <td><select class="fp-cell fp-select pb-cell-select" data-bind="brandId" data-options="brand" disabled aria-label="Brand"><option value="">Select item first</option></select><input type="hidden" data-field="brandId"><input type="hidden" data-field="brandName"></td>
+  <td data-brand-cell><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-brand" data-field="brandName" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..." aria-label="Brand"><input type="hidden" data-field="brandId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
 </template>
 <template id="pb-cell-unit">
-  <td><select class="fp-cell fp-select pb-cell-select" data-bind="uomId" data-options="uom" aria-label="Unit"><option value="">Unit</option></select><input type="hidden" data-field="uomId"><input type="hidden" data-field="unit"></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
 </template>
 <template id="pb-cell-remove">
   <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
@@ -2150,8 +2179,7 @@
   <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5.00" aria-label="VAT %"></td>
   <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-label="Discount %"></td>
   <td><input class="fp-cell fp-cell-num" data-field="discountAmount" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Discount amount"></td>
-  <td><select class="fp-cell fp-select pb-cell-select" data-field="foc" aria-label="Free of charge"><option value="No" selected>No</option><option value="Yes">Yes</option></select></td>
-  <td><output class="pb-line-total" data-total>—</output></td>
+  <td><output class="pb-line-total" data-total>—</output><input type="hidden" data-field="foc" value="No"></td>
   <td class="pb-col-act"><div class="pb-row-actions">
     <button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
     <button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
@@ -2359,6 +2387,7 @@
       <h2 id="master-view-title" class="sf-title"></h2>
       <p id="master-view-sub" class="sf-sub mv-code"></p>
     </div>
+    <span class="mv-keys" aria-hidden="true"><kbd>↑↓</kbd> Scroll · <kbd>E</kbd> Edit · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Close</span>
     <button type="button" class="lk-close" data-mv="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
   </div>
   <div id="master-view-fields" class="mv-body"></div>
@@ -2367,7 +2396,6 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
       <span>Delete</span>
     </button>
-    <span class="mv-keys" aria-hidden="true"><kbd>↑↓</kbd> Scroll · <kbd>E</kbd> Edit · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Close</span>
     <button type="button" class="ml-btn ml-btn-plain" data-mv="close">Close</button>
     <button type="button" class="ml-btn ml-btn-primary" data-mv="edit" aria-keyshortcuts="E">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -2388,6 +2416,46 @@
   <div class="sf-foot mc-foot">
     <button type="button" class="ml-btn ml-btn-plain" data-mc="cancel">Cancel</button>
     <button type="button" id="master-confirm-ok" class="ml-btn ml-btn-danger-solid" data-mc="ok"></button>
+  </div>
+</dialog>
+
+<!-- QUICK ITEM POPUP (Purchase Book › Create Item): the few fields an item needs; the full form stays in Masters › Item -->
+<dialog id="quick-item" class="lookup sf qi" aria-labelledby="quick-item-title" aria-describedby="quick-item-sub">
+  <div class="sf-head">
+    <span class="sf-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="m3 8 9 5 9-5M12 13v8"></path></svg></span>
+    <div class="sf-heading">
+      <h2 id="quick-item-title" class="sf-title">Create New Item</h2>
+      <p id="quick-item-sub" class="sf-sub">Saved to the Item master and filled into the line.</p>
+    </div>
+    <button type="button" class="lk-close" data-qi="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <form id="quick-item-form" class="qi-body" novalidate>
+    <div class="fp-field qi-wide">
+      <label class="fp-label" for="quick-item-name">Item Name <span class="fp-req">*</span></label>
+      <input id="quick-item-name" class="fp-input" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper placeholder="e.g. GATE VALVE 2&quot; SS316">
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-item-unit">Unit</label>
+      <div class="fp-input-wrap fp-lookup-wrap"><input id="quick-item-unit" class="fp-input fp-lookup" type="text" data-lookup="uom" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select unit..."><input id="quick-item-unit-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-item-category">Category</label>
+      <div class="fp-input-wrap fp-lookup-wrap"><input id="quick-item-category" class="fp-input fp-lookup" type="text" data-lookup="category" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select category..."><input id="quick-item-category-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-item-brand">Brand</label>
+      <div class="fp-input-wrap fp-lookup-wrap"><input id="quick-item-brand" class="fp-input fp-lookup" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..."><input id="quick-item-brand-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-item-cost">Buying Cost</label>
+      <input id="quick-item-cost" class="fp-input fp-cell-num" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000">
+    </div>
+    <p id="quick-item-error" class="qi-error" role="alert" hidden></p>
+  </form>
+  <div class="sf-foot qi-foot">
+    <span class="qi-keys"><kbd>Enter</kbd> Next / Save · <kbd>Esc</kbd> Close</span>
+    <button type="button" class="ml-btn ml-btn-plain" data-qi="close">Cancel</button>
+    <button type="button" id="quick-item-save" class="ml-btn ml-btn-green" data-qi="save">Create Item</button>
   </div>
 </dialog>
 

@@ -18,7 +18,9 @@ require_once __DIR__ . '/master_validation.php';
 
 const PB_PURCHASE_TYPES = ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'];
 const PB_PO_STATUSES = ['Draft', 'Sent', 'Confirmed', 'Partially Received', 'Received', 'Cancelled'];
-const PB_PAYMENT_MODES = ['Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'];
+const PB_PAYMENT_MODES = ['As usual', 'Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'];
+const PB_CERTIFICATIONS = ['N/A', 'Pressure Test', 'COC Certificate', 'MTC Certificate', 'TPI Certificate'];
+const PB_CURRENCIES = ['OMR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'USD', 'EUR', 'INR', 'GBP', 'PKR', 'EGP', 'JOD', 'TRY', 'CNY', 'JPY', 'KRW'];
 const PB_VAT_MODES = ['include', 'exclude'];
 
 /* The next document number: PR000001, RFQ000001, PO-0001, GRN000001. Call inside the insert's transaction. */
@@ -40,6 +42,97 @@ function pb_money(float $value): string
 function pb_flag(array $data, string $key): int
 {
     return !empty($data[$key]) && $data[$key] !== 'false' ? 1 : 0;
+}
+
+/* ---------- Formatted remarks (purchase orders) ----------
+ * The remarks editor sends HTML. Only these tags are kept, each without attributes except a text colour
+ * (style="color: #rrggbb"); scripts, styles and embeds are dropped with their content and any other tag
+ * is unwrapped to its text. Remarks without tags (older orders, imports) stay plain text.
+ */
+const PB_REMARK_TAGS = ['b', 'strong', 'i', 'em', 'u', 'span', 'font', 'br', 'div', 'p', 'ul', 'ol', 'li'];
+const PB_REMARK_DROP = ['script', 'style', 'iframe', 'object', 'embed', 'template', 'svg', 'math', 'head', 'title', 'meta', 'link',
+    'form', 'input', 'button', 'textarea', 'select'];
+
+/* Formatted remarks contain one of the kept tags; anything else is plain text (shown escaped). The page uses the same test. */
+function pb_is_html(string $text): bool
+{
+    return (bool) preg_match('~</?(b|strong|i|em|u|span|font|br|div|p|ul|ol|li)\b~i', $text);
+}
+
+function pb_clean_html(string $html): string
+{
+    $html = trim($html);
+    if ($html === '' || !pb_is_html($html)) {
+        return $html;
+    }
+    if (!class_exists(DOMDocument::class)) {      // no DOM extension: keep the text and its line breaks
+        $text = (string) preg_replace('~<(br|/p|/div|/li)\b[^>]*>~i', "\n", $html);
+        return trim(html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+    $doc = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $doc->loadHTML('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' . $html . '</body></html>', LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    $body = $doc->getElementsByTagName('body')->item(0);
+    if (!$body) {
+        return '';
+    }
+    pb_clean_children($body);
+    $out = '';
+    foreach (iterator_to_array($body->childNodes) as $child) {
+        $out .= $doc->saveHTML($child);
+    }
+    return trim($out);
+}
+
+function pb_clean_children(DOMNode $node): void
+{
+    foreach (iterator_to_array($node->childNodes) as $child) {
+        if ($child instanceof DOMText) {
+            continue;
+        }
+        if (!$child instanceof DOMElement) {
+            $node->removeChild($child);       // comments, processing instructions
+            continue;
+        }
+        $tag = strtolower($child->tagName);
+        if (in_array($tag, PB_REMARK_DROP, true)) {
+            $node->removeChild($child);
+            continue;
+        }
+        pb_clean_children($child);
+        if (!in_array($tag, PB_REMARK_TAGS, true)) {
+            while ($child->firstChild) {
+                $node->insertBefore($child->firstChild, $child);
+            }
+            $node->removeChild($child);
+            continue;
+        }
+        $colour = $tag === 'font' ? $child->getAttribute('color') : '';
+        if (preg_match('~(?:^|;)\s*color\s*:\s*([^;]+)~i', $child->getAttribute('style'), $m)) {
+            $colour = $m[1];
+        }
+        foreach (iterator_to_array($child->attributes) as $attribute) {
+            $child->removeAttribute($attribute->name);
+        }
+        $colour = pb_clean_colour($colour);
+        if ($colour !== '') {
+            $child->setAttribute('style', "color: $colour");
+        }
+    }
+}
+
+function pb_clean_colour(string $colour): string
+{
+    $colour = strtolower(trim($colour));
+    if (preg_match('~^#([0-9a-f]{3}|[0-9a-f]{6})$~', $colour)) {
+        return $colour;
+    }
+    if (preg_match('~^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$~', $colour, $m)) {
+        return sprintf('#%02x%02x%02x', min(255, (int) $m[1]), min(255, (int) $m[2]), min(255, (int) $m[3]));
+    }
+    return '';
 }
 
 /* ---------- Lines ---------- */
@@ -425,6 +518,8 @@ function po_format(array $row): array
         'deliveryLocation' => $row['delivery_location'], 'deliveryTerms' => $row['delivery_terms'], 'paymentMode' => $row['payment_mode'],
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
         'supplierName' => $supplier ? $supplier['supplier_name'] : '', 'contactName' => $row['contact_name'], 'email' => $row['email'],
+        'contactNumber' => $row['contact_number'], 'salesman' => $row['salesman'], 'salesmanContact' => $row['salesman_contact'],
+        'certifications' => $row['certifications'] === '' ? [] : explode(', ', $row['certifications']),
         'currency' => $row['currency'], 'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
     ];
@@ -459,8 +554,8 @@ function purchase_order_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
         $data = array_replace(pb_as_input(purchase_order_find($id), ['poDate', 'purchaseRequestId', 'quotationRequestId', 'quotationNumber',
-            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'supplierId', 'contactName', 'email', 'currency',
-            'vatMode', 'discountAmount', 'shipping']), $data);
+            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'salesman', 'salesmanContact', 'certifications',
+            'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
     }
     $in = new Input($data);
     $supplierId = $in->id('supplierId', 'supplier', 'suppliers');
@@ -475,12 +570,16 @@ function purchase_order_save(array $data, ?int $id = null): array
         'delivery_location' => $in->text('deliveryLocation', 'Delivery location', 200),
         'delivery_terms' => $in->text('deliveryTerms', 'Delivery terms', 200),
         'payment_mode' => $in->text('paymentMode', 'Payment mode', 40),
+        'salesman' => $in->text('salesman', 'Salesman / created by', 100),
+        'salesman_contact' => $in->text('salesmanContact', 'Salesman contact', 40),
+        'certifications' => po_certifications($in, $data['certifications'] ?? []),
         'supplier_id' => $supplierId,
         'contact_name' => $in->text('contactName', 'Contact person', 100),
+        'contact_number' => $in->text('contactNumber', 'Contact person number', 40),
         'email' => $in->email('email', 'Email ID'),
-        'currency' => $supplierId !== null ? (string) query('SELECT currency FROM suppliers WHERE id = ?', [$supplierId])->fetchColumn() : 'OMR',
+        'currency' => po_currency($in, $supplierId),
         'vat_mode' => $vatMode,
-        'remarks' => $in->text('remarks', 'Remarks', 2000),
+        'remarks' => pb_clean_html($in->text('remarks', 'Remarks', 20000)),
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
     ];
     if ($supplierId === null) {
@@ -488,6 +587,11 @@ function purchase_order_save(array $data, ?int $id = null): array
     }
     if ($v['payment_mode'] !== '' && !in_array($v['payment_mode'], PB_PAYMENT_MODES, true)) {
         $in->fail('paymentMode', 'Payment mode must be one of: ' . implode(', ', PB_PAYMENT_MODES) . '.');
+    }
+    foreach (['salesman_contact' => 'salesmanContact', 'contact_number' => 'contactNumber'] as $column => $key) {
+        if ($v[$column] !== '' && !preg_match('~^[0-9+\-\s()]{3,40}$~', $v[$column])) {
+            $in->fail($key, 'Enter a phone number (digits, spaces, + - ( ) only).');
+        }
     }
     if ($v['delivery_date'] !== null && $v['delivery_date'] < $v['po_date']) {
         $in->fail('deliveryDate', 'The delivery date cannot be before the PO date.');
@@ -507,6 +611,35 @@ function purchase_order_save(array $data, ?int $id = null): array
     return purchase_order_find($id);
 }
 
+/* Certification Required: a list (or comma text) of PB_CERTIFICATIONS, stored as "A, B". N/A goes with nothing else. */
+function po_certifications(Input $in, mixed $raw): string
+{
+    $picked = is_array($raw) ? $raw : (is_string($raw) ? explode(',', $raw) : []);
+    $picked = array_values(array_unique(array_filter(array_map(static fn ($v) => trim((string) $v), $picked), 'strlen')));
+    if (array_diff($picked, PB_CERTIFICATIONS)) {
+        $in->fail('certifications', 'Certification must be one of: ' . implode(', ', PB_CERTIFICATIONS) . '.');
+        return '';
+    }
+    if (count($picked) > 1) {
+        $picked = array_values(array_diff($picked, ['N/A']));
+    }
+    usort($picked, static fn ($a, $b) => array_search($a, PB_CERTIFICATIONS, true) <=> array_search($b, PB_CERTIFICATIONS, true));
+    return implode(', ', $picked);
+}
+
+/* The order's currency: the one picked on the form, else the supplier's, else OMR. */
+function po_currency(Input $in, ?int $supplierId): string
+{
+    $currency = strtoupper($in->text('currency', 'Currency', 10));
+    if ($currency !== '' && !in_array($currency, PB_CURRENCIES, true)) {
+        $in->fail('currency', 'Currency must be one of: ' . implode(', ', PB_CURRENCIES) . '.');
+    }
+    if ($currency === '' && $supplierId !== null) {
+        $currency = (string) query('SELECT currency FROM suppliers WHERE id = ?', [$supplierId])->fetchColumn();
+    }
+    return $currency !== '' ? $currency : 'OMR';
+}
+
 function purchase_order_delete(int $id): void
 {
     delete_row('purchase_orders', $id, 'Purchase order not found.');
@@ -522,7 +655,7 @@ function grn_format(array $row): array
     return pb_common($row) + [
         'code' => $row['grn_code'], 'itemCount' => $lines[0], 'totalQty' => $lines[1], 'acceptedQty' => $lines[2], 'name' => $supplier ? $supplier['supplier_name'] : 'No supplier', 'grnDate' => $row['grn_date'],
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierName' => $supplier ? $supplier['supplier_name'] : '',
-        'warehouseId' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'], 'warehouseName' => $warehouse ? $warehouse['warehouse_name'] : '',
+        'warehouseId' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'], 'warehouseName' => $warehouse ? $warehouse['warehouse_name'] : '', 'warehouseCode' => $warehouse ? $warehouse['warehouse_code'] : '',
         'purchaseOrderId' => $row['purchase_order_id'] === null ? null : (int) $row['purchase_order_id'], 'poNumber' => $row['po_number'],
         'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],

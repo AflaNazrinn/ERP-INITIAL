@@ -77,6 +77,9 @@ foreach (['supplier_quotation_items', 'customer_quotation_items', 'supplier_orde
 foreach ([['supplier_contacts', 'designation'], ['customer_contacts', 'email'], ['supplier_documents', 'doc_type'], ['customer_documents', 'expiry_date']] as [$table, $column]) {
     query('SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [$table, $column])->fetchColumn() ? $ok("column $table.$column") : $bad("column $table.$column is missing: import the migration");
 }
+foreach ([['purchase_orders', 'salesman'], ['purchase_orders', 'contact_number']] as [$table, $column]) {
+    query('SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [$table, $column])->fetchColumn() ? $ok("column $table.$column") : $bad("column $table.$column is missing: import migrations/2026_11_11_001_purchase_order_details.sql");
+}
 try {
     $applied = query("SELECT 1 FROM schema_migrations WHERE migration = '2026_11_09_001_master_fixes.sql'")->fetchColumn();
     $applied ? $ok('migration recorded in schema_migrations') : print("NOTE  migration not recorded in schema_migrations (harmless; see the deploy README)\n");

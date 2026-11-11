@@ -74,6 +74,8 @@ php bin/seed-demo-data.php     # optional: sample units, categories, brands, war
 2. `migrations/2026_11_09_001_master_fixes.sql`
 3. `migrations/2026_11_10_001_purchase_book.sql` (Purchase Book: purchase requests, quotation requests,
    purchase orders and GRNs; it only adds tables)
+4. `migrations/2026_11_11_001_purchase_order_details.sql` (Purchase Order: salesman, salesman contact,
+   certifications and contact number; it only adds columns)
 
 Then run this in the **SQL** tab, so a later `php bin/migrate.php` knows the files are already applied:
 
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO schema_migrations (migration) VALUES ('2026_11_05_001_masters.sql'), ('2026_11_09_001_master_fixes.sql'),
-  ('2026_11_10_001_purchase_book.sql');
+  ('2026_11_10_001_purchase_book.sql'), ('2026_11_11_001_purchase_order_details.sql');
 ```
 
 A database that already has the earlier files only needs the newer ones (and their names in `schema_migrations`).
@@ -116,6 +118,18 @@ Run the build again, upload the new zip to the same folder and extract it, overw
 contains `.env` or uploaded documents, so both are kept. If the release adds a file to `migrations/`,
 run `php bin/migrate.php` again (or import that file in phpMyAdmin and add its name to
 `schema_migrations`).
+
+## Demo Purchase Book documents
+
+To see the Purchase Book pages with something in them, add 3 demo documents to each one (Purchase
+Request, Quotation Request, Purchase Order, GRN). They use the suppliers, items and stock points already
+in the database (at least one supplier is needed; GRNs also need a stock point), and their remarks start
+with "Demo data". The script adds them only once.
+
+- **With SSH**: `php bin/seed-purchase-book.php`
+- **Without SSH**: upload `backend/bin/seed-purchase-book.php` (from the repository) to `public_html/api/`,
+  open `https://<your-domain>/api/seed-purchase-book.php` once, read the list of codes it added,
+  then **delete the file**.
 
 ## Before real data goes in
 

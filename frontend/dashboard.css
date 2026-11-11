@@ -805,7 +805,9 @@ kbd {
   display: flex; align-items: center; gap: 8px; width: 244px; height: 34px; padding: 0 12px;
   border: 1px solid var(--input-line); border-radius: 6px; background: var(--surface); color: var(--ink-400);
 }
-.ml-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .15); }
+/* Same highlight as the create forms' fields: yellow on the masters, green on the Purchase Book lists. */
+.ml-search:focus-within { background: var(--entry-bg); border-color: var(--entry-line); box-shadow: var(--entry-ring); color: var(--ink-700); }
+.ml-search:focus-within input::placeholder { color: var(--ink-700); }
 .ml-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink-900); }
 /* The search box itself shows focus: no inner ring or box on the input in any search bar. */
 .ml-search input, .ml-search input:focus, .ml-search input:focus-visible,
@@ -1063,7 +1065,8 @@ kbd {
 .mv-link { color: var(--tone-blue-ink); font-weight: 600; }
 .mv-value-name { font-size: 15px; font-weight: 800; text-transform: uppercase; }
 .mv-foot { background: var(--surface); }
-.mv-keys { flex: 1; min-width: 0; text-align: center; font-size: 11px; color: var(--ink-500); }
+.mv-keys { flex: none; white-space: nowrap; font-size: 11px; color: var(--ink-500); }   /* top right, beside Close */
+.mv-foot [data-mv="delete"] { margin-right: auto; }
 .mv-keys kbd { font-size: 10px; padding: 1px 5px; }
 
 .mc { width: min(440px, calc(100vw - 32px)); }
@@ -1142,10 +1145,10 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
   --accent-line: #bbf7d0;
   --accent-ink: #166534;
   --accent-ink-deep: #14532d;
-  /* The field being edited: light green here instead of the masters' yellow. */
-  --entry-bg: #bbf7d0;
+  /* The field being edited (mouse or Enter/Tab navigation): bright green instead of the masters' yellow. */
+  --entry-bg: #86efac;
   --entry-line: #15803d;
-  --entry-ring: 0 0 0 3px rgba(22, 163, 74, .35);
+  --entry-ring: 0 0 0 3px rgba(22, 163, 74, .3);
 }
 .fp-theme-purchase .fp-title { color: var(--accent-hover); }
 .fp-theme-purchase .fp-section-title { font-size: 13px; }
@@ -1302,9 +1305,9 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
   --accent-line: #bbf7d0;
   --accent-ink: #166534;
   --accent-ink-deep: #14532d;
-  --entry-bg: #bbf7d0;
+  --entry-bg: #86efac;
   --entry-line: #15803d;
-  --entry-ring: 0 0 0 3px rgba(22, 163, 74, .35);
+  --entry-ring: 0 0 0 3px rgba(22, 163, 74, .3);
 }
 .pb-list-title { color: var(--ink-900) !important; font-size: 20px; }
 .ml-btn-outline-green { background: var(--surface); border-color: #15803d; color: #15803d; }
@@ -1348,3 +1351,95 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
   .ps-sign { flex: 1; margin-top: 36px; padding-top: 6px; border-top: 1px solid #0f172a; font-size: 10px; font-weight: 700; text-align: center; color: #334155; }
   .ps-seal { width: 110px; height: 110px; object-fit: contain; margin-left: auto; }
 }
+
+/* ---------- List page keyboard highlight (every Masters and Purchase Book list) ----------
+   ↑/↓ PgUp/PgDn highlight the whole row; →/← move the highlight onto the View / Edit / Delete buttons.
+   The colour is the page's field highlight: yellow on the masters, green on the Purchase Book lists. */
+.ml-table tbody tr:focus { outline: none; }
+.ml-table tbody tr:focus td { background: var(--entry-bg); color: var(--ink-900); }
+.ml-table tbody tr:focus td:first-child { box-shadow: inset 4px 0 0 var(--entry-line); }
+.ml-table tbody tr:focus .ml-code { color: var(--ink-900); }
+.ml-table .ml-actions .ml-act:focus {
+  outline: none; background: var(--entry-bg); border-color: var(--entry-line); box-shadow: var(--entry-ring); color: var(--ink-900);
+}
+.ml-table .ml-actions .ml-act-danger:focus { color: var(--danger); }
+
+/* ---------- Purchase Order page (redesign, November 2026) ---------- */
+.pb-input-strong { font-weight: 800 !important; color: var(--ink-900); }
+.pb-cert { margin-top: 14px; }
+.pb-cert-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px; padding: 11px 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted);
+}
+.pb-check input:focus-visible { outline: 2px solid var(--entry-line); outline-offset: 2px; }
+
+/* Line items header: the VAT switch beside Create Item / Add Item. */
+.pb-vat-switch {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--input-line); background: var(--surface); color: var(--ink-700);
+  font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .03em;
+}
+.pb-vat-switch[aria-pressed="true"] { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+.pb-vat-switch:hover { border-color: var(--accent); }
+.pb-vat-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pb-table-po { min-width: 1080px; }
+.pb-table-po .pb-col-code { width: 150px; }
+.pb-table-po .pb-col-total { text-align: right !important; }
+.pb-table-po .pb-line-total { display: block; text-align: right; background: none; font-weight: 800; }
+
+/* Remarks editor: toolbar over a rich-text box. */
+.pb-editor-hint { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 10px; font-weight: 600; color: var(--accent); }
+.pb-editor-hint > span { font-size: 8px; }
+.pb-editor { border: 1px solid var(--input-line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.pb-editor:focus-within { border-color: var(--entry-line); box-shadow: var(--entry-ring); }
+.pb-editor-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 8px;
+  border-bottom: 1px solid var(--line-soft); background: var(--surface-muted);
+}
+.pb-tool {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 9px;
+  border: 1px solid var(--input-line); border-radius: 6px; background: var(--surface); color: var(--ink-800); cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 700;
+}
+.pb-tool-sq { width: 28px; padding: 0; }
+.pb-tool:hover { border-color: var(--accent); background: var(--accent-soft); }
+.pb-tool-sep { width: 1px; height: 20px; margin: 0 2px; background: var(--line); }
+.pb-tool-label { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-600); }
+.pb-swatch {
+  width: 15px; height: 15px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--swatch); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line);
+}
+.pb-swatch:hover { transform: scale(1.15); box-shadow: 0 0 0 1px var(--ink-500); }
+.pb-colour-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.pb-editor-area {
+  min-height: 108px; max-height: 260px; overflow-y: auto; padding: 10px 14px; outline: none;
+  font-size: 13px; line-height: 1.55; color: var(--ink-900); background: var(--surface);
+}
+.pb-editor-area:focus { background: var(--surface); }
+.pb-editor-area:empty::before { content: attr(data-placeholder); color: var(--ink-400); pointer-events: none; }
+.pb-editor-area ul, .pb-editor-area ol, .ps-remarks-body ul, .ps-remarks-body ol { margin: 4px 0; padding-left: 22px; }
+
+/* Financial Summary: the figures in a soft box, the grand total in its own green box. */
+.pb-summary-po { display: flex; flex-direction: column; gap: 14px; }
+.pb-sum-box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted); gap: 10px; }
+.pb-sum-box .pb-sum-input { background: var(--surface); }
+.pb-grand-box {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px;
+  border: 1px solid #bbf7d0; border-radius: 10px; background: #f0fdf4;
+  font-size: 15px; font-weight: 800; color: var(--ink-900);
+}
+.pb-grand-box strong { font-family: var(--font-mono); font-size: 24px; color: #15803d; }
+
+.ps-remarks-body { margin-top: 4px; white-space: normal; }
+
+/* ---------- Quick item popup (Purchase Book › Create Item) ---------- */
+.qi { width: min(560px, calc(100vw - 32px)); }
+.qi[open] { display: flex; flex-direction: column; }
+.qi-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 18px 22px; overflow-y: auto; }
+.qi-wide { grid-column: 1 / -1; }
+.qi .fp-input { height: 40px; font-size: 13px; }
+.qi-error { grid-column: 1 / -1; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12px; font-weight: 600; }
+.qi-foot { justify-content: flex-end; }
+.qi-keys { margin-right: auto; font-size: 11px; color: var(--ink-500); }
+.qi-keys kbd { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-muted); font-family: var(--font-mono); font-size: 10px; }
+@media (max-width: 520px) { .qi-body { grid-template-columns: minmax(0, 1fr); } .qi-keys { display: none; } }
