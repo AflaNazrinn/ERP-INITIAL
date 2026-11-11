@@ -51,7 +51,7 @@ backend/
   public/api/             thin endpoints (kebab-case file names)
   src/                    api_bootstrap.php, security.php, master_validation.php, one module per master
   migrations/             dated .sql files, applied in name order
-  bin/                    migrate.php, seed-demo-data.php
+  bin/                    migrate.php, seed-demo-data.php, seed-more-demo-data.php, seed-purchase-book.php
   README.md               endpoint list and full local setup
 database model/           the schema diagram the database must follow
 design/                   screen designs (design/masters/popup_reference.png = lookup popup style)
@@ -104,6 +104,8 @@ Step by step: [backend/README.md](backend/README.md#run-it-locally). In short:
 cp backend/.env.example backend/.env      # database name, user, password, port
 php backend/bin/migrate.php                # create the tables
 php backend/bin/seed-demo-data.php         # optional demo masters
+php backend/bin/seed-more-demo-data.php    # optional: more brands, suppliers, customers, items (safe to rerun)
+php backend/bin/seed-purchase-book.php     # optional: demo PRs, RFQs, POs and GRNs
 # start PHP-FPM on 127.0.0.1:9000, then:
 APP_ROOT=$PWD caddy run --config Caddyfile # https://localhost
 ```

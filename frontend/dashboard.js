@@ -521,6 +521,11 @@ function initKeyboardNavigation() {
 
   window.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.isComposing) return;   // IME composition: not a shortcut
+    // A dropdown list opened with Enter (openSelectMenu) takes every key while it is open.
+    if (handleSelectMenuKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
     // An open styled dropdown (.fp-select-list) keeps focus on its options and handles its own keys.
     // After Enter picks an option of a dropdown that Enter opened (data-enter-opens), move on like a lookup pick.
     const openSelect = event.target.closest?.('select');
@@ -570,9 +575,9 @@ function initKeyboardNavigation() {
 
     if (event.shiftKey || !event.key.startsWith('Arrow')) {
       // Enter opens a focused dropdown (Space and Alt+Down already do natively).
-      if (event.key === 'Enter' && event.target.tagName === 'SELECT') {
+      if (event.key === 'Enter' && !event.shiftKey && event.target.tagName === 'SELECT') {
         event.preventDefault();
-        try { event.target.showPicker(); } catch { /* unsupported: Space still works */ }
+        if (!event.repeat) openSelectMenu(event.target);
       }
       return;
     }
@@ -902,6 +907,7 @@ function showFormErrors(errors, reveal) {
 function formEnterOrder(form, saveButton) {
   const fields = [...form.querySelectorAll('input:not([readonly]):not([disabled]):not([type="file"]), select:not([disabled]), textarea, [contenteditable="true"]')]
     .filter(node => node.dataset.enterSkip === undefined)
+    .filter(node => !(node.dataset.enterSkipFilled !== undefined && lookupIdInput(node)?.value))   // e.g. a name the picked code filled
     .filter(node => node.getClientRects().length > 0)
     .filter(node => !childLookupIsEmpty(node));
   return [...fields, saveButton];
@@ -951,23 +957,160 @@ function enterField(node) {
 }
 
 // Dropdowns on the forms: a <select>, or an input with a suggestion list (Inventory Status). Enter on one that
-// has choices opens it; Enter again, once a choice is made, moves on to the next field. data-picker-open marks
+// has choices opens it (a <select> opens the select menu below; picking with Enter moves on). data-picker-open marks
 // a dropdown that has been opened, until focus leaves it. A dropdown with nothing to choose just moves on.
 function hasDropdownChoices(field) {
   if (field instanceof HTMLSelectElement) return [...field.options].some(option => option.value !== '' && !option.disabled);
   return field instanceof HTMLInputElement && Boolean(field.list?.options.length);
 }
 function showDropdown(field) {
+  if (field instanceof HTMLSelectElement) return openSelectMenu(field);
   try { field.showPicker(); } catch { return false; }   // not supported: Space / Alt+↓ still open it
   field.dataset.pickerOpen = '';
   return true;
 }
 // Called on Enter: true when it opened the dropdown (the caller stays on the field).
 function openDropdownOnEnter(field) {
+  if (field instanceof HTMLSelectElement) return hasDropdownChoices(field) && openSelectMenu(field);
   if (field.dataset.pickerOpen !== undefined || !hasDropdownChoices(field)) return false;
   return showDropdown(field);
 }
 document.addEventListener('focusout', event => { if (event.target instanceof HTMLElement) delete event.target.dataset.pickerOpen; });
+
+/* ---------- Select menu: the list a <select> opens on Enter ----------
+   The browser's own picker cannot be opened from a key in every browser (Safari has no
+   select.showPicker()), so Enter opens this list under the field instead. Focus stays on the
+   <select>: ↑/↓, PgUp/PgDn, Home/End move the highlight, typing jumps to a matching option,
+   Enter (or Space) picks it, Esc or Tab closes the list. Picking with Enter inside a form moves on
+   to the next field, like a lookup pick. The mouse still opens the browser's own picker. */
+const selectMenu = { select: null, node: null, options: [], active: -1, typed: '', typedAt: 0 };
+
+function openSelectMenu(select) {
+  closeSelectMenu();
+  const options = [...select.options].filter(option => !option.hidden && !option.disabled);
+  if (options.length === 0) return false;
+  const node = document.createElement('ul');
+  node.className = 'fp-suggest fp-select-menu';
+  node.id = 'select-menu';
+  node.setAttribute('role', 'listbox');
+  node.replaceChildren(...options.map((option, index) => {
+    const item = el('li', 'fp-suggest-item', option.textContent.trim() || option.value);
+    item.id = `select-menu-option-${index}`;
+    item.dataset.index = String(index);
+    item.setAttribute('role', 'option');
+    return item;
+  }));
+  // Keep focus on the select: mousedown would move it to the list.
+  node.addEventListener('mousedown', event => {
+    event.preventDefault();
+    const item = event.target.closest('[data-index]');
+    if (item) pickSelectMenu(Number(item.dataset.index), { advance: false });
+  });
+  (select.closest('dialog[open]') || document.body).append(node);
+  Object.assign(selectMenu, { select, node, options, active: Math.max(0, options.indexOf(select.selectedOptions[0])), typed: '' });
+  placeSelectMenu();
+  select.setAttribute('aria-expanded', 'true');
+  select.setAttribute('aria-controls', node.id);
+  syncSelectMenuActive();
+  return true;
+}
+
+function closeSelectMenu() {
+  const { select, node } = selectMenu;
+  if (!node) return;
+  node.remove();
+  select.removeAttribute('aria-expanded');
+  select.removeAttribute('aria-controls');
+  select.removeAttribute('aria-activedescendant');
+  Object.assign(selectMenu, { select: null, node: null, options: [], active: -1 });
+}
+
+// Under the field (position: fixed, so table and card edges do not clip it), or above it when the window has no room below.
+function placeSelectMenu() {
+  const { select, node } = selectMenu;
+  const box = select.getBoundingClientRect();
+  const width = Math.max(box.width, 160);
+  Object.assign(node.style, { position: 'fixed', zIndex: '1000', right: 'auto', width: 'auto', minWidth: `${width}px`, maxWidth: `${Math.max(width, 360)}px` });
+  node.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - node.offsetWidth - 8))}px`;
+  const below = window.innerHeight - box.bottom - 8;
+  const height = Math.min(node.scrollHeight, 240);
+  if (below >= height || below >= box.top) { node.style.top = `${box.bottom + 4}px`; node.style.bottom = 'auto'; }
+  else { node.style.top = 'auto'; node.style.bottom = `${window.innerHeight - box.top + 4}px`; }
+}
+
+function syncSelectMenuActive() {
+  const { select, node, active } = selectMenu;
+  for (const item of node.children) {
+    const on = Number(item.dataset.index) === active;
+    item.classList.toggle('is-active', on);
+    item.setAttribute('aria-selected', String(on));
+    if (on) { select.setAttribute('aria-activedescendant', item.id); item.scrollIntoView({ block: 'nearest' }); }
+  }
+}
+
+// Sets the select as a user's pick would (input + change, so the form records it for undo).
+function pickSelectMenu(index, { advance }) {
+  const { select, options } = selectMenu;
+  const option = options[index];
+  closeSelectMenu();
+  if (!option) return;
+  if (select.value !== option.value) {
+    select.value = option.value;
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  // A change handler may already have moved focus (Party › Under goes straight to Name).
+  if (advance && document.activeElement === select && select.closest('form')) focusNextField(select);
+}
+
+// Every key while the list is open. Returns true when handled.
+function handleSelectMenuKeys(event) {
+  const { select, options } = selectMenu;
+  if (!select) return false;
+  if (event.target !== select || !select.isConnected) { closeSelectMenu(); return false; }
+  const { key } = event;
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    if (event.altKey && key === 'ArrowUp') { event.preventDefault(); closeSelectMenu(); return true; }
+    closeSelectMenu();
+    return false;
+  }
+  if (key === 'Shift') return true;
+  const step = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 }[key];
+  const listKey = step || key === 'Escape' || key === 'Home' || key === 'End'
+    || ((key === 'Enter' || key === ' ') && !event.shiftKey) || (key.length === 1 && key !== ' ');
+  // Anything else (Tab, ←/→, Shift+Enter to save …) closes the list and does its usual job.
+  if (!listKey) { closeSelectMenu(); return false; }
+  event.preventDefault();
+  if (key === 'Escape') { closeSelectMenu(); return true; }
+  if (key === 'Enter' || key === ' ') {
+    if (!event.repeat) pickSelectMenu(selectMenu.active, { advance: key === 'Enter' });
+    return true;
+  }
+  const last = options.length - 1;
+  if (step) selectMenu.active = Math.max(0, Math.min(last, selectMenu.active + step));
+  else if (key === 'Home') selectMenu.active = 0;
+  else if (key === 'End') selectMenu.active = last;
+  else if (key.length === 1) {
+    // Type to jump: letters typed quickly build a prefix; one letter again cycles through its options.
+    const now = Date.now();
+    selectMenu.typed = now - selectMenu.typedAt < 700 ? selectMenu.typed + key.toLowerCase() : key.toLowerCase();
+    selectMenu.typedAt = now;
+    const text = option => option.textContent.trim().toLowerCase();
+    const cycling = [...selectMenu.typed].every(char => char === selectMenu.typed[0]);
+    const prefix = cycling ? selectMenu.typed[0] : selectMenu.typed;
+    const order = options.map((_, i) => (selectMenu.active + (cycling ? 1 : 0) + i) % options.length);
+    const match = order.find(i => text(options[i]).startsWith(prefix));
+    if (match !== undefined) selectMenu.active = match;
+  }
+  syncSelectMenuActive();
+  return true;
+}
+
+document.addEventListener('focusout', event => { if (event.target === selectMenu.select) closeSelectMenu(); });
+document.addEventListener('mousedown', event => { if (selectMenu.node && !selectMenu.node.contains(event.target)) closeSelectMenu(); }, true);
+window.addEventListener('resize', closeSelectMenu);
+window.addEventListener('hashchange', closeSelectMenu);
+document.addEventListener('scroll', event => { if (selectMenu.node && !selectMenu.node.contains(event.target)) closeSelectMenu(); }, true);
 
 
 /* =====================================================================
@@ -1161,7 +1304,7 @@ const LOOKUPS = {
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
-  // Purchase Book rows: the Item Code cell searches codes (the name shows beside each).
+  // Purchase Book rows: the Item Code popup lists codes with each item's name.
   itemcode: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name']], display: row => row.code, meta: row => row.name },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
@@ -1293,6 +1436,9 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-enter-hint').textContent = multi ? 'Tick / Untick' : 'Select';
   byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
   byId('lookup-done-hint').hidden = !multi;
+  const canCreate = Boolean(lookupCreateForm(field));
+  byId('lookup-create').hidden = !canCreate;
+  byId('lookup-create-hint').hidden = !canCreate;
   const search = byId('lookup-search');
   search.value = query;
   search.placeholder = `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
@@ -1332,7 +1478,8 @@ function renderLookupRows() {
   });
   if (rows.length === 0) {
     const tr = el('tr');
-    const td = el('td', 'lk-empty', query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`);
+    const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.' : '';
+    const td = el('td', 'lk-empty', (query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`) + createHint);
     td.colSpan = config.columns.length + (lookup.multi ? 1 : 0);
     tr.append(td);
     rows.push(tr);
@@ -1452,6 +1599,11 @@ function handleLookupDialogKeys(event) {
   if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeLookup({ advance: true }); return; }
   if (key === 'Tab' && !ctrl && !event.altKey) { event.preventDefault(); moveFocusByTab(event.shiftKey); return; }
   if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // page shortcuts wait until it closes
+  if (event.altKey && !ctrl && event.code === 'KeyN' && !byId('lookup-create').hidden) {
+    event.preventDefault();
+    if (!event.repeat) createItemFromLookup();
+    return;
+  }
   if (ctrl || event.altKey) return;
   const search = byId('lookup-search');
   const [cancel, select] = [byId('lookup-cancel'), byId('lookup-select')];
@@ -1482,7 +1634,30 @@ function handleLookupDialogKeys(event) {
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
   if (steps[key]) { event.preventDefault(); moveLookupActive(steps[key]); return; }
-  if (key === 'Enter') { event.preventDefault(); if (!event.repeat) pickLookupRow({ advance: true }); }
+  if (key === 'Enter') {
+    event.preventDefault();
+    if (event.repeat) return;
+    if (lookup.shown.length === 0 && !lookup.multi && !byId('lookup-create').hidden) createItemFromLookup();
+    else pickLookupRow({ advance: true });
+  }
+}
+
+// The Purchase Book form whose item row holds this Item Code / Item Name popup field, if any:
+// those popups can create a new item (saved to the Item master) and pick it straight into the row.
+function lookupCreateForm(field) {
+  if (!['item', 'itemcode'].includes(field.dataset.lookup) || !field.closest('.fp-row')) return null;
+  return PURCHASE_FORMS.find(form => byId(`${form.spec.key}-form`).contains(field)) || null;
+}
+
+// Create New Item in the popup: the Create Item form opens with the searched name filled in; once saved
+// to the Item master, the new item is picked into the row the popup was opened from.
+function createItemFromLookup() {
+  const { field, kind } = lookup;
+  const form = lookupCreateForm(field);
+  if (!form) return;
+  const query = byId('lookup-search').value.trim();
+  closeLookup();
+  openQuickItem(form, { row: field.closest('.fp-row'), name: kind === 'item' ? query : '' });
 }
 
 // A list of records picked one at a time (Brand → items, Supplier → brands, Warehouse → items).
@@ -1560,6 +1735,7 @@ function initLookups() {
     const action = event.target.closest('[data-lookup-action]')?.dataset.lookupAction;
     if (action === 'cancel') closeLookup();
     else if (action === 'select') { if (lookup.multi) applyLookupMulti(); else pickLookupRow(); }
+    else if (action === 'create') createItemFromLookup();
   });
 }
 
@@ -2009,8 +2185,8 @@ function initItemPage() {
    Each page is <section id="KEY-page"> holding #KEY-form, #KEY-undo,
    #KEY-back and #KEY-save. Enter moves to the next field (textareas with
    data-enter-newline take Enter themselves, and dropdowns with
-   data-enter-opens open on it; other dropdowns with choices open on the
-   first Enter and move on with the next), Shift+Enter saves, Ctrl+Z undoes the last edit (including added and removed
+   data-enter-opens open on it, as do other dropdowns with choices; in the open
+   list Enter picks and moves on to the next field), Shift+Enter saves, Ctrl+Z undoes the last edit (including added and removed
    rows), Shift+X or Alt+A adds a row (Shift+X also inside a row table's
    text cells; type a capital X there with Caps Lock), Esc goes back to the
    previous page.
@@ -2268,8 +2444,8 @@ function createFormPage(config) {
     if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
       if (target.dataset.enterNewline) return false;
       event.preventDefault();
-      if (target.dataset.enterOpens) {        // a dropdown that always opens on Enter (Enter passes it by in the order)
-        try { target.showPicker(); } catch { /* unsupported: Space still works */ }
+      if (target.dataset.enterOpens && target instanceof HTMLSelectElement) {   // a dropdown that always opens on Enter
+        if (!event.repeat) openSelectMenu(target);
         return true;
       }
       if (openDropdownOnEnter(target)) return true;   // other dropdowns: Enter opens, Enter again moves on
@@ -3199,7 +3375,8 @@ function createMasterList(config) {
     const target = event.target;
     const tr = $('body').contains(target) ? target.closest('tr') : null;
     if (!tr) {
-      if (target !== search || !rows.length || !['ArrowDown', 'PageDown'].includes(event.key)) return false;
+      const outside = target === search || target === byId('app') || target === document.body;   // not on a row yet
+      if (!outside || !rows.length || !['ArrowDown', 'PageDown'].includes(event.key)) return false;
       event.preventDefault();
       focusRow(rows[0]);
       return true;
@@ -3249,7 +3426,9 @@ function createMasterList(config) {
       return true;
     }
     if (handleRowKeys(event)) return true;
-    if (isTextEntry(event.target)) return false;
+    // Shift+N also works from an empty search box (the search ignores case, so a lowercase n still searches).
+    const newKey = event.key === 'N' && event.shiftKey;
+    if (isTextEntry(event.target) && !(newKey && event.target === search && !search.value)) return false;
     const letter = event.key.toLowerCase();
     if (event.key === '/') {
       event.preventDefault();
@@ -3288,13 +3467,15 @@ function createMasterList(config) {
   // After an edit or a delete, focus lands back on that row (or the row now in its place).
   list.focusRow = code => {
     const tr = [...$('body').rows].find(entry => entry.dataset.code === code) || $('body').rows[0];
-    if (tr) focusRow(tr); else $('search').focus();
+    if (tr) focusRow(tr); else byId('app').focus();   // no rows left: the page itself, so Shift+N still works
   };
   const firstField = () => {
     const code = list.returnTo;
     const tr = code && [...$('body').rows].find(entry => entry.dataset.code === code);
     if (tr) list.returnTo = null;
-    return tr || $('search');          // a fresh visit starts in the search box (↓ enters the rows)
+    // A fresh visit starts on the first row, not in the search box, so the page's letter keys (Shift+N new,
+    // F filter, I import) work straight away; "/" goes to the search. With no rows yet: the page itself.
+    return tr || $('body').rows[0] || byId('app');
   };
 
   FORM_KEY_HANDLERS[page] = handleKeys;
@@ -3928,14 +4109,17 @@ function initMasterConfirm() {
    Keys: Enter moves to the next field (opening the Unit / Category / Brand popups), Enter on the last field or
    Ctrl+S creates, Esc closes without saving. */
 
-const quickItem = { form: null, opener: null, saving: false };
+const quickItem = { form: null, row: null, opener: null, saving: false };
 const qiEl = suffix => byId(`quick-item-${suffix}`);
 const QUICK_ITEM_FIELDS = ['name', 'unit', 'category', 'brand', 'cost'];
 
-function openQuickItem(form) {
+// row: the line to fill (from an item popup's Create New Item); name: the text searched there.
+function openQuickItem(form, { row = null, name = '' } = {}) {
   quickItem.form = form;
+  quickItem.row = row;
   quickItem.opener = document.activeElement;
   byId('quick-item-form').reset();
+  qiEl('name').value = name.toUpperCase();
   clearLookupIds(byId('quick-item-form'));
   clearFormErrors(byId('quick-item-form'));
   qiEl('error').hidden = true;
@@ -3978,7 +4162,7 @@ async function saveQuickItem() {
     forgetLookups('item', 'itemcode');
     closeQuickItem();
     showToast('Item created', `${item.code} · ${item.name}`);
-    await fillQuickItem(quickItem.form, item);
+    await fillQuickItem(quickItem.form, item, quickItem.row);
   } catch (error) {
     const fields = { itemName: 'name', uomId: 'unit', categoryId: 'category', brandId: 'brand', sourcing: 'cost' };
     const key = Object.keys(error.fields || {}).find(field => fields[field]);
@@ -3989,12 +4173,13 @@ async function saveQuickItem() {
   }
 }
 
-// The new item into the line last worked on (if it has no item yet), else the first empty line, else a new one.
-async function fillQuickItem(form, item) {
+// The new item into the line its popup was opened from (target), else the line last worked on (if it has
+// no item yet), else the first empty line, else a new one.
+async function fillQuickItem(form, item, target = null) {
   if (!form) return;
   const rows = form.page.rowsOf('items');
   const empty = row => row && rows.includes(row) && !pbCell(row, 'itemId').value && !pbCell(row, 'itemName').value.trim();
-  const row = empty(form.lastRow) ? form.lastRow : rows.find(empty) || form.page.addRow('items');
+  const row = target && rows.includes(target) ? target : empty(form.lastRow) ? form.lastRow : rows.find(empty) || form.page.addRow('items');
   await applyPurchaseItem(form, row, String(item.id));
   form.page.record();
   pbCell(row, 'quantity')?.focus() ?? pbCell(row, 'receivedQty')?.focus();
@@ -4599,14 +4784,14 @@ function renderRoute() {
    Purchase Book  (Quick Menu › Purchase Book): Purchase Request, Quotation Request (RFQ),
    Purchase Order and Goods Receipt Note (GRN). Each is a createFormPage() form with item lines.
 
-   A line's Item Code and Item Name search the item master; picking either fills the other, the
-   item's brands (Brand) and its unit. A name typed without picking is kept as a free-text item.
+   A line's Item Code and Item Name are "Select Item" popups over the Item master; picking either fills the
+   other, the item's brand and its unit. The popup's Create New Item (Alt+N) saves a new item and picks it.
    Selects with data-bind (row) or data-bind-id (header) show a hidden input that holds the value,
    so undo restores them even when their options load later (a row's brands, a supplier's contacts).
    Purchase orders and GRNs total their lines as the server does (backend/src/purchase_book.php):
    the Discount Amount is shared across the lines by value before tax; VAT is each line's VAT % on
    what is left, included in the prices or added on top (Include / Exclude VAT); Shipping is added last.
-   Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Ctrl+Z undo, Esc back.
+   Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Alt+I create an item, Ctrl+Z undo, Esc back.
    ===================================================================== */
 
 const pbData = { items: new Map(), suppliers: new Map(), racks: [] };
@@ -4631,14 +4816,13 @@ function composePurchaseTemplates() {
       const brandName = hidden(); brandName.dataset.field = 'brandName';
       row.querySelector('[data-field="itemName"]').closest('td').append(brandId, brandName);
       brandCell.remove();
-      row.querySelector('[data-field="itemCode"]').placeholder = 'Select code...';
-      row.querySelector('[data-field="itemName"]').placeholder = 'Select item name...';
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
     if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
     else row.append(...cells('pb-cell-unit'), ...cells('pb-cell-remove'));
   }
 }
+
 
 function fillSelect(select, options, placeholder) {
   const keep = select.value;
@@ -4860,7 +5044,8 @@ function createPurchaseForm(spec) {
         brandId: value('brandId') || null, brandName: value('brandName'), uomId: value('uomId') || null, unit: value('unit'),
       };
       const fail = (field, message) => errors.push({ node: pbCell(row, field), message: `Row ${index + 1}: ${message}` });
-      if (!line.itemName) fail('itemName', 'enter the item name or pick an item.');
+      if (spec.itemsFromMaster && !line.itemId) fail('itemName', 'pick an item from the Item master, or create one (Alt+N in the popup).');
+      else if (!line.itemName) fail('itemName', 'enter the item name or pick an item.');
       if (spec.kind === 'grn') {
         Object.assign(line, {
           receivedQty: value('receivedQty'), acceptedQty: value('acceptedQty'), rejectedQty: value('rejectedQty'),
@@ -4979,6 +5164,13 @@ function createPurchaseForm(spec) {
       return { payload, errors };
     },
     fill: fillDocument,
+    // Alt+I: Create Item (saved to the Item master and filled into the line).
+    onKey(event) {
+      if (!(event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyI')) return false;
+      event.preventDefault();
+      if (!event.repeat) openQuickItem(form);
+      return true;
+    },
     init() { initPurchaseForm(form); spec.init?.(form); },
   });
   return form;
@@ -5007,38 +5199,28 @@ function initPurchaseForm(form) {
     const row = target.closest('.fp-row');
     if (!row) return;
     const field = target.dataset.field;
-    if (isSuggestField(target) && (field === 'itemName' || field === 'itemCode')) {
-      if (suggest.picking) {
-        const id = lookupIdInput(target).value;
-        if (id) applyPurchaseItem(form, row, id);
-      } else if (field === 'itemName' || field === 'itemCode') {
-        // Typing over a picked item makes the row a typed item: the other cell and the brand let go of it.
+    // Item popups: a pick fills the whole row; clearing either cell (Backspace) clears the item.
+    if (isLookupField(target) && (field === 'itemName' || field === 'itemCode')) {
+      const id = lookupIdInput(target).value;
+      if (id) {
+        // Fill the other cell at once from the popup's list (the full item loads after), so Enter can pass it by.
         const other = field === 'itemName' ? pbCell(row, 'itemCode') : pbCell(row, 'itemName');
-        if (row.dataset.itemApplied) {
-          if (field === 'itemName') other.value = '';
-          lookupIdInput(other).value = '';
-          pbCell(row, 'itemId').value = '';
-          pbCell(row, 'brandId').value = '';
-          pbCell(row, 'brandName').value = '';
-          row.dataset.itemApplied = '';
-          setRowBrands(row, null);
-        }
+        const picked = lookupCache[other.dataset.lookup]?.find(entry => String(entry.id) === id)
+          || lookupCache[target.dataset.lookup]?.find(entry => String(entry.id) === id);
+        if (picked) fillLookup(other, picked);
+        applyPurchaseItem(form, row, id);
+      } else {
+        for (const cell of [pbCell(row, 'itemCode'), pbCell(row, 'itemName')]) fillLookup(cell, null);
+        for (const name of ['brandId', 'brandName', 'uomId', 'unit']) if (pbCell(row, name)) pbCell(row, name).value = '';
+        row.dataset.itemApplied = '';
+        setRowBrands(row, null);
+        syncBoundSelects(row);
       }
     }
     linkRowNumbers(row, field);
   }, true);
 
   body.addEventListener('focusin', event => { form.lastRow = event.target.closest('.fp-row'); });
-
-  // A code or name that matches an item exactly is taken when the cell is left (settleSuggest fills the id).
-  body.addEventListener('focusout', event => {
-    const row = event.target.closest('.fp-row');
-    if (!row || !isSuggestField(event.target) || !['itemName', 'itemCode'].includes(event.target.dataset.field)) return;
-    setTimeout(() => {
-      const id = lookupIdInput(event.target).value;
-      if (id && row.dataset.itemApplied !== id) applyPurchaseItem(form, row, id);
-    }, 40);
-  });
 
   // Numbers read as money / percentages once a cell is left.
   formNode.addEventListener('change', event => {
@@ -5268,7 +5450,7 @@ async function purchaseOptions(select, api, label) {
 /* ---------- Purchase Request ---------- */
 const prForm = createPurchaseForm({
   key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php',
-  kind: 'simple', template: 'pb-line-simple', lookups: [],
+  kind: 'simple', template: 'pb-line-simple', lookups: [], itemsFromMaster: true,   // every line is an Item master item
   firstField: () => byId('pr-reference'),
   fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required', deliveryLocation: 'pr-location' },
   header: () => ({

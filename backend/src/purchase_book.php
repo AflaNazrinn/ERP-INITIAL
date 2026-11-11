@@ -141,6 +141,7 @@ function pb_clean_colour(string $colour): string
  * The item lines of a payload. $priced adds the PO price columns, $grn the GRN quantities and costs.
  * A row with no item name and no item picked is blank and dropped; at least one line is required.
  * A picked item, brand or unit fills its code / name from the master, so the text always matches.
+ * Purchase request lines must be Item master items; the other documents also take typed item names.
  */
 function pb_read_lines(Input $in, string $kind): array
 {
@@ -192,6 +193,9 @@ function pb_read_lines(Input $in, string $kind): array
             $item = query('SELECT item_code, item_name FROM items WHERE id = ?', [$itemId])->fetch();
             $line['itemCode'] = $item['item_code'];
             $line['itemName'] = $item['item_name'];
+        } elseif ($kind === 'pr') {
+            // A purchase request lists Item master items only (the screen creates a new item first).
+            $r->fail('itemName', 'pick an item from the Item master.');
         } elseif ($line['itemName'] === '') {
             $r->fail('itemName', 'enter the item name or pick an item.');
         }

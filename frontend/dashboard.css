@@ -763,6 +763,8 @@ kbd {
 .lk-empty { padding: 28px 14px !important; text-align: center; color: var(--ink-500); }
 .lk-foot { flex: none; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line); }
 .lk-foot .fp-btn { white-space: nowrap; }
+.lk-foot .lk-create { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }   /* left, away from Cancel / Select */
+.lk-foot .lk-create[hidden] { display: none; }
 .lk-foot .fp-btn:disabled { opacity: .5; cursor: default; }
 @media (max-width: 600px) {
   .lk-keys { display: none; }

@@ -5,8 +5,8 @@ declare(strict_types=1);
  * Adds demo Purchase Book documents: 3 purchase requests, 3 quotation requests (from those requests),
  * 3 purchase orders (from those quotations) and 3 GRNs (receiving those orders).
  * They are saved through the same functions the API uses, so codes, validation and totals are the real ones.
- * The lines use the suppliers, items and stock points already in the database (typed item names when there
- * are no items yet). Every demo document's remarks start with "Demo data", so they are easy to find and delete.
+ * The lines use the suppliers, items and stock points already in the database (purchase request lines must be
+ * Item master items, so at least one item is needed). Every demo document's remarks start with "Demo data", so they are easy to find and delete.
  * Refuses to run twice (when a demo purchase request already exists).
  *
  *   With SSH:     php backend/bin/seed-purchase-book.php
@@ -49,8 +49,15 @@ try {
     $supplier = static fn (int $i): int => (int) $suppliers[$i % count($suppliers)]['id'];
     $warehouse = query('SELECT id FROM warehouses ORDER BY id LIMIT 1')->fetchColumn();
 
-    // Six lines to share out: the first items on file, else typed names.
+    // Six lines to share out: the first items on file (repeated when there are fewer than six).
     $items = query('SELECT id, uom_id, buying_rate FROM items ORDER BY id LIMIT 6')->fetchAll();
+    if (!$items) {
+        $say('Add at least one item first (Masters > Item, or php backend/bin/seed-demo-data.php); nothing added.');
+        exit(1);
+    }
+    while (count($items) < 6) {
+        $items[] = $items[count($items) % count($items)];
+    }
     $typed = [['GATE VALVE 2" SS316', 'Pieces', 12.5], ['BALL BEARING 6205-2RS', 'Pieces', 3.2], ['PTFE THREAD SEAL TAPE', 'Roll', 0.35],
         ['MCB 32A 3 POLE', 'Pieces', 9.75], ['SAFETY GLOVES NITRILE', 'Pair', 1.1], ['PRESSURE GAUGE 0-10 BAR', 'Pieces', 7.4]];
     $line = static function (int $n) use ($items, $typed): array {
