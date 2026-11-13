@@ -89,8 +89,9 @@ function delete_stored(string $storedPath): void
     }
 }
 
-/* Streams a stored file as a download and ends the request. */
-function send_stored_file(string $storedPath, string $originalName): never
+/* Streams a stored file and ends the request: as a download, or (inline, for a PDF or an image only)
+   for the browser to show in a tab. */
+function send_stored_file(string $storedPath, string $originalName, bool $inline = false): never
 {
     $path = rtrim(config()['storage'], '/') . '/' . $storedPath;
     if (!is_file($path)) {
@@ -100,7 +101,8 @@ function send_stored_file(string $storedPath, string $originalName): never
     header_remove('Content-Type');
     header('Content-Type: ' . (DOCUMENT_TYPES[$extension] ?? 'application/octet-stream'));
     header('Content-Length: ' . filesize($path));
-    header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($originalName));
+    $inline = $inline && in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true);
+    header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . "; filename*=UTF-8''" . rawurlencode($originalName));
     readfile($path);
     exit;
 }

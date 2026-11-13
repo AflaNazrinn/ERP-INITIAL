@@ -13,7 +13,10 @@ const PARTY_TABLES = [
     'supplier' => ['owner' => 'supplier_id', 'contacts' => 'supplier_contacts', 'quotations' => 'supplier_quotation_items', 'orders' => 'supplier_orders'],
     'customer' => ['owner' => 'customer_id', 'contacts' => 'customer_contacts', 'quotations' => 'customer_quotation_items', 'orders' => 'customer_orders'],
 ];
-const PARTY_ORDER_STATUSES = ['Pending', 'Fulfilled'];
+// Purchase orders (suppliers) and sales orders (customers) move through different statuses.
+const PARTY_ORDER_STATUSES = ['supplier' => ['Pending', 'Fulfilled'], 'customer' => ['Pending', 'Delivered', 'Invoiced']];
+// Payment terms a supplier or customer can have (blank: none set).
+const PARTY_PAYMENT_TERMS = ['Cash', 'Advance', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'];
 const PARTY_CURRENCIES = ['OMR', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'USD', 'EUR', 'INR', 'GBP', 'PKR', 'EGP', 'JOD', 'TRY', 'CNY', 'JPY', 'KRW'];
 const PARTY_STATUSES = ['active', 'inactive'];
 
@@ -38,10 +41,10 @@ function party_read_rows(Input $in, string $key, string $label, callable $read):
 }
 
 /* contacts, quotations, orders and documents from a save payload; blank rows are dropped. */
-function party_rows_input(Input $in): array
+function party_rows_input(Input $in, string $kind): array
 {
     $allBlank = static fn (array $values) => implode('', array_map(static fn ($v) => (string) $v, $values)) === '';
-    return [
+    $rows = [
         'contacts' => party_read_rows($in, 'contacts', 'Contact', static function (Input $r) use ($allBlank) {
             $v = ['name' => $r->text('name', 'Name', 100), 'designation' => $r->text('designation', 'Designation', 100),
                   'number' => $r->phone('number', 'Mobile number'), 'email' => $r->email('email', 'Email', 150)];
@@ -53,19 +56,36 @@ function party_rows_input(Input $in): array
                   'deliveryTime' => $r->text('deliveryTime', 'Delivery time', 60), 'warranty' => $r->text('warranty', 'Warranty', 60)];
             return $allBlank($v) ? null : $v;
         }),
-        'orders' => party_read_rows($in, 'orders', 'Order', static function (Input $r) use ($allBlank) {
+        'orders' => party_read_rows($in, 'orders', 'Order', static function (Input $r) use ($allBlank, $kind) {
             $v = ['number' => $r->text('number', 'Order number', 40), 'value' => $r->decimal('value', 'Total value', 15, 3),
                   'items' => $r->whole('items', 'Total items')];
-            if ($allBlank($v)) {
+            // Sales orders only: the quotation the order came from.
+            $quotationRef = $kind === 'customer' ? $r->text('quotationRef', 'Quotation ref', 40) : '';
+            $documentId = $r->whole('documentId', 'Order document');
+            if ($allBlank($v) && $documentId === null) {
                 return null;   // a row with only its default date and status is blank
             }
-            return $v + ['date' => $r->date('date', 'Order date'), 'status' => $r->choice('status', 'Status', PARTY_ORDER_STATUSES, 'Pending')];
+            if ($v['number'] === '') {
+                $r->fail('number', 'Order number is required.');
+            }
+            return $v + ['date' => $r->date('date', 'Order date'), 'status' => $r->choice('status', 'Status', PARTY_ORDER_STATUSES[$kind], 'Pending'),
+                         'quotationRef' => $quotationRef, 'documentId' => $documentId];
         }),
         // Stored documents kept on the form: [{ id, type, expiry }]. Only used on an update.
         'documents' => party_read_rows($in, 'documents', 'Document', static fn (Input $r) => [
             'id' => $r->whole('id', 'Document', true), 'type' => $r->text('type', 'Document type', 60), 'expiry' => $r->date('expiry', 'Expiry date'),
         ]),
     ];
+    // An order number names one order of the party: its PO / SO document is linked by it after an upload.
+    $seen = [];
+    foreach ($rows['orders'] as $o) {
+        $key = mb_strtoupper($o['number']);
+        if (isset($seen[$key])) {
+            $in->fail('orders', "Order {$o['number']} is listed twice.");
+        }
+        $seen[$key] = true;
+    }
+    return $rows;
 }
 
 /*
@@ -88,15 +108,27 @@ function party_rows_save(string $kind, int $ownerId, array $rows, bool $isUpdate
         query("INSERT INTO `{$t['quotations']}` (`$owner`, item_name, description, unit, rate, delivery_time, warranty, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [$ownerId, $q['itemName'], $q['description'], $q['unit'], $q['rate'], $q['deliveryTime'], $q['warranty'], $order + 1]);
     }
+    $docs = PARTY_DOCUMENTS[$kind];
+    // Only a document of this party can be an order's document.
+    $ownDocs = array_flip(array_map('intval',
+        query("SELECT id FROM `{$docs['table']}` WHERE `$owner` = ?", [$ownerId])->fetchAll(PDO::FETCH_COLUMN)));
+    $kept = [];
     foreach ($rows['orders'] as $order => $o) {
-        query("INSERT INTO `{$t['orders']}` (`$owner`, order_number, order_date, total_value, total_items, status, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [$ownerId, $o['number'], $o['date'], $o['value'], $o['items'], $o['status'], $order + 1]);
+        $documentId = isset($o['documentId'], $ownDocs[$o['documentId']]) ? $o['documentId'] : null;
+        if ($documentId !== null) {
+            $kept[$documentId] = true;   // an order's document stays while the order does
+        }
+        if ($kind === 'customer') {
+            query("INSERT INTO customer_orders (customer_id, order_number, order_date, quotation_ref, total_value, total_items, status, document_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [$ownerId, $o['number'], $o['date'], $o['quotationRef'], $o['value'], $o['items'], $o['status'], $documentId, $order + 1]);
+        } else {
+            query("INSERT INTO supplier_orders (supplier_id, order_number, order_date, total_value, total_items, status, document_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [$ownerId, $o['number'], $o['date'], $o['value'], $o['items'], $o['status'], $documentId, $order + 1]);
+        }
     }
     if (!$isUpdate) {
         return [];
     }
-    $docs = PARTY_DOCUMENTS[$kind];
-    $kept = [];
     foreach ($rows['documents'] as $d) {
         $kept[$d['id']] = true;
         query("UPDATE `{$docs['table']}` SET doc_type = ?, expiry_date = ? WHERE id = ? AND `$owner` = ?", [$d['type'], $d['expiry'], $d['id'], $ownerId]);
@@ -118,7 +150,9 @@ function party_rows_find(string $kind, int $ownerId): array
     $owner = $t['owner'];
     $contacts = query("SELECT * FROM `{$t['contacts']}` WHERE `$owner` = ? ORDER BY sort_order, id", [$ownerId])->fetchAll();
     $quotations = query("SELECT * FROM `{$t['quotations']}` WHERE `$owner` = ? ORDER BY sort_order, id", [$ownerId])->fetchAll();
-    $orders = query("SELECT * FROM `{$t['orders']}` WHERE `$owner` = ? ORDER BY sort_order, id", [$ownerId])->fetchAll();
+    $docs = PARTY_DOCUMENTS[$kind]['table'];
+    $orders = query("SELECT o.*, d.original_name AS document_name FROM `{$t['orders']}` o LEFT JOIN `$docs` d ON d.id = o.document_id
+                     WHERE o.`$owner` = ? ORDER BY o.sort_order, o.id", [$ownerId])->fetchAll();
     return [
         'contacts' => array_map(static fn ($c) => [
             'name' => $c['contact_name'], 'designation' => $c['designation'], 'number' => $c['contact_number'], 'email' => $c['email'],
@@ -128,8 +162,9 @@ function party_rows_find(string $kind, int $ownerId): array
             'deliveryTime' => $q['delivery_time'], 'warranty' => $q['warranty'],
         ], $quotations),
         'orders' => array_map(static fn ($o) => [
-            'number' => $o['order_number'], 'date' => $o['order_date'], 'value' => $o['total_value'],
+            'number' => $o['order_number'], 'date' => $o['order_date'], 'quotationRef' => $o['quotation_ref'] ?? '', 'value' => $o['total_value'],
             'items' => $o['total_items'] === null ? null : (int) $o['total_items'], 'status' => $o['status'],
+            'document' => $o['document_id'] === null ? null : ['id' => (int) $o['document_id'], 'name' => $o['document_name']],
         ], $orders),
         'documents' => party_documents_list($kind, $ownerId),
     ];
@@ -139,7 +174,8 @@ function party_rows_find(string $kind, int $ownerId): array
 function party_rows_as_input(array $party): array
 {
     return [
-        'contacts' => $party['contacts'], 'quotations' => $party['quotations'], 'orders' => $party['orders'],
+        'contacts' => $party['contacts'], 'quotations' => $party['quotations'],
+        'orders' => array_map(static fn ($o) => array_diff_key($o, ['document' => 0]) + ['documentId' => $o['document']['id'] ?? null], $party['orders']),
         'documents' => array_map(static fn ($d) => ['id' => $d['id'], 'type' => $d['docType'], 'expiry' => $d['expiryDate']], $party['documents']),
     ];
 }

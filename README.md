@@ -91,7 +91,7 @@ item batch expiry and PDF spec link; brand and category descriptions.
 - Success: `{ "data": … }`. Failure: `{ "error": "message", "fields": { "payloadKey": "message" } }` with 4xx/5xx.
 - `422` = validation (the form highlights the fields named in `fields`), `404` not found, `409` duplicate, `500` logged server-side.
 - Writes need the `X-CSRF-Token` header; the page gets it from `GET /api/session.php`.
-- There is **no login yet**. `current_user()` in `backend/src/security.php` is where it goes; the `users` table already exists.
+- **Sign-in:** `frontend/login.html` posts to `api/login.php` (DELETE there signs out). Every other endpoint except `api/session.php` answers `401` until the session has a user (`current_user()` in `backend/src/security.php`); the dashboard sends a signed-out visitor to the sign-in page. Users are in the `users` table (bcrypt hashes). The first one is **admin / admin@1234**: change it on a live server.
 
 The full endpoint list is in [backend/README.md](backend/README.md).
 

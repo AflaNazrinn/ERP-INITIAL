@@ -13,7 +13,10 @@ require_once __DIR__ . '/master_validation.php';
 
 const ITEM_STATUSES = ['ACTIVE / RELEASED', 'QUALITY HOLD', 'OBSOLETE', 'DRAFT'];
 
-const ITEM_SELECT = 'SELECT i.*, u.uom_name, w.warehouse_code, w.warehouse_name, r.location_code
+// line_stock_points: the stock points picked on the item's sourcing lines (item_brands), for the Item list.
+const ITEM_SELECT = 'SELECT i.*, u.uom_name, w.warehouse_code, w.warehouse_name, r.location_code,
+      (SELECT GROUP_CONCAT(DISTINCT lw.warehouse_name ORDER BY lw.warehouse_name SEPARATOR \', \')
+         FROM item_brands ib JOIN warehouses lw ON lw.id = ib.warehouse_id WHERE ib.item_id = i.id) AS line_stock_points
     FROM items i
     LEFT JOIN uoms u ON u.id = i.uom_id
     LEFT JOIN warehouses w ON w.id = i.warehouse_id
@@ -37,6 +40,8 @@ function item_format(array $row): array
         'warehouseId'   => $id($row['warehouse_id']),
         'warehouseCode' => $row['warehouse_code'] ?? null,
         'warehouseName' => $row['warehouse_name'] ?? '',
+        // Shown in the Item list: the sourcing lines' stock points, else the item's own (from its rack).
+        'stockPoints'   => ($row['line_stock_points'] ?? '') !== '' ? $row['line_stock_points'] : ($row['warehouse_name'] ?? ''),
         'rackId'        => $id($row['rack_id']),
         'rackCode'      => $row['location_code'] ?? null,
         'buyingRate'    => $row['buying_rate'],
@@ -69,8 +74,8 @@ function item_find(int $id): array
         throw new NotFound('Item not found.');
     }
     $sourcing = query(
-        'SELECT ib.brand_id, ib.brand_name, ib.supplier_id, s.supplier_name, ib.price_per_unit
-         FROM item_brands ib LEFT JOIN suppliers s ON s.id = ib.supplier_id
+        'SELECT ib.brand_id, ib.brand_name, ib.supplier_id, s.supplier_name, ib.warehouse_id, w.warehouse_code, w.warehouse_name, ib.price_per_unit, ib.opening_stock
+         FROM item_brands ib LEFT JOIN suppliers s ON s.id = ib.supplier_id LEFT JOIN warehouses w ON w.id = ib.warehouse_id
          WHERE ib.item_id = ? ORDER BY ib.sort_order, ib.id',
         [$id]
     )->fetchAll();
@@ -79,7 +84,11 @@ function item_find(int $id): array
         'brandName'    => $s['brand_name'],
         'supplierId'   => $s['supplier_id'] === null ? null : (int) $s['supplier_id'],
         'supplierName' => $s['supplier_name'],
+        'warehouseId'   => $s['warehouse_id'] === null ? null : (int) $s['warehouse_id'],
+        'warehouseCode' => $s['warehouse_code'],
+        'warehouseName' => $s['warehouse_name'] ?? '',
         'cost'         => $s['price_per_unit'],
+        'openingStock' => $s['opening_stock'] === null ? null : rtrim(rtrim($s['opening_stock'], '0'), '.'),
     ], $sourcing)];
 }
 
@@ -96,10 +105,14 @@ function name_of(string $table, string $column, ?int $id): string
 /* A saved item as a save payload. Selling price and opening stock are kept per item, so they go on the first row. */
 function item_input(array $item): array
 {
-    $sourcing = array_map(static fn ($s) => ['brandId' => $s['brandId'], 'supplierId' => $s['supplierId'], 'cost' => $s['cost']], $item['sourcing']);
+    $sourcing = array_map(static fn ($s) => ['warehouseId' => $s['warehouseId'], 'brandId' => $s['brandId'], 'supplierId' => $s['supplierId'],
+        'cost' => $s['cost'], 'openingStock' => $s['openingStock']], $item['sourcing']);
     if ($sourcing) {
         $sourcing[0]['sellingPrice'] = $item['sellingPrice'];
-        $sourcing[0]['openingStock'] = $item['availableStock'];
+        // Lines saved before opening stock was kept per line: the item's total goes on the first.
+        if (!array_filter($sourcing, static fn ($s) => $s['openingStock'] !== null)) {
+            $sourcing[0]['openingStock'] = $item['availableStock'];
+        }
     }
     return [
         'itemName' => $item['name'], 'uomId' => $item['uomId'], 'categoryId' => $item['categoryId'], 'subCategoryId' => $item['subCategoryId'],
@@ -111,7 +124,7 @@ function item_input(array $item): array
 /*
  * Payload: itemName, uomId, categoryId, subCategoryId, brandId, comments, warehouseId, rackId,
  * status, imageLink, supplierUrl,
- * sourcing: [{ brandId, supplierId, cost, openingStock, sellingPrice, batchExpiry }, …].
+ * sourcing: [{ warehouseId (stock point), brandId, supplierId, cost, openingStock, sellingPrice, batchExpiry }, …].
  * The first sourcing row's cost and selling price become the item's buying rate and selling price,
  * and the opening stock of all rows its available stock. On an update the rows replace the old ones.
  */
@@ -155,6 +168,7 @@ function item_save(array $data, ?int $id = null): array
     foreach ($in->rows('sourcing') as $index => $line) {
         $row = new Input($line);
         $source = [
+            'warehouseId'  => $row->id('warehouseId', 'stock point', 'warehouses'),
             'brandId'      => $row->id('brandId', 'brand', 'brands'),
             'supplierId'   => $row->id('supplierId', 'supplier', 'suppliers'),
             'cost'         => $row->decimal('cost', 'Cost', 14, 4),
@@ -167,7 +181,7 @@ function item_save(array $data, ?int $id = null): array
             $in->fail('sourcing', 'Sourcing row ' . ($index + 1) . ': ' . $e->getMessage());
             continue;
         }
-        if ($source['brandId'] === null && $source['supplierId'] === null && $source['cost'] === null
+        if ($source['warehouseId'] === null && $source['brandId'] === null && $source['supplierId'] === null && $source['cost'] === null
             && $source['sellingPrice'] === null && $source['openingStock'] === null) {
             continue;   // blank row
         }
@@ -213,8 +227,9 @@ function item_save(array $data, ?int $id = null): array
         $priced = [];
         foreach ($sourcing as $order => $source) {
             query(
-                'INSERT INTO item_brands (item_id, brand_id, brand_name, supplier_id, price_per_unit, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $source['brandId'], name_of('brands', 'brand_name', $source['brandId']), $source['supplierId'], $source['cost'], $order + 1]
+                'INSERT INTO item_brands (item_id, brand_id, brand_name, supplier_id, warehouse_id, price_per_unit, opening_stock, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$id, $source['brandId'], name_of('brands', 'brand_name', $source['brandId']), $source['supplierId'], $source['warehouseId'],
+                 $source['cost'], $source['openingStock'], $order + 1]
             );
             $itemBrandId = (int) db()->lastInsertId();
             if ($source['supplierId'] === null) {

@@ -65,7 +65,39 @@ function warehouse_find(int $id): array
         throw new NotFound('Stock point not found.');
     }
     $items = query('SELECT id, item_code, item_name FROM items WHERE warehouse_id = ? ORDER BY item_name', [$id])->fetchAll();
-    return warehouse_format($row) + ['items' => array_map(static fn ($i) => ['id' => (int) $i['id'], 'code' => $i['item_code'], 'name' => $i['item_name']], $items)];
+    return warehouse_format($row) + ['items' => array_map(static fn ($i) => ['id' => (int) $i['id'], 'code' => $i['item_code'], 'name' => $i['item_name']], $items)]
+        + warehouse_stock($id);
+}
+
+/* The stock held at one stock point: the opening stock of every item sourcing line there, added up.
+ * Items saved before opening stock was kept per line hold their total on the first line (its stock point,
+ * else the item's own), as the Item page shows them. Returns availableStock ("44") and stockedItems. */
+function warehouse_stock(int $id): array
+{
+    $lines = query(
+        'SELECT item_id, opening_stock AS qty FROM item_brands WHERE warehouse_id = ? AND opening_stock IS NOT NULL',
+        [$id]
+    )->fetchAll();
+    $older = query(
+        "SELECT i.id AS item_id, NULLIF(i.available_stock, '') AS qty
+         FROM items i
+         LEFT JOIN item_brands f ON f.id = (SELECT id FROM item_brands WHERE item_id = i.id ORDER BY sort_order, id LIMIT 1)
+         WHERE COALESCE(f.warehouse_id, i.warehouse_id) = ?
+           AND NOT EXISTS (SELECT 1 FROM item_brands ib WHERE ib.item_id = i.id AND ib.opening_stock IS NOT NULL)",
+        [$id]
+    )->fetchAll();
+    $total = 0.0;
+    $stocked = [];
+    foreach ([...$lines, ...$older] as $line) {
+        if ($line['qty'] === null || !is_numeric($line['qty'])) {
+            continue;
+        }
+        $total += (float) $line['qty'];
+        if ((float) $line['qty'] != 0.0) {
+            $stocked[(int) $line['item_id']] = true;
+        }
+    }
+    return ['availableStock' => rtrim(rtrim(number_format($total, 3, '.', ''), '0'), '.'), 'stockedItems' => count($stocked)];
 }
 
 /* Active rack / bin locations; only one stock point's when $warehouseId is given. */

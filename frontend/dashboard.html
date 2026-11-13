@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="auth-pending">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,11 +17,18 @@
       <div class="brand-mark" aria-hidden="true">G</div>
       <h1 class="brand-name">Growth Engine</h1>
     </div>
-    <button type="button" id="dashboard-range-btn" class="range-btn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
-      <span id="dashboard-range-text" class="range-text"></span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
-    </button>
+    <div class="header-actions">
+      <button type="button" id="dashboard-range-btn" class="range-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+        <span id="dashboard-range-text" class="range-text"></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+      <span id="header-user" class="header-user" title="Signed in"></span>
+      <button type="button" id="sign-out" class="range-btn sign-out-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>
+        <span>Sign out</span>
+      </button>
+    </div>
   </header>
 
   <!-- ROW 1: KPI TILES -->
@@ -202,21 +209,17 @@
           <input id="item-name" name="itemName" class="fp-input" type="text" maxlength="200" data-upper required autocomplete="off"
                  placeholder="Enter comprehensive item designation, technical specification, and model numbers...">
         </div>
-        <div class="fp-field fp-span-3">
+        <div class="fp-field fp-span-4">
           <label class="fp-label" for="item-uom">Unit of Measure</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="item-uom" class="fp-input fp-lookup" type="text" data-lookup="uom" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select unit..."><input id="item-uom-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
-        <div class="fp-field fp-span-3">
+        <div class="fp-field fp-span-4">
           <label class="fp-label" for="item-category">Primary Category</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="item-category" class="fp-input fp-lookup" type="text" data-lookup="category" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select category..."><input id="item-category-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
-        <div class="fp-field fp-span-3">
+        <div class="fp-field fp-span-4">
           <label class="fp-label" for="item-subcategory">Subcategory</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="item-subcategory" class="fp-input fp-lookup" type="text" data-lookup="subcategory" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select subcategory..." data-lookup-parent="item-category"><input id="item-subcategory-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
-        </div>
-        <div class="fp-field fp-span-3">
-          <label class="fp-label" for="item-warehouse">Stock Point</label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="item-warehouse" class="fp-input fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select stock point..."><input id="item-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-12">
           <label class="fp-label" for="item-comments">Comments</label>
@@ -237,7 +240,7 @@
         <table class="fp-table">
           <thead>
             <tr>
-              <th class="fp-col-brand">Brand Name</th>
+              <th class="fp-col-stock">Stock Point</th>
               <th class="fp-col-supplier">Supplier Entity</th>
               <th class="fp-col-num">Cost (OMR)</th>
               <th class="fp-col-num">Opening Stock</th>
@@ -258,7 +261,7 @@
         <div class="fp-grid-2">
           <div class="fp-field">
             <label class="fp-label fp-label-sm" for="item-rack">Rack / Bin</label>
-            <div class="fp-input-wrap fp-lookup-wrap"><input id="item-rack" class="fp-input fp-input-sm fp-mono fp-lookup" type="text" data-lookup="rack" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select rack / bin..." data-lookup-parent="item-warehouse"><input id="item-rack-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+            <div class="fp-input-wrap fp-lookup-wrap"><input id="item-rack" class="fp-input fp-input-sm fp-mono fp-lookup" type="text" data-lookup="rack" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select rack / bin..."><input id="item-rack-id" type="hidden"><input id="item-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
           </div>
           <div class="fp-field">
             <label class="fp-label fp-label-sm" for="item-status">Inventory Status</label>
@@ -308,7 +311,7 @@
   <!-- One sourcing row; cloned by "Add Sourcing Row". -->
   <template id="item-source-row-template">
     <tr class="fp-source-row fp-row">
-      <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="brand" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..." aria-label="Brand"><input data-field="brandId" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
+      <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="stockPoint" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select stock point..." aria-label="Stock point"><input data-field="warehouseId" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div><input data-field="brandId" type="hidden"></td>
       <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="supplier" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select supplier..." aria-label="Supplier"><input data-field="supplierId" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
       <td><input class="fp-cell fp-cell-num" data-field="cost" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000" aria-label="Cost (OMR)"></td>
       <td><input class="fp-cell fp-cell-num" data-field="openingStock" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Opening stock"></td>
@@ -875,7 +878,7 @@
   <form id="party-form" class="fp-form" novalidate>
     <section class="fp-card fp-party-bar">
       <div class="fp-under"><label class="fp-under-label" for="party-under">Under</label><select id="party-under" class="fp-input fp-select fp-under-select" data-enter-opens="true"><option value="" selected disabled hidden>Select…</option><option value="creditors">Creditors</option><option value="debtors">Debtors</option></select></div>
-      <div class="fp-tabs" role="tablist" aria-label="Party sections"><button type="button" class="fp-tab" role="tab" data-tab="general" aria-selected="false">General Information</button><button type="button" class="fp-tab" role="tab" data-tab="documents" aria-selected="false">Document Upload</button><button type="button" class="fp-tab" role="tab" data-tab="quotations" aria-selected="false">Quotations</button><button type="button" class="fp-tab" role="tab" data-tab="purchases" aria-selected="false">Previous Purchases</button></div>
+      <div class="fp-tabs" role="tablist" aria-label="Party sections"><button type="button" class="fp-tab" role="tab" data-tab="general" aria-selected="false">General Information</button><button type="button" class="fp-tab" role="tab" data-tab="documents" aria-selected="false">Document Upload</button><button type="button" class="fp-tab" role="tab" data-tab="quotations" aria-selected="false"><span data-creditors="Quotations" data-debtors="Purchase Orders">Quotations</span></button><button type="button" class="fp-tab" role="tab" data-tab="purchases" aria-selected="false"><span data-creditors="Previous Purchases" data-debtors="Previous Sales">Previous Purchases</span></button></div>
     </section>
 <div data-tab-panel="general">
 <div data-under="creditors">
@@ -899,6 +902,14 @@
           <div class="fp-input-wrap fp-lookup-wrap"><input id="party-sup-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-city">City</label>
+          <input id="party-sup-city" class="fp-input" type="text" autocomplete="off" data-letters placeholder="e.g. Muscat">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-zip">Zip Code</label>
+          <input id="party-sup-zip" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. 112">
+        </div>
+        <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-currency">Currency</label>
           <select id="party-sup-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
         </div>
@@ -906,9 +917,13 @@
           <label class="fp-label" for="party-sup-tax">Tax Reg Number</label>
           <input id="party-sup-tax" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. OM1100XXXXXX">
         </div>
-        <div class="fp-field fp-span-9">
-          <label class="fp-label" for="party-sup-comments">Comments</label>
-          <input id="party-sup-comments" class="fp-input" type="text" autocomplete="off" placeholder="Enter remarks, delivery notes or other comments...">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-sup-head">Account Head</label>
+          <input id="party-sup-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="Sundry Creditors" placeholder="e.g. Sundry Creditors">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-sup-organization">Organization Name</label>
+          <input id="party-sup-organization" class="fp-input" type="text" autocomplete="off" placeholder="Enter parent company or group organization name...">
         </div>
         <div class="fp-field fp-span-12">
           <label class="fp-label" for="party-sup-brand-entry">Brands Supplied</label>
@@ -982,10 +997,17 @@
       </div>
     </section>
     </div>
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Comments</h2>
+      <div class="fp-field">
+        <label class="fp-label" for="party-sup-comments">Comments</label>
+        <textarea id="party-sup-comments" class="fp-input fp-textarea" rows="4" autocomplete="off" placeholder="Enter remarks, delivery notes, special terms or other comments about this supplier..."></textarea>
+      </div>
+    </section>
 </div>
 <div data-under="debtors" hidden>
     <section class="fp-card">
-      <h2 class="fp-section-title">1. General Details</h2>
+      <h2 class="fp-section-title">1. Customer Details</h2>
       <div class="fp-grid-12">
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-code">ID</label>
@@ -995,19 +1017,6 @@
           <label class="fp-label" for="party-cus-name">Name <span class="fp-req">*</span></label>
           <input id="party-cus-name" class="fp-input" type="text" autocomplete="off" maxlength="150" data-upper required placeholder="Enter registered company name as per trade licence / CR...">
         </div>
-        <div class="fp-field fp-span-3">
-          <label class="fp-label" for="party-cus-head">Account Head</label>
-          <select id="party-cus-head" class="fp-input fp-select"><option value="Sundry Debtors">Sundry Debtors</option></select>
-        </div>
-        <div class="fp-field fp-span-9">
-          <label class="fp-label" for="party-cus-organization">Organization Name</label>
-          <input id="party-cus-organization" class="fp-input" type="text" autocomplete="off" placeholder="Enter parent company or group organization name...">
-        </div>
-      </div>
-    </section>
-    <section class="fp-card">
-      <h2 class="fp-section-title">2. Contact &amp; Location</h2>
-      <div class="fp-grid-12">
         <div class="fp-field fp-span-6">
           <label class="fp-label" for="party-cus-address">Address</label>
           <input id="party-cus-address" class="fp-input" type="text" autocomplete="off" placeholder="Building, street, area...">
@@ -1025,6 +1034,31 @@
           <input id="party-cus-zip" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. 112">
         </div>
         <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-currency">Currency</label>
+          <select id="party-cus-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-tax">Tax Registration Number</label>
+          <input id="party-cus-tax" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. OM1100XXXXXX">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-head">Account Head</label>
+          <input id="party-cus-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="Sundry Debtors" placeholder="e.g. Sundry Debtors">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="party-cus-organization">Organization Name</label>
+          <input id="party-cus-organization" class="fp-input" type="text" autocomplete="off" placeholder="Enter parent company or group organization name...">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Contact Details</h2><button type="button" class="fp-add-row" data-add-row="customerContacts" title="Add Row (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Row</span><kbd>Shift+X</kbd></button></div>
+      <div class="fp-grid-12 fp-grid-gap-bottom">
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="party-cus-owner">Owner Details</label>
+          <input id="party-cus-owner" class="fp-input" type="text" autocomplete="off" placeholder="Owner name and details">
+        </div>
+        <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-mobile">Mobile Number</label>
           <div class="fp-phone"><select id="party-cus-mobile-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Mobile number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="party-cus-mobile" class="fp-input" type="text" autocomplete="off" inputmode="tel" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
@@ -1037,63 +1071,54 @@
           <input id="party-cus-email" class="fp-input" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com">
         </div>
       </div>
-    </section>
-    <section class="fp-card">
-      <div class="fp-section-head"><h2 class="fp-section-title">3. Key Contacts &amp; Ownership</h2><button type="button" class="fp-add-row" data-add-row="customerContacts" title="Add Row (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Row</span><kbd>Shift+X</kbd></button></div>
-      <div class="fp-grid-12 fp-grid-gap-bottom">
-        <div class="fp-field fp-span-12">
-          <label class="fp-label" for="party-cus-owner">Owner Details</label>
-          <input id="party-cus-owner" class="fp-input" type="text" autocomplete="off" placeholder="Owner name, mobile number and email...">
-        </div>
-      </div>
       <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:70px">S.No</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-cus-contacts"></tbody></table></div>
     </section>
     <div class="fp-pair">
     <section class="fp-card">
-      <h2 class="fp-section-title">4. Credit &amp; Sales Settings</h2>
+      <h2 class="fp-section-title">3. Financial Terms</h2>
       <div class="fp-grid-2">
         <div class="fp-field">
           <label class="fp-label" for="party-cus-credit-limit">Credit Limit (OMR)</label>
           <input id="party-cus-credit-limit" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="party-cus-credit-days">Credit Days</label>
+          <label class="fp-label" for="party-cus-credit-days">Credit Period (Days)</label>
           <input id="party-cus-credit-days" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="numeric" placeholder="30">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="party-cus-discount">Discount %</label>
-          <input id="party-cus-discount" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.00">
+          <label class="fp-label" for="party-cus-terms">Payment Terms</label>
+          <select id="party-cus-terms" class="fp-input fp-select"><option value="">Select terms</option><option value="Cash">Cash</option><option value="Advance">Advance</option><option value="Net 15">Net 15</option><option value="Net 30">Net 30</option><option value="Net 45">Net 45</option><option value="Net 60">Net 60</option><option value="Net 90">Net 90</option></select>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="party-cus-salesman">Salesman</label>
-          <select id="party-cus-salesman" class="fp-input fp-select"><option value="">Select salesman</option></select>
-        </div>
-        <div class="fp-field fp-span-full">
-          <label class="fp-label" for="party-cus-tax">Tax Registration Number</label>
-          <input id="party-cus-tax" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="e.g. OM1100XXXXXX">
+          <label class="fp-label" for="party-cus-opening">Opening Balance (OMR)</label>
+          <input id="party-cus-opening" class="fp-input fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000">
         </div>
       </div>
     </section>
     <section class="fp-card">
-      <h2 class="fp-section-title">5. Additional Info</h2>
-      <div class="fp-grid-12">
-        <div class="fp-field fp-span-12">
-          <label class="fp-label" for="party-cus-other1">Other Details 1</label>
-          <input id="party-cus-other1" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+      <h2 class="fp-section-title">4. Other Details</h2>
+      <div class="fp-grid-2">
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-bank">Bank Name</label>
+          <input id="party-cus-bank" class="fp-input" type="text" autocomplete="off" placeholder="e.g. Bank Muscat">
         </div>
-        <div class="fp-field fp-span-12">
-          <label class="fp-label" for="party-cus-other2">Other Details 2</label>
-          <input id="party-cus-other2" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-branch">Bank Branch</label>
+          <input id="party-cus-branch" class="fp-input" type="text" autocomplete="off" placeholder="e.g. Ruwi Branch">
         </div>
-        <div class="fp-field fp-span-12">
-          <label class="fp-label" for="party-cus-other3">Other Details 3</label>
-          <input id="party-cus-other3" class="fp-input" type="text" autocomplete="off" placeholder="Additional information...">
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-iban">Bank Account / IBAN</label>
+          <input id="party-cus-iban" class="fp-input fp-mono" type="text" autocomplete="off" placeholder="Account number or IBAN">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="party-cus-website">Website</label>
+          <input id="party-cus-website" class="fp-input" type="text" autocomplete="off" placeholder="www.company.com">
         </div>
       </div>
     </section>
     </div>
     <section class="fp-card">
-      <div class="fp-section-head"><h2 class="fp-section-title">6. Agreements &amp; Documents</h2><button type="button" id="party-agreement-btn" class="fp-add-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg><span>Upload Agreements</span></button></div>
+      <div class="fp-section-head"><h2 class="fp-section-title">5. Agreements &amp; Documents</h2><button type="button" id="party-agreement-btn" class="fp-add-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg><span>Upload Agreements</span></button></div>
               <div class="fp-field">
           <label class="fp-label" for="party-cus-comments">Comments</label>
           <textarea id="party-cus-comments" class="fp-input fp-textarea" rows="4" autocomplete="off" placeholder="Enter agreement terms, special pricing notes, delivery instructions or other comments about this customer..."></textarea>
@@ -1119,6 +1144,7 @@
     </section>
 </div>
 <div data-tab-panel="quotations" hidden>
+  <div data-under="creditors">
     <section class="fp-card">
       <div class="fp-section-head"><h2 class="fp-section-title">1. Quotation Document Input</h2></div>
       <div class="fp-quote-input">
@@ -1146,11 +1172,95 @@
       <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:22%">Item Name</th><th class="" style="width:auto">Description</th><th class="" style="width:8%">Unit</th><th class="fp-col-num" style="width:11%">Rate (OMR)</th><th class="" style="width:11%">Delivery Time</th><th class="" style="width:11%">Warranty</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-quote-rows"></tbody></table></div>
       <p id="party-quote-summary" class="fp-table-note"></p>
     </section>
+  </div>
+  <!-- Debtors: the customer's purchase order, read from its file or typed in -->
+  <div data-under="debtors">
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">1. Purchase Order Document Input</h2></div>
+      <div id="party-cpo-drop" class="fp-drop">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"></path><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"></path><path d="m8 17 4-4 4 4"></path></svg>
+        <strong class="fp-drop-title">Drag and drop your Purchase Order file here</strong>
+        <span class="fp-drop-note">Excel (.xlsx), CSV, TXT or JSON: the items are read into the table below</span>
+        <button type="button" id="party-cpo-btn" class="fp-drop-btn">Choose File</button>
+        <input id="party-cpo-input" type="file" accept=".xlsx,.xls,.csv,.txt,.json,.pdf,.doc,.docx" hidden>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title">2. Purchase Order Details</h2><button type="button" class="fp-add-row" data-add-row="customerPo" title="Add Row (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Row</span><kbd>Shift+X</kbd></button></div>
+      <div class="cpo-stats">
+        <div class="cpo-stat"><span class="cpo-stat-label">Total Items</span><strong id="party-cpo-count" class="cpo-stat-value">0</strong></div>
+        <div class="cpo-stat cpo-stat-accent"><span class="cpo-stat-label">Total Value (OMR)</span><strong id="party-cpo-total" class="cpo-stat-value">0.000</strong></div>
+        <div class="cpo-stat"><span class="cpo-stat-label">Total Quantity</span><strong id="party-cpo-qty" class="cpo-stat-value">0</strong></div>
+      </div>
+      <div class="cpo-head">
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-cpo-number">Customer PO No. <span class="fp-req">*</span></label>
+          <input id="party-cpo-number" class="fp-input fp-input-sm fp-mono" type="text" autocomplete="off" maxlength="60" placeholder="e.g. MKT/PO/2026/121">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-cpo-date">PO Date</label>
+          <input id="party-cpo-date" class="fp-input fp-input-sm" type="date">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-cpo-delivery">Delivery Date</label>
+          <input id="party-cpo-delivery" class="fp-input fp-input-sm" type="date">
+        </div>
+      </div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table cpo-table"><thead><tr><th style="width:56px">S.No</th><th style="width:22%">Item Name</th><th style="width:auto">Description</th><th style="width:9%">Unit</th><th class="fp-col-num" style="width:9%">Qty</th><th class="fp-col-num" style="width:12%">Rate (OMR)</th><th class="fp-col-num" style="width:13%">Amount (OMR)</th><th class="fp-col-del" style="width:64px">Action</th></tr></thead><tbody id="party-cpo-rows"></tbody><tfoot class="fp-table-foot cpo-foot"><tr><td></td><td id="party-cpo-foot-count"></td><td></td><td class="cpo-foot-label">Total Qty</td><td id="party-cpo-foot-qty" class="fp-foot-num"></td><td class="cpo-foot-label">Total Value</td><td id="party-cpo-foot-total" class="fp-foot-num cpo-foot-total"></td><td></td></tr></tfoot></table></div>
+    </section>
+  </div>
 </div>
 <div data-tab-panel="purchases" hidden>
+    <!-- 1. Add Purchase / Sales Order: one order at a time, with its PO / SO document -->
     <section class="fp-card">
-      <div class="fp-section-head"><h2 class="fp-section-title"><span data-creditors="1. Previous Purchase Orders" data-debtors="1. Previous Sales Orders"></span></h2><button type="button" class="fp-add-row" data-add-row="orders" title="Add Order (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Order</span><kbd>Shift+X</kbd></button></div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:20%"><span data-creditors="PO Number" data-debtors="SO Number"></span></th><th class="" style="width:17%">Order Date</th><th class="fp-col-num" style="width:18%">Total Value (OMR)</th><th class="fp-col-num" style="width:11%">Total Items</th><th class="" style="width:20%">Status</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-order-rows"></tbody><tfoot class="fp-table-foot"><tr><td>Total</td><td id="party-order-count"></td><td id="party-order-value" class="fp-foot-num"></td><td id="party-order-items" class="fp-foot-num"></td><td></td><td></td></tr></tfoot></table></div>
+      <h2 class="fp-section-title"><span data-creditors="1. Add Purchase Order" data-debtors="1. Add Sales Order"></span></h2>
+      <div class="po-add">
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-order-number"><span data-creditors="PO Number" data-debtors="SO Number"></span> <span class="fp-req">*</span></label>
+          <input id="party-order-number" class="fp-input fp-input-sm fp-mono" type="text" autocomplete="off" maxlength="40" data-transient="1">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-order-date">Order Date</label>
+          <input id="party-order-date" class="fp-input fp-input-sm" type="date" data-transient="1">
+        </div>
+        <div class="fp-field" data-under="debtors">
+          <label class="fp-label fp-label-sm" for="party-order-quote">Quotation Ref</label>
+          <input id="party-order-quote" class="fp-input fp-input-sm fp-mono" type="text" autocomplete="off" maxlength="40" placeholder="e.g. QUO-666764" data-transient="1">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-order-value">Total Value (OMR)</label>
+          <input id="party-order-value" class="fp-input fp-input-sm fp-input-num fp-mono" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" data-transient="1">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-order-items">Total Items</label>
+          <input id="party-order-items" class="fp-input fp-input-sm fp-input-num fp-mono" type="text" autocomplete="off" inputmode="numeric" placeholder="0" data-transient="1">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label fp-label-sm" for="party-order-status">Status</label>
+          <select id="party-order-status" class="fp-input fp-input-sm fp-select" data-transient="1"><option>Pending</option><option>Fulfilled</option></select>
+        </div>
+        <div class="fp-field">
+          <span class="fp-label fp-label-sm" id="party-order-file-label"><span data-creditors="PO Document" data-debtors="SO Document"></span></span>
+          <div class="po-attach">
+            <button type="button" id="party-order-file-btn" class="po-attach-btn" aria-labelledby="party-order-file-label party-order-file-name">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+              <span id="party-order-file-name">Attach PDF / image</span>
+            </button>
+            <button type="button" id="party-order-file-clear" class="po-attach-clear" aria-label="Remove the attached file" title="Remove file" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+            <input id="party-order-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden>
+          </div>
+        </div>
+        <button type="button" id="party-order-add" class="fp-btn fp-btn-primary po-add-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span id="party-order-add-label">Add Order</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 2. Previous Purchase / Sales Orders: saved with the record -->
+    <section class="fp-card">
+      <div class="fp-section-head"><h2 class="fp-section-title"><span data-creditors="2. Previous Purchase Orders" data-debtors="2. Previous Sales Orders"></span></h2><span id="party-order-count" class="fp-file-count"></span></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table po-table"><thead><tr><th style="width:16%"><span data-creditors="PO Number" data-debtors="SO Number"></span></th><th style="width:13%">Order Date</th><th style="width:13%" data-under="debtors">Quotation Ref</th><th class="fp-col-num" style="width:14%">Total Value</th><th class="po-col-center" style="width:11%">Total Items</th><th class="po-col-center" style="width:11%">Status</th><th style="width:auto">Document</th><th class="po-col-center" style="width:190px">Action</th></tr></thead><tbody id="party-order-rows"></tbody></table></div>
     </section>
 </div>
 
@@ -1163,8 +1273,8 @@
   </form>
   <template id="party-doc-row"><tr class="fp-row"><td><div class="fp-doc"><span class="fp-doc-badge" data-doc-badge></span><div class="fp-doc-text"><strong class="fp-doc-name" data-doc-name></strong><span class="fp-doc-size" data-doc-size></span></div></div></td><td><select class="fp-cell fp-select fp-cell-select" data-field="type" aria-label="Document type"><option value="">Select type</option><option>Commercial Registration</option><option>VAT Certificate</option><option>Trade Licence</option><option>Bank Letter</option><option>Agreement</option><option>Other</option></select></td><td><input class="fp-cell fp-cell-date" data-field="expiry" type="date" aria-label="Expiry date"></td><td><input class="fp-cell" data-field="uploadedOn" type="text" readonly tabindex="-1" aria-label="Uploaded on"></td><td class="fp-col-del"><button type="button" class="fp-del" data-doc-preview title="View file" aria-label="View file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="fp-del" data-doc-remove title="Remove file" aria-label="Remove file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" data-letters placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" data-letters placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><div class="fp-phone fp-phone-cell"><select class="fp-cell fp-select fp-select-list fp-phone-code" data-field="mobileCode" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" inputmode="tel" data-check="phone" placeholder="9XXX XXXX" aria-label="Mobile number"></div></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-cpo-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><input class="fp-cell" data-field="unit" type="text" autocomplete="off" placeholder="PCS" aria-label="Unit"></td><td><input class="fp-cell fp-cell-num" data-field="qty" type="text" autocomplete="off" inputmode="decimal" placeholder="0" aria-label="Qty"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><output class="cpo-amount" data-amount>0.000</output></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-order-row"><tr class="fp-row"><td><input class="fp-cell fp-mono" data-field="number" type="text" autocomplete="off" placeholder="Order number" aria-label="Order number"></td><td><input class="fp-cell fp-cell-date" data-field="date" type="date" aria-label="Order date"></td><td><input class="fp-cell fp-cell-num" data-field="value" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Total value (OMR)"></td><td><input class="fp-cell fp-cell-num" data-field="items" type="text" autocomplete="off" inputmode="numeric" placeholder="0" aria-label="Total items"></td><td><select class="fp-cell fp-select fp-cell-select" data-field="status" aria-label="Status"><option>Pending</option><option>Fulfilled</option></select></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
 </section>
 
 <!-- BRAND CREATION  (#/masters/brand/new · Masters › Create › Brand) -->
@@ -1395,6 +1505,10 @@
     </section>
 
     <div class="fp-footer fp-footer-end">
+      <div class="fp-footer-stat" aria-live="polite">
+        <span class="fp-footer-stat-label">Available Stock</span>
+        <strong id="warehouse-stock" class="fp-footer-stat-value">0</strong>
+      </div>
       <div class="fp-actions">
         <button type="button" id="warehouse-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
         <button type="button" id="warehouse-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="warehouse-save-label">Save Stock Point Record</span></button>
@@ -2345,15 +2459,41 @@
       <span class="si-drop-note">Supports .XLS, .XLSX and .CSV spreadsheets exported from any company</span>
     </button>
     <div id="master-import-file" class="si-file" hidden>
-      <span class="si-file-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h2M8 17h2M14 13h2M14 17h2"></path></svg></span>
+      <span class="si-file-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 15l2 2 4-4"></path></svg></span>
       <div class="si-file-text">
         <strong id="master-import-file-name"></strong>
         <span id="master-import-file-summary"></span>
-        <ul id="master-import-file-issues" class="si-issues"></ul>
+        <ul id="master-import-mapping" class="si-mapping" aria-label="How the sheet's columns were read"></ul>
       </div>
-      <button type="button" class="ml-act" data-si="browse">Change File</button>
-      <button type="button" class="ml-act ml-act-danger" data-si="clear" aria-label="Remove file">Remove</button>
+      <button type="button" class="si-file-link" data-si="browse">Change file</button>
+      <button type="button" class="si-file-link si-file-remove" data-si="clear" aria-label="Remove file">Remove</button>
     </div>
+
+    <div id="master-import-stats" class="si-stats" hidden>
+      <div class="si-stat"><span>Total Records</span><strong id="master-import-total">0</strong></div>
+      <div class="si-stat si-stat-new"><span>New</span><strong id="master-import-new">0</strong></div>
+      <div class="si-stat si-stat-dup"><span>Duplicates</span><strong id="master-import-dup">0</strong></div>
+      <div class="si-stat si-stat-err"><span>Errors</span><strong id="master-import-err">0</strong></div>
+    </div>
+
+    <section id="master-import-preview" class="si-preview" aria-labelledby="master-import-preview-title" hidden>
+      <div class="si-preview-head">
+        <h3 id="master-import-preview-title" class="si-preview-title">Preview</h3>
+        <div class="si-tabs" role="group" aria-label="Show rows">
+          <button type="button" class="si-tab" data-si-filter="all" aria-pressed="true">All <span id="master-import-tab-all">0</span></button>
+          <button type="button" class="si-tab" data-si-filter="new" aria-pressed="false">New <span id="master-import-tab-new">0</span></button>
+          <button type="button" class="si-tab" data-si-filter="duplicate" aria-pressed="false">Duplicates <span id="master-import-tab-duplicate">0</span></button>
+          <button type="button" class="si-tab" data-si-filter="error" aria-pressed="false">Errors <span id="master-import-tab-error">0</span></button>
+        </div>
+      </div>
+      <div class="si-table-wrap">
+        <table class="si-table">
+          <thead><tr id="master-import-head"></tr></thead>
+          <tbody id="master-import-rows"></tbody>
+        </table>
+        <p id="master-import-none" class="si-none" hidden>No rows in this view.</p>
+      </div>
+    </section>
 
     <fieldset class="si-strategy">
       <legend class="si-strategy-title">
@@ -2363,7 +2503,7 @@
       <div class="si-options">
         <label class="si-option">
           <input type="radio" name="master-import-mode" value="skip" class="sf-radio" checked>
-          <span><strong>Skip Duplicates <em class="si-rec">(Recommended)</em></strong><span>Keep existing records if the code or name already exists.</span></span>
+          <span><strong>Skip Duplicates <em class="si-rec">(Recommended)</em></strong><span id="master-import-skip-note">Keep existing records if the code or name already exists.</span></span>
         </label>
         <label class="si-option">
           <input type="radio" name="master-import-mode" value="overwrite" class="sf-radio">
@@ -2374,9 +2514,10 @@
   </div>
   <div class="sf-foot si-foot">
     <button type="button" class="ml-btn ml-btn-plain" data-si="close">Cancel</button>
+    <span id="master-import-summary" class="si-summary" aria-live="polite"></span>
     <button type="button" id="master-import-start" class="ml-btn ml-btn-green" data-si="start" aria-keyshortcuts="Control+Enter" disabled>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
-      <span>Start Import</span>
+      <span id="master-import-start-label">Start Import</span>
     </button>
   </div>
 </dialog>
@@ -2386,22 +2527,23 @@
   <div class="sf-head">
     <span id="master-view-icon" class="sf-icon" aria-hidden="true"></span>
     <div class="sf-heading">
-      <h2 id="master-view-title" class="sf-title"></h2>
-      <p id="master-view-sub" class="sf-sub mv-code"></p>
+      <h2 id="master-view-title" class="sf-title mv-title"></h2>
+      <p class="mv-sub"><span id="master-view-sub" class="mv-code-chip"></span></p>
     </div>
-    <span class="mv-keys" aria-hidden="true"><kbd>↑↓</kbd> Scroll · <kbd>E</kbd> Edit · <kbd>Del</kbd> Delete · <kbd>Esc</kbd> Close</span>
+    <span class="lk-keys mv-keys" aria-hidden="true"><span class="lk-key"><kbd>←→</kbd> Tabs</span><span class="lk-key"><kbd>E</kbd> Edit</span><span class="lk-key"><kbd>Del</kbd> Delete</span><span class="lk-key"><kbd>Esc</kbd> Close</span></span>
     <button type="button" class="lk-close" data-mv="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
   </div>
-  <div id="master-view-fields" class="mv-body"></div>
+  <div id="master-view-tabs" class="mv-tabs" role="tablist" aria-label="Record sections"></div>
+  <div id="master-view-fields" class="mv-body" role="tabpanel" tabindex="-1"></div>
   <div class="sf-foot mv-foot">
     <button type="button" class="ml-btn ml-btn-danger" data-mv="delete" aria-keyshortcuts="Delete">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
       <span>Delete</span>
     </button>
-    <button type="button" class="ml-btn ml-btn-plain" data-mv="close">Close</button>
+    <button type="button" class="ml-btn ml-btn-plain mv-btn-close" data-mv="close">Close</button>
     <button type="button" class="ml-btn ml-btn-primary" data-mv="edit" aria-keyshortcuts="E">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-      <span>Edit</span>
+      <span id="master-view-edit-label">Edit</span>
     </button>
   </div>
 </dialog>
@@ -2418,6 +2560,26 @@
   <div class="sf-foot mc-foot">
     <button type="button" class="ml-btn ml-btn-plain" data-mc="cancel">Cancel</button>
     <button type="button" id="master-confirm-ok" class="ml-btn ml-btn-danger-solid" data-mc="ok"></button>
+  </div>
+</dialog>
+
+<!-- Previous order popup (Party › Previous Purchases › View) -->
+<dialog id="order-view" class="lookup sf mv ov" aria-labelledby="order-view-title" aria-describedby="order-view-sub">
+  <div class="sf-head">
+    <span class="sf-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4M10 13h4M10 17h4M8 9h2"></path></svg></span>
+    <div class="sf-heading">
+      <h2 id="order-view-title" class="sf-title mv-title"></h2>
+      <p class="mv-sub"><span id="order-view-sub" class="mv-code-chip"></span></p>
+    </div>
+    <button type="button" class="lk-close" data-ov="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div id="order-view-fields" class="mv-body"></div>
+  <div class="sf-foot mv-foot">
+    <button type="button" class="ml-btn ml-btn-plain mv-btn-close" data-ov="close">Close</button>
+    <button type="button" id="order-view-open" class="ml-btn ml-btn-primary" data-ov="open">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+      <span>Open Document</span>
+    </button>
   </div>
 </dialog>
 

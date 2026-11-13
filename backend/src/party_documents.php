@@ -9,8 +9,8 @@ require_once __DIR__ . '/document_storage.php';
  */
 
 const PARTY_DOCUMENTS = [
-    'supplier' => ['table' => 'supplier_documents', 'owner' => 'supplier_id', 'parent' => 'suppliers', 'folder' => 'supplier-documents'],
-    'customer' => ['table' => 'customer_documents', 'owner' => 'customer_id', 'parent' => 'customers', 'folder' => 'customer-documents'],
+    'supplier' => ['table' => 'supplier_documents', 'owner' => 'supplier_id', 'parent' => 'suppliers', 'folder' => 'supplier-documents', 'orders' => 'supplier_orders'],
+    'customer' => ['table' => 'customer_documents', 'owner' => 'customer_id', 'parent' => 'customers', 'folder' => 'customer-documents', 'orders' => 'customer_orders'],
 ];
 
 function party_document_format(array $row): array
@@ -36,8 +36,9 @@ function party_documents_list(string $kind, int $ownerId): array
 /*
  * Stores every file in $files for one supplier or customer; all or nothing. $types and $expiries hold
  * each file's document type and expiry date (YYYY-MM-DD or ''), in the same order as the files.
+ * $orders: for a PO / SO document, the number of the party's order it belongs to ('' for none).
  */
-function party_documents_upload(string $kind, int $ownerId, array $files, array $types = [], array $expiries = []): array
+function party_documents_upload(string $kind, int $ownerId, array $files, array $types = [], array $expiries = [], array $orders = []): array
 {
     $t = PARTY_DOCUMENTS[$kind];
     if (!row_exists($t['parent'], $ownerId)) {
@@ -52,12 +53,17 @@ function party_documents_upload(string $kind, int $ownerId, array $files, array 
     }
     $stored = [];
     try {
-        transaction(static function () use ($t, $ownerId, $files, $meta, &$stored): void {
+        transaction(static function () use ($t, $ownerId, $files, $meta, $orders, &$stored): void {
             foreach ($files as $i => $file) {
                 [$path, $original] = store_upload($file, $t['folder']);
                 $stored[] = $path;
                 query("INSERT INTO `{$t['table']}` (`{$t['owner']}`, file_path, original_name, doc_type, expiry_date) VALUES (?, ?, ?, ?, ?)",
                     [$ownerId, $path, $original, $meta[$i][0], $meta[$i][1]]);
+                $orderNumber = trim($orders[$i] ?? '');
+                if ($orderNumber !== '') {
+                    query("UPDATE `{$t['orders']}` SET document_id = ? WHERE `{$t['owner']}` = ? AND order_number = ?",
+                        [(int) db()->lastInsertId(), $ownerId, $orderNumber]);
+                }
             }
         });
     } catch (Throwable $e) {
@@ -69,12 +75,12 @@ function party_documents_upload(string $kind, int $ownerId, array $files, array 
     return party_documents_list($kind, $ownerId);
 }
 
-function party_document_download(string $kind, int $id): never
+function party_document_download(string $kind, int $id, bool $inline = false): never
 {
     $t = PARTY_DOCUMENTS[$kind];
     $row = query("SELECT * FROM `{$t['table']}` WHERE id = ?", [$id])->fetch();
     if (!$row) {
         throw new NotFound('Document not found.');
     }
-    send_stored_file($row['file_path'], $row['original_name']);
+    send_stored_file($row['file_path'], $row['original_name'], $inline);
 }

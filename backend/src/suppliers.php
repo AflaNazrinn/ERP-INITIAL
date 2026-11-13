@@ -8,7 +8,7 @@ require_once __DIR__ . '/party_records.php';
  * documents (party_records.php), and the brands they sell (supplier_brands).
  */
 
-const SUPPLIER_PAYMENT_TERMS = ['Cash', 'Advance', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'];
+const SUPPLIER_PAYMENT_TERMS = PARTY_PAYMENT_TERMS;
 
 function supplier_format(array $row): array
 {
@@ -16,7 +16,10 @@ function supplier_format(array $row): array
         'id'             => (int) $row['id'],
         'code'           => $row['supplier_code'],
         'name'           => $row['supplier_name'],
+        'accountHead'    => $row['account_head'] ?? '',
+        'organizationName' => $row['organization_name'] ?? '',
         'city'           => $row['city'],
+        'zipCode'        => $row['zip_code'] ?? '',
         'country'        => $row['country'],
         'currency'       => $row['currency'],
         'address'        => $row['address'],
@@ -72,7 +75,7 @@ function supplier_next_code(): string
 function supplier_input(array $s): array
 {
     return [
-        'supplierName' => $s['name'], 'address' => $s['address'], 'country' => $s['country'], 'city' => $s['city'], 'currency' => $s['currency'],
+        'supplierName' => $s['name'], 'accountHead' => $s['accountHead'], 'organizationName' => $s['organizationName'], 'address' => $s['address'], 'country' => $s['country'], 'city' => $s['city'], 'zipCode' => $s['zipCode'], 'currency' => $s['currency'],
         'taxRegNo' => $s['taxRegNo'], 'remarks' => $s['remarks'], 'ownerDetails' => $s['ownerDetails'], 'phone' => $s['phone'],
         'telephone' => $s['telephone'], 'email' => $s['email'], 'debitLimit' => $s['debitLimit'], 'debitDays' => $s['debitDays'],
         'paymentTerms' => $s['paymentTerms'], 'openingBalance' => $s['openingBalance'], 'accountDetails' => $s['accountDetails'],
@@ -81,7 +84,7 @@ function supplier_input(array $s): array
 }
 
 /*
- * Payload: supplierName, address, country, city, currency, taxRegNo, remarks, ownerDetails, phone,
+ * Payload: supplierName, accountHead, organizationName, address, country, city, zipCode, currency, taxRegNo, remarks, ownerDetails, phone,
  * telephone, email, debitLimit, debitDays, paymentTerms, openingBalance, accountDetails, status,
  * brandIds: [id, …], contacts: [{ name, designation, number, email }, …],
  * quotations: [{ itemName, description, unit, rate, deliveryTime, warranty }, …],
@@ -95,9 +98,12 @@ function supplier_save(array $data, ?int $id = null): array
     $in = new Input($data);
     $row = [
         'supplier_name'   => $in->name('supplierName', 'Name', 150),
+        'account_head'    => $in->text('accountHead', 'Account head', 100) ?: 'Sundry Creditors',
+        'organization_name' => $in->text('organizationName', 'Organization name', 150),
         'address'         => $in->text('address', 'Address', 255),
         'country'         => $in->text('country', 'Country', 80),
         'city'            => $in->text('city', 'City', 100),
+        'zip_code'        => $in->text('zipCode', 'Zip code', 20),
         'currency'        => $in->choice('currency', 'Currency', PARTY_CURRENCIES, 'OMR'),
         'tax_reg_no'      => $in->text('taxRegNo', 'Tax reg number', 50),
         'remarks'         => $in->text('remarks', 'Comments', 65535),
@@ -113,7 +119,7 @@ function supplier_save(array $data, ?int $id = null): array
         'status'          => $in->choice('status', 'Status', PARTY_STATUSES, 'active'),
     ];
     $brandIds = $in->ids('brandIds', 'brand', 'brands');
-    $rows = party_rows_input($in);
+    $rows = party_rows_input($in, 'supplier');
     $in->done();
 
     // The model keeps the first three contact names on the supplier row as well.

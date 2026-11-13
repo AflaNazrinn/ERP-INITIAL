@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 /*
  * Required first by every JSON endpoint in backend/public/api/.
- * Sends JSON headers, starts the session, checks the CSRF token on writes,
+ * Sends JSON headers, starts the session, answers 401 when nobody is signed in
+ * (except endpoints that define PUBLIC_ENDPOINT), checks the CSRF token on writes,
  * and turns exceptions into JSON errors:
  *   ValidationError → 422 { "error": "...", "fields": { "field": "message" } }
  *   NotFound        → 404 { "error": "..." }
@@ -166,6 +167,11 @@ set_exception_handler(static function (Throwable $e): void {
 });
 
 start_secure_session();
+
+// Signed in, or 401. session.php and login.php define PUBLIC_ENDPOINT before requiring this file.
+if (!defined('PUBLIC_ENDPOINT') && current_user() === null) {
+    json_error('Please sign in.', 401);
+}
 
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)
     && !csrf_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {

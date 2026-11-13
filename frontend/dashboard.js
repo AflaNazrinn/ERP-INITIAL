@@ -399,7 +399,7 @@ function moveFocusByTab(backwards) {
 // that end, or the whole text is selected (how a field looks on arriving by keyboard).
 function caretAtEdge(field, key) {
   const { selectionStart: start, selectionEnd: end, value } = field;
-  if (start == null) return true;         // dates: the browser exposes no caret
+  if (start == null) return true;         // no caret to move
   if (start === 0 && end === value.length) return true;
   if (start !== end) return false;
   return key === 'ArrowLeft' ? start === 0 : end === value.length;
@@ -632,7 +632,7 @@ const INPUT_FILTERS = {
 function initInputFilters() {
   document.addEventListener('input', event => {
     const field = event.target;
-    if (!(field instanceof HTMLInputElement) || field.type !== 'text') return;
+    if (!(field instanceof HTMLInputElement) || field.type !== 'text' || isDateField(field)) return;
     const kind = field.dataset.letters !== undefined ? 'letters' : field.inputMode;
     const allowed = INPUT_FILTERS[kind];
     if (!allowed) return;
@@ -945,12 +945,179 @@ function todayInputValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+/* ---------- Date fields ----------
+   Every <input type="date"> becomes a typed DD/MM/YYYY field: the browsers' own date boxes move between
+   day, month and year differently (Safari hardly at all). Digits fill the day, then the month, then the
+   year, and the slashes appear by themselves: 13052026 → 13/05/2026. A first digit that cannot start a
+   two-digit day (4–9) or month (2–9) moves on at once (5 → 05/), and / . - or a space ends a part early
+   (1/ → 01/). On leaving the field a missing year becomes this year and a two-digit year 20xx.
+   The field's .value stays YYYY-MM-DD ('' until it is a real date), so the forms read, set, compare and
+   save dates exactly as before. The calendar button, Alt+↓ or F4 opens the browser's date picker. */
+
+const NATIVE_VALUE = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const isDateField = node => node?.dataset?.date !== undefined;
+const typedDate = input => NATIVE_VALUE.get.call(input);
+
+// "2026-05-13" → "13/05/2026" ('' for anything else).
+function isoToDisplay(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ''));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : '';
+}
+// "13/05/2026" → "2026-05-13"; '' while it is not a real date (31/02/2026, a year still being typed …).
+function displayToIso(text) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(text ?? '').trim());
+  if (!match) return '';
+  const [day, month, year] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(year, month - 1, day);
+  date.setFullYear(year);                    // years below 100 are not 19xx
+  if (year < 1000 || date.getMonth() !== month - 1 || date.getDate() !== day) return '';
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+// Typed text → "DD/MM/YYYY" so far, with the slash after each finished part.
+function formatTypedDate(text) {
+  const parts = [''];                        // day, month, year
+  for (const char of text) {
+    const index = parts.length - 1;
+    if (/\d/.test(char)) {
+      if (index === 2) { if (parts[2].length < 4) parts[2] += char; continue; }
+      parts[index] += char;
+      const single = parts[index].length === 1 && Number(char) > (index === 0 ? 3 : 1);   // 4–9 / 2–9: one digit only
+      if (single) parts[index] = `0${char}`;
+      if (parts[index].length === 2) parts.push('');
+    } else if (/[/.\-\s]/.test(char) && index < 2 && parts[index].length === 1) {
+      parts[index] = `0${parts[index]}`;    // "1/" → "01/"
+      parts.push('');
+    }                                        // anything else, or a separator after a finished part, is dropped
+  }
+  return parts.join('/');
+}
+
+// Leaving the field: pad the day and month, and supply the year (this year, or 20 + two digits).
+function completeTypedDate(text) {
+  const [day = '', month = '', year = ''] = text.split('/');
+  if (!day || !month) return text;
+  const fullYear = !year ? String(new Date().getFullYear()) : year.length === 2 ? `20${year}` : year;
+  const pad = part => (/^[1-9]$/.test(part) ? `0${part}` : part);   // a lone 0 stays: the date check flags it
+  return `${pad(day)}/${pad(month)}/${fullYear}`;
+}
+
+function enhanceDateField(input) {
+  if (isDateField(input)) return;
+  const stored = typedDate(input);
+  input.type = 'text';
+  input.dataset.date = '';
+  input.dataset.check ??= 'date';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.maxLength = 10;
+  if (!input.placeholder) input.placeholder = 'DD/MM/YYYY';
+  // .value is YYYY-MM-DD both ways; anything else written to it is shown as it is.
+  Object.defineProperty(input, 'value', {
+    configurable: true,
+    get() { return displayToIso(typedDate(this)); },
+    set(value) {
+      const text = String(value ?? '');
+      NATIVE_VALUE.set.call(this, /^\d{4}-\d{2}-\d{2}$/.test(text) ? isoToDisplay(text) : text);
+    },
+  });
+  input.value = stored;
+
+  const wrap = el('span', 'fp-date');
+  input.before(wrap);
+  const button = el('button', 'fp-date-btn');
+  button.type = 'button';
+  button.tabIndex = -1;
+  button.title = 'Open the calendar (Alt+↓ or F4)';
+  button.setAttribute('aria-label', 'Open the calendar');
+  button.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>';
+  // The browser's picker, opened by the button: an invisible date input under the field.
+  const picker = el('input', 'fp-date-picker');
+  picker.type = 'date';
+  picker.tabIndex = -1;
+  picker.dataset.datePicker = '';
+  picker.dataset.enterSkip = '';
+  picker.setAttribute('aria-hidden', 'true');
+  wrap.append(input, button, picker);
+
+  const openPicker = () => {
+    picker.value = input.value;
+    try { picker.showPicker(); } catch { /* no picker in this browser: typing still works */ }
+  };
+  const takePick = event => {
+    event.stopPropagation();                 // the form records the date field's change, not the picker's
+    if (!picker.value || picker.value === input.value) return;
+    input.value = picker.value;
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  picker.addEventListener('input', takePick);
+  picker.addEventListener('change', takePick);
+  button.addEventListener('mousedown', event => event.preventDefault());   // keep focus in the field
+  button.addEventListener('click', openPicker);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')) {
+      event.preventDefault();
+      event.stopPropagation();
+      openPicker();
+    }
+  });
+}
+
+function initDateFields() {
+  // Typing: reformat to DD/MM/YYYY and keep the caret after the same digit.
+  document.addEventListener('input', event => {
+    const input = event.target;
+    if (!isDateField(input) || !event.inputType) return;            // our own events carry no inputType
+    const text = typedDate(input);
+    const caret = input.selectionStart ?? text.length;
+    const digitsBefore = text.slice(0, caret).replace(/\D/g, '').length;
+    let formatted = formatTypedDate(text);
+    if (event.inputType.startsWith('delete')) formatted = formatted.replace(/\/$/, '');   // let Backspace remove a slash
+    if (formatted === text) return;
+    NATIVE_VALUE.set.call(input, formatted);
+    let position = 0;
+    for (let seen = 0; position < formatted.length && seen < digitsBefore; position += 1) if (/\d/.test(formatted[position])) seen += 1;
+    if (formatted[position] === '/' && !event.inputType.startsWith('delete')) position += 1;
+    input.setSelectionRange(position, position);
+  }, true);
+  // Leaving: finish the date before the field checks look at it (they listen later, without capture).
+  document.addEventListener('focusout', event => {
+    const input = event.target;
+    if (!isDateField(input)) return;
+    const text = typedDate(input);
+    const complete = completeTypedDate(text);
+    if (complete === text) return;
+    NATIVE_VALUE.set.call(input, complete);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, true);
+  // form.reset() puts the raw default back: show it as a date again.
+  document.addEventListener('reset', event => {
+    setTimeout(() => { for (const input of event.target.querySelectorAll('[data-date]')) input.value = typedDate(input); }, 0);
+  }, true);
+
+  const selector = 'input[type="date"]:not([data-date-picker])';
+  for (const input of document.querySelectorAll(selector)) enhanceDateField(input);
+  // Rows added from templates (expiry dates, order dates).
+  new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches(selector)) enhanceDateField(node);
+        for (const input of node.querySelectorAll(selector)) enhanceDateField(input);
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 // A table cell counts as filled once it holds something other than its starting value.
 const isCellFilled = cell => cell.value.trim() !== '' && cell.value !== cell.defaultValue;
 
 function focusField(node) {
   node.focus();
-  if (node.select && node.type !== 'date') node.select();
+  if (node.select) node.select();
 }
 
 // Moving on with Enter (or a pick / Esc in a popup): a lookup field opens its "Select …" popup straight
@@ -1133,6 +1300,24 @@ class ApiError extends Error {
 }
 
 let csrfToken = null;
+// login.html, coming back to this screen (#/masters/item …) once signed in.
+function goToSignIn() {
+  location.replace(`login.html${location.hash ? `?next=${encodeURIComponent(location.hash)}` : ''}`);
+}
+// Before anything loads: the signed-in user, or off to the sign-in page (null).
+async function checkSignedIn() {
+  try {
+    const session = await apiRequest('api/session.php');
+    csrfToken = session.csrfToken;
+    if (session.user) return session.user;
+  } catch { /* server down: the sign-in page says so */ }
+  goToSignIn();
+  return null;
+}
+async function signOut() {
+  try { await apiRequest('api/login.php', { method: 'DELETE' }); } catch { /* signed out anyway below */ }
+  location.replace('login.html');
+}
 async function loadCsrfToken() {
   csrfToken = (await apiRequest('api/session.php')).csrfToken;
   return csrfToken;
@@ -1159,6 +1344,8 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
     await loadCsrfToken();
     return apiRequest(url, { method, json, body: json === undefined ? body : undefined }, true);
   }
+  // Signed out meanwhile (another tab, or the session ended): back to the sign-in page, then here again.
+  if (response.status === 401) goToSignIn();
   if (!response.ok || !result || !('data' in result)) {
     throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
   }
@@ -1274,6 +1461,7 @@ function phoneDialFor(field) {
 // The message for a data-check field ('' when its value is fine or empty).
 function fieldCheckProblem(field) {
   if (field.dataset.check === 'email') return emailProblem(field.value);
+  if (field.dataset.check === 'date') return typedDate(field).trim() && !field.value ? 'Enter a real date as DD/MM/YYYY, e.g. 13/05/2026.' : '';
   if (field.dataset.check === 'phone') return phoneProblem(field.value, phoneDialFor(field), { allowExtension: field.dataset.allowExtension !== undefined });
   return '';
 }
@@ -1297,7 +1485,8 @@ function initFieldChecks() {
       field.classList.add('is-invalid');
       field.setAttribute('aria-invalid', 'true');
       field.title = message;
-      showToast(field.dataset.check === 'email' ? 'Check the email address' : 'Check the phone number', message, true);
+      const titles = { email: 'Check the email address', date: 'Check the date', phone: 'Check the phone number' };
+      showToast(titles[field.dataset.check], message, true);
     } else if (field.classList.contains('is-invalid')) {
       clearFieldError(field);
     }
@@ -1991,7 +2180,7 @@ function resetItemForm() {
   itemEl('save-label').textContent = 'Save Item Record';
   itemEl('source-body').replaceChildren();
   addSourceRow({ focus: false });
-  // Enter skips Subcategory / Rack when the chosen category / stock point has none: that needs these lists.
+  // Enter skips Subcategory when the chosen category has none: that needs this list. Rack / Bin lists every location.
   loadLookup('subcategory');
   loadLookup('rack');
 }
@@ -2016,7 +2205,7 @@ async function editItem(id) {
   fillLookup(itemEl('uom'), item.uomId && { id: item.uomId, name: item.unit });
   fillLookup(itemEl('category'), item.categoryId && { id: item.categoryId, name: item.category });
   fillLookup(itemEl('subcategory'), item.subCategoryId && { id: item.subCategoryId, name: item.subCategory });
-  fillLookup(itemEl('warehouse'), item.warehouseId && { id: item.warehouseId, code: item.warehouseCode, name: item.warehouseName });
+  itemEl('warehouse-id').value = item.warehouseId ?? '';   // no Stock Point field: kept for an item without a rack
   fillLookup(itemEl('rack'), item.rackId && { id: item.rackId, code: item.rackCode });
   itemEl('comments').value = item.description;
   itemEl('status').value = item.status;
@@ -2026,12 +2215,15 @@ async function editItem(id) {
   item.sourcing.forEach((source, index) => {
     const row = addSourceRow({ focus: false });
     const cell = field => row.querySelector(`[data-field="${field}"]`);
-    fillLookup(cell('brand'), source.brandId && { id: source.brandId, name: source.brandName });
+    fillLookup(cell('stockPoint'), source.warehouseId && { id: source.warehouseId, code: source.warehouseCode, name: source.warehouseName });
+    cell('brandId').value = source.brandId ?? '';    // no Brand column any more: an older line keeps its brand
     fillLookup(cell('supplier'), source.supplierId && { id: source.supplierId, name: source.supplierName });
     cell('cost').value = source.cost ?? '';
-    if (index === 0) {                          // selling price and opening stock are kept per item
+    cell('openingStock').value = source.openingStock ?? '';   // each stock point's own opening stock
+    if (index === 0) {                          // the selling price is kept per item
       cell('sellingPrice').value = item.sellingPrice ?? '';
-      cell('openingStock').value = item.availableStock ?? '';
+      // Lines saved before opening stock was kept per line: the item's total shows on the first.
+      if (!item.sourcing.some(line => line.openingStock != null)) cell('openingStock').value = item.availableStock ?? '';
     }
   });
 }
@@ -2054,7 +2246,7 @@ function readItemForm() {
     subCategoryId: id('subcategory-id'),
     comments: text('comments'),
     sourcing: [],
-    warehouseId: id('warehouse-id'),
+    warehouseId: id('rack-id') === null ? id('warehouse-id') : null,   // with a rack the server takes the rack's stock point
     rackId: id('rack-id'),
     status: text('status'),
     docLink: text('doc-link'),
@@ -2065,13 +2257,13 @@ function readItemForm() {
 
   for (const row of itemEl('source-body').rows) {
     const cell = field => row.querySelector(`[data-field="${field}"]`);
-    const line = Object.fromEntries(['brandId', 'supplierId', 'cost', 'openingStock', 'sellingPrice', 'batchExpiry']
+    const line = Object.fromEntries(['warehouseId', 'brandId', 'supplierId', 'cost', 'openingStock', 'sellingPrice', 'batchExpiry']
       .map(field => [field, cell(field).value.trim()]));
     if (Object.values(line).every(v => v === '')) continue;     // blank rows are ignored
     for (const field of ['cost', 'openingStock', 'sellingPrice']) {
       if (line[field] !== '' && !DECIMAL_3.test(line[field])) fail(cell(field), 'Enter a number with up to 3 decimals.');
     }
-    for (const field of ['brandId', 'supplierId']) line[field] = line[field] === '' ? null : Number(line[field]);
+    for (const field of ['warehouseId', 'brandId', 'supplierId']) line[field] = line[field] === '' ? null : Number(line[field]);
     payload.sourcing.push(line);
   }
 
@@ -2083,7 +2275,7 @@ function readItemForm() {
 
 const ITEM_FIELD_NODES = {
   itemName: 'name', uomId: 'uom', categoryId: 'category', subCategoryId: 'subcategory',
-  warehouseId: 'warehouse', rackId: 'rack', status: 'status', comments: 'comments', imageLink: 'image-link', supplierUrl: 'supplier-url',
+  warehouseId: 'rack', rackId: 'rack', status: 'status', comments: 'comments', imageLink: 'image-link', supplierUrl: 'supplier-url',
 };
 let itemSaving = false;
 
@@ -2144,7 +2336,7 @@ function handleItemPageKeys(event) {
   if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey
       && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
     event.preventDefault();
-    if (target.type === 'date' && target.closest('.fp-source-row')) { addSourceRow(); return true; }
+    if (isDateField(target) && target.closest('.fp-source-row')) { addSourceRow(); return true; }
     if (openDropdownOnEnter(target)) return true;
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
     const next = fieldAfter(order, target);
@@ -2458,7 +2650,7 @@ function createFormPage(config) {
     if (list) {
       // Shift+X adds a row, except in text fields outside the row table, where X is something you'd type.
       const inRows = Boolean(target.closest?.('.fp-row')) && byId(lists[list].body).contains(target);
-      const typingText = isTextEntry(target) && !target.inputMode && target.type !== 'date' && !inRows;
+      const typingText = isTextEntry(target) && !target.inputMode && !isDateField(target) && !inRows;
       const shiftX = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && key.toLowerCase() === 'x' && !typingText;
       if (shiftX || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
         event.preventDefault();
@@ -2655,6 +2847,10 @@ const categoryForm = createFormPage({
 /* ---------- Stock Point Creation  (#/masters/stock-point/new). Ids keep the "warehouse" prefix: the table is warehouses. ---------- */
 
 const warehouseEl = suffix => byId(`warehouse-${suffix}`);
+// Footer: the stock held here (every item line's opening stock at this stock point, added up). A new one holds none.
+function showWarehouseStock(point) {
+  warehouseEl('stock').textContent = point ? formatCount(point.availableStock || 0) : '0';
+}
 const warehouseItems = createLookupChips({ container: 'warehouse-chips', entry: 'warehouse-item-entry', onChange: () => warehouseForm.record() });
 
 const warehouseForm = createFormPage({
@@ -2690,7 +2886,9 @@ const warehouseForm = createFormPage({
     setPhoneField(warehouseEl('phone'), point.phone, countryNamed(point.country)?.dial || '+968');
     warehouseEl('type').value = ['Office', 'Warehouse', 'Shop'].includes(point.type) ? point.type : 'Warehouse';
     warehouseItems.set(point.items);
+    showWarehouseStock(point);
   },
+  onReset: () => showWarehouseStock(null),
   // Picking the country sets the phone's calling code. This runs before the form records the edit, so Ctrl+Z undoes both.
   init() {
     warehouseEl('country').addEventListener('input', () => {
@@ -2704,7 +2902,8 @@ const warehouseForm = createFormPage({
 
 const partyEl = suffix => byId(`party-${suffix}`);
 let partyTab = 'general';
-const partyVariant = () => (partyEl('under').value === 'debtors' ? 'cus' : 'sup');
+// Until Under is chosen the page shows the Debtors details, so those are the fields in use.
+const partyVariant = () => (partyEl('under').value === 'creditors' ? 'sup' : 'cus');
 const partyFiles = { agreements: [] };
 
 function showPartyTab(tab) {
@@ -2722,36 +2921,44 @@ function syncPartyPhoneCodes(under) {
 const partyDial = under => countryNamed(partyEl(under === 'debtors' ? 'cus-country' : 'sup-country').value)?.dial || '+968';
 
 // Show what the Under choice selects: the matching General panel, labels and placeholders.
-// Until Creditors or Debtors is chosen, the page shows only the Under box (data-pending; see CSS).
+// Until Creditors or Debtors is chosen (data-pending), Under shows "Select…" and the page shows the
+// Debtors details; choosing either one switches the page. Save asks for the choice first.
 function syncPartyVariant() {
-  const under = partyEl('under').value;
-  partyEl('form').toggleAttribute('data-pending', under === '');
+  const chosen = partyEl('under').value;
+  const under = chosen || 'debtors';
+  partyEl('form').toggleAttribute('data-pending', chosen === '');
   for (const panel of partyEl('form').querySelectorAll('[data-under]')) panel.hidden = panel.dataset.under !== under;
-  for (const label of partyEl('page').querySelectorAll('[data-creditors]')) label.textContent = label.dataset[under || 'creditors'];
+  for (const label of partyEl('page').querySelectorAll('[data-creditors]')) label.textContent = label.dataset[under];
   partyEl('save-label').textContent = partySaveLabel();
+  partyEl('order-number').placeholder = `e.g. ${previewCode(under === 'debtors' ? 'SO' : 'PO')}`;
+  syncOrderStatuses(under);
   const noun = under === 'debtors' ? 'Customer' : 'Supplier';
   if (partyForm?.isEditing()) partyEl('title').textContent = `Edit ${noun}`;
   else if (partyEl('form').hasAttribute('data-fixed-under')) partyEl('title').textContent = `${noun} Creation`;
 }
-const partySaveLabel = () => `${partyForm?.isEditing() ? 'Update' : 'Save'} ${partyEl('under').value === 'debtors' ? 'Customer' : 'Supplier'} Record`;
+const partySaveLabel = () => `${partyForm?.isEditing() ? 'Update' : 'Save'} ${partyVariant() === 'cus' ? 'Customer' : 'Supplier'} Record`;
 
 function refreshPartyTotals() {
-  const prefix = partyVariant() === 'cus' ? 'SO' : 'PO';
-  let orders = 0, value = 0, items = 0;
-  for (const row of partyForm.rowsOf('orders')) {
-    const number = row.querySelector('[data-field="number"]');
-    number.placeholder = previewCode(prefix);
+  partyEl('order-number').placeholder = `e.g. ${previewCode(partyVariant() === 'cus' ? 'SO' : 'PO')}`;
+  // Debtors › Purchase Orders: each line's amount (qty × rate) and the PO's totals.
+  let poLines = 0, poQty = 0, poValue = 0;
+  for (const row of partyForm.rowsOf('customerPo')) {
+    const qty = row.querySelector('[data-field="qty"]').value.trim();
+    const rate = row.querySelector('[data-field="rate"]').value.trim();
+    const amount = DECIMAL_3.test(qty) && DECIMAL_3.test(rate) ? Math.round(Number(qty) * Number(rate) * 1000) / 1000 : 0;
+    row.querySelector('[data-amount]').textContent = formatAmount(amount);
     if (isBlankRow(row)) continue;
-    orders += 1;
-    const rowValue = row.querySelector('[data-field="value"]').value.trim();
-    const rowItems = row.querySelector('[data-field="items"]').value.trim();
-    if (DECIMAL_3.test(rowValue)) value += Number(rowValue);
-    if (WHOLE_NUMBER.test(rowItems)) items += Number(rowItems);
+    poLines += 1;
+    if (DECIMAL_3.test(qty)) poQty += Number(qty);
+    poValue += amount;
   }
-  partyEl('order-count').textContent = `${orders} order${orders === 1 ? '' : 's'}`;
-  partyEl('order-value').textContent = formatAmount(value);
-  partyEl('order-items').textContent = formatCount(items);
-
+  const qtyText = formatCount(Math.round(poQty * 1000) / 1000);
+  partyEl('cpo-count').textContent = formatCount(poLines);
+  partyEl('cpo-total').textContent = formatAmount(poValue);
+  partyEl('cpo-qty').textContent = qtyText;
+  partyEl('cpo-foot-count').textContent = `${poLines} item${poLines === 1 ? '' : 's'}`;
+  partyEl('cpo-foot-qty').textContent = qtyText;
+  partyEl('cpo-foot-total').textContent = formatAmount(poValue);
   let quoted = 0, rates = 0;
   for (const row of partyForm.rowsOf('quotations')) {
     if (isBlankRow(row)) continue;
@@ -2782,11 +2989,25 @@ function splitQuotationLine(line, delimiter) {
 
 const QUOTE_COLUMNS = ['itemName', 'description', 'unit', 'rate', 'deliveryTime', 'warranty'];
 const QUOTE_HEADERS = { item: 'itemName', itemname: 'itemName', name: 'itemName', description: 'description', desc: 'description', unit: 'unit', uom: 'unit', rate: 'rate', rateomr: 'rate', price: 'rate', deliverytime: 'deliveryTime', delivery: 'deliveryTime', warranty: 'warranty' };
-const headerKey = text => QUOTE_HEADERS[String(text).toLowerCase().replace(/[^a-z]/g, '')];
+// What a file is read into: the supplier's quotation (Creditors) or the customer's purchase order (Debtors).
+const QUOTE_SPEC = {
+  list: 'quotations', columns: QUOTE_COLUMNS, headers: QUOTE_HEADERS, title: 'Quotation read', noun: 'quotation',
+  hint: 'Use columns Item Name, Description, Unit, Rate, Delivery Time and Warranty.',
+};
+const CPO_COLUMNS = ['itemName', 'description', 'unit', 'qty', 'rate'];
+const CPO_SPEC = {
+  list: 'customerPo', columns: CPO_COLUMNS, title: 'Purchase order read', noun: 'purchase order',
+  headers: { item: 'itemName', itemname: 'itemName', name: 'itemName', product: 'itemName', description: 'description', desc: 'description',
+    unit: 'unit', uom: 'unit', qty: 'qty', quantity: 'qty', qtyordered: 'qty', rate: 'rate', rateomr: 'rate', price: 'rate', unitprice: 'rate' },
+  hint: 'Use columns Item Name, Description, Unit, Qty and Rate.',
+};
+const headerKeyIn = spec => text => spec.headers[String(text).toLowerCase().replace(/[^a-z]/g, '')];
+const headerKey = headerKeyIn(QUOTE_SPEC);
 
 // JSON (array of objects), or lines separated by tab, comma, pipe or semicolon. Without a header line,
 // only lines with a numeric rate count, so sentences in a pasted email are not read as items.
-function parseQuotationText(source) {
+function parseQuotationText(source, spec = QUOTE_SPEC) {
+  const headerKey = headerKeyIn(spec);
   const text = source.trim();
   if (text.startsWith('[') || text.startsWith('{')) {
     try {
@@ -2804,7 +3025,7 @@ function parseQuotationText(source) {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const delimiter = ['\t', '|', ';', ','].find(mark => lines.some(line => line.includes(mark)));
   if (!delimiter) return [];
-  let columns = QUOTE_COLUMNS;
+  let columns = spec.columns;
   const first = splitQuotationLine(lines[0], delimiter);
   const hasHeader = first.filter(headerKey).length >= 2;
   if (hasHeader) columns = first.map(headerKey);
@@ -2822,9 +3043,10 @@ function parseQuotationText(source) {
 // Spreadsheet rows (Excel or CSV) as quotation rows. The header row is the first of the top five naming two
 // known columns (Item Name, Description, Unit, Rate, Delivery Time, Warranty); without one the columns are
 // read in that order and only rows with a numeric rate count.
-function quotationRowsFromSheet(sheet) {
+function quotationRowsFromSheet(sheet, spec = QUOTE_SPEC) {
+  const headerKey = headerKeyIn(spec);
   const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.filter(headerKey).length >= 2);
-  const columns = headerIndex === -1 ? QUOTE_COLUMNS : sheet[headerIndex].map(headerKey);
+  const columns = headerIndex === -1 ? spec.columns : sheet[headerIndex].map(headerKey);
   const rows = [];
   for (const cells of sheet.slice(headerIndex + 1)) {
     const row = {};
@@ -2832,47 +3054,50 @@ function quotationRowsFromSheet(sheet) {
       const value = String(cells[index] ?? '').trim();
       if (column && value) row[column] = value;
     });
-    if (/^\d+(\.\d+)?$/.test(row.rate || '')) row.rate = String(Number(Number(row.rate).toFixed(3)));   // spreadsheet floats
+    for (const key of ['rate', 'qty']) {
+      if (/^\d+(\.\d+)?$/.test(row[key] || '')) row[key] = String(Number(Number(row[key]).toFixed(3)));   // spreadsheet floats
+    }
     if (Object.keys(row).length && (headerIndex !== -1 || /^\d+(\.\d+)?$/.test(row.rate || ''))) rows.push(row);
   }
   return rows;
 }
 
-function addParsedQuotations(rows, sourceName) {
+function addParsedQuotations(rows, sourceName, spec = QUOTE_SPEC) {
   if (rows.length === 0) {
-    showToast('No items found', `Nothing could be read from ${sourceName}. Use columns Item Name, Description, Unit, Rate, Delivery Time and Warranty.`, true);
+    showToast('No items found', `Nothing could be read from ${sourceName}. ${spec.hint}`, true);
     return false;
   }
-  const existing = partyForm.rowsOf('quotations');
+  const existing = partyForm.rowsOf(spec.list);
   for (const row of existing) if (isBlankRow(row)) row.remove();   // parsed rows take the place of blank ones
-  for (const row of rows) partyForm.appendRow('quotations', row);
+  for (const row of rows) partyForm.appendRow(spec.list, row);
   partyForm.record();
-  showToast('Quotation read', `${rows.length} item${rows.length === 1 ? '' : 's'} added from ${sourceName}. Check them before saving.`);
+  showToast(spec.title, `${rows.length} item${rows.length === 1 ? '' : 's'} added from ${sourceName}. Check them before saving.`);
   return true;
 }
 
 // Excel (.xlsx), CSV, TXT and JSON are read into the table. PDF and Word layouts cannot be read reliably
 // in the browser, so they get a message saying what to do instead.
-async function readQuotationFile(file) {
+async function readQuotationFile(file, spec = QUOTE_SPEC) {
   const extension = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
   if (['pdf', 'doc', 'docx'].includes(extension)) {
-    showToast('This file cannot be read automatically',
-      'PDF and Word quotations cannot be read. Save the quotation as Excel (.xlsx) or CSV, or paste its lines into Attach & Parse Email.', true);
+    showToast('This file cannot be read automatically', spec === QUOTE_SPEC
+      ? 'PDF and Word quotations cannot be read. Save the quotation as Excel (.xlsx) or CSV, or paste its lines into Attach & Parse Email.'
+      : 'PDF and Word purchase orders cannot be read. Save the purchase order as Excel (.xlsx) or CSV, or type its lines into the table.', true);
     return;
   }
   if (['xlsx', 'xls', 'csv'].includes(extension)) {
     try {
-      addParsedQuotations(quotationRowsFromSheet(await readSpreadsheet(file)), file.name);
+      addParsedQuotations(quotationRowsFromSheet(await readSpreadsheet(file), spec), file.name, spec);
     } catch (error) {
       showToast('Could not read the file', error.message || 'The file could not be read.', true);
     }
     return;
   }
   if (!['json', 'txt'].includes(extension)) {
-    showToast('File type not supported', 'Use an Excel (.xlsx), CSV, TXT or JSON quotation.', true);
+    showToast('File type not supported', `Use an Excel (.xlsx), CSV, TXT or JSON ${spec.noun}.`, true);
     return;
   }
-  addParsedQuotations(parseQuotationText(await file.text()), file.name);
+  addParsedQuotations(parseQuotationText(await file.text(), spec), file.name, spec);
 }
 
 function renderFileList(listId, files) {
@@ -3020,12 +3245,237 @@ function removeDocument(row) {
 function previewDocument(row) {
   const { file, stored } = docFiles.get(row);
   if (stored) {                                // a saved document: the server sends it as a download
-    window.open(`api/${partyOwner()}-documents.php?id=${stored.id}`, '_blank', 'noopener');
+    window.open(partyDocUrl(partyOwner(), stored.id, true), '_blank', 'noopener');
     return;
   }
   const url = URL.createObjectURL(file);
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60000);   // long enough for the new tab to load it
+}
+
+/* ---------- Party › Previous Purchases / Sales ----------
+   1. Add Order takes one order at a time (number, date, value, items, status and its PO / SO document);
+   2. the orders table lists them, with View (a popup) and Delete. The orders are saved with the record;
+   a new document is uploaded after the save and linked to its order by the order number. */
+
+let partyOrders = [];                          // [{ number, date, quotationRef, value, items, status, document: {id,name}|null, file: File|null }]
+// Purchase orders (creditors) and sales orders (debtors) move through different statuses (as the server's PARTY_ORDER_STATUSES).
+const ORDER_STATUSES = { creditors: ['Pending', 'Fulfilled'], debtors: ['Pending', 'Delivered', 'Invoiced'] };
+let orderStatusSide = null;
+
+// The Status choices follow Under; orders added before Under changed keep the nearest status.
+function syncOrderStatuses(under) {
+  if (orderStatusSide === under) return;
+  orderStatusSide = under;
+  const select = partyEl('order-status');
+  const choices = ORDER_STATUSES[under];
+  const keep = select.value;
+  select.replaceChildren(...choices.map(status => new Option(status, status)));
+  select.value = choices.includes(keep) ? keep : 'Pending';
+  const nearest = status => (choices.includes(status) ? status : status === 'Pending' ? 'Pending' : choices.at(-1) === 'Invoiced' ? 'Delivered' : 'Fulfilled');
+  if (partyOrders.some(order => !choices.includes(order.status))) {
+    partyOrders = partyOrders.map(order => ({ ...order, status: nearest(order.status) }));
+  }
+  renderPartyOrders();
+}
+let orderEntryFile = null;
+const ORDER_FILE_KINDS = ['pdf', 'jpg', 'jpeg', 'png'];
+const orderEntryFields = ['number', 'date', 'quote', 'value', 'items', 'status'].map(name => `order-${name}`);
+const isSalesSide = () => partyVariant() === 'cus';
+
+function clearOrderEntry() {
+  for (const suffix of orderEntryFields) clearFieldError(partyEl(suffix));
+  partyEl('order-number').value = '';
+  partyEl('order-date').value = todayInputValue();
+  partyEl('order-quote').value = '';
+  partyEl('order-value').value = '';
+  partyEl('order-items').value = '';
+  partyEl('order-status').value = 'Pending';
+  setOrderEntryFile(null);
+}
+
+function setOrderEntryFile(file) {
+  orderEntryFile = file;
+  partyEl('order-file').value = '';
+  partyEl('order-file-name').textContent = file ? file.name : 'Attach PDF / image';
+  partyEl('order-file-btn').closest('.po-attach').classList.toggle('has-file', Boolean(file));
+  partyEl('order-file-clear').hidden = !file;
+}
+
+function pickOrderFile(file) {
+  if (!file) return;
+  if (!ORDER_FILE_KINDS.includes(docExtension(file.name))) showToast('File not added', `${file.name}: choose a PDF, JPG or PNG.`, true);
+  else if (file.size > DOC_MAX_BYTES) showToast('File not added', `${file.name} is larger than 10 MB.`, true);
+  else setOrderEntryFile(file);
+}
+
+function addPartyOrder() {
+  for (const suffix of orderEntryFields) clearFieldError(partyEl(suffix));
+  const check = formChecks(suffix => partyEl(`order-${suffix}`));
+  const noun = partyVariant() === 'cus' ? 'SO' : 'PO';
+  check.required('number', `${noun} Number`);
+  const number = check.text('number');
+  if (number && partyOrders.some(order => order.number.toUpperCase() === number.toUpperCase())) {
+    check.fail(partyEl('order-number'), `${number} is already in the list.`);
+  }
+  check.matches('value', DECIMAL_3, 'Enter a number with up to 3 decimals.');
+  check.matches('items', WHOLE_NUMBER, 'Enter a whole number.');
+  if (check.errors.length) {
+    showFormErrors(check.errors);
+    return;
+  }
+  const value = check.text('value');
+  partyOrders.push({
+    number, date: partyEl('order-date').value, quotationRef: isSalesSide() ? check.text('quote') : '',
+    value: value === '' ? '' : Number(value).toFixed(3), items: check.text('items'),
+    status: partyEl('order-status').value, document: null, file: orderEntryFile,
+  });
+  renderPartyOrders();
+  partyForm.record();
+  clearOrderEntry();
+  partyEl('order-number').focus();
+}
+
+async function deletePartyOrder(index) {
+  const order = partyOrders[index];
+  const ok = await confirmAction({
+    title: `Delete ${order.number}?`,
+    message: `The order${order.document || order.file ? ' and its document' : ''} will be removed when you save the record.`,
+    confirm: 'Delete Order',
+  });
+  if (!ok) return;
+  partyOrders.splice(index, 1);
+  renderPartyOrders();
+  partyForm.record();
+  const buttons = partyEl('order-rows').querySelectorAll('[data-order-delete]');
+  (buttons[Math.min(index, buttons.length - 1)] || partyEl('order-number')).focus();
+}
+
+const orderDocName = order => order.file?.name || order.document?.name || '';
+
+function openOrderDocument(order) {
+  if (order.file) {
+    const url = URL.createObjectURL(order.file);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } else if (order.document) {
+    window.open(partyDocUrl(partyOwner(), order.document.id, true), '_blank', 'noopener');
+  }
+}
+
+function orderDocChip(order) {
+  const name = orderDocName(order);
+  if (!name) return el('span', 'po-doc-none', 'No document');
+  const chip = el('button', 'po-doc');
+  chip.type = 'button';
+  chip.title = `Open ${name}`;
+  chip.dataset.orderDoc = '';
+  const icon = el('span', 'po-doc-icon', docExtension(name) === 'pdf' ? 'PDF' : 'IMG');
+  icon.dataset.kind = docExtension(name) === 'pdf' ? 'pdf' : 'image';
+  icon.setAttribute('aria-hidden', 'true');
+  chip.append(icon, el('span', '', name));
+  return chip;
+}
+
+const sheetDateText = value => (value ? value.split('-').reverse().join('-') : '—');   // YYYY-MM-DD → DD-MM-YYYY
+
+function renderPartyOrders() {
+  const icon = paths => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const rows = partyOrders.map((order, index) => {
+    const tr = el('tr');
+    tr.dataset.order = String(index);
+    const value = el('td', 'po-value');
+    if (order.value !== '') value.append(formatAmount(order.value), el('small', '', 'OMR')); else value.textContent = '—';
+    const status = el('td', 'po-col-center');
+    status.append(el('span', `po-status po-status-${order.status.toLowerCase()}`, order.status));
+    const doc = el('td');
+    doc.append(orderDocChip(order));
+    const actions = el('td');
+    const wrap = el('div', 'po-actions');
+    const view = el('button', 'po-act po-act-view');
+    view.type = 'button';
+    view.dataset.orderView = '';
+    view.innerHTML = `${icon('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle>')}<span>View</span>`;
+    view.setAttribute('aria-label', `View ${order.number}`);
+    const del = el('button', 'po-act po-act-delete');
+    del.type = 'button';
+    del.dataset.orderDelete = '';
+    del.innerHTML = `${icon('<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"></path>')}<span>Delete</span>`;
+    del.setAttribute('aria-label', `Delete ${order.number}`);
+    wrap.append(view, del);
+    actions.append(wrap);
+    const sales = isSalesSide();
+    tr.append(el('td', `po-number${sales ? ' po-number-sales' : ''}`, order.number), el('td', '', sheetDateText(order.date)));
+    if (sales) tr.append(el('td', 'po-ref', order.quotationRef || '–'));
+    tr.append(value,
+      el('td', 'po-col-center po-items', order.items === '' ? '—' : formatCount(order.items)), status, doc, actions);
+    return tr;
+  });
+  if (rows.length === 0) {
+    const empty = el('tr');
+    const cell = el('td', 'fp-table-empty', 'No orders yet. Add one above.');
+    cell.colSpan = isSalesSide() ? 8 : 7;
+    empty.append(cell);
+    rows.push(empty);
+  }
+  partyEl('order-rows').replaceChildren(...rows);
+  const count = partyOrders.length;
+  partyEl('order-count').textContent = `${count} order${count === 1 ? '' : 's'}`;
+}
+
+let orderViewIndex = -1;
+let orderViewOpener = null;
+function openOrderView(index) {
+  const order = partyOrders[index];
+  orderViewIndex = index;
+  orderViewOpener = document.activeElement;
+  const sales = partyVariant() === 'cus';
+  byId('order-view-title').textContent = `${sales ? 'Sales' : 'Purchase'} Order`;
+  byId('order-view-sub').textContent = order.number;
+  const docName = orderDocName(order);
+  byId('order-view-fields').replaceChildren(viewSection('Order', viewFields([
+    { label: `${sales ? 'SO' : 'PO'} Number`, value: order.number, column: { type: 'code' } },
+    { label: 'Order Date', value: order.date ? formatDate(new Date(`${order.date}T00:00`)) : '' },
+    ...(sales ? [{ label: 'Quotation Ref', value: order.quotationRef }] : []),
+    { label: 'Total Value (OMR)', value: order.value === '' ? '' : formatAmount(order.value) },
+    { label: 'Total Items', value: order.items === '' ? '' : formatCount(order.items) },
+    { label: 'Status', value: el('span', `po-status po-status-${order.status.toLowerCase()}`, order.status) },
+    { label: `${sales ? 'SO' : 'PO'} Document`, value: docName ? `${docName}${order.file ? ' (uploads when you save)' : ''}` : 'No document' },
+  ])));
+  byId('order-view-open').hidden = !docName;
+  document.documentElement.classList.add('has-modal');
+  byId('order-view').showModal();
+  (docName ? byId('order-view-open') : byId('order-view').querySelector('.mv-foot [data-ov="close"]')).focus();
+}
+
+function closeOrderView() {
+  const dialog = byId('order-view');
+  if (dialog.open) dialog.close();
+  document.documentElement.classList.remove('has-modal');
+  if (orderViewOpener && document.contains(orderViewOpener)) orderViewOpener.focus();
+}
+
+function initPartyOrders() {
+  partyEl('order-add').addEventListener('click', addPartyOrder);
+  partyEl('order-file-btn').addEventListener('click', () => partyEl('order-file').click());
+  partyEl('order-file').addEventListener('change', event => pickOrderFile(event.target.files[0]));
+  partyEl('order-file-clear').addEventListener('click', () => { setOrderEntryFile(null); partyEl('order-file-btn').focus(); });
+  enableFileDrop(partyEl('order-file-btn'), files => pickOrderFile(files[0]));
+  for (const suffix of orderEntryFields) partyEl(suffix).addEventListener('input', () => clearFieldError(partyEl(suffix)));
+  partyEl('order-rows').addEventListener('click', event => {
+    const row = event.target.closest('tr[data-order]');
+    if (!row) return;
+    const index = Number(row.dataset.order);
+    if (event.target.closest('[data-order-view]')) openOrderView(index);
+    else if (event.target.closest('[data-order-delete]')) deletePartyOrder(index);
+    else if (event.target.closest('[data-order-doc]')) openOrderDocument(partyOrders[index]);
+  });
+  const dialog = byId('order-view');
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog || event.target.closest('[data-ov="close"]')) closeOrderView();
+    else if (event.target.closest('[data-ov="open"]')) openOrderDocument(partyOrders[orderViewIndex]);
+  });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeOrderView(); });
 }
 
 // supplier_brands: the brands this supplier sells.
@@ -3039,18 +3489,22 @@ const partyForm = createFormPage({
   saveLabel: partySaveLabel,
   // New documents (with their type and expiry) and customer agreements are uploaded once the record is saved.
   async afterSave(record) {
+    const orderType = partyVariant() === 'cus' ? 'Sales Order' : 'Purchase Order';
     const uploads = [
       ...docRows().map(readDocRow).filter(doc => doc.file).map(doc => ({ file: doc.file, type: doc.type, expiry: doc.expiry })),
       ...(partyVariant() === 'cus' ? partyFiles.agreements.map(file => ({ file, type: 'Agreement', expiry: '' })) : []),
+      // PO / SO documents: the server links each to its order by number.
+      ...partyOrders.filter(order => order.file).map(order => ({ file: order.file, type: orderType, expiry: '', order: order.number })),
     ];
     if (uploads.length === 0) return;
     const owner = partyOwner();
     const form = new FormData();
     form.append(`${owner}Id`, String(record.id));
-    for (const { file, type, expiry } of uploads) {
+    for (const { file, type, expiry, order } of uploads) {
       form.append('files[]', file, file.name);
       form.append('types[]', type);
       form.append('expiries[]', expiry);
+      form.append('orders[]', order || '');
     }
     try {
       await apiRequest(`api/${owner}-documents.php`, { method: 'POST', body: form });
@@ -3060,12 +3514,13 @@ const partyForm = createFormPage({
     }
   },
   fieldNodes: Object.fromEntries([
-    ['supplierName', 'sup-name'], ['customerName', 'cus-name'], ['organizationName', 'cus-organization'],
+    ['supplierName', 'sup-name'], ['customerName', 'cus-name'], ['organizationName', () => `${partyVariant()}-organization`], ['accountHead', () => `${partyVariant()}-head`],
     ['email', () => `${partyVariant()}-email`], ['country', () => `${partyVariant()}-country`], ['address', () => `${partyVariant()}-address`],
     ['phone', () => `${partyVariant()}-mobile`], ['telephone', () => `${partyVariant()}-phone`],
     ['taxRegNo', () => `${partyVariant()}-tax`], ['debitLimit', 'sup-credit-limit'], ['debitDays', 'sup-credit-days'],
-    ['openingBalance', 'sup-opening'], ['paymentTerms', 'sup-terms'], ['currency', 'sup-currency'], ['brandIds', 'sup-brand-entry'],
-    ['creditLimit', 'cus-credit-limit'], ['creditDays', 'cus-credit-days'], ['discountPercent', 'cus-discount'],
+    ['openingBalance', () => `${partyVariant()}-opening`], ['paymentTerms', () => `${partyVariant()}-terms`], ['currency', () => `${partyVariant()}-currency`], ['brandIds', 'sup-brand-entry'],
+    ['creditLimit', 'cus-credit-limit'], ['creditDays', 'cus-credit-days'],
+    ['poNumber', 'cpo-number'], ['poDate', 'cpo-date'], ['poDeliveryDate', 'cpo-delivery'],
   ].map(([key, suffix]) => [key, () => partyEl(typeof suffix === 'function' ? suffix() : suffix)])),
   firstField: () => (partyEl('under').value ? partyEl(`${partyVariant()}-name`) : partyEl('under')),
   setCode() {
@@ -3079,17 +3534,19 @@ const partyForm = createFormPage({
     customerContacts: { body: 'party-cus-contacts', template: 'party-contact-row', initial: 1, label: index => String(index + 1).padStart(2, '0'),
       defaults: () => ({ mobileCode: partyDial('debtors') }) },
     quotations: { body: 'party-quote-rows', template: 'party-quote-row', initial: 1 },
-    orders: { body: 'party-order-rows', template: 'party-order-row', initial: 1, defaults: () => ({ date: todayInputValue() }) },
+    // Debtors › Purchase Orders: the lines of the customer's PO.
+    customerPo: { body: 'party-cpo-rows', template: 'party-cpo-row', initial: 1, label: index => String(index + 1).padStart(2, '0') },
   },
   addRowList() {
     if (partyTab === 'general') return partyVariant() === 'cus' ? 'customerContacts' : 'supplierContacts';
-    return { quotations: 'quotations', purchases: 'orders' }[partyTab] || null;
+    if (partyTab === 'quotations') return partyVariant() === 'cus' ? 'customerPo' : 'quotations';
+    return null;
   },
   refresh: refreshPartyTotals,
   extra: {
-    read: () => ({ documents: docRows().map(readDocRow), brands: supplierBrands.get() }),
-    write(state) { renderDocRows(state.documents); supplierBrands.set(state.brands); },
-    reset() { renderDocRows([]); supplierBrands.set([]); },
+    read: () => ({ documents: docRows().map(readDocRow), brands: supplierBrands.get(), orders: partyOrders.map(order => ({ ...order })) }),
+    write(state) { renderDocRows(state.documents); supplierBrands.set(state.brands); partyOrders = state.orders.map(order => ({ ...order })); renderPartyOrders(); },
+    reset() { renderDocRows([]); supplierBrands.set([]); partyOrders = []; renderPartyOrders(); clearOrderEntry(); },
   },
   extraFocus: () => partyEl('doc-btn'),
   onReset() {
@@ -3122,14 +3579,20 @@ const partyForm = createFormPage({
     const NUMBER_2 = 'Enter a number with up to 2 decimals.';
     check.matches('credit-limit', variant === 'sup' ? MONEY_2 : DECIMAL_3, variant === 'sup' ? NUMBER_2 : NUMBER_3);
     check.matches('credit-days', WHOLE_NUMBER, WHOLE);
-    if (variant === 'sup') check.matches('opening', MONEY_2, NUMBER_2);
-    if (variant === 'cus' && (check.text('discount') !== '') && (!DECIMAL_2.test(check.text('discount')) || Number(check.text('discount')) > 100)) {
-      check.fail(partyEl('cus-discount'), 'Discount must be from 0 to 100, with up to 2 decimals.');
-    }
+    check.matches('opening', variant === 'sup' ? MONEY_2 : DECIMAL_3, variant === 'sup' ? NUMBER_2 : NUMBER_3);
     for (const row of partyForm.rowsOf('quotations')) check.rowCell(row, 'rate', DECIMAL_3, NUMBER_3);
-    for (const row of partyForm.rowsOf('orders')) {
-      check.rowCell(row, 'value', DECIMAL_3, NUMBER_3);
-      check.rowCell(row, 'items', WHOLE_NUMBER, WHOLE);
+    if (variant === 'cus') {
+      const poRows = partyForm.rowsOf('customerPo');
+      for (const row of poRows) {
+        check.rowCell(row, 'qty', DECIMAL_3, NUMBER_3);
+        check.rowCell(row, 'rate', DECIMAL_3, NUMBER_3);
+      }
+      if (poRows.some(row => !isBlankRow(row)) && partyEl('cpo-number').value.trim() === '') {
+        check.fail(partyEl('cpo-number'), 'Customer PO No. is required for the purchase order lines.');
+      }
+      if (partyEl('cpo-date').value && partyEl('cpo-delivery').value && partyEl('cpo-delivery').value < partyEl('cpo-date').value) {
+        check.fail(partyEl('cpo-delivery'), 'Delivery date cannot be before the PO date.');
+      }
     }
     const generalFields = [...partyEl('form').querySelectorAll(`[data-under="${partyEl('under').value}"] input[id], [data-under="${partyEl('under').value}"] select, [data-under="${partyEl('under').value}"] textarea`)]
       .filter(node => node.type !== 'file' && !node.readOnly && !node.dataset.transient);
@@ -3144,23 +3607,29 @@ const partyForm = createFormPage({
     const rowsOfTabs = {
       contacts: contactRows,
       quotations: filledRows(partyForm.rowsOf('quotations')).map(row => Object.fromEntries(QUOTE_COLUMNS.map(key => [key, row[key].trim()]))),
-      orders: filledRows(partyForm.rowsOf('orders')).map(row => ({
-        number: row.number.trim(), date: row.date, value: row.value.trim(), items: row.items.trim(), status: row.status,
+      // A newly attached file has no stored id yet: it is uploaded after the save and linked by the order number.
+      orders: partyOrders.map(order => ({
+        number: order.number, date: order.date, quotationRef: order.quotationRef || '', value: order.value, items: order.items, status: order.status,
+        documentId: order.file ? null : order.document?.id ?? null,
       })),
       documents: docRows().map(readDocRow).filter(doc => doc.stored).map(doc => ({ id: doc.stored.id, type: doc.type, expiry: doc.expiry })),
     };
     // Mapped onto the suppliers / customers columns of the data model.
     const payload = variant === 'sup' ? {
-      supplierName: d.name, address: d.address, country: d.country, currency: d.currency, taxRegNo: d.tax, remarks: d.comments,
+      supplierName: d.name, accountHead: d.head, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip, currency: d.currency, taxRegNo: d.tax, remarks: d.comments,
       ownerDetails: d.owner, phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email,
       debitLimit: d['credit-limit'], debitDays: d['credit-days'], paymentTerms: d.terms, openingBalance: d.opening,
       accountDetails: lines(d.bank && `Bank: ${d.bank}`, d.branch && `Branch: ${d.branch}`, d.iban && `Account / IBAN: ${d.iban}`, d.website && `Website: ${d.website}`),
       brandIds: supplierBrands.ids(), ...rowsOfTabs,
     } : {
-      customerName: d.name, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip,
+      customerName: d.name, accountHead: d.head, organizationName: d.organization, address: d.address, country: d.country, city: d.city, zipCode: d.zip, currency: d.currency,
       phone: joinPhone(d['mobile-code'], d.mobile), telephone: joinPhone(d['phone-code'], d.phone), email: d.email, ownerDetails: d.owner,
-      creditLimit: d['credit-limit'], creditDays: d['credit-days'], discountPercent: d.discount, salesman: d.salesman, taxRegNo: d.tax,
-      accountDetails: lines(d.other1, d.other2, d.other3), comments: d.comments, ...rowsOfTabs,
+      creditLimit: d['credit-limit'], creditDays: d['credit-days'], paymentTerms: d.terms, openingBalance: d.opening,
+      taxRegNo: d.tax,
+      accountDetails: lines(d.bank && `Bank: ${d.bank}`, d.branch && `Branch: ${d.branch}`, d.iban && `Account / IBAN: ${d.iban}`, d.website && `Website: ${d.website}`),
+      comments: d.comments, ...rowsOfTabs,
+      poNumber: partyEl('cpo-number').value.trim(), poDate: partyEl('cpo-date').value, poDeliveryDate: partyEl('cpo-delivery').value,
+      poItems: filledRows(partyForm.rowsOf('customerPo')).map(row => Object.fromEntries(CPO_COLUMNS.map(key => [key, row[key].trim()]))),
     };
     return { errors: check.errors, payload };
   },
@@ -3178,7 +3647,11 @@ const partyForm = createFormPage({
       if (country) partyEl('sup-currency').value = country.currency;
       syncPartyPhoneCodes('creditors');
     });
-    partyEl('cus-country').addEventListener('input', () => syncPartyPhoneCodes('debtors'));
+    partyEl('cus-country').addEventListener('input', () => {
+      const country = countryNamed(partyEl('cus-country').value);
+      if (country) partyEl('cus-currency').value = country.currency;
+      syncPartyPhoneCodes('debtors');
+    });
     partyEl('form').addEventListener('click', event => {
       const tab = event.target.closest('[data-tab]');
       if (tab) showPartyTab(tab.dataset.tab);
@@ -3190,6 +3663,7 @@ const partyForm = createFormPage({
       addDocuments(files);
     });
     enableFileDrop(partyEl('doc-drop'), addDocuments);
+    initPartyOrders();
     partyEl('doc-rows').addEventListener('keydown', event => handleTableArrows(event, null));
     // Runs before the form's own input listener, so the undo step sees the cleared expiry date.
     partyEl('doc-rows').addEventListener('input', event => {
@@ -3210,6 +3684,13 @@ const partyForm = createFormPage({
       if (file) readQuotationFile(file);
     });
     enableFileDrop(partyEl('quote-drop'), files => { if (files[0]) readQuotationFile(files[0]); });
+    partyEl('cpo-btn').addEventListener('click', () => partyEl('cpo-input').click());
+    partyEl('cpo-input').addEventListener('change', event => {
+      const [file] = event.target.files;
+      event.target.value = '';
+      if (file) readQuotationFile(file, CPO_SPEC);
+    });
+    enableFileDrop(partyEl('cpo-drop'), files => { if (files[0]) readQuotationFile(files[0], CPO_SPEC); });
     partyEl('email-open').addEventListener('click', () => {
       partyEl('email-panel').hidden = false;
       partyEl('email-text').focus();
@@ -3238,8 +3719,12 @@ function fillPartyForm(party) {
   set('name', party.name);
   set('address', party.address);
   set('country', party.country);
+  set('city', party.city);
+  set('zip', party.zipCode);
   set('tax', party.taxRegNo);
   set('owner', party.ownerDetails);
+  set('organization', party.organizationName);
+  set('head', party.accountHead || (variant === 'cus' ? 'Sundry Debtors' : 'Sundry Creditors'));
   set('email', party.email);
   const dial = countryNamed(party.country)?.dial || '+968';
   for (const [field, value] of [['mobile', party.phone], ['phone', party.telephone]]) {
@@ -3249,43 +3734,46 @@ function fillPartyForm(party) {
   }
   // Lines saved as "Label: value" (see read()) go back to their fields.
   const accountLines = String(party.accountDetails ?? '').split('\n').filter(Boolean);
+  ensureOption(partyEl(`${variant}-currency`), party.currency);
+  set('currency', party.currency || 'OMR');
+  // Financial Terms and Other Details are the same on both sides (suppliers name the limit "debit").
+  set('credit-limit', variant === 'sup' ? party.debitLimit : party.creditLimit);
+  set('credit-days', variant === 'sup' ? party.debitDays : party.creditDays);
+  set('terms', party.paymentTerms);
+  set('opening', party.openingBalance);
+  const labelled = { 'Bank: ': 'bank', 'Branch: ': 'branch', 'Account / IBAN: ': 'iban', 'Website: ': 'website' };
+  const other = [];
+  for (const line of accountLines) {
+    const prefix = Object.keys(labelled).find(label => line.startsWith(label));
+    if (prefix) set(labelled[prefix], line.slice(prefix.length)); else other.push(line);
+  }
   if (variant === 'sup') {
-    ensureOption(partyEl('sup-currency'), party.currency);
-    set('currency', party.currency);
     set('comments', party.remarks);
-    set('credit-limit', party.debitLimit);
-    set('credit-days', party.debitDays);
-    set('terms', party.paymentTerms);
-    set('opening', party.openingBalance);
-    const labelled = { 'Bank: ': 'bank', 'Branch: ': 'branch', 'Account / IBAN: ': 'iban', 'Website: ': 'website' };
-    const other = [];
-    for (const line of accountLines) {
-      const prefix = Object.keys(labelled).find(label => line.startsWith(label));
-      if (prefix) set(labelled[prefix], line.slice(prefix.length)); else other.push(line);
-    }
     if (other.length) set('bank', [partyEl('sup-bank').value, ...other].filter(Boolean).join(' · '));
     supplierBrands.set(party.brands);
   } else {
-    set('organization', party.organizationName);
-    set('city', party.city);
-    set('zip', party.zipCode);
-    set('credit-limit', party.creditLimit);
-    set('credit-days', party.creditDays);
-    set('discount', party.discountPercent);
-    ensureOption(partyEl('cus-salesman'), party.salesman);
-    set('salesman', party.salesman);
-    set('comments', party.comments);
-    ['other1', 'other2', 'other3'].forEach((suffix, index) => set(suffix, index < 2 ? accountLines[index] : accountLines.slice(2).join(' · ')));
+    // Older customers kept free "Other Details 1–3" lines: they move into Comments, so nothing is lost.
+    set('comments', [...other, party.comments].filter(Boolean).join('\n'));
+    partyEl('cpo-number').value = party.poNumber ?? '';
+    partyEl('cpo-date').value = party.poDate ?? '';
+    partyEl('cpo-delivery').value = party.poDeliveryDate ?? '';
+    partyForm.setRows('customerPo', (party.poItems ?? []).map(line => ({
+      ...line, qty: line.qty == null ? '' : String(Number(line.qty)), rate: line.rate ?? '',
+    })));
   }
   partyForm.setRows(variant === 'cus' ? 'customerContacts' : 'supplierContacts', party.contacts.map(contact => {
     const [mobileCode, mobile] = splitPhone(contact.number, dial);
     return { name: contact.name, designation: contact.designation, mobileCode, mobile, email: contact.email };
   }));
   partyForm.setRows('quotations', party.quotations.map(quote => ({ ...quote, rate: quote.rate ?? '' })));
-  partyForm.setRows('orders', party.orders.map(order => ({
-    number: order.number, date: order.date ?? '', value: order.value ?? '', items: order.items ?? '', status: order.status,
-  })));
-  renderDocRows(party.documents.map(doc => ({
+  partyOrders = party.orders.map(order => ({
+    number: order.number, date: order.date ?? '', quotationRef: order.quotationRef ?? '', value: order.value ?? '', items: order.items == null ? '' : String(order.items),
+    status: order.status, document: order.document, file: null,
+  }));
+  renderPartyOrders();
+  // PO / SO documents show on their order, not in Document Upload.
+  const orderDocIds = new Set(party.orders.map(order => order.document?.id).filter(Boolean));
+  renderDocRows(party.documents.filter(doc => !orderDocIds.has(doc.id)).map(doc => ({
     stored: doc, uploadedOn: new Date(String(doc.uploadedAt).replace(' ', 'T')), type: doc.docType, expiry: doc.expiryDate ?? '',
   })));
 }
@@ -3301,6 +3789,7 @@ const ML_ICONS = {
   edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>',
   delete: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"></path></svg>',
 };
+ML_ICONS.export = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>';
 ML_ICONS.pdf = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>';
 const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 const normalHeader = text => String(text).toLowerCase().replace(/[^a-z]/g, '');
@@ -3326,16 +3815,20 @@ function masterCell(column, value) {
 
 // config: key ('item' → #item-list-page), route, newRoute, noun, nouns (plural), api, lookups (lookup lists a change
 // makes stale), fromApi(record) → row, toPayload(row) → save payload (import; may be async),
-// edit(id) and formPage (Edit), related(record) → extra View sections (the party lists),
+// edit(id) and formPage (Edit), related(record, note) → { general: extra View cards, tabs: extra View tabs } (party and purchase
+// lists), viewOrder (View card order by group), viewTitle(row) (View heading; else the name),
 // columns [{ key, label, type, group (View section), headers (spreadsheet aliases), read(value) → value or throws,
 // inTable: false for detail columns shown only in View, import and export }], sample (template row values by key).
+const ML_PAGE_SIZE = 18;     // rows on one page of a list; the rest are on the next pages
+
 function createMasterList(config) {
   const page = `${config.key}-list`;
   const $ = suffix => byId(`${page}-${suffix}`);
   const tableColumns = config.columns.filter(column => column.inTable !== false);
   const caps = config.noun === config.noun.toUpperCase();          // UOM stays UOM in sentences
   const list = {
-    config, rows: [], applied: new Set(), range: { from: '', to: '' }, $, render, loaded: false,
+    config, rows: [], applied: new Set(), range: { from: '', to: '' }, $, render, loaded: false, selected: new Set(),
+    page: 1, shown: [], filterKey: '',
     one: caps ? config.noun : config.noun.toLowerCase(),
     many: caps ? config.nouns : config.nouns.toLowerCase(),
   };
@@ -3363,10 +3856,32 @@ function createMasterList(config) {
     const { applied, rows: all } = list;
     const rows = all.filter(row => (applied.size === 0 || applied.has(row.code)) && inDateRange(row, list.range)
       && (!query || config.columns.some(column => String(row[column.key] ?? '').toLowerCase().includes(query))));
-    $('body').replaceChildren(...rows.map(row => {
+    const known = new Set(all.map(row => row.code));
+    for (const code of list.selected) if (!known.has(code)) list.selected.delete(code);   // deleted meanwhile
+    // ML_PAGE_SIZE rows a page. A new search or filter starts again on page 1; coming back from a record's
+    // Edit or View opens the page that holds it.
+    const filterKey = [query, [...applied].join(','), list.range.from, list.range.to].join('|');
+    if (filterKey !== list.filterKey) { list.filterKey = filterKey; list.page = 1; }
+    list.shown = rows;
+    const back = list.returnTo && list.returnTo !== list.pagedFor ? rows.findIndex(row => row.code === list.returnTo) : -1;
+    if (back >= 0) { list.page = Math.floor(back / ML_PAGE_SIZE) + 1; list.pagedFor = list.returnTo; }
+    const pages = Math.max(1, Math.ceil(rows.length / ML_PAGE_SIZE));
+    list.page = Math.min(Math.max(1, list.page), pages);
+    const start = (list.page - 1) * ML_PAGE_SIZE;
+    const visible = rows.slice(start, start + ML_PAGE_SIZE);
+    $('body').replaceChildren(...visible.map(row => {
       const tr = el('tr');
       tr.dataset.code = row.code;
       tr.tabIndex = -1;                 // ↑/↓ highlight the row itself (handleRowKeys)
+      const check = el('td', 'ml-col-check');
+      const box = el('input', 'ml-check');
+      box.type = 'checkbox';
+      box.tabIndex = -1;                // Space on the row ticks it; Tab and the arrows pass the box by
+      box.dataset.select = '';
+      box.checked = list.selected.has(row.code);
+      box.setAttribute('aria-label', `Select ${row.code}`);
+      check.append(box);
+      tr.classList.toggle('is-selected', box.checked);
       const actions = el('td', 'ml-col-actions');
       const group = el('div', 'ml-actions');
       for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ['delete', 'Delete']]) {
@@ -3379,17 +3894,56 @@ function createMasterList(config) {
         group.append(button);
       }
       actions.append(group);
-      tr.append(...tableColumns.map(column => masterCell(column, row[column.key])), actions);
+      tr.append(check, ...tableColumns.map(column => masterCell(column, row[column.key])), actions);
       return tr;
     }));
+    syncSelection();
     $('empty').hidden = rows.length > 0;
     const filtered = rows.length < all.length ? ` (filtered from ${all.length})` : '';
     $('count').textContent = rows.length
-      ? `Showing 1 to ${rows.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
+      ? `Showing ${start + 1} to ${start + visible.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
+    renderPager(pages);
     const active = applied.size + (list.range.from || list.range.to ? 1 : 0);
     $('filter-label').textContent = active ? `Filter (${active})` : 'Filter';
     $('filter').classList.toggle('is-on', active > 0);
   }
+
+  // Previous, the page numbers (1 … 4 5 6 … 12 when there are many) and Next.
+  const pager = $('page').querySelector('.ml-pager');
+  function renderPager(pages) {
+    const p = list.page;
+    const focused = pager.contains(document.activeElement) ? document.activeElement.textContent : null;
+    const button = (label, page, { disabled = false, current = false } = {}) => {
+      const btn = el('button', `ml-page${current ? ' ml-page-current' : ''}`, label);
+      btn.type = 'button';
+      btn.disabled = disabled;
+      if (current) btn.setAttribute('aria-current', 'page');
+      else btn.dataset.page = String(page);
+      if (label !== String(page)) btn.setAttribute('aria-label', `${label} page`);
+      return btn;
+    };
+    const numbers = [...new Set([1, p - 1, p, p + 1, pages])].filter(n => n >= 1 && n <= pages).sort((a, b) => a - b);
+    const items = [];
+    numbers.forEach((n, index) => {
+      if (index && n - numbers[index - 1] > 1) items.push(el('span', 'ml-page-gap', '…'));
+      items.push(button(String(n), n, { current: n === p }));
+    });
+    pager.replaceChildren(button('Previous', p - 1, { disabled: p <= 1 }), ...items, button('Next', p + 1, { disabled: p >= pages }));
+    // Focus stays on the button pressed (Next stays on Next) unless it is now disabled.
+    if (focused !== null) ([...pager.querySelectorAll('button')].find(btn => btn.textContent === focused && !btn.disabled)
+      || pager.querySelector('[aria-current="page"]')).focus();
+  }
+  function goToPage(page, focus) {
+    list.page = page;
+    render();
+    const rows = [...$('body').rows];
+    if (focus === 'first') focusRow(rows[0]);
+    else if (focus === 'last') focusRow(rows[rows.length - 1]);
+  }
+  pager.addEventListener('click', event => {
+    const target = event.target.closest('[data-page]');
+    if (target && !target.disabled) goToPage(Number(target.dataset.page));
+  });
 
   // Row navigation: ↑/↓ highlight the previous/next row (↓ from the search box enters the table, ↑ from the
   // first row returns to it), PgUp/PgDn jump a screenful, Home/End the first/last row, → steps along the
@@ -3402,6 +3956,11 @@ function createMasterList(config) {
     tr.scrollIntoView({ block: 'nearest' });
   };
   function handleRowKeys(event) {
+    if (event.key === ' ' && event.target.matches?.('tr') && $('body').contains(event.target)) {
+      event.preventDefault();
+      if (!event.repeat) toggleRow(event.target, !list.selected.has(event.target.dataset.code));
+      return true;
+    }
     if (event.shiftKey || !ROW_KEYS.includes(event.key)) return false;
     const rows = [...$('body').rows];
     const search = $('search');
@@ -3422,8 +3981,16 @@ function createMasterList(config) {
     const index = rows.indexOf(tr);
     const pageSize = Math.max(1, Math.floor(window.innerHeight / Math.max(tr.offsetHeight, 1)) - 4);
     switch (event.key) {
-      case 'ArrowDown': focusRow(rows[Math.min(index + 1, rows.length - 1)]); break;
-      case 'ArrowUp': if (index === 0) search.focus(); else focusRow(rows[index - 1]); break;
+      // ↓ on a page's last row and ↑ on its first row carry on into the next / previous page.
+      case 'ArrowDown':
+        if (index === rows.length - 1 && list.page * ML_PAGE_SIZE < list.shown.length) goToPage(list.page + 1, 'first');
+        else focusRow(rows[Math.min(index + 1, rows.length - 1)]);
+        break;
+      case 'ArrowUp':
+        if (index > 0) focusRow(rows[index - 1]);
+        else if (list.page > 1) goToPage(list.page - 1, 'last');
+        else search.focus();
+        break;
       case 'PageDown': focusRow(rows[Math.min(index + pageSize, rows.length - 1)]); break;
       case 'PageUp': focusRow(rows[Math.max(index - pageSize, 0)]); break;
       case 'Home': focusRow(rows[0]); break;
@@ -3453,6 +4020,8 @@ function createMasterList(config) {
       if (event.target === search && search.value) {
         search.value = '';
         render();
+      } else if (list.selected.size) {
+        clearSelection();                    // ticked rows: the first Esc clears them
       } else {
         goBack();
       }
@@ -3481,8 +4050,112 @@ function createMasterList(config) {
     return true;
   }
 
+  /* Row selection: the tick column (one by one, or every shown row from the header box) and the bar above the
+     table: "3 of 9 suppliers selected", Export Selected (CSV), Delete Selected, Clear selection.
+     Space ticks the highlighted row. Ticks survive search and filter; a deleted record drops out. */
+  const selection = { all: null, bar: null, text: null };
+  function toggleRow(tr, on, sync = true) {
+    if (!tr) return;
+    if (on) list.selected.add(tr.dataset.code); else list.selected.delete(tr.dataset.code);
+    tr.classList.toggle('is-selected', on);
+    tr.querySelector('[data-select]').checked = on;
+    if (sync) syncSelection();
+  }
+  function syncSelection() {
+    if (!selection.bar) return;
+    const shown = [...$('body').rows];
+    const ticked = shown.filter(tr => list.selected.has(tr.dataset.code)).length;
+    selection.all.checked = shown.length > 0 && ticked === shown.length;
+    selection.all.indeterminate = ticked > 0 && ticked < shown.length;
+    selection.bar.hidden = list.selected.size === 0;
+    selection.text.replaceChildren(el('strong', '', String(list.selected.size)), ` of ${list.count(list.rows.length)} selected`);   // 3 of 9 suppliers selected
+  }
+  const selectedRows = () => list.rows.filter(row => list.selected.has(row.code));
+  function clearSelection() {
+    list.selected.clear();
+    for (const tr of $('body').rows) toggleRow(tr, false, false);
+    syncSelection();
+  }
+  function exportSelected() {
+    const rows = selectedRows();
+    const { columns } = config;
+    downloadCsv(masterFileName(list, `selected-${today.toISOString().slice(0, 10)}`),
+      [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
+    showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
+  }
+  // One DELETE per record (the server checks each one); records it refuses stay ticked and are named.
+  async function deleteSelected() {
+    const rows = selectedRows();
+    if (!rows.length) return;
+    const named = rows.slice(0, 5).map(row => row.code).join(', ') + (rows.length > 5 ? ` and ${rows.length - 5} more` : '');
+    const ok = await confirmAction({
+      title: `Delete ${list.count(rows.length)}?`,
+      message: `${named} will be removed from the ${list.one} list.`,
+      confirm: `Delete ${rows.length === 1 ? config.noun : config.nouns}`,
+    });
+    if (!ok) return;
+    const failed = [];
+    for (const row of rows) {
+      try {
+        await apiRequest(`${config.api}?id=${row.id}`, { method: 'DELETE' });
+        list.rows.splice(list.rows.indexOf(row), 1);
+        list.selected.delete(row.code);
+        list.applied.delete(row.code);
+      } catch (error) {
+        failed.push({ row, message: error.message });
+      }
+    }
+    const deleted = rows.length - failed.length;
+    if (deleted) forgetLookups(...config.lookups);
+    render();
+    if (!failed.length) showToast(`${list.count(deleted)} deleted`, `${named} ${deleted === 1 ? 'was' : 'were'} removed.`);
+    else showToast(`${list.count(failed.length)} not deleted`,
+      `${deleted ? `${deleted} deleted. ` : ''}${failed.map(entry => entry.row.code).join(', ')}: ${failed[0].message}`, true);
+    list.focusRow(failed[0]?.row.code);
+  }
+  function buildSelectionBar() {
+    const bar = el('div', 'ml-selbar');
+    bar.hidden = true;
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Selected records');
+    const text = el('span', 'ml-selbar-text');
+    text.setAttribute('aria-live', 'polite');
+    const actions = el('div', 'ml-selbar-actions');
+    const button = (className, icon, label, onClick) => {
+      const node = el('button', `ml-btn ${className}`);
+      node.type = 'button';
+      node.innerHTML = ML_ICONS[icon];
+      node.append(el('span', '', label));
+      node.addEventListener('click', onClick);
+      return node;
+    };
+    const clear = el('button', 'ml-selbar-clear', 'Clear selection');
+    clear.type = 'button';
+    clear.addEventListener('click', clearSelection);
+    actions.append(button('ml-btn-plain', 'export', 'Export Selected', exportSelected),
+      button('ml-btn-danger', 'delete', 'Delete Selected', deleteSelected), clear);
+    bar.append(text, actions);
+    $('body').closest('.ml-card').querySelector('.ml-table-wrap').before(bar);
+    Object.assign(selection, { bar, text });
+  }
+
   list.init = () => {
-    $('head').replaceChildren(...tableColumns.map(column => el('th', '', column.label)), el('th', 'ml-col-actions', 'Actions'));
+    const allBox = el('input', 'ml-check');
+    allBox.type = 'checkbox';
+    allBox.tabIndex = -1;
+    allBox.setAttribute('aria-label', `Select all ${list.many}`);
+    const allCell = el('th', 'ml-col-check');
+    allCell.append(allBox);
+    $('head').replaceChildren(allCell, ...tableColumns.map(column => el('th', '', column.label)), el('th', 'ml-col-actions', 'Actions'));
+    allBox.addEventListener('change', () => {
+      for (const tr of $('body').rows) toggleRow(tr, allBox.checked, false);
+      syncSelection();
+    });
+    selection.all = allBox;
+    buildSelectionBar();
+    $('body').addEventListener('change', event => {
+      if (event.target.matches('[data-select]')) toggleRow(event.target.closest('tr'), event.target.checked);
+    });
     $('search').addEventListener('input', render);
     $('back').addEventListener('click', goBack);
     $('filter').addEventListener('click', () => openMasterFilter(list));
@@ -3499,6 +4172,8 @@ function createMasterList(config) {
   };
   // After an edit or a delete, focus lands back on that row (or the row now in its place).
   list.focusRow = code => {
+    const at = list.shown.findIndex(row => row.code === code);
+    if (at >= 0 && Math.floor(at / ML_PAGE_SIZE) + 1 !== list.page) { list.page = Math.floor(at / ML_PAGE_SIZE) + 1; render(); }
     const tr = [...$('body').rows].find(entry => entry.dataset.code === code) || $('body').rows[0];
     if (tr) focusRow(tr); else byId('app').focus();   // no rows left: the page itself, so Shift+N still works
   };
@@ -3517,8 +4192,11 @@ function createMasterList(config) {
     reset() {
       $('search').value = '';
       list.applied.clear();
+      list.selected.clear();
       list.range = { from: '', to: '' };
       list.rows = [];
+      list.pagedFor = null;
+      if (!list.returnTo) list.page = 1;     // a fresh visit starts on page 1; back from a record keeps its page
       render();
       // Once the rows are in, focus the row last opened (or the first), unless the user has moved on.
       list.load().then(() => {
@@ -3711,7 +4389,7 @@ function handleMasterDateKeys(event) {
   }
   if (key === 'Enter' && target === mfEl('from')) { event.preventDefault(); mfEl('to').focus(); return true; }
   if (key === 'Enter' && target === mfEl('to')) { event.preventDefault(); if (!event.repeat) setMasterDate(); return true; }
-  if (target.type === 'date' && key.startsWith('Arrow')) return true;
+  if (isDateField(target) && key.startsWith('Arrow')) return true;
   return false;
 }
 
@@ -3903,76 +4581,650 @@ async function readSpreadsheet(file) {
    New rows are saved with POST (the server numbers them); Update / Overwrite sends PUT with only the
    cells the sheet fills in, so blank cells keep what the record already has. */
 
-const masterImport = { list: null, rows: [], opener: null, busy: false };
+const masterImport = { list: null, rows: [], entries: [], filter: 'all', columns: [], opener: null, busy: false };
 const miEl = suffix => byId(`master-import-${suffix}`);
 const miMode = () => byId('master-import').querySelector('input[name="master-import-mode"]:checked').value;
 // A sheet row that is already a record: by code or name, or the list's own rule (documents: by code only).
 const findMasterRow = (rows, row, list = masterImport.list) => (list?.config.matchRow
   ? list.config.matchRow(rows, row)
-  : rows.find(existing => (row.code && sameText(existing.code, row.code)) || sameText(existing.name, row.name)));
+  : rows.find(existing => (row.code && sameText(existing.code, row.code)) || (squash(row.name) && squash(existing.name) === squash(row.name))));
+
+/* ---------- Import normaliser ----------
+   Sheets come from other companies in their own layout. Before a row is checked, each sheet column is
+   matched to one of ours and each value is put in our format:
+   - Headings: exact (key, label, the column's headers, IMPORT_HEADERS for every list), then a heading that
+     contains one of those words ("Primary Email Address"), then one with a small typo ("Adress").
+   - Columns no heading explains are matched by what they hold: emails, phone numbers, countries,
+     currencies, dates, one of a field's fixed choices, or "City, Country". With no name heading at all,
+     the column of distinct text values becomes the name.
+   - Values: spacing cleaned up; numbers read as "OMR 1,250.500", "1.250,50" or "30 days"; dates as
+     13/11/2026, 2026-11-13, 13 Nov 2026 or an Excel date number; countries and currencies by name, code or
+     symbol; phone numbers given their country's calling code; Yes / No, Y / N, 1 / 0 as Active / Inactive. */
+
+// Headings every list understands, by our column key (a list's own headers come first).
+const IMPORT_HEADERS = {
+  name: ['name', 'full name', 'display name', 'title', 'account name', 'business name', 'trade name', 'legal name'],
+  code: ['id', 'code', 'account code', 'account id', 'ref no', 'reference code'],
+  email: ['email', 'e mail', 'email address', 'mail id', 'email id', 'emailid', 'mail address'],
+  phone: ['mobile', 'mobile no', 'cell', 'cell no', 'cellphone', 'gsm', 'whatsapp', 'whatsapp no', 'phone', 'contact no', 'contact number', 'mobile phone'],
+  telephone: ['landline', 'work phone', 'office phone', 'office no', 'alternate phone', 'alternative phone', 'other phone', 'secondary phone', 'phone 2', 'tel no'],
+  address: ['addr', 'street address', 'full address', 'address 1', 'address line 1', 'billing address', 'postal address', 'office address'],
+  city: ['town', 'city name', 'city town', 'municipality'],
+  country: ['nation', 'country name', 'country code', 'country region'],
+  zipCode: ['zip', 'zip code', 'postcode', 'post code', 'postal code', 'pincode', 'pin'],
+  currency: ['currency', 'curr', 'ccy', 'currency code', 'currency name'],
+  status: ['status', 'active', 'is active', 'active status', 'state', 'enabled'],
+  remarks: ['notes', 'note', 'remark', 'remarks', 'comment', 'comments', 'memo'],
+  comments: ['notes', 'note', 'remark', 'remarks', 'comment', 'comments', 'memo'],
+  description: ['notes', 'note', 'remarks', 'comments', 'memo', 'details'],
+  taxRegNo: ['vat', 'vat no', 'vat reg no', 'vat registration', 'vatin', 'tax id', 'tax no', 'tin', 'gst', 'gstin', 'trn'],
+  ownerDetails: ['owner', 'owner name', 'proprietor', 'director', 'owner details'],
+  contactPerson: ['contact person', 'contact name', 'attention', 'attn', 'person in charge'],
+  paymentTerms: ['payment terms', 'payment term', 'terms'],
+  debitLimit: ['credit limit', 'limit', 'credit amount'],
+  creditLimit: ['credit limit', 'limit', 'credit amount'],
+  debitDays: ['credit days', 'credit period', 'payment days', 'days'],
+  creditDays: ['credit days', 'credit period', 'payment days', 'days'],
+  openingBalance: ['opening balance', 'balance', 'opening'],
+  salesman: ['sales rep', 'sales representative', 'account manager', 'sales executive'],
+  category: ['category', 'product group', 'item group', 'class'],
+  unit: ['unit', 'units', 'uom', 'measure', 'unit of measure'],
+};
+
+const squash = text => String(text ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// Cell text with odd spaces, invisible characters and line breaks tidied ("a\nb" → "a, b").
+const cleanCell = value => String(value ?? '')
+  .replace(/[​-‍﻿]/g, '').replace(/[   \t]/g, ' ')
+  .replace(/\s*[\r\n]+\s*/g, ', ').replace(/\s+/g, ' ').replace(/^[,\s]+|[,\s]+$/g, '');
+
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+// heading text → our column, or undefined. Exact first, then "contains", then a typo of one or two letters.
+// Quality: 3 exact, 2 contains, 1 typo; a better match for the same field wins over a weaker one.
+function headerMatcher(columns, noun = '') {
+  const exact = new Map();
+  const add = (word, column) => { const key = normalHeader(word); if (key && !exact.has(key)) exact.set(key, column); };
+  for (const column of columns) for (const word of [column.key, column.label, ...(column.headers || [])]) add(word, column);
+  const code = columns.find(column => column.key === 'code');
+  // "Supplier ID", "Vendor No": the noun, or a one-word name heading, followed by id / no / code.
+  const nameWords = (columns.find(column => column.key === 'name')?.headers || []).filter(word => !word.includes(' '));
+  if (code) for (const word of [noun, ...nameWords].filter(Boolean)) for (const end of ['id', 'no', 'number', 'code', 'ref']) add(`${word} ${end}`, code);
+  for (const column of columns) for (const word of IMPORT_HEADERS[column.key] || []) add(word, column);
+  const words = [...exact.keys()].sort((a, b) => b.length - a.length);
+  return text => {
+    const full = normalHeader(text);
+    if (!full) return [undefined, 0];
+    for (const candidate of [full, normalHeader(String(text).replace(/\(.*?\)|\[.*?\]/g, ''))]) {
+      if (exact.has(candidate)) return [exact.get(candidate), 3];
+    }
+    const inside = words.find(word => word.length >= 4 && full.includes(word));
+    if (inside) return [exact.get(inside), 2];
+    const near = words.find(word => word.length >= 5 && editDistance(full, word) <= (word.length >= 9 ? 2 : 1));
+    return near ? [exact.get(near), 1] : [undefined, 0];
+  };
+}
+
+/* Countries and currencies, by name, code, symbol or common short form. */
+const COUNTRY_ALIASES = {
+  uae: 'United Arab Emirates', emirates: 'United Arab Emirates', unitedarabemirate: 'United Arab Emirates', are: 'United Arab Emirates', dubai: 'United Arab Emirates',
+  ksa: 'Saudi Arabia', saudi: 'Saudi Arabia', kingdomofsaudiarabia: 'Saudi Arabia', sau: 'Saudi Arabia',
+  sultanateofoman: 'Oman', omn: 'Oman', qat: 'Qatar', stateofqatar: 'Qatar', kwt: 'Kuwait', bhr: 'Bahrain', kingdomofbahrain: 'Bahrain',
+  ind: 'India', bharat: 'India', pak: 'Pakistan', egy: 'Egypt', jor: 'Jordan', turkey: 'Türkiye', turkiye: 'Türkiye', tur: 'Türkiye',
+  chn: 'China', prc: 'China', peoplesrepublicofchina: 'China', jpn: 'Japan', kor: 'South Korea', korea: 'South Korea', republicofkorea: 'South Korea',
+  deu: 'Germany', ger: 'Germany', deutschland: 'Germany', ita: 'Italy', italia: 'Italy',
+  uk: 'United Kingdom', gbr: 'United Kingdom', gb: 'United Kingdom', greatbritain: 'United Kingdom', britain: 'United Kingdom', england: 'United Kingdom',
+  us: 'United States', usa: 'United States', america: 'United States', unitedstatesofamerica: 'United States',
+};
+function findCountry(text) {
+  const key = squash(text).replace(/^the/, '');
+  if (!key) return null;
+  const dial = String(text).trim();
+  return COUNTRIES.find(country => squash(country.name) === key || country.code.toLowerCase() === key || country.dial === dial)
+    || COUNTRIES.find(country => country.name === COUNTRY_ALIASES[key]) || null;
+}
+const CURRENCY_ALIASES = {
+  $: 'USD', us$: 'USD', usdollar: 'USD', dollar: 'USD', dollars: 'USD', '€': 'EUR', euro: 'EUR', euros: 'EUR', '£': 'GBP', pound: 'GBP', pounds: 'GBP', sterling: 'GBP',
+  '₹': 'INR', rs: 'INR', inr: 'INR', rupee: 'INR', rupees: 'INR', ro: 'OMR', rial: 'OMR', omanirial: 'OMR', omaniriyal: 'OMR', bz: 'OMR',
+  dhs: 'AED', dh: 'AED', dirham: 'AED', dirhams: 'AED', sr: 'SAR', riyal: 'SAR', saudiriyal: 'SAR', qr: 'QAR', kd: 'KWD', bd: 'BHD',
+  '¥': 'JPY', yen: 'JPY', yuan: 'CNY', rmb: 'CNY', renminbi: 'CNY', '₩': 'KRW', won: 'KRW', lira: 'TRY', '₺': 'TRY', pkr: 'PKR',
+};
+function findCurrency(text) {
+  const raw = String(text ?? '').trim();
+  if (!raw) return '';
+  const key = squash(raw) || raw.replace(/\s/g, '');
+  const code = PO_CURRENCIES.find(currency => currency.code.toLowerCase() === key || squash(currency.name) === key)?.code
+    || CURRENCY_ALIASES[key] || CURRENCY_ALIASES[raw.toLowerCase().replace(/\s/g, '')];
+  if (code) return code;
+  const country = findCountry(raw);
+  return country ? country.currency : (/^[a-z]{3}$/i.test(raw) ? raw.toUpperCase() : '');
+}
+
+// "OMR 1,250.500" → "1250.5", "1.250,50" → "1250.5", "30 days" → "30", "1.2E+05" → "120000"; null when not a number.
+function sheetNumber(text) {
+  let value = String(text ?? '').trim();
+  if (!value) return null;
+  if (/^\d+(\.\d+)?e\+?\d+$/i.test(value)) return String(Number(value));
+  if (/^\(.*\)$/.test(value)) value = `-${value.slice(1, -1)}`;          // accounting style: (500) is -500
+  value = value.replace(/[^\d.,\-]/g, '');
+  if (!/\d/.test(value) || /-/.test(value.slice(1))) return null;
+  const negative = value.startsWith('-');
+  value = value.replace(/^-/, '');
+  const comma = value.lastIndexOf(','), dot = value.lastIndexOf('.');
+  if (comma >= 0 && dot >= 0) value = comma > dot ? value.replace(/\./g, '').replace(',', '.') : value.replace(/,/g, '');
+  else if (comma >= 0) value = /^\d{1,3}(,\d{3})+$/.test(value) ? value.replace(/,/g, '') : value.replace(',', '.');
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(value)) return null;
+  const number = Number(value) * (negative ? -1 : 1);
+  return Number.isFinite(number) ? String(number) : null;
+}
+
+// A date in any common layout → "YYYY-MM-DD", or null. Day comes before month unless the day is over 12.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function sheetDate(text) {
+  const value = String(text ?? '').trim();
+  if (!value) return null;
+  const iso = (y, m, d) => {
+    let year = Number(y);
+    if (String(y).length <= 2) year += year < 70 ? 2000 : 1900;
+    const date = new Date(Date.UTC(year, Number(m) - 1, Number(d)));
+    return date.getUTCMonth() === Number(m) - 1 && date.getUTCDate() === Number(d) && year > 1900 && year < 2200 ? date.toISOString().slice(0, 10) : null;
+  };
+  if (/^\d{5}(\.\d+)?$/.test(value)) {             // an Excel date number (days since 1899-12-30)
+    return new Date(Date.UTC(1899, 11, 30) + Math.round(Number(value)) * 86400000).toISOString().slice(0, 10);
+  }
+  let match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T].*)?$/.exec(value);
+  if (match) return iso(match[1], match[2], match[3]);
+  match = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})(?:[ T].*)?$/.exec(value);
+  if (match) return Number(match[1]) <= 12 && Number(match[2]) > 12 ? iso(match[3], match[1], match[2]) : iso(match[3], match[2], match[1]);
+  const month = word => MONTHS.indexOf(word.slice(0, 3).toLowerCase()) + 1;
+  match = /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/.,]+([a-z]{3,})\.?[\s\-/.,]+(\d{2}|\d{4})$/i.exec(value);       // 13 Nov 2026, 13-Nov-26
+  if (match && month(match[2])) return iso(match[3], month(match[2]), match[1]);
+  match = /^([a-z]{3,})\.?[\s\-/.]+(\d{1,2})(?:st|nd|rd|th)?,?[\s\-/.]+(\d{2}|\d{4})$/i.exec(value);       // Nov 13, 2026
+  if (match && month(match[1])) return iso(match[3], month(match[1]), match[2]);
+  return null;
+}
+
+// A phone number with its country's calling code: "0096891234567", "96891234567", "9123 4567" (row in Oman)
+// all become "+968 91234567". A number that fits no country is left as digits.
+function normalPhone(text, country) {
+  let value = String(text ?? '').trim();
+  if (!value) return '';
+  if (/^\d+(\.\d+)?e\+?\d+$/i.test(value)) value = Number(value).toFixed(0);
+  value = value.replace(/\.0+$/, '').replace(/^00/, '+');
+  const plus = value.startsWith('+');
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 6) return value;
+  const byDial = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length);
+  const fits = (place, national) => national.length >= place.min && national.length <= place.max;
+  const withCode = (place, national) => `${place.dial} ${national.length > place.max && national.startsWith('0') ? national.slice(1) : national}`;
+  for (const place of byDial) {
+    const dial = place.dial.slice(1);
+    if (!digits.startsWith(dial)) continue;
+    const national = digits.slice(dial.length);
+    if (plus || (country ? place === country : true) && (fits(place, national) || fits(place, national.replace(/^0/, '')))) return withCode(place, national);
+  }
+  if (plus) return `+${digits}`;
+  if (country) {
+    const national = digits.replace(/^0/, '');
+    if (fits(country, national)) return withCode(country, national);
+  }
+  return digits;
+}
+
+// The kind of value a column holds, for matching sheet columns by content.
+function columnKind(column) {
+  if (column.kind) return column.kind;
+  if (column.read?.choices) return 'choice';
+  if (column.read?.isDate) return 'date';
+  if (column.read === readCurrency) return 'currency';
+  if (column.key === 'country') return 'country';
+  return null;
+}
+const looksLike = {
+  email: value => EMAIL.test(value.replace(/^mailto:/i, '')),
+  phone: value => /^[+\d\s\-().]+$/.test(value) && isPhoneToken(value) && !sheetDate(value),
+  country: value => Boolean(findCountry(value)),
+  currency: value => value.length <= 20 && Boolean(findCurrency(value)) && !/^\d/.test(value),
+  date: value => Boolean(sheetDate(value)) && !/^\d{5}(\.\d+)?$/.test(value),
+  cityCountry: value => value.includes(',') && Boolean(findCountry(value.split(',').pop())),
+};
+const share = (values, test) => (values.length ? values.filter(test).length / values.length : 0);
+
+// Fills in sheetColumns (index → our column) for columns no heading explained, from their values.
+// Returns how each column was matched, for the preview.
+function matchColumnsByContent(columns, sheetColumns, headers, body, required) {
+  const mapping = [];
+  const taken = () => new Set(sheetColumns.filter(Boolean).map(column => column.key));
+  const values = at => body.map(row => row.cells[at]).filter(Boolean).slice(0, 200);
+  sheetColumns.forEach((column, at) => {
+    if (column && column.key !== '__cityCountry') mapping.push({ at, header: headers[at] || `Column ${at + 1}`, labels: [column.label], how: 'heading' });
+  });
+  const width = sheetColumns.length;
+  for (let at = 0; at < width; at++) {
+    if (sheetColumns[at]) continue;
+    const cells = values(at);
+    if (!cells.length) continue;
+    const free = columns.filter(column => !taken().has(column.key));
+    const header = headers[at] || `Column ${at + 1}`;
+    const pick = kind => free.find(column => columnKind(column) === kind);
+    let chosen = null;
+    for (const kind of ['email', 'phone', 'country', 'currency', 'date']) {
+      if (pick(kind) && share(cells, looksLike[kind]) >= 0.6) { chosen = pick(kind); break; }
+    }
+    if (!chosen) {
+      chosen = free.find(column => columnKind(column) === 'choice'
+        && share(cells, value => column.read.choices.some(choice => squash(choice) === squash(value))) >= 0.8) || null;
+    }
+    if (chosen) {
+      sheetColumns[at] = chosen;
+      mapping.push({ at, header, labels: [chosen.label], how: 'content' });
+      continue;
+    }
+    const city = free.find(column => column.key === 'city'), country = free.find(column => column.key === 'country');
+    if (city && country && share(cells, looksLike.cityCountry) >= 0.6) {
+      sheetColumns[at] = { key: '__cityCountry', label: `${city.label} + ${country.label}` };
+      mapping.push({ at, header, labels: [city.label, country.label], how: 'content' });
+    }
+  }
+  // No heading names the record: the column of distinct, mostly-text values is the name.
+  const requiredColumn = columns.find(column => column.key === required);
+  if (requiredColumn && !taken().has(required)) {
+    let best = null;
+    for (let at = 0; at < width; at++) {
+      if (sheetColumns[at]) continue;
+      const cells = values(at);
+      const text = share(cells, value => /[a-z]{2}/i.test(value) && !Object.values(looksLike).some(test => test(value)));
+      const unique = cells.length ? new Set(cells.map(squash)).size / cells.length : 0;
+      const score = text * unique;
+      if (cells.length && text >= 0.8 && (!best || score > best.score)) best = { at, score };
+    }
+    if (best) {
+      sheetColumns[best.at] = requiredColumn;
+      mapping.push({ at: best.at, header: headers[best.at] || `Column ${best.at + 1}`, labels: [requiredColumn.label], how: 'content' });
+    }
+  }
+  return mapping.sort((a, b) => a.at - b.at);
+}
+
+// Values that depend on each other: country from the phone or the address, city from the address,
+// currency from the country, phone numbers given the country's calling code.
+function tidyImportRow(columns, raw) {
+  const has = key => columns.some(column => column.key === key);
+  const kinds = kind => columns.filter(column => column.kind === kind);
+  let country = raw.country ? findCountry(raw.country) : null;
+  if (country) raw.country = country.name;
+  const parts = (raw.address || '').split(',').map(part => part.trim()).filter(Boolean);
+  const addressCountry = parts.length > 1 ? findCountry(parts[parts.length - 1]) : null;
+  if (has('country') && !raw.country) {
+    const dialled = kinds('phone').map(column => raw[column.key]).find(value => /^(\+|00)/.test(value || ''));
+    country = addressCountry || (dialled ? findCountry(normalPhone(dialled).split(' ')[0]) : null);
+    if (country) raw.country = country.name;
+  }
+  if (has('city') && !raw.city && addressCountry && parts.length > 1) {
+    const city = parts[parts.length - 2];
+    if (/[a-z]/i.test(city) && city.length <= 40 && !/\d{3,}/.test(city)) raw.city = city;
+  }
+  for (const column of kinds('phone')) if (raw[column.key]) raw[column.key] = normalPhone(raw[column.key], country);
+  for (const column of kinds('email')) if (raw[column.key]) raw[column.key] = raw[column.key].replace(/^mailto:/i, '').toLowerCase();
+  if (has('currency') && !raw.currency && country) raw.currency = country.currency;
+}
+
+/* Contact sorting. A sheet from elsewhere may not have our Email / Mobile columns: one "User Detail" or
+   "Contact" cell can hold "ali@acme.com, +968 9123 4567". Emails and phone numbers are found by their
+   shape in (a) the list's own email / phone columns, (b) columns whose heading means contact details,
+   and (c) for emails only, any column the list does not know. They then fill the list's email and phone
+   columns (kind: 'email' / 'phone') in order: the first phone is the Mobile, a second one the Telephone.
+   Whatever else such a cell holds (a person's name) stays in the column it was read for. */
+const CONTACT_EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+const CONTACT_PHONE = /(?:\+|00)?\(?\d[\d\s\-().]{5,}\d/g;
+const CONTACT_HEADER = /contact|detail|info|user|person|phone|mobile|mob|tel|cell|whatsapp|number|reach|communication/;
+const CONTACT_LABELS = /\b(e-?mail(?:\s*id)?|mail|phone|mobile|mob|tel|telephone|cell|whatsapp|contact|no)\b\.?\s*[:\-]?/gi;
+const isPhoneToken = token => {
+  const digits = token.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15 && !/^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$/.test(token.trim());   // not a date
+};
+// Takes the emails and phone numbers out of one cell; rest is what is left once labels and separators go.
+function takeContacts(text, { phones: wantPhones = true } = {}) {
+  const emails = [], phones = [];
+  let rest = String(text).replace(CONTACT_EMAIL, match => { emails.push(match.toLowerCase()); return ' '; });
+  if (wantPhones) {
+    rest = rest.replace(CONTACT_PHONE, match => {
+      if (!isPhoneToken(match)) return match;
+      phones.push(match.trim().replace(/\s+/g, ' ').replace(/^00/, '+'));
+      return ' ';
+    });
+  }
+  if (emails.length || phones.length) rest = rest.replace(CONTACT_LABELS, ' ');
+  rest = rest.replace(/[,;|/\n]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\s\-:()]+|[\s\-:(]+$/g, '').trim();
+  return { emails, phones, rest };
+}
+
+// raw: our column key → cell text; cells / sheetColumns / headers: the sheet row as read. Returns a note for
+// the preview naming the sheet columns contacts were taken from, or ''.
+function sortContacts(columns, raw, cells, sheetColumns, headers, sources = new Set()) {
+  const emailColumns = columns.filter(column => column.kind === 'email');
+  const phoneColumns = columns.filter(column => column.kind === 'phone');
+  if (!emailColumns.length && !phoneColumns.length) return '';
+  const emails = [], phones = [], from = new Set();
+  // The sheet cell each of our columns was read from (the first filled one, as masterRowsFromSheet takes).
+  const readFrom = {};
+  sheetColumns.forEach((column, at) => { if (column && !(column.key in readFrom) && String(cells[at] ?? '').trim()) readFrom[column.key] = at; });
+  // Our own email / phone columns first, so a sheet that has them keeps them where they were.
+  const indices = [...sheetColumns.keys()];
+  const order = [...indices.filter(at => sheetColumns[at]?.kind), ...indices.filter(at => !sheetColumns[at]?.kind)];
+  for (const at of order) {
+    const column = sheetColumns[at];
+    const text = String(cells[at] ?? '').trim();
+    if (!text) continue;
+    const contactHeading = CONTACT_HEADER.test(normalHeader(headers[at] ?? ''));
+    const own = column && readFrom[column.key] === at;             // this cell is the value of one of our columns
+    if (column && !column.kind && (!contactHeading || !own)) continue;   // a known column that is not about contacts
+    const found = takeContacts(text, { phones: Boolean(column?.kind) || contactHeading || text.includes('@') });
+    if (!found.emails.length && !found.phones.length) continue;   // e.g. "john@gmail" stays, and the check names it
+    emails.push(...found.emails);
+    phones.push(...found.phones);
+    if (!column?.kind) { from.add(String(headers[at] ?? '').trim() || 'another column'); sources.add(at); }
+    if (own) raw[column.key] = column.kind ? '' : found.rest;      // email / phone are refilled below; "Ali 9123 4567" keeps "Ali"
+  }
+  const fill = (targets, values) => {
+    for (const column of targets) {
+      if (raw[column.key]) continue;
+      const value = values.shift();
+      if (value) raw[column.key] = value;
+    }
+  };
+  fill(emailColumns, [...new Set(emails)]);
+  fill(phoneColumns, [...new Set(phones)]);
+  return from.size ? `contacts read from ${[...from].join(', ')}` : '';
+}
 
 // Header row: the first of the top five rows naming the required column (the name; a document's Item Name).
+// With none, the first filled row is the headings, unless it already holds data (an email, a number, a date):
+// then the sheet has no headings and every column is matched by its values.
 // Documents read one item line per sheet row; config.groupRows() then joins the lines into documents.
+// Every row keeps its tidied values (sheetRaw) for the preview; a row that cannot be read becomes an error.
 function masterRowsFromSheet(list, sheet) {
   const { noun } = list.config;
   const columns = list.config.importColumns || list.config.columns;
   const required = list.config.importKey || 'name';
   const requiredLabel = columns.find(column => column.key === required)?.label || `${noun} Name`;
-  const byHeader = {};
-  for (const column of columns) {
-    for (const header of [column.key, column.label, ...(column.headers || [])]) byHeader[normalHeader(header)] ??= column;
+  const matchHeader = headerMatcher(columns, noun);
+  const lines = sheet.map((cells, index) => ({ cells: cells.map(cleanCell), line: index + 1 })).filter(row => row.cells.some(Boolean));
+  if (!lines.length) throw new Error('The sheet is empty.');
+  let headerAt = lines.slice(0, 5).findIndex(row => row.cells.some(cell => matchHeader(cell)[0]?.key === required));
+  if (headerAt === -1) {
+    const data = lines[0].cells.some(cell => looksLike.email(cell) || looksLike.date(cell) || /^[+\d][\d\s.,\-()]*$/.test(cell));
+    headerAt = data ? -1 : 0;
   }
-  const headerIndex = sheet.slice(0, 5).findIndex(cells => cells.some(cell => byHeader[normalHeader(cell)]?.key === required));
-  if (headerIndex === -1) throw new Error(`No "${requiredLabel}" column was found. Download the template to see the expected columns.`);
-  const sheetColumns = sheet[headerIndex].map(cell => byHeader[normalHeader(cell)]);
-  const rows = [], issues = [];
-  sheet.slice(headerIndex + 1).forEach((cells, index) => {
-    if (cells.every(cell => String(cell).trim() === '')) return;
-    const line = headerIndex + index + 2;
-    const raw = {};
-    sheetColumns.forEach((column, at) => { if (column && !raw[column.key]) raw[column.key] = String(cells[at] ?? '').trim(); });
-    if (!raw[required]) { issues.push(`Row ${line}: ${requiredLabel.toLowerCase()} is empty`); return; }
-    try {
-      rows.push({ ...Object.fromEntries(columns.map(column => [column.key, column.read ? column.read(raw[column.key] || '') : raw[column.key] || ''])), sheetLine: line });
-    } catch (error) {
-      issues.push(`Row ${line}: ${error.message}`);
-    }
+  const headers = headerAt >= 0 ? lines[headerAt].cells : [];
+  const elsewhere = sheetBelongsElsewhere(list, headers);
+  if (elsewhere) {
+    const wrong = new Error(`This sheet looks like ${elsewhere.list.config.noun} data (${elsewhere.hits.slice(0, 4).join(', ')}), not ${noun} data. `
+      + `Open ${elsewhere.list.config.noun} ${elsewhere.list.config.groupRows ? 'list' : 'Master'} and import it there.`);
+    wrong.title = `Wrong file for ${list.config.nouns}`;
+    throw wrong;
+  }
+  const body = lines.slice(headerAt + 1);
+  const width = Math.max(headers.length, ...body.map(row => row.cells.length));
+  // Headings first. Of several columns for one field the best match is kept (exact over "contains" over a
+  // typo); email and phone keep them all, since a second phone column is the Telephone.
+  const matches = Array.from({ length: width }, (_, at) => matchHeader(headers[at] ?? ''));
+  const sheetColumns = matches.map(([column, quality], at) => {
+    if (!column || column.kind) return column;
+    const better = matches.some(([other, q], index) => other === column && (q > quality || (q === quality && index < at)));
+    return better ? undefined : column;
   });
-  return { rows: list.config.groupRows ? list.config.groupRows(rows) : rows, issues };
+  const mapping = matchColumnsByContent(columns, sheetColumns, headers, body, required);
+  if (!sheetColumns.some(column => column?.key === required)) {
+    throw new Error(`No "${requiredLabel}" column was found. Download the template to see the expected columns.`);
+  }
+  const rows = [], errors = [], sources = new Set();
+  for (const { cells, line } of body) {
+    const raw = {};
+    sheetColumns.forEach((column, at) => {
+      const value = cells[at] || '';
+      if (!column || !value) return;
+      if (column.key === '__cityCountry') {             // "Muscat, Oman"
+        const parts = value.split(',');
+        const country = findCountry(parts.pop());
+        raw.country ||= country ? country.name : '';
+        raw.city ||= country ? parts.join(',').trim() : value;
+        return;
+      }
+      if (!raw[column.key]) raw[column.key] = value;
+    });
+    const note = sortContacts(columns, raw, cells, sheetColumns, headers, sources);
+    tidyImportRow(columns, raw);
+    if (!raw[required]) { errors.push({ line, raw, message: `${requiredLabel} is missing` }); continue; }
+    if (looksLike.email(raw[required]) || looksLike.phone(raw[required]) || !/[a-z0-9]/i.test(raw[required])) {
+      errors.push({ line, raw, message: `${requiredLabel} "${raw[required]}" is not a name` });
+      continue;
+    }
+    // Every field is read, so the preview names all of a row's problems at once.
+    const row = {}, problems = [];
+    for (const column of columns) {
+      try { row[column.key] = column.read ? column.read(raw[column.key] || '') : raw[column.key] || ''; }
+      catch (error) { problems.push(error.message); }
+      // Phone numbers must have the digits their country uses (the server checks the same).
+      const phone = column.kind === 'phone' && row[column.key] && phoneProblem(row[column.key], '', { allowExtension: (column.headers || []).includes('extension') });
+      if (phone) problems.push(`${column.label.toLowerCase()} "${row[column.key]}": ${phone.charAt(0).toLowerCase()}${phone.slice(1).replace(/\.$/, '')}`);
+    }
+    if (problems.length) errors.push({ line, raw, message: problems.join('; ') });
+    else rows.push({ ...row, sheetLine: line, sheetRaw: raw, sheetNote: note });
+  }
+  // Columns emails / phones were taken from, and the columns nothing was read from.
+  const contactLabels = ['email', 'phone'].map(kind => columns.find(column => column.kind === kind)?.label).filter(Boolean);
+  for (const at of sources) {
+    if (!mapping.some(entry => entry.at === at)) mapping.push({ at, header: headers[at] || `Column ${at + 1}`, labels: [...new Set(contactLabels)], how: 'content' });
+  }
+  const ignored = [];
+  for (let at = 0; at < width; at++) {
+    if (!mapping.some(entry => entry.at === at) && body.some(row => row.cells[at])) ignored.push(headers[at] || `Column ${at + 1}`);
+  }
+  mapping.sort((x, y) => x.at - y.at);
+  // A document is imported whole or not at all: a bad line keeps its other lines out too.
+  if (list.config.groupRows) {
+    const broken = new Map(errors.filter(error => error.raw.docNo).map(error => [squash(error.raw.docNo), error.line]));
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const at = rows[i].docNo && broken.get(squash(rows[i].docNo));
+      if (at) {
+        errors.push({ line: rows[i].sheetLine, raw: rows[i].sheetRaw, message: `Document ${rows[i].docNo} is not imported: row ${at} of it has an error` });
+        rows.splice(i, 1);
+      }
+    }
+  }
+  return { rows: list.config.groupRows ? list.config.groupRows(rows) : rows, errors, columns, mapping, ignored };
 }
 
-function renderMasterImportPreview(fileName, { rows, issues }) {
-  const { list } = masterImport;
-  masterImport.rows = rows;
-  const duplicates = rows.filter(row => findMasterRow(list.rows, row)).length;
+/* Which list a sheet belongs to. Each list scores the sheet's headings: 2 for a heading it knows exactly,
+   1 for one containing a word it knows, and 3 more when the heading names the list's own record
+   ("Customer Code", "Client Name"; words two lists share, like "company", do not count). Another list
+   scoring clearly higher means the file is for that list (customers chosen on the Item page). */
+function sheetBelongsElsewhere(list, headers) {
+  if (!headers.some(Boolean)) return null;
+  const nounsOf = other => {
+    const name = (other.config.importColumns || other.config.columns).find(column => column.key === 'name');
+    return [other.config.noun, ...(name?.headers || []).filter(word => !word.includes(' '))].map(squash).filter(word => word.length >= 4);
+  };
+  const counts = new Map();
+  for (const other of allLists()) for (const word of new Set(nounsOf(other))) counts.set(word, (counts.get(word) || 0) + 1);
+  const ownMatch = headerMatcher(list.config.importColumns || list.config.columns, list.config.noun);
+  const score = other => {
+    const match = other === list ? ownMatch : headerMatcher(other.config.importColumns || other.config.columns, other.config.noun);
+    const nouns = nounsOf(other).filter(word => counts.get(word) === 1);
+    let total = 0;
+    const hits = [];
+    for (const header of headers) {
+      if (!header) continue;
+      const [, quality] = match(header);
+      let points = quality === 3 ? 2 : quality === 2 ? 1 : 0;
+      // The record's own noun; not for a heading this list also knows exactly ("Item Name" on a purchase sheet).
+      if (nouns.some(word => normalHeader(header).includes(word)) && (other === list || ownMatch(header)[1] < 3)) points += 3;
+      if (points) { total += points; hits.push(header); }
+    }
+    return { list: other, score: total, hits };
+  };
+  const ours = score(list);
+  const best = allLists().filter(other => other !== list).map(score).sort((a, b) => b.score - a.score)[0];
+  return best && best.score >= 4 && best.score >= ours.score + 3 ? best : null;
+}
+
+// One preview entry per record (a document: its lines joined) and per unreadable row, in sheet order.
+// A duplicate already exists in the list, or repeats an earlier row of the same file; neither is added.
+function masterImportEntries(list, { rows, errors }) {
+  const entries = [], seen = [];
+  for (const row of rows) {
+    const lines = row.lines || [row];
+    const raw = {};
+    for (const key of new Set(lines.flatMap(line => Object.keys(line.sheetRaw || {})))) {
+      // The value as it will be saved (read into our format), else the tidied sheet text.
+      const values = lines.map(line => (typeof line[key] === 'string' && line[key] ? line[key] : line.sheetRaw[key])).filter(Boolean);
+      const numbers = values.map(value => Number(value.replace(/,/g, '')));
+      // A document's quantities add up (2 + 2 → 4); other line values are listed once each.
+      raw[key] = lines.length > 1 && /^(qty|quantity)$/i.test(key) && numbers.every(Number.isFinite)
+        ? formatCount(numbers.reduce((sum, value) => sum + value, 0))
+        : [...new Set(values)].join(', ');
+    }
+    const line = lines[0].sheetLine;
+    const existing = findMasterRow(list.rows, row);
+    const earlier = existing ? null : seen.find(entry => findMasterRow([entry.row], row, list));
+    if (!existing && !earlier) seen.push({ row, line });
+    entries.push({
+      row, raw, line, existing,
+      status: existing || earlier ? 'duplicate' : 'new',
+      details: existing ? `${list.config.noun} already exists${existing.code ? ` (${existing.code})` : ''}`
+        : earlier ? `Repeats row ${earlier.line} of this file` : `Ready to import${row.sheetNote ? ` · ${row.sheetNote}` : ''}`,
+    });
+  }
+  for (const error of errors) entries.push({ raw: error.raw, line: error.line, status: 'error', details: error.message });
+  return entries.sort((x, y) => x.line - y.line);
+}
+
+const SI_STATUS = { new: 'New', error: 'Error' };
+const SI_MAX_COLUMNS = 7;
+
+function renderMasterImportPreview(file, sheet, entries) {
+  Object.assign(masterImport, { entries, filter: 'all', rows: sheet.rows });
+  // The sheet's columns that hold something, the list's code / document number first.
+  const filled = sheet.columns.filter(column => entries.some(entry => entry.raw[column.key]));
+  masterImport.columns = filled.slice(0, SI_MAX_COLUMNS);
+  const count = status => entries.filter(entry => entry.status === status).length;
+  const totals = { all: entries.length, new: count('new'), duplicate: count('duplicate'), error: count('error') };
   miEl('drop').hidden = true;
   miEl('file').hidden = false;
-  miEl('file-name').textContent = fileName;
-  miEl('file-summary').textContent = `${list.count(rows.length)} ready · ${rows.length - duplicates} new · ${duplicates} already exist`
-    + (issues.length ? ` · ${issues.length} row${issues.length === 1 ? '' : 's'} skipped` : '');
-  miEl('file-issues').replaceChildren(...issues.slice(0, 3).map(text => el('li', '', text)),
-    ...(issues.length > 3 ? [el('li', '', `…and ${issues.length - 3} more`)] : []));
-  miEl('start').disabled = rows.length === 0;
+  miEl('stats').hidden = false;
+  miEl('preview').hidden = false;
+  byId('master-import').classList.add('has-preview');
+  miEl('file-name').textContent = file.name;
+  miEl('file-summary').textContent = `${formatFileSize(file.size)} · ${entries.length} row${entries.length === 1 ? '' : 's'} found`;
+  // How the sheet's columns were read: "User Detail → Email, Mobile", "Nation → Country"; then what was left out.
+  const shown = sheet.mapping.filter(entry => entry.how === 'content' || normalHeader(entry.header) !== normalHeader(entry.labels[0]));
+  miEl('mapping').replaceChildren(...shown.map(entry => {
+    const chip = el('li', `si-map${entry.how === 'content' ? ' si-map-content' : ''}`);
+    chip.append(el('span', '', entry.header), el('b', '', '→'), el('span', '', entry.labels.join(', ')));
+    chip.title = entry.how === 'content' ? 'Matched by what the column holds' : 'Matched by the column heading';
+    return chip;
+  }), ...(sheet.ignored.length ? [el('li', 'si-map si-map-ignored', `Not imported: ${sheet.ignored.join(', ')}`)] : []));
+  miEl('total').textContent = totals.all;
+  miEl('new').textContent = totals.new;
+  miEl('dup').textContent = totals.duplicate;
+  miEl('err').textContent = totals.error;
+  for (const [key, value] of Object.entries(totals)) miEl(`tab-${key}`).textContent = value;
+  miEl('head').replaceChildren(el('th', 'si-col-row', 'Row'), el('th', '', 'Status'), el('th', '', 'Details'),
+    ...masterImport.columns.map(column => el('th', '', column.label)));
+  renderMasterImportRows();
+  updateMasterImportSummary();
+}
+
+function renderMasterImportRows() {
+  const { entries, filter, columns } = masterImport;
+  const overwrite = miMode() === 'overwrite';
+  for (const tab of byId('master-import').querySelectorAll('[data-si-filter]')) tab.setAttribute('aria-pressed', String(tab.dataset.siFilter === filter));
+  const shown = entries.filter(entry => filter === 'all' || entry.status === filter);
+  miEl('rows').replaceChildren(...shown.map(entry => {
+    const tr = el('tr', `si-row-${entry.status}`);
+    const label = entry.status === 'duplicate'
+      ? `Duplicate · ${overwrite && entry.existing ? 'Update' : 'Skip'}` : SI_STATUS[entry.status];
+    const badge = el('span', `si-badge si-badge-${entry.status}`, label);
+    tr.append(el('td', 'si-col-row', String(entry.line)), el('td', ''), el('td', 'si-details', entry.details),
+      ...columns.map((column, index) => el('td', index === 0 ? 'si-code' : '', (column.read?.isDate && isoToDisplay(entry.raw[column.key])) || entry.raw[column.key] || '—')));
+    tr.cells[1].append(badge);
+    return tr;
+  }));
+  miEl('none').hidden = shown.length > 0;
+}
+
+// Footer: "5 new · 3 skipped · 2 with errors" and the number of records Import will write.
+function updateMasterImportSummary() {
+  const { entries = [], list } = masterImport;
+  const overwrite = miMode() === 'overwrite';
+  const fresh = entries.filter(entry => entry.status === 'new').length;
+  const updates = overwrite ? entries.filter(entry => entry.status === 'duplicate' && entry.existing).length : 0;
+  const skipped = entries.filter(entry => entry.status === 'duplicate').length - updates;
+  const errors = entries.filter(entry => entry.status === 'error').length;
+  const total = fresh + updates;
+  const summary = miEl('summary');
+  summary.replaceChildren();
+  if (entries.length) {
+    const part = (number, text) => { const span = el('span', ''); span.append(el('b', '', String(number)), ` ${text}`); return span; };
+    const parts = [part(fresh, 'new')];
+    if (overwrite && updates) parts.push(part(updates, 'to update'));
+    if (skipped) parts.push(part(skipped, 'skipped'));
+    if (errors) parts.push(part(errors, 'with errors'));
+    parts.forEach((item, index) => summary.append(...(index ? [' · '] : []), item));
+  }
+  miEl('start-label').textContent = entries.length ? `Import ${total} ${total === 1 ? 'record' : 'records'}` : 'Start Import';
+  miEl('start').disabled = total === 0 || masterImport.busy;
+  if (list) miEl('skip-note').textContent = `Keep existing records if the ${list.config.matchRow ? 'document number' : 'code or name'} already exists.`;
+}
+
+// Before Import is offered, every row that would be saved is turned into its save payload: that looks up
+// its unit, category, stock point, supplier … so a row naming one that does not exist shows as an error now.
+async function checkImportEntries(list, entries) {
+  for (const entry of entries) {
+    if (entry.status === 'error' || (entry.status === 'duplicate' && !entry.existing)) continue;
+    try {
+      await list.config.toPayload(entry.row);
+    } catch (error) {
+      Object.assign(entry, { status: 'error', details: error.message.charAt(0).toUpperCase() + error.message.slice(1) });
+    }
+  }
 }
 
 async function loadMasterImportFile(file) {
   if (!file) return;
   try {
-    renderMasterImportPreview(file.name, masterRowsFromSheet(masterImport.list, await readSpreadsheet(file)));
+    const { list } = masterImport;
+    const sheet = masterRowsFromSheet(list, await readSpreadsheet(file));
+    miEl('summary').textContent = 'Checking rows…';
+    const entries = masterImportEntries(list, sheet);
+    await checkImportEntries(list, entries);
+    renderMasterImportPreview(file, sheet, entries);
     miEl('start').focus();
     if (miEl('start').disabled) miEl('file').querySelector('[data-si="browse"]').focus();
   } catch (error) {
     clearMasterImportFile();
-    showToast('Could not read the file', error.message || 'The file could not be read.', true);
+    showToast(error.title || 'Could not read the file', error.message || 'The file could not be read.', true);
   }
 }
 
 function clearMasterImportFile() {
-  masterImport.rows = [];
+  Object.assign(masterImport, { rows: [], entries: [], filter: 'all' });
   miEl('input').value = '';
   miEl('file').hidden = true;
+  miEl('stats').hidden = true;
+  miEl('preview').hidden = true;
   miEl('drop').hidden = false;
-  miEl('start').disabled = true;
+  byId('master-import').classList.remove('has-preview');
+  updateMasterImportSummary();
 }
 
 function openMasterImport(list) {
@@ -3998,27 +5250,32 @@ function closeMasterImport() {
 
 async function startMasterImport() {
   const { list } = masterImport;
-  if (!masterImport.rows.length || masterImport.busy) return;
+  if (!masterImport.entries.length || masterImport.busy) return;
   const overwrite = miMode() === 'overwrite';
   masterImport.busy = true;
   miEl('start').disabled = true;
-  miEl('file-summary').textContent = `Importing ${list.count(masterImport.rows.length)}…`;
+  miEl('summary').textContent = `Importing ${miEl('start-label').textContent.replace(/^Import /, '')}…`;
   let added = 0, updated = 0, skipped = 0;
   const failures = [];
   const filled = payload => Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== null && value !== undefined
     && !(Array.isArray(value) && value.length === 0)));
-  const seen = [];                                   // rows of this file already handled: a name twice is one record
-  for (const row of masterImport.rows) {
-    const existing = findMasterRow(list.rows, row);
+  // Only rows the preview passed: errors never, duplicates only as updates (Update / Overwrite), and a
+  // record added meanwhile (another tab) is checked again so it is not added twice.
+  const added_ = [];
+  for (const entry of masterImport.entries) {
+    if (entry.status === 'error') continue;
+    const { row } = entry;
+    const existing = findMasterRow(list.rows, row) || findMasterRow(added_, row);
+    if (entry.status === 'duplicate' && !entry.existing) { skipped++; continue; }   // repeats a row of this file
+    if (existing && (!overwrite || !list.rows.includes(existing))) { skipped++; continue; }
     try {
-      if (findMasterRow(seen, row) || (existing && !overwrite)) { skipped++; continue; }
-      seen.push(row);
       const payload = await list.config.toPayload(row);
       if (existing) {
         await apiRequest(`${list.config.api}?id=${existing.id}`, { method: 'PUT', json: filled(payload) });
         updated++;
       } else {
         await apiRequest(list.config.api, { method: 'POST', json: payload });
+        added_.push(row);
         added++;
       }
     } catch (error) {
@@ -4027,6 +5284,7 @@ async function startMasterImport() {
   }
   masterImport.busy = false;
   forgetLookups(...list.config.lookups);
+  if (!added && !updated && !failures.length) { updateMasterImportSummary(); return; }
   closeMasterImport();
   await list.load();
   const summary = `${added} added, ${overwrite ? `${updated} updated` : `${skipped} skipped`}`;
@@ -4057,6 +5315,7 @@ function handleMasterImportKeys(event) {
     else {
       next = dialog.querySelector(`input[name="master-import-mode"]:not([value="${target.value}"])`);
       next.checked = true;
+      if (masterImport.entries.length) { renderMasterImportRows(); updateMasterImportSummary(); }
     }
   } else if (key === 'ArrowDown' && (target === miEl('drop') || miEl('file').contains(target))) {
     next = chosen;
@@ -4079,6 +5338,10 @@ function initMasterImport() {
     else if (action === 'browse') miEl('input').click();
     else if (action === 'clear') { clearMasterImportFile(); miEl('drop').focus(); }
     else if (action === 'start') startMasterImport();
+    else if (event.target.closest('[data-si-filter]')) {
+      masterImport.filter = event.target.closest('[data-si-filter]').dataset.siFilter;
+      renderMasterImportRows();
+    }
     else if (action === 'template') {
       const { list } = masterImport;
       const columns = list.config.importColumns || list.config.columns;
@@ -4088,6 +5351,10 @@ function initMasterImport() {
     }
   });
   miEl('input').addEventListener('change', event => loadMasterImportFile(event.target.files[0]));
+  // Switching Skip / Update relabels the duplicates and recounts the Import button.
+  dialog.addEventListener('change', event => {
+    if (event.target.name === 'master-import-mode' && masterImport.entries.length) { renderMasterImportRows(); updateMasterImportSummary(); }
+  });
   for (const zone of [miEl('drop'), miEl('file')]) enableFileDrop(zone, files => loadMasterImportFile(files[0]));
 }
 
@@ -4283,34 +5550,99 @@ async function deleteMasterRow(list, row) {
 }
 
 /* ---------- View popup (#master-view) ----------
-   The record in titled sections of label / value rows (each column's group). The party lists also show
-   the record's contacts, documents, quotations and previous orders, fetched when the popup opens.
-   Keys: E edit, Delete removes, ↑/↓ scroll, Esc closes. */
+   The record under tabs. General Information holds the list's columns in titled cards (one per column group):
+   half-width cards in two columns, full-width ones (long text, tables) under them. config.related(record, note)
+   adds cards to General Information and tabs of its own (a party's documents, quotations and orders; a purchase
+   document's items); the record is fetched when the popup opens (record null meanwhile: those tabs show note).
+   Keys: ←/→ tabs, ↑/↓ scroll, E edit, Delete removes, Esc closes. */
 
-const masterView = { list: null, row: null, opener: null };
+const masterView = { list: null, row: null, opener: null, tabs: [], tab: 0 };
 
-function viewSection(title, ...content) {
-  const section = el('section', 'mv-section');
-  section.append(el('h3', 'mv-section-title', title), ...content);
-  return section;
+const VIEW_ICONS = {
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path>',
+  telephone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"></path>',
+  email: '<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-10 6L2 7"></path>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path>',
+};
+function viewIcon(name, size = 14) {
+  const icon = el('span', 'mv-icon');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${VIEW_ICONS[name]}</svg>`;
+  return icon;
+}
+// A value with its icon in front (a mobile number, an email).
+function viewWithIcon(icon, text, className = '') {
+  const span = el('span', 'mv-inline');
+  span.append(viewIcon(icon, 13), el('span', className, text));
+  return span;
+}
+const viewNote = message => el('p', 'mv-empty', message);
+const viewCount = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+const viewSerial = index => String(index + 1).padStart(2, '0');
+const viewDate = value => (value ? sheetDateText(String(value).slice(0, 10)) : '');
+const viewMono = (text, accent = false) => (text === '' || text == null ? '' : el('span', `mv-mono${accent ? ' mv-accent' : ''}`, String(text)));
+
+// Status: a dot and the word (Active green; anything else grey).
+function viewStatus(text) {
+  const word = text === text.toLowerCase() ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  return el('span', `mv-status${/^active/i.test(text) ? '' : ' is-off'}`, word);
+}
+function viewChips(names, className = '') {
+  if (names.length === 0) return el('span', 'mv-none', '—');
+  const wrap = el('span', 'mv-chips');
+  wrap.append(...names.map(name => el('span', `mv-chip ${className}`.trim(), name)));
+  return wrap;
 }
 
-// Label / value rows; wide values (addresses, remarks) take the whole row.
+// One column's value, shown by its type: codes in orange mono, status as a badge, currency code and name, phone / email with icons.
+function viewValue(column, value) {
+  const text = String(value ?? '').trim();
+  if (!text) return el('span', 'mv-none', '—');
+  if (column.type === 'code') return viewMono(text, true);
+  if (column.type === 'status') return viewStatus(text);
+  if (column.type === 'name') return el('strong', 'mv-value-name', text);
+  if (column.key === 'currency') {
+    const currency = PO_CURRENCIES.find(entry => entry.code === text.toUpperCase());
+    const box = el('span', 'mv-inline');
+    box.append(el('span', 'mv-chip mv-chip-code', text.toUpperCase()));
+    if (currency) box.append(el('span', 'mv-soft', currency.name));
+    return box;
+  }
+  if (column.type === 'pill') return el('span', 'mv-chip', text);
+  if (column.kind === 'phone') return viewWithIcon(column.key === 'telephone' ? 'telephone' : 'phone', text, 'mv-mono');
+  if (column.kind === 'email') return viewWithIcon('email', text.toLowerCase());
+  if (['mono', 'qty', 'qty-ok'].includes(column.type)) return viewMono(text);
+  return document.createTextNode(text);
+}
+
+// A titled card. wide: the full width of the tab (long text, tables); count: a note at the right of the title.
+function viewCard({ title, count = '', wide = false }, ...content) {
+  const section = el('section', `mv-section${wide ? ' mv-section-wide' : ''}`);
+  const heading = el('h3', 'mv-section-title');
+  heading.append(el('span', '', title));
+  if (count !== '') heading.append(el('span', 'mv-section-count', count));
+  section.append(heading, ...content);
+  return section;
+}
+const viewSection = (title, ...content) => viewCard({ title, wide: content.some(node => node.classList?.contains('mv-table-wrap')) }, ...content);
+
+// Label / value rows, one to a line. A value may be a node (chips, a badge).
 function viewFields(entries) {
-  const dl = el('dl', 'mv-grid');
+  const dl = el('dl', 'mv-rows');
   for (const { label, value, column = {} } of entries) {
-    const item = el('div', `mv-item${column.type === 'wrap' ? ' mv-item-wide' : ''}`);
-    const dd = el('dd', `mv-value${column.type === 'name' ? ' mv-value-name' : ''}`);
-    dd.append(column.key ? masterValue(column, value) : document.createTextNode(String(value ?? '') || '—'));
-    item.append(el('dt', 'mv-label', label), dd);
-    dl.append(item);
+    const row = el('div', `mv-row${column.type === 'wrap' ? ' mv-row-wrap' : ''}`);
+    const dd = el('dd', 'mv-value');
+    dd.append(value instanceof Node ? value : viewValue(column, value));
+    row.append(el('dt', 'mv-label', label), dd);
+    dl.append(row);
   }
   return dl;
 }
 
-// A small table; cells may be nodes (a document link). Empty: a note instead.
+// A small table; cells may be nodes (a document link, a badge). Empty: a note instead.
 function viewTable(headings, rows, empty) {
-  if (rows.length === 0) return el('p', 'mv-empty', empty);
+  if (rows.length === 0) return viewNote(empty);
   const wrap = el('div', 'mv-table-wrap');
   const table = el('table', 'mv-table');
   const head = el('tr');
@@ -4332,27 +5664,140 @@ function viewTable(headings, rows, empty) {
   return wrap;
 }
 
+// Half-width cards in two columns: the first four in pairs (left, right, left, right), the rest each to the
+// shorter column so the columns end level; full-width cards under them.
+function viewLayout(sections) {
+  const columns = [el('div', 'mv-col'), el('div', 'mv-col')];
+  const heights = [0, 0];
+  const wide = [];
+  let placed = 0;
+  for (const section of sections) {
+    if (section.classList.contains('mv-section-wide')) { wide.push(section); continue; }
+    const side = placed < 4 ? placed % 2 : heights[1] < heights[0] ? 1 : 0;
+    placed += 1;
+    columns[side].append(section);
+    heights[side] += 1.5 + section.querySelectorAll('.mv-row, tr').length;
+  }
+  const used = columns.filter(column => column.childElementCount);
+  if (used.length === 0) return wide;
+  const grid = el('div', `mv-cols${used.length === 1 ? ' mv-cols-single' : ''}`);
+  grid.append(...used);
+  return [grid, ...wide];
+}
+
+const partyDocUrl = (kind, id, inline = false) => `api/${kind}-documents.php?id=${id}${inline ? '&inline=1' : ''}`;
+const PREVIEW_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
+function viewFileSize(bytes) {
+  if (bytes == null) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+// No expiry (grey), Valid till (green), Expires within 30 days (amber), Expired (red).
+function viewExpiry(expiry) {
+  if (!expiry) return el('span', 'mv-expiry', 'No expiry');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((new Date(`${String(expiry).slice(0, 10)}T00:00`) - today) / 86400000);
+  const when = viewDate(expiry);
+  if (days < 0) return el('span', 'mv-expiry is-expired', `Expired ${when}`);
+  if (days <= 30) return el('span', 'mv-expiry is-soon', `Expires ${when}`);
+  return el('span', 'mv-expiry is-valid', `Valid till ${when}`);
+}
+function viewDocLink(kind, id, name, icon, label, inline) {
+  const link = el('a', 'mv-doc-act');
+  link.href = partyDocUrl(kind, id, inline);
+  if (inline) { link.target = '_blank'; link.rel = 'noopener'; } else link.download = name;
+  link.title = label;
+  link.setAttribute('aria-label', `${label} ${name}`);
+  link.append(viewIcon(icon));
+  return link;
+}
+// The Document Upload tab: a card per file (type, name, size and upload date, expiry, open and download).
+function viewDocCards(kind, docs) {
+  if (docs.length === 0) return viewNote('No documents uploaded.');
+  const grid = el('div', 'mv-docs');
+  for (const doc of docs) {
+    const extension = docExtension(doc.originalName);
+    const preview = PREVIEW_EXTENSIONS.includes(extension);
+    const file = el('span', 'mv-doc-file', extension.toUpperCase().slice(0, 4));
+    file.dataset.kind = extension === 'pdf' ? 'pdf' : preview ? 'image' : 'file';
+    file.setAttribute('aria-hidden', 'true');
+    const name = el('p', 'mv-doc-name', doc.originalName);
+    name.title = doc.originalName;
+    const text = el('div', 'mv-doc-text');
+    text.append(el('p', 'mv-doc-type', doc.docType || 'Document'), name,
+      el('p', 'mv-doc-meta', [viewFileSize(doc.size), doc.uploadedAt ? `Uploaded ${viewDate(doc.uploadedAt)}` : ''].filter(Boolean).join(' · ')));
+    const top = el('div', 'mv-doc-top');
+    top.append(file, text);
+    const actions = el('span', 'mv-doc-acts');
+    if (preview) actions.append(viewDocLink(kind, doc.id, doc.originalName, 'eye', 'Open', true));
+    actions.append(viewDocLink(kind, doc.id, doc.originalName, 'download', 'Download', false));
+    const foot = el('div', 'mv-doc-foot');
+    foot.append(viewExpiry(doc.expiryDate), actions);
+    const card = el('article', 'mv-doc');
+    card.append(top, foot);
+    grid.append(card);
+  }
+  return grid;
+}
+
 function renderMasterView(list, row, record, loadError) {
+  const { config } = list;
   const groups = new Map();
-  for (const column of list.config.columns) {
-    if (column.key === 'code') continue;
+  for (const column of config.columns) {
     const group = column.group || 'Details';
     if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push({ label: column.label, value: row[column.key], column });
+    const label = column.key === 'code' && column.label === 'Code' ? `${config.noun} ID` : column.label;
+    groups.get(group).push({ label, value: row[column.key], column });
   }
-  const sections = [...groups].map(([title, entries]) => viewSection(title, viewFields(entries)));
-  if (list.config.related) {
-    if (record) sections.push(...list.config.related(record));
-    else sections.push(viewSection('More', el('p', 'mv-empty', loadError ? `Could not load the rest of the record: ${loadError}` : 'Loading contacts, documents, quotations and orders…')));
-  }
-  byId('master-view-fields').replaceChildren(...sections);
+  const order = config.viewOrder || [];
+  const rank = title => (order.includes(title) ? order.indexOf(title) : order.length);
+  const general = [...groups].sort(([a], [b]) => rank(a) - rank(b)).map(([title, entries]) =>
+    viewCard({ title, wide: entries.every(entry => entry.column.type === 'wrap') }, viewFields(entries)));
+  const note = loadError ? `Could not load the rest of the record: ${loadError}` : 'Loading…';
+  const related = config.related?.(record, note) ?? { general: [], tabs: [] };
+  masterView.tabs = [{ label: 'General Information', sections: [...general, ...related.general] }, ...related.tabs]
+    .map(tab => ({ ...tab, sections: viewLayout(tab.sections) }));
+  renderMasterViewTabs();
+}
+
+function renderMasterViewTabs() {
+  const { tabs } = masterView;
+  masterView.tab = Math.min(masterView.tab, tabs.length - 1);
+  byId('master-view-tabs').replaceChildren(...tabs.map((tab, index) => {
+    const button = el('button', 'mv-tab');
+    button.type = 'button';
+    button.id = `master-view-tab-${index}`;
+    button.tabIndex = -1;
+    button.dataset.mvTab = String(index);
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(index === masterView.tab));
+    button.setAttribute('aria-controls', 'master-view-fields');
+    button.append(el('span', '', tab.label));
+    if (tab.count != null) button.append(el('span', 'mv-tab-count', String(tab.count)));
+    return button;
+  }));
+  // Records with tabs keep one height, so changing tab does not resize the popup.
+  byId('master-view').classList.toggle('mv-tabbed', tabs.length > 1);
+  const panel = byId('master-view-fields');
+  panel.setAttribute('aria-labelledby', `master-view-tab-${masterView.tab}`);
+  panel.replaceChildren(...tabs[masterView.tab].sections);
+}
+
+function showMasterViewTab(index) {
+  const count = masterView.tabs.length;
+  masterView.tab = (index + count) % count;
+  renderMasterViewTabs();
+  byId('master-view-fields').scrollTop = 0;
 }
 
 async function openMasterView(list, row) {
-  Object.assign(masterView, { list, row, opener: document.activeElement });
+  Object.assign(masterView, { list, row, opener: document.activeElement, tab: 0 });
   byId('master-view-icon').replaceChildren(list.$('page').querySelector('.fp-brand-icon svg, .fp-brand-icon span').cloneNode(true));
-  byId('master-view-title').textContent = `${list.config.noun} Details`;
-  byId('master-view-sub').textContent = `${row.code} · ${row.name}`;
+  byId('master-view-title').textContent = list.config.viewTitle?.(row) || row.name || list.config.noun;
+  byId('master-view-sub').textContent = row.code;
+  byId('master-view-edit-label').textContent = `Edit ${list.config.noun}`;
   renderMasterView(list, row, null);
   document.documentElement.classList.add('has-modal');
   byId('master-view').showModal();
@@ -4383,7 +5828,12 @@ function masterViewAction(action) {
 function handleMasterViewKeys(event) {
   const { key } = event;
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
-  // ↑/↓ and Page Up/Down scroll the details (long records such as a full supplier); ←/→ move between the buttons.
+  // ←/→ change tab; ↑/↓ and Page Up/Down scroll the tab (long records such as a full supplier).
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    event.preventDefault();
+    showMasterViewTab(masterView.tab + (key === 'ArrowRight' ? 1 : -1));
+    return true;
+  }
   const scroll = { ArrowUp: -60, ArrowDown: 60, PageUp: -300, PageDown: 300 }[key];
   if (scroll) {
     event.preventDefault();
@@ -4402,38 +5852,74 @@ function initMasterView() {
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeMasterView(); });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeMasterView(); return; }   // backdrop
+    const tab = event.target.closest('[data-mv-tab]');
+    if (tab) { showMasterViewTab(Number(tab.dataset.mvTab)); return; }
     const action = event.target.closest('[data-mv]')?.dataset.mv;
     if (action) masterViewAction(action);
   });
 }
 
-// The party lists' extra View sections: contacts, (supplier) brands, documents, quotations, previous orders.
+// The party lists' View: Brands Supplied (suppliers) and Contact Persons on General Information, then the tabs
+// Document Upload, Quotations / Purchase Orders and Previous Purchases / Previous Sales (as the form's tabs).
 function partyViewSections(kind) {
-  return record => {
-    const docLink = doc => {
-      const link = el('a', 'mv-link', doc.originalName);
-      link.href = `api/${kind}-documents.php?id=${doc.id}`;
-      link.download = doc.originalName;
+  const supplier = kind === 'supplier';
+  const labels = ['Document Upload', supplier ? 'Quotations' : 'Purchase Orders', supplier ? 'Previous Purchases' : 'Previous Sales'];
+  return (record, note) => {
+    if (!record) return { general: [], tabs: labels.map(label => ({ label, sections: [viewCard({ title: label, wide: true }, viewNote(note))] })) };
+    const amount = value => (value == null || value === '' ? '' : viewMono(formatAmount(value)));
+    const general = [];
+    if (supplier) general.push(viewCard({ title: 'Brands Supplied' }, viewFields([{ label: 'Brands', value: viewChips(record.brands.map(b => b.name), 'mv-chip-brand') }])));
+    general.push(viewCard({ title: 'Contact Persons', count: viewCount(record.contacts.length, 'person'), wide: true },
+      viewTable(['S.No', 'Name', 'Designation', 'Mobile', 'Email'], record.contacts.map((c, i) => [viewSerial(i), el('strong', '', c.name || '—'), c.designation,
+        c.number ? viewWithIcon('phone', c.number, 'mv-mono') : '', c.email ? viewWithIcon('email', c.email.toLowerCase()) : '']), 'No contact persons.')));
+
+    // An order's PO / SO document shows with its order, not among the party's documents.
+    const orderDocs = new Set(record.orders.map(o => o.document?.id).filter(Boolean));
+    const docs = record.documents.filter(d => !orderDocs.has(d.id));
+    const documents = { label: labels[0], count: docs.length,
+      sections: [viewCard({ title: 'Uploaded Documents', count: viewCount(docs.length, 'file'), wide: true }, viewDocCards(kind, docs))] };
+
+    let second;
+    if (supplier) {
+      second = { label: labels[1], count: record.quotations.length, sections: [viewCard({ title: 'Quotations', count: viewCount(record.quotations.length, 'item'), wide: true },
+        viewTable(['S.No', 'Item Name', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
+          record.quotations.map((q, i) => [viewSerial(i), el('strong', '', q.itemName || '—'), q.description, q.unit, amount(q.rate), q.deliveryTime, q.warranty]), 'No quotations.'))] };
+    } else {
+      const lines = record.poItems ?? [];
+      const qty = lines.reduce((sum, line) => sum + Number(line.qty || 0), 0);
+      const total = lines.reduce((sum, line) => sum + Number(line.qty || 0) * Number(line.rate || 0), 0);
+      second = { label: labels[1], count: lines.length, sections: [
+        viewCard({ title: 'Purchase Order Details' }, viewFields([
+          { label: 'Customer PO No.', value: record.poNumber, column: { type: 'code' } }, { label: 'PO Date', value: viewDate(record.poDate) },
+          { label: 'Delivery Date', value: viewDate(record.poDeliveryDate) }, { label: 'Total Items', value: String(lines.length), column: { type: 'mono' } },
+          { label: 'Total Quantity', value: lines.length ? String(Math.round(qty * 1000) / 1000) : '', column: { type: 'mono' } },
+          { label: 'Total Value (OMR)', value: lines.length ? formatAmount(total) : '', column: { type: 'mono' } }])),
+        viewCard({ title: 'Items', count: viewCount(lines.length, 'item'), wide: true },
+          viewTable(['S.No', 'Item Name', 'Description', 'Unit', 'Qty', 'Rate (OMR)', 'Amount (OMR)'],
+            lines.map((line, i) => [viewSerial(i), el('strong', '', line.itemName || '—'), line.description, line.unit, viewMono(line.qty == null ? '' : String(Number(line.qty))),
+              amount(line.rate), line.qty == null || line.rate == null ? '' : amount(Number(line.qty) * Number(line.rate))]), 'No purchase order lines.'))] };
+    }
+
+    const docChip = order => {
+      if (!order.document) return el('span', 'po-doc-none', 'No document');
+      const link = el('a', 'po-doc');
+      link.href = partyDocUrl(kind, order.document.id, true);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.title = `Open ${order.document.name}`;
+      const icon = el('span', 'po-doc-icon', docExtension(order.document.name) === 'pdf' ? 'PDF' : 'IMG');
+      icon.dataset.kind = docExtension(order.document.name) === 'pdf' ? 'pdf' : 'image';
+      icon.setAttribute('aria-hidden', 'true');
+      link.append(icon, el('span', '', order.document.name));
       return link;
     };
-    const date = value => (value ? shortDate(String(value).slice(0, 10)) : '');
-    const sections = [
-      viewSection('Contact Persons', viewTable(['Name', 'Designation', 'Mobile', 'Email'],
-        record.contacts.map(c => [c.name, c.designation, c.number, c.email]), 'No contact persons.')),
-    ];
-    if (kind === 'supplier') {
-      sections.push(viewSection('Brands Supplied', viewFields([{ label: 'Brands', value: record.brands.map(b => b.name).join(', ') }])));
-    }
-    sections.push(
-      viewSection('Documents', viewTable(['File', 'Type', 'Expiry', 'Uploaded'],
-        record.documents.map(d => [docLink(d), d.docType, date(d.expiryDate), date(d.uploadedAt)]), 'No documents uploaded.')),
-      viewSection('Quotations', viewTable(['Item', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
-        record.quotations.map(q => [q.itemName, q.description, q.unit, q.rate == null ? '' : formatAmount(q.rate), q.deliveryTime, q.warranty]), 'No quotations.')),
-      viewSection(kind === 'supplier' ? 'Previous Purchase Orders' : 'Previous Sales Orders',
-        viewTable([kind === 'supplier' ? 'PO Number' : 'SO Number', 'Date', 'Value (OMR)', 'Items', 'Status'],
-          record.orders.map(o => [o.number, date(o.date), o.value == null ? '' : formatAmount(o.value), o.items, o.status]), 'No previous orders.')),
-    );
-    return sections;
+    const orders = { label: labels[2], count: record.orders.length, sections: [
+      viewCard({ title: supplier ? 'Previous Purchase Orders' : 'Previous Sales Orders', count: viewCount(record.orders.length, 'order'), wide: true },
+        viewTable([supplier ? 'PO Number' : 'SO Number', 'Date', ...(supplier ? [] : ['Quotation Ref']), 'Value (OMR)', 'Items', 'Status', 'Document'],
+          record.orders.map(o => [viewMono(o.number, !supplier), viewDate(o.date), ...(supplier ? [] : [o.quotationRef]), amount(o.value),
+            o.items == null || o.items === '' ? '' : viewMono(formatCount(o.items)), el('span', `po-status po-status-${String(o.status).toLowerCase()}`, o.status), docChip(o)]),
+          'No previous orders.'))] };
+    return { general, tabs: [documents, second, orders] };
   };
 }
 
@@ -4442,63 +5928,96 @@ function partyViewSections(kind) {
 const ACTIVE_STATUSES = ['active', 'inactive'];
 const ITEM_STATUSES = ['ACTIVE / RELEASED', 'QUALITY HOLD', 'OBSOLETE', 'DRAFT'];
 // Import readers: a blank cell stays blank (the server default on a new record; kept as it is on an update).
+// Each reader first puts the value in our format (see the import normaliser), then checks it.
 const readCurrency = value => {
   if (!value) return '';
-  const code = value.toUpperCase();
-  if (!/^[A-Z]{3}$/.test(code)) throw new Error(`currency "${value}" must be a 3-letter code`);
+  const code = findCurrency(value);
+  if (!code) throw new Error(`currency "${value}" is not a currency we know (use a code such as OMR or USD)`);
   return code;
 };
 const readEmail = value => {
-  if (value && !EMAIL.test(value)) throw new Error(`"${value}" is not a valid email`);
-  return value;
+  const email = value.replace(/^mailto:/i, '').trim().toLowerCase();
+  if (email && !EMAIL.test(email)) throw new Error(`"${value}" is not a valid email`);
+  return email;
 };
-// One of a fixed list, matched without case; "active" matches "ACTIVE / RELEASED".
-const readChoice = (name, choices) => value => {
+// One of a fixed list. Case, spaces and punctuation are ignored ("net30" is "Net 30"); a start matches
+// ("active" is "ACTIVE / RELEASED"); the same number matches ("30 days" is "Net 30"); aliases add other words.
+const readChoice = (name, choices, aliases = {}) => {
+  const read = value => {
+    if (!value) return '';
+    const key = squash(value);
+    const digits = value.replace(/\D/g, '');
+    const choice = choices.find(option => squash(option) === key)
+      || (aliases[key] && choices.find(option => option === aliases[key]))
+      || (key && choices.find(option => squash(option).startsWith(key)))
+      || (digits && choices.find(option => option.replace(/\D/g, '') === digits));
+    if (!choice) throw new Error(`${name} "${value}" must be one of: ${choices.join(', ')}`);
+    return choice;
+  };
+  read.choices = choices;
+  return read;
+};
+const ACTIVE_WORDS = ['active', 'yes', 'y', 'true', '1', 'enabled', 'enable', 'on', 'a', 'live', 'open', 'current'];
+const INACTIVE_WORDS = ['inactive', 'no', 'n', 'false', '0', 'disabled', 'disable', 'off', 'i', 'blocked', 'closed', 'suspended', 'archived', 'dormant', 'deleted'];
+const aliasesOf = groups => Object.fromEntries(Object.entries(groups).flatMap(([choice, words]) => words.map(word => [squash(word), choice])));
+const STATUS_ALIASES = aliasesOf({ active: ACTIVE_WORDS, inactive: INACTIVE_WORDS });
+const ITEM_STATUS_ALIASES = aliasesOf({
+  'ACTIVE / RELEASED': [...ACTIVE_WORDS, 'released'], OBSOLETE: [...INACTIVE_WORDS, 'discontinued'],
+  'QUALITY HOLD': ['hold', 'on hold', 'qc', 'quarantine'], DRAFT: ['new', 'pending'],
+});
+const TERM_ALIASES = aliasesOf({ Cash: ['cod', 'cash on delivery', 'immediate'], Advance: ['prepaid', 'advance payment', 'pia'] });
+const STOCK_POINT_TYPE_ALIASES = aliasesOf({
+  Warehouse: ['wh', 'godown', 'store', 'depot', 'storehouse', 'stores'], Shop: ['retail', 'outlet', 'showroom', 'branch', 'store front'],
+  Office: ['ho', 'head office', 'admin', 'headquarters', 'hq'],
+});
+// Numbers in any common layout (see sheetNumber): "OMR 1,250.500", "1.250,50", "30 days".
+const readNumberAs = (name, test, message, round = 3) => value => {
   if (!value) return '';
-  const choice = choices.find(option => sameText(option, value) || option.toLowerCase().startsWith(value.trim().toLowerCase()));
-  if (!choice) throw new Error(`${name} "${value}" must be one of: ${choices.join(', ')}`);
-  return choice;
+  const number = sheetNumber(value);
+  const rounded = number === null ? null : String(Number(Number(number).toFixed(round)));
+  if (rounded === null || !test(Number(rounded))) throw new Error(`${name} "${value}" ${message}`);
+  return rounded;
 };
-const readWholeNumber = name => value => {
-  if (!value) return '';
-  if (!/^\d{1,9}$/.test(value)) throw new Error(`${name} "${value}" must be a whole number`);
-  return String(Number(value));
-};
-const readAmount = name => value => {
-  if (!value) return '';
-  const amount = value.replace(/,/g, '');
-  if (!/^\d{1,10}(\.\d{1,3})?$/.test(amount)) throw new Error(`${name} "${value}" must be an amount with up to 3 decimals`);
-  return amount;
-};
-const readPercent = value => {
-  if (!value) return '';
-  const percent = value.replace(/%$/, '').trim();
-  if (!/^\d{1,3}(\.\d{1,2})?$/.test(percent) || Number(percent) > 100) throw new Error(`discount "${value}" must be a percentage from 0 to 100`);
-  return percent;
-};
+const readWholeNumber = name => readNumberAs(name, n => Number.isInteger(n) && n >= 0 && n < 1e9, 'must be a whole number', 0);
+const readAmount = name => readNumberAs(name, n => n >= 0 && n < 1e10, 'must be an amount of 0 or more');
 const readDecimals = value => {
   if (!value) return '';
-  if (!/^\d+$/.test(value) || Number(value) > UOM_MAX_DECIMALS) throw new Error(`decimal allowed "${value}" must be a whole number from 0 to ${UOM_MAX_DECIMALS}`);
-  return String(Number(value));
+  const number = sheetNumber(value);
+  if (number === null || !Number.isInteger(Number(number)) || Number(number) < 0 || Number(number) > UOM_MAX_DECIMALS) {
+    throw new Error(`decimal allowed "${value}" must be a whole number from 0 to ${UOM_MAX_DECIMALS}`);
+  }
+  return String(Number(number));
 };
 const readFactor = value => {
   if (!value) return '';
-  if (!isValidUomFactor(value)) throw new Error(`conversion factor "${value}" must be above 0, with up to 4 decimals`);
-  return value;
+  const number = sheetNumber(value);
+  if (number === null || !isValidUomFactor(number)) throw new Error(`conversion factor "${value}" must be above 0, with up to 4 decimals`);
+  return number;
 };
 
+const LOOKUP_SHORT_FORMS = {
+  pcs: 'piece', pc: 'piece', nos: 'number', no: 'number', ea: 'each', kgs: 'kilogram', kg: 'kilogram', kilo: 'kilogram', kilos: 'kilogram',
+  gm: 'gram', gms: 'gram', g: 'gram', ltr: 'litre', ltrs: 'litre', lt: 'litre', l: 'litre', liter: 'litre', liters: 'litre',
+  mtr: 'meter', mtrs: 'meter', m: 'meter', metre: 'meter', metres: 'meter', dz: 'dozen', doz: 'dozen', bx: 'box', ctn: 'carton', ctns: 'carton',
+  rl: 'roll', rls: 'roll', pkt: 'packet', pkts: 'packet', pk: 'pack', prs: 'pair', pr: 'pair', sqm: 'squaremeter', ft: 'feet', wh: 'warehouse',
+};
 // The id of the lookup row named (or coded) `name`, for import; null when blank. rows narrows the search (sub-categories).
 async function importLookupId(kind, name, narrow = rows => rows) {
   if (!name) return null;
   const rows = narrow(await loadLookup(kind));
-  const row = rows.find(other => sameText(other.name, name) || sameText(other.code, name));
+  // Exact name or code first; then ignoring spaces and punctuation, a plural, or a common short form ("pcs").
+  const forms = text => { const key = squash(text); return [key, key.replace(/s$/, ''), key.replace(/es$/, ''), LOOKUP_SHORT_FORMS[key]].filter(Boolean); };
+  const wanted = forms(name);
+  const row = rows.find(other => sameText(other.name, name) || sameText(other.code, name))
+    || rows.find(other => [other.name, other.code].some(text => forms(text).some(form => wanted.includes(form))));
   if (!row) throw new Error(`there is no ${LOOKUPS[kind].plural.replace(/ies$/, 'y').replace(/s$/, '')} "${name}"`);
   return row.id;
 }
 
 const codeColumn = (...headers) => ({ key: 'code', label: 'Code', type: 'code', group: 'Identification', headers });
 const nameColumn = (noun, ...headers) => ({ key: 'name', label: `${noun} Name`, type: 'name', group: 'Identification', headers, read: value => value.toUpperCase() });
-const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', group: 'Identification', read: readChoice('status', statuses) });
+const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', group: 'Identification',
+  read: readChoice('status', statuses, statuses === ITEM_STATUSES ? ITEM_STATUS_ALIASES : STATUS_ALIASES) });
 const detail = column => ({ ...column, inTable: false });
 const PHONE_HEADERS = ['mobile', 'mobile no', 'mobile number', 'phone', 'phone no', 'phone number', 'contact no', 'contact number'];
 const TERMS = ['Cash', 'Advance', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'];
@@ -4507,20 +6026,23 @@ const supplierList = createMasterList({
   key: 'supplier', route: 'masters/supplier', newRoute: '#/masters/supplier/new', noun: 'Supplier', nouns: 'Suppliers',
   api: 'api/suppliers.php', lookups: ['supplier'], formPage: 'party',
   edit: id => partyForm.edit(id, () => preparePartyEdit('creditors')),
-  related: partyViewSections('supplier'),
+  related: partyViewSections('supplier'), viewOrder: ['Identification', 'Contact', 'Financial Terms', 'Location'],
   columns: [codeColumn('supplier code', 'vendor code', 'party code'),
     nameColumn('Supplier', 'supplier', 'vendor', 'vendor name', 'company', 'company name', 'party name'),
     { key: 'currency', label: 'Currency', type: 'pill', group: 'Financial Terms', headers: ['currency code', 'curr'], read: readCurrency },
-    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS },
-    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail'], read: readEmail },
+    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS, kind: 'phone' },
+    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail', 'e-mail', 'email ids'], read: readEmail, kind: 'email' },
     { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
     statusColumn(),
+    detail({ key: 'accountHead', label: 'Account Head', group: 'Identification', headers: ['account group', 'ledger group', 'head'] }),
+    detail({ key: 'organizationName', label: 'Organization Name', group: 'Identification', headers: ['organisation', 'organization', 'group'] }),
     detail({ key: 'ownerDetails', label: 'Owner Name', group: 'Contact', headers: ['owner', 'proprietor'] }),
-    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'] }),
+    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'], kind: 'phone' }),
     detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
+    detail({ key: 'zipCode', label: 'Zip Code', group: 'Location', headers: ['zip', 'postal code', 'po box', 'pin code'] }),
     detail({ key: 'country', label: 'Country', group: 'Location' }),
-    detail({ key: 'taxRegNo', label: 'Tax Reg. No', group: 'Financial Terms', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
-    detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Financial Terms', headers: ['terms'], read: readChoice('payment terms', TERMS) }),
+    detail({ key: 'taxRegNo', label: 'Tax Reg. No', group: 'Identification', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
+    detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Financial Terms', headers: ['terms'], read: readChoice('payment terms', TERMS, TERM_ALIASES) }),
     detail({ key: 'debitLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Financial Terms', headers: ['debit limit'], read: readAmount('credit limit') }),
     detail({ key: 'debitDays', label: 'Credit Period (Days)', group: 'Financial Terms', headers: ['credit days', 'debit days'], read: readWholeNumber('credit period') }),
     detail({ key: 'openingBalance', label: 'Opening Balance (OMR)', type: 'mono', group: 'Financial Terms', headers: ['opening'], read: readAmount('opening balance') }),
@@ -4528,8 +6050,8 @@ const supplierList = createMasterList({
     detail({ key: 'remarks', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
   fromApi: record => ({ ...record, debitDays: record.debitDays ?? '' }),
   toPayload: row => ({
-    supplierName: row.name, currency: row.currency, phone: row.phone, email: row.email, city: row.city, status: row.status,
-    ownerDetails: row.ownerDetails, telephone: row.telephone, address: row.address, country: row.country, taxRegNo: row.taxRegNo,
+    supplierName: row.name, accountHead: row.accountHead, organizationName: row.organizationName, currency: row.currency, phone: row.phone, email: row.email, city: row.city, status: row.status,
+    ownerDetails: row.ownerDetails, telephone: row.telephone, address: row.address, zipCode: row.zipCode, country: row.country, taxRegNo: row.taxRegNo,
     paymentTerms: row.paymentTerms, debitLimit: row.debitLimit, debitDays: row.debitDays, openingBalance: row.openingBalance,
     accountDetails: row.accountDetails, remarks: row.remarks,
   }),
@@ -4540,33 +6062,34 @@ const customerList = createMasterList({
   key: 'customer', route: 'masters/customer', newRoute: '#/masters/customer/new', noun: 'Customer', nouns: 'Customers',
   api: 'api/customers.php', lookups: [], formPage: 'party',
   edit: id => partyForm.edit(id, () => preparePartyEdit('debtors')),
-  related: partyViewSections('customer'),
+  related: partyViewSections('customer'), viewOrder: ['Identification', 'Contact', 'Credit & Sales', 'Location'],
   columns: [codeColumn('customer code', 'client code', 'party code'),
     nameColumn('Customer', 'customer', 'client', 'client name', 'company', 'company name', 'party name'),
-    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS },
-    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail'], read: readEmail },
+    { key: 'phone', label: 'Mobile', group: 'Contact', headers: PHONE_HEADERS, kind: 'phone' },
+    { key: 'email', label: 'Email', type: 'upper', group: 'Contact', headers: ['email address', 'email id', 'mail', 'e-mail', 'email ids'], read: readEmail, kind: 'email' },
     { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
     statusColumn(),
     detail({ key: 'organizationName', label: 'Organization Name', group: 'Identification', headers: ['organisation', 'organization', 'group'] }),
+    detail({ key: 'accountHead', label: 'Account Head', group: 'Identification', headers: ['account group', 'ledger group', 'head'] }),
     detail({ key: 'ownerDetails', label: 'Owner Details', group: 'Contact', headers: ['owner', 'proprietor'] }),
-    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'] }),
+    detail({ key: 'telephone', label: 'Telephone', group: 'Contact', headers: ['landline', 'office phone', 'tel'], kind: 'phone' }),
     detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
     detail({ key: 'zipCode', label: 'Zip Code', group: 'Location', headers: ['zip', 'postal code', 'po box', 'pin code'] }),
     detail({ key: 'country', label: 'Country', group: 'Location' }),
     detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Credit & Sales', read: readCurrency }),
     detail({ key: 'creditLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Credit & Sales', read: readAmount('credit limit') }),
-    detail({ key: 'creditDays', label: 'Credit Days', group: 'Credit & Sales', read: readWholeNumber('credit days') }),
-    detail({ key: 'discountPercent', label: 'Discount %', group: 'Credit & Sales', headers: ['discount'], read: readPercent }),
-    detail({ key: 'salesman', label: 'Salesman', group: 'Credit & Sales', headers: ['sales person', 'salesperson'] }),
-    detail({ key: 'taxRegNo', label: 'Tax Registration No', group: 'Credit & Sales', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
-    detail({ key: 'accountDetails', label: 'Additional Info', type: 'wrap', group: 'Other Details', headers: ['other details'] }),
+    detail({ key: 'creditDays', label: 'Credit Period (Days)', group: 'Credit & Sales', headers: ['credit days', 'credit period'], read: readWholeNumber('credit period') }),
+    detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Credit & Sales', headers: ['terms'], read: readChoice('payment terms', TERMS, TERM_ALIASES) }),
+    detail({ key: 'openingBalance', label: 'Opening Balance (OMR)', type: 'mono', group: 'Credit & Sales', headers: ['opening'], read: readAmount('opening balance') }),
+    detail({ key: 'taxRegNo', label: 'Tax Registration No', group: 'Identification', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
+    detail({ key: 'accountDetails', label: 'Bank / Other Details', type: 'wrap', group: 'Other Details', headers: ['bank details', 'bank account', 'iban', 'other details'] }),
     detail({ key: 'comments', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
   fromApi: record => ({ ...record, creditDays: record.creditDays ?? '' }),
   toPayload: row => ({
-    customerName: row.name, phone: row.phone, email: row.email, city: row.city, status: row.status, organizationName: row.organizationName,
+    customerName: row.name, accountHead: row.accountHead, phone: row.phone, email: row.email, city: row.city, status: row.status, organizationName: row.organizationName,
     ownerDetails: row.ownerDetails, telephone: row.telephone, address: row.address, zipCode: row.zipCode, country: row.country,
-    currency: row.currency, creditLimit: row.creditLimit, creditDays: row.creditDays, discountPercent: row.discountPercent,
-    salesman: row.salesman, taxRegNo: row.taxRegNo, accountDetails: row.accountDetails, comments: row.comments,
+    currency: row.currency, creditLimit: row.creditLimit, creditDays: row.creditDays, paymentTerms: row.paymentTerms, openingBalance: row.openingBalance,
+    taxRegNo: row.taxRegNo, accountDetails: row.accountDetails, comments: row.comments,
   }),
   sample: { name: 'OMAN OIL SERVICES LLC', phone: '+968 2456 1100', email: 'procurement@omanoil.om', city: 'Muscat', country: 'Oman', status: 'active' },
 });
@@ -4580,14 +6103,15 @@ const itemList = createMasterList({
     { key: 'category', label: 'Category', group: 'Classification', headers: ['item category', 'group', 'item group'] },
     { key: 'subCategory', label: 'Sub Category', group: 'Classification', headers: ['subcategory', 'sub group', 'subgroup'] },
     { key: 'unit', label: 'Unit', type: 'pill', group: 'Classification', headers: ['uom', 'unit name', 'unit of measure'] },
-    { key: 'stockPoint', label: 'Stock Point', group: 'Storage', headers: ['warehouse', 'store', 'location'] },
+    // Available Stock: the opening stock of every sourcing line added up (22 at one stock point + 22 at another = 44).
+    { key: 'availableStock', label: 'Available Stock', type: 'qty', group: 'Storage' },
     statusColumn(ITEM_STATUSES),
+    detail({ key: 'stockPoint', label: 'Stock Point', group: 'Storage', headers: ['warehouse', 'store', 'location'] }),
     detail({ key: 'rack', label: 'Rack / Bin', group: 'Storage', headers: ['rack', 'bin'] }),
-    detail({ key: 'availableStock', label: 'Available Stock', group: 'Storage' }),
     detail({ key: 'buyingRate', label: 'Buying Rate (OMR)', type: 'mono', group: 'Pricing' }),
     detail({ key: 'sellingPrice', label: 'Selling Price (OMR)', type: 'mono', group: 'Pricing' }),
     detail({ key: 'description', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['comments', 'remarks', 'notes'] })],
-  fromApi: record => ({ ...record, stockPoint: record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
+  fromApi: record => ({ ...record, stockPoint: record.stockPoints ?? record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
   async toPayload(row) {
     const categoryId = await importLookupId('category', row.category);
     return {
@@ -4648,14 +6172,14 @@ const stockPointList = createMasterList({
   api: 'api/warehouses.php', lookups: ['warehouse', 'item'], formPage: 'warehouse', edit: id => warehouseForm.edit(id),
   columns: [codeColumn('stock point code', 'warehouse code', 'store code'),
     nameColumn('Stock Point', 'stock point', 'warehouse', 'warehouse name', 'store', 'store name', 'location'),
-    { key: 'type', label: 'Type', type: 'pill', group: 'Identification', headers: ['stock point type', 'warehouse type', 'store type'], read: readChoice('type', ['Office', 'Warehouse', 'Shop']) },
+    { key: 'type', label: 'Type', type: 'pill', group: 'Identification', headers: ['stock point type', 'warehouse type', 'store type'], read: readChoice('type', ['Office', 'Warehouse', 'Shop'], STOCK_POINT_TYPE_ALIASES) },
     { key: 'city', label: 'City', group: 'Location', headers: ['town'] },
     { key: 'country', label: 'Country', group: 'Location' },
     { key: 'contactPerson', label: 'Contact Person', group: 'Contact & Management', headers: ['contact', 'in charge', 'incharge', 'store keeper'] },
-    { key: 'phone', label: 'Phone', group: 'Contact & Management', headers: ['mobile', 'phone no', 'phone number', 'telephone', 'tel', 'extension'] },
+    { key: 'phone', label: 'Phone', group: 'Contact & Management', headers: ['mobile', 'phone no', 'phone number', 'telephone', 'tel', 'extension'], kind: 'phone' },
     statusColumn(),
     detail({ key: 'address', label: 'Address', type: 'wrap', group: 'Location', headers: ['street', 'address line'] }),
-    detail({ key: 'email', label: 'Email', type: 'upper', group: 'Contact & Management', headers: ['email address', 'mail'], read: readEmail }),
+    detail({ key: 'email', label: 'Email', type: 'upper', group: 'Contact & Management', headers: ['email address', 'mail', 'e-mail'], read: readEmail, kind: 'email' }),
     detail({ key: 'manager', label: 'Assigned Manager', group: 'Contact & Management', headers: ['manager'] }),
     detail({ key: 'capacity', label: 'Total Storage Capacity', type: 'mono', group: 'Capacity & Remarks', headers: ['capacity'], read: readWholeNumber('capacity') }),
     detail({ key: 'remarks', label: 'Remarks', type: 'wrap', group: 'Capacity & Remarks', headers: ['notes', 'comments'] })],
@@ -5942,62 +7466,60 @@ const remarksPlainText = html => {
 };
 const pbAmount = value => (value === null || value === undefined || value === '' ? '' : pbMoney(pbNum(value)));
 
-// The View popup's item table for one document kind.
+// The View popup for one document kind: an Items tab with the lines; Summary (PO, GRN) and Remarks & Print on General Information.
 function purchaseItemsSection(kind) {
-  return record => {
-    const item = line => [line.itemCode, line.itemName, line.brandName];
+  return (record, note) => {
+    if (!record) return { general: [], tabs: [{ label: 'Items', sections: [viewCard({ title: 'Items', wide: true }, viewNote(note))] }] };
+    const item = line => [line.itemCode, el('strong', '', line.itemName || '—'), line.brandName];
+    const mono = value => viewMono(value);
     const table = kind === 'grn'
       ? viewTable(['Code', 'Item', 'Brand', 'Received', 'Accepted', 'Rejected', 'Unit', 'Expiry', 'Rack', 'Unit Cost', 'VAT %', 'Disc %', 'Total'],
-        record.items.map(l => [...item(l), pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit,
-          pbDate(l.expiryDate), l.rackCode, pbAmount(l.unitCost), pbQty(pbNum(l.vatRate)), pbQty(pbNum(l.discountPct)), pbAmount(l.lineTotal)]), 'No items.')
+        record.items.map(l => [...item(l), mono(pbQty(pbNum(l.receivedQty))), mono(pbQty(pbNum(l.acceptedQty))), mono(pbQty(pbNum(l.rejectedQty))), l.unit,
+          pbDate(l.expiryDate), l.rackCode, mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.lineTotal))]), 'No items.')
       : kind === 'po'
         ? viewTable(['Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'Line Total'],
-          record.items.map(l => [l.itemCode, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbQty(pbNum(l.vatRate)),
-            pbQty(pbNum(l.discountPct)), pbAmount(l.discountAmount), pbAmount(l.lineTotal)]), 'No items.')
+          record.items.map(l => [l.itemCode, el('strong', '', l.itemName || '—'), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
+            mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.discountAmount)), mono(pbAmount(l.lineTotal))]), 'No items.')
         : viewTable(['Code', 'Item', 'Brand', 'Quantity', 'Unit'],
-          record.items.map(l => [...item(l), pbQty(pbNum(l.quantity)), l.unit]), 'No items.');
-    const sections = [viewSection(`Items (${record.items.length})`, table)];
+          record.items.map(l => [...item(l), mono(pbQty(pbNum(l.quantity))), l.unit]), 'No items.');
+    const general = [];
     if (kind === 'po' || kind === 'grn') {
-      sections.push(viewSection('Summary', viewFields([
+      const money = { type: 'mono' };
+      general.push(viewCard({ title: 'Summary' }, viewFields([
         { label: 'Prices', value: record.vatMode === 'exclude' ? 'VAT Enabled (added on top)' : 'VAT Included' },
-        { label: 'Subtotal', value: pbAmount(record.subtotal) }, { label: 'VAT', value: pbAmount(record.vatAmount) },
-        { label: 'Discount Amount', value: pbAmount(record.discountAmount) }, { label: 'Shipping Price', value: pbAmount(record.shipping) },
-        { label: 'Grand Total', value: pbAmount(record.grandTotal) },
+        { label: 'Subtotal', value: pbAmount(record.subtotal), column: money }, { label: 'VAT', value: pbAmount(record.vatAmount), column: money },
+        { label: 'Discount Amount', value: pbAmount(record.discountAmount), column: money }, { label: 'Shipping Price', value: pbAmount(record.shipping), column: money },
+        { label: 'Grand Total', value: pbAmount(record.grandTotal), column: { type: 'code' } },
       ])));
     }
-    sections.push(viewSection('Remarks & Print', viewFields([
+    general.push(viewCard({ title: 'Remarks & Print' }, viewFields([
       { label: 'Remarks', value: kind === 'po' && isRemarksHtml(record.remarks) ? remarksPlainText(record.remarks) : record.remarks, column: { type: 'wrap' } },
       { label: 'Signatory Slots', value: record.includeSignatory ? 'Included' : 'Not included' },
       { label: 'Seal', value: record.attachSeal ? 'Attached' : 'Not attached' },
     ])));
-    return sections;
+    return { general, tabs: [{ label: 'Items', count: record.items.length,
+      sections: [viewCard({ title: 'Items', count: viewCount(record.items.length, 'item'), wide: true }, table)] }] };
   };
 }
 
 /* Import: one item line per sheet row. Rows with the same Document No become one document (a blank
    Document No makes the row a document of its own); the first row of a group gives the header fields. */
-const readSheetDate = label => value => {
-  if (!value) return '';
-  if (/^\d{4,6}(\.\d+)?$/.test(value)) {               // an Excel date serial (days since 1899-12-30)
-    const date = new Date(Date.UTC(1899, 11, 30) + Math.round(Number(value)) * 86400000);
-    return date.toISOString().slice(0, 10);
-  }
-  let match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(value);
-  if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
-  match = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(value);   // day first (11/06/2026 is 11 June)
-  if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-  throw new Error(`${label} "${value}" is not a date (use YYYY-MM-DD or DD-MM-YYYY)`);
+// Dates in any common layout (see sheetDate): 13/11/2026, 2026-11-13, 13 Nov 2026, Nov 13 2026, Excel numbers.
+const readSheetDate = label => {
+  const read = value => {
+    if (!value) return '';
+    const date = sheetDate(value);
+    if (!date) throw new Error(`${label} "${value}" is not a date (use DD/MM/YYYY or YYYY-MM-DD)`);
+    return date;
+  };
+  read.isDate = true;
+  return read;
 };
-const readSheetNumber = (label, decimals = 3) => value => {
-  if (!value) return '';
-  const text = value.replace(/,/g, '');
-  if (!new RegExp(`^\\d{1,11}(\\.\\d{1,${decimals}})?$`).test(text)) throw new Error(`${label} "${value}" must be a number with up to ${decimals} decimals`);
-  return text;
-};
+const readSheetNumber = (label, decimals = 3) => readNumberAs(label, n => n >= 0 && n < 1e11, 'must be a number of 0 or more', decimals);
 const readVatMode = value => {
   if (!value) return '';
-  if (/^incl/i.test(value)) return 'include';
-  if (/^excl/i.test(value)) return 'exclude';
+  if (/^(incl|inc\b|yes|y$|with)/i.test(value)) return 'include';
+  if (/^(excl|exc\b|no|n$|without|plus)/i.test(value)) return 'exclude';
   throw new Error(`VAT "${value}" must be Include or Exclude`);
 };
 
@@ -6038,11 +7560,12 @@ function purchaseList(spec) {
   return createMasterList({
     key: spec.key, route: spec.route, newRoute: `#/${spec.route}/new`, noun: spec.noun, nouns: spec.nouns,
     api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
-    dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind),
+    dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind), viewTitle: () => spec.noun,
     columns: spec.columns, fromApi: spec.fromApi, sample: {},
     importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
     importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
-    matchRow: () => undefined,                  // every import adds new documents (the server numbers them)
+    // A Document No that is already a document's number (PR000018) is a duplicate; other rows add new documents.
+    matchRow: (rows, group) => (group.docNo ? rows.find(existing => sameText(existing.code, group.docNo)) : undefined),
     groupRows: groupSheetDocuments,
     async toPayload(group) {
       const items = [];
@@ -6068,7 +7591,7 @@ const prList = purchaseList({
   ],
   fromApi: r => ({ ...r, date: r.requestedDate, requiredDate: r.requiredDate || '' }),
   importColumns: [{ key: 'referenceNo', label: 'Reference ID', headers: ['reference', 'ref'] },
-    { key: 'purchaseType', label: 'Purchase Type', headers: ['type'], read: value => (value ? readChoice('purchase type', ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'])(value) : '') },
+    { key: 'purchaseType', label: 'Purchase Type', headers: ['type'], read: readChoice('purchase type', ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'], aliasesOf({ 'Stock Replenishment': ['stock', 'replenishment', 'restock'], 'Direct Purchase': ['direct'], Urgent: ['emergency', 'rush'] })) },
     { key: 'requestedDate', label: 'Requested Date', headers: ['date', 'request date'], read: readSheetDate('Requested date') },
     { key: 'requiredDate', label: 'Required Delivery Date', headers: ['required date', 'required by'], read: readSheetDate('Required date') },
     { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
@@ -6141,9 +7664,9 @@ const poList = purchaseList({
     certificationText: (r.certifications || []).join(', ') }),
   importColumns: [{ key: 'poDate', label: 'PO Date', headers: ['date', 'order date'], read: readSheetDate('PO date') },
     { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor'] },
-    { key: 'status', label: 'Status', read: value => (value ? readChoice('status', ['Draft', 'Sent', 'Confirmed', 'Partially Received', 'Received', 'Cancelled'])(value) : '') },
+    { key: 'status', label: 'Status', read: readChoice('status', ['Draft', 'Sent', 'Confirmed', 'Partially Received', 'Received', 'Cancelled'], aliasesOf({ 'Partially Received': ['partial', 'part received'], Cancelled: ['canceled', 'void'] })) },
     { key: 'quotationNumber', label: 'Quotation Number', headers: ['quotation no', 'quote no'] },
-    { key: 'paymentMode', label: 'Payment Mode', headers: ['payment'], read: value => (value ? readChoice('payment mode', ['As usual', 'Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'])(value) : '') },
+    { key: 'paymentMode', label: 'Payment Mode', headers: ['payment'], read: readChoice('payment mode', ['As usual', 'Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'], aliasesOf({ 'Bank Transfer': ['transfer', 'wire', 'bank', 'neft', 'rtgs'], Cheque: ['check', 'chq'], Card: ['credit card', 'debit card'] })) },
     { key: 'salesman', label: 'Salesman', headers: ['created by', 'salesman / created by'] },
     { key: 'deliveryDate', label: 'Delivery Date', read: readSheetDate('Delivery date') },
     { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
@@ -6362,11 +7885,17 @@ async function loadDashboard() {
   renderActivities(data.activities);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await checkSignedIn();
+  if (!user) return;
+  document.documentElement.classList.remove('auth-pending');
+  byId('header-user').textContent = user.fullName || user.username;
+  byId('sign-out').addEventListener('click', signOut);
   byId('footer-year').textContent = String(today.getFullYear());
   for (const select of [...document.querySelectorAll('select[data-phone-code]'),
     ...[...document.querySelectorAll('template')].flatMap(template => [...template.content.querySelectorAll('select[data-phone-code]')])]) fillPhoneCodes(select);
   initKeyboardNavigation();
+  initDateFields();
   initInputFilters();
   initUppercaseFields();
   initFieldChecks();
