@@ -2183,10 +2183,31 @@ function removeSourceRow(row) {
   const neighbour = row.nextElementSibling || row.previousElementSibling;
   row.remove();
   showItemStock();
+  setItemDirty(true);
   neighbour.querySelector('input').focus();
 }
 
 let itemEditing = null;                     // { id } while an item is being edited; null on Item Creation
+
+/* Clear All (Item page): enabled once anything changed since the form opened; puts the form back as it
+   opened — empty on Item Creation, the saved item on Edit Item — after a confirmation. */
+let itemDirty = false;
+function setItemDirty(dirty) {
+  itemDirty = dirty;
+  itemEl('clear').disabled = !dirty;
+}
+async function clearItemForm() {
+  if (!itemDirty) return;
+  const editingId = itemEditing?.id;
+  const ok = await confirmAction({
+    title: editingId ? 'Clear all changes?' : 'Clear all fields?',
+    message: editingId ? 'Everything you changed is put back to the saved item.' : 'Everything typed on this form is cleared, with any files chosen to upload.',
+    confirm: 'Clear All',
+  });
+  if (!ok) return;
+  if (editingId) await editItem(editingId); else resetItemForm();
+  itemEl('name').focus();
+}
 
 /* ---------- Item files: Media & Specification Assets ----------
    Doc / PDF Spec and CAD / Image each have an Upload button (click, Enter or drop files on it) and a list
@@ -2264,6 +2285,7 @@ function addItemFiles(kind, files) {
     else itemFiles.pending[kind].push(file);
   }
   renderItemFiles(kind);
+  if (files.length) setItemDirty(true);
   if (rejected.length) showToast(`${label}: ${rejected.length === 1 ? 'a file was' : 'some files were'} not added`, rejected.join(', '), true);
 }
 
@@ -2279,6 +2301,7 @@ function initItemFilePicker(kind) {
     if (target.dataset.pendingFile !== undefined) {
       itemFiles.pending[kind].splice(Number(target.dataset.pendingFile), 1);
       renderItemFiles(kind);
+      setItemDirty(true);
       button.focus();
       return;
     }
@@ -2336,6 +2359,7 @@ function resetItemForm() {
   addSourceRow({ focus: false });
   showItemStock();
   resetItemFiles();
+  setItemDirty(false);
   // Enter skips Subcategory when the chosen category has none: that needs this list. Rack / Bin lists every location.
   loadLookup('subcategory');
   loadLookup('rack');
@@ -2383,6 +2407,7 @@ async function editItem(id) {
     }
   });
   showItemStock();
+  setItemDirty(false);                        // the saved item is the starting point
 }
 
 function isHttpUrl(value) {
@@ -2488,12 +2513,13 @@ function handleItemPageKeys(event) {
       || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
     event.preventDefault();
     addSourceRow();
+    setItemDirty(true);
     return true;
   }
   if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey
       && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
     event.preventDefault();
-    if (isDateField(target) && target.closest('.fp-source-row')) { addSourceRow(); return true; }
+    if (isDateField(target) && target.closest('.fp-source-row')) { addSourceRow(); setItemDirty(true); return true; }
     if (openDropdownOnEnter(target)) return true;
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
     const next = fieldAfter(order, target);
@@ -2549,8 +2575,10 @@ function fieldOutsideTable(row, forward) {
 }
 
 function initItemPage() {
-  itemEl('add-row').addEventListener('click', () => addSourceRow());
+  itemEl('add-row').addEventListener('click', () => { addSourceRow(); setItemDirty(true); });
   itemEl('save').addEventListener('click', saveItem);
+  itemEl('clear').addEventListener('click', clearItemForm);
+  for (const type of ['input', 'change']) itemEl('form').addEventListener(type, () => setItemDirty(true));
   itemEl('back').addEventListener('click', () => { location.hash = '#/home'; });
   itemEl('form').addEventListener('submit', event => event.preventDefault());
   itemEl('form').addEventListener('input', event => {
