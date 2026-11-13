@@ -115,11 +115,16 @@ function query_search(): string
 function serve_master(callable $list, callable $find, callable $nextCode, callable $save, callable $delete): never
 {
     $method = allow_methods('GET', 'POST', 'PUT', 'DELETE');
+    if ($method !== 'GET') {
+        lock_writes();
+    }
     if ($method === 'POST' && isset($_GET['bulk'])) {
         json_out(serve_bulk_save($save));
     }
     if ($method === 'POST') {
-        json_out($save(json_input(), null), 201);
+        $data = json_input();
+        refuse_duplicate_name(data_version_name(), $data, null);
+        json_out($save($data, null), 201);
     }
     if ($method === 'PUT' || $method === 'DELETE') {
         $id = query_id('id') ?? json_error('id is required.', 400);
@@ -127,7 +132,9 @@ function serve_master(callable $list, callable $find, callable $nextCode, callab
             $delete($id);
             json_out(['id' => $id]);
         }
-        json_out($save(json_input(), $id));
+        $data = json_input();
+        refuse_duplicate_name(data_version_name(), $data, $id);
+        json_out($save($data, $id));
     }
     if (isset($_GET['nextCode'])) {
         json_out(['code' => $nextCode()]);
@@ -144,6 +151,87 @@ function serve_master(callable $list, callable $find, callable $nextCode, callab
  */
 const BULK_MAX_RECORDS = 200;
 
+/*
+ * No duplicate records: endpoint → [table, code column, name column, payload name key, noun].
+ * Every create, and every update that changes the name, is refused when another saved record has the
+ * same name (ignoring case and spaces): from a form, an import or a quick create alike. Writes to one
+ * endpoint run one at a time (lock_writes), so when two people save the same name at the same moment,
+ * the first is saved and the second gets "already exists". Imports send "dedupe": true with
+ * { "match": { code, name } }: a match there is a skip (duplicate: true), not an error.
+ */
+const MASTER_UNIQUE = [
+    'uoms'               => ['uoms', 'uom_code', 'uom_name', 'unitName', 'unit'],
+    'brands'             => ['brands', 'brand_code', 'brand_name', 'brandName', 'brand'],
+    'categories'         => ['categories', 'category_code', 'category_name', 'categoryName', 'category'],
+    'suppliers'          => ['suppliers', 'supplier_code', 'supplier_name', 'supplierName', 'supplier'],
+    'customers'          => ['customers', 'customer_code', 'customer_name', 'customerName', 'customer'],
+    'items'              => ['items', 'item_code', 'item_name', 'itemName', 'item'],
+    'warehouses'         => ['warehouses', 'warehouse_code', 'warehouse_name', 'warehouseName', 'stock point'],
+    'purchase-requests'  => ['purchase_requests', 'pr_code', null, null, 'purchase request'],
+    'quotation-requests' => ['quotation_requests', 'rfq_code', null, null, 'quotation request'],
+    'purchase-orders'    => ['purchase_orders', 'po_code', null, null, 'purchase order'],
+    'grns'               => ['grns', 'grn_code', null, null, 'GRN'],
+];
+
+/* The saved record (other than $exceptId) with this code or name, as [id, code]; null when there is none. */
+function find_existing(string $endpoint, string $code, string $name, int $exceptId = 0): ?array
+{
+    [$table, $codeColumn, $nameColumn] = MASTER_UNIQUE[$endpoint] ?? [null, null, null];
+    if ($table === null) {
+        return null;
+    }
+    $name = preg_replace('/\s+/u', '', $name);
+    $where = [];
+    $params = [];
+    if (trim($code) !== '') {
+        $where[] = "`$codeColumn` = ?";
+        $params[] = trim($code);
+    }
+    if ($nameColumn !== null && $name !== '') {
+        $where[] = "REPLACE(`$nameColumn`, ' ', '') = ?";
+        $params[] = $name;
+    }
+    if (!$where) {
+        return null;
+    }
+    $row = query("SELECT id, `$codeColumn` AS code FROM `$table` WHERE (" . implode(' OR ', $where) . ') AND id <> ? LIMIT 1',
+        [...$params, $exceptId])->fetch();
+    return $row ? [(int) $row['id'], (string) $row['code']] : null;
+}
+
+/* Refuses (422 on the name field) a create, or a rename, that would repeat another record's name. */
+function refuse_duplicate_name(string $endpoint, array $data, ?int $id): void
+{
+    [$table, , $nameColumn, $key, $noun] = MASTER_UNIQUE[$endpoint] ?? [null, null, null, null, null];
+    if ($nameColumn === null || !is_string($data[$key] ?? null) || trim($data[$key]) === '') {
+        return;
+    }
+    if ($id !== null) {
+        $saved = query("SELECT `$nameColumn` FROM `$table` WHERE id = ?", [$id])->fetchColumn();
+        if ($saved !== false && strcasecmp(preg_replace('/\s+/u', '', (string) $saved), preg_replace('/\s+/u', '', $data[$key])) === 0) {
+            return;                              // the name is not changing (older look-alikes stay editable)
+        }
+    }
+    $found = find_existing($endpoint, '', $data[$key], $id ?? 0);
+    if ($found !== null) {
+        throw new ValidationError([$key => ucfirst($noun) . " \"" . trim($data[$key]) . "\" already exists ({$found[1]})."]);
+    }
+}
+
+/*
+ * One write at a time per endpoint (MySQL GET_LOCK, held until the request ends): a save or an import
+ * checks for duplicates and inserts without another request slipping in between. Other endpoints and
+ * all reads are not held up. The lock name carries the database name: a shared MySQL server serves
+ * other sites too.
+ */
+function lock_writes(): void
+{
+    $name = 'erp:' . query('SELECT DATABASE()')->fetchColumn() . ':' . data_version_name();
+    if ((int) query('SELECT GET_LOCK(?, 30)', [mb_substr($name, 0, 64)])->fetchColumn() !== 1) {
+        json_error('The server is busy saving other changes. Please try again.', 503);
+    }
+}
+
 function serve_bulk_save(callable $save): array
 {
     $records = json_input()['records'] ?? null;
@@ -154,6 +242,7 @@ function serve_bulk_save(callable $save): array
         json_error('Send at most ' . BULK_MAX_RECORDS . ' records a request.', 413);
     }
     set_time_limit(120);
+    $endpoint = data_version_name();
     $results = [];
     foreach ($records as $entry) {
         $id = $entry['id'] ?? null;
@@ -162,7 +251,13 @@ function serve_bulk_save(callable $save): array
             $results[] = ['ok' => false, 'error' => 'Each record needs data (and a whole-number id to update).'];
             continue;
         }
+        if ($id === null && !empty($entry['dedupe']) && is_array($entry['match'] ?? null)
+            && ($found = find_existing($endpoint, (string) ($entry['match']['code'] ?? ''), (string) ($entry['match']['name'] ?? ''))) !== null) {
+            $results[] = ['ok' => false, 'duplicate' => true, 'error' => "Already exists ({$found[1]})."];
+            continue;
+        }
         try {
+            refuse_duplicate_name($endpoint, $data, $id);
             $results[] = ['ok' => true, 'record' => $save($data, $id)];
         } catch (ValidationError $e) {
             $results[] = ['ok' => false, 'error' => $e->getMessage(), 'fields' => $e->fields];

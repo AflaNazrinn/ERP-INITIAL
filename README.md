@@ -43,6 +43,7 @@ Caddyfile
 frontend/
   dashboard.html          the whole UI: dashboard, quick menu, every form page, the lookup popup
   dashboard.js            router, form engine, lookup popups, apiRequest()
+  sync.js                 live updates between users (polls api/changes.php every second)
   dashboard.css
 backend/
   .env.example            copy to .env (never committed)

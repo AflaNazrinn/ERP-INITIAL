@@ -6,6 +6,7 @@
 <title>Growth Engine Dashboard</title>
 <link rel="stylesheet" href="dashboard.css">
 <script src="dashboard.js" defer></script>
+<script src="sync.js" defer></script>
 </head>
 <body>
 <div id="app" class="app" tabindex="-1">
@@ -297,8 +298,12 @@
       </section>
     </div>
 
-    <!-- Footer bar -->
+    <!-- Footer bar: Available Stock is the opening stock of every sourcing line, added up (as the item is saved). -->
     <div class="fp-footer">
+      <div class="fp-footer-stat" aria-live="polite">
+        <span class="fp-footer-stat-label">Available Stock</span>
+        <strong id="item-stock" class="fp-footer-stat-value">0</strong>
+      </div>
       <div class="fp-actions">
         <button type="button" id="item-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
         <button type="button" id="item-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="item-save-label">Save Item Record</span></button>
@@ -909,7 +914,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-currency">Currency</label>
-          <select id="party-sup-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
+          <select id="party-sup-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="INR">INR</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-tax">Tax Reg Number</label>
@@ -1033,7 +1038,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-currency">Currency</label>
-          <select id="party-cus-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="INR">INR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
+          <select id="party-cus-currency" class="fp-input fp-select fp-select-list" data-enter-skip data-enter-opens="true" title="Set from the country. To change it: Enter or Space opens the list"><option value="OMR">OMR</option><option value="AED">AED</option><option value="INR">INR</option><option value="SAR">SAR</option><option value="QAR">QAR</option><option value="KWD">KWD</option><option value="BHD">BHD</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option><option value="EGP">EGP</option><option value="JOD">JOD</option><option value="TRY">TRY</option><option value="CNY">CNY</option><option value="JPY">JPY</option><option value="KRW">KRW</option></select>
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-tax">Tax Registration Number</label>
@@ -1503,10 +1508,6 @@
     </section>
 
     <div class="fp-footer fp-footer-end">
-      <div class="fp-footer-stat" aria-live="polite">
-        <span class="fp-footer-stat-label">Available Stock</span>
-        <strong id="warehouse-stock" class="fp-footer-stat-value">0</strong>
-      </div>
       <div class="fp-actions">
         <button type="button" id="warehouse-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
         <button type="button" id="warehouse-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="warehouse-save-label">Save Stock Point Record</span></button>

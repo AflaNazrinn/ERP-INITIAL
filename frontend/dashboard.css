@@ -1536,6 +1536,7 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
 .ml-btn-outline-green { background: var(--surface); border-color: #15803d; color: #15803d; }
 .ml-btn-outline-green:hover { background: #f0fdf4; }
 .ml-table .ml-qty { font-family: var(--font-mono); font-weight: 700; text-align: right; color: var(--ink-900); }
+.ml-table th.ml-th-num { text-align: right; }
 .ml-table .ml-qty-ok { color: #15803d; }
 .pb-list-table th:nth-last-child(n+2):nth-last-child(-n+3) { text-align: right; }   /* the two number columns before Actions */
 .pb-list-table .ml-act[data-action="view"] { color: #15803d; border-color: #bbf7d0; }

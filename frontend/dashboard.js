@@ -1343,7 +1343,7 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
   let result = null;
   try { result = await response.json(); } catch { /* not JSON: handled below */ }
   const ownChange = response.headers.get('X-Data-Version');
-  if (ownChange) noteOwnChange(ownChange);
+  if (ownChange && typeof noteOwnChange === 'function') noteOwnChange(ownChange);   // sync.js
   // An expired session has a new token: fetch it and try once more.
   if (response.status === 403 && method !== 'GET' && !retried) {
     await loadCsrfToken();
@@ -1355,76 +1355,6 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
     throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
   }
   return result.data;
-}
-
-/* =====================================================================
-   Live updates between browsers
-   Every write bumps its endpoint's version on the server (data_versions). Each open dashboard asks
-   api/changes.php for those numbers every LIVE_POLL_MS while its tab is visible (and at once when it
-   comes back), then reloads only what changed: the dropdown / lookup lists of that endpoint and the open
-   list page (keeping its search, page and focus). Forms being typed in are never touched.
-   This browser's own writes come back in X-Data-Version and are not reloaded twice.
-   ===================================================================== */
-
-const LIVE_POLL_MS = 5000;
-const live = { versions: null, busy: false, pending: new Set() };
-const endpointName = url => url.split('?')[0].split('/').pop().replace(/\.php$/, '');
-
-// "uoms=42" from this browser's own write: when it is the very next version, nobody else changed it meanwhile.
-function noteOwnChange(header) {
-  const [name, value] = header.split('=');
-  const version = Number(value);
-  if (!live.versions || !name || !version) return;
-  if (version === (live.versions[name] ?? 0) + 1) live.versions[name] = version;
-}
-
-async function pollChanges() {
-  if (document.hidden || live.busy) return;
-  live.busy = true;
-  try {
-    const { versions } = await apiRequest('api/changes.php');
-    if (live.versions) {
-      for (const [name, version] of Object.entries(versions)) if (live.versions[name] !== version) live.pending.add(name);
-    }
-    live.versions = { ...versions };
-    if (live.pending.size) await applyLiveChanges();
-  } catch { /* offline for a moment: the next poll tries again */ } finally {
-    live.busy = false;
-  }
-}
-
-// Endpoints whose changes also show in another list (an item row shows its unit, category, stock points …).
-const LIVE_DEPENDS = {
-  'api/items.php': ['uoms', 'categories', 'sub-categories', 'brands', 'warehouses', 'rack-bins', 'suppliers', 'grns'],
-  'api/suppliers.php': ['brands'],
-};
-
-async function applyLiveChanges() {
-  const changed = new Set(live.pending);
-  // Cached lookup rows go stale: the next popup or dropdown loads them again. An open one keeps its rows.
-  const kinds = Object.keys(LOOKUPS).filter(kind => LOOKUPS[kind].api && changed.has(endpointName(LOOKUPS[kind].api)));
-  const openKind = byId('lookup').open ? lookup.kind : suggest.field?.dataset.suggest;
-  forgetLookups(...kinds.filter(kind => kind !== openKind));
-  if (changed.has('items')) pbData.items.clear();
-  if (changed.has('suppliers')) pbData.suppliers.clear();
-  if (changed.has('rack-bins')) apiRequest('api/rack-bins.php').then(racks => { pbData.racks = racks; }).catch(() => {});
-
-  // The open list page, unless a popup is over it (then on a later poll, once it has closed).
-  const list = allLists().find(entry => entry.pageKey === currentPage);
-  const affects = list && [endpointName(list.config.api), ...(LIVE_DEPENDS[list.config.api] || [])].some(name => changed.has(name));
-  const keep = new Set(kinds.includes(openKind) ? [endpointName(LOOKUPS[openKind].api)] : []);   // forget it once closed
-  if (affects) {
-    if (document.querySelector('dialog[open]') || masterImport.busy || !list.loaded) for (const name of changed) keep.add(name);
-    else await list.refresh();
-  }
-  live.pending = keep;
-}
-
-function initLiveUpdates() {
-  pollChanges();
-  setInterval(pollChanges, LIVE_POLL_MS);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollChanges(); });
-  window.addEventListener('focus', pollChanges);
 }
 
 /* =====================================================================
@@ -1451,8 +1381,9 @@ function initLiveUpdates() {
 const COUNTRIES = [
 // The last two numbers are the fewest and most digits a phone number has after the calling code
 // (PHONE_DIGITS in backend/src/master_validation.php is the same list).
-  ['OM', 'Oman', 'OMR', '+968', 8, 8], ['AE', 'United Arab Emirates', 'AED', '+971', 8, 9], ['SA', 'Saudi Arabia', 'SAR', '+966', 8, 9],
-  ['QA', 'Qatar', 'QAR', '+974', 8, 8], ['KW', 'Kuwait', 'KWD', '+965', 8, 8], ['BH', 'Bahrain', 'BHD', '+973', 8, 8], ['IN', 'India', 'INR', '+91', 10, 10],
+// Oman, the UAE and India come first (the usual ones); the rest follow.
+  ['OM', 'Oman', 'OMR', '+968', 8, 8], ['AE', 'United Arab Emirates', 'AED', '+971', 8, 9], ['IN', 'India', 'INR', '+91', 10, 10],
+  ['SA', 'Saudi Arabia', 'SAR', '+966', 8, 9], ['QA', 'Qatar', 'QAR', '+974', 8, 8], ['KW', 'Kuwait', 'KWD', '+965', 8, 8], ['BH', 'Bahrain', 'BHD', '+973', 8, 8],
   ['PK', 'Pakistan', 'PKR', '+92', 9, 10], ['EG', 'Egypt', 'EGP', '+20', 8, 10], ['JO', 'Jordan', 'JOD', '+962', 8, 9], ['TR', 'Türkiye', 'TRY', '+90', 10, 10],
   ['CN', 'China', 'CNY', '+86', 10, 11], ['JP', 'Japan', 'JPY', '+81', 9, 10], ['KR', 'South Korea', 'KRW', '+82', 8, 10], ['DE', 'Germany', 'EUR', '+49', 6, 11],
   ['IT', 'Italy', 'EUR', '+39', 6, 11], ['GB', 'United Kingdom', 'GBP', '+44', 9, 10], ['US', 'United States', 'USD', '+1', 10, 10],
@@ -1599,9 +1530,9 @@ const LOOKUPS = {
     columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}` },
 };
 
-// The currencies a purchase order can be in (the server's PB_CURRENCIES).
-const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['SAR', 'Saudi Riyal'], ['QAR', 'Qatari Riyal'], ['KWD', 'Kuwaiti Dinar'],
-  ['BHD', 'Bahraini Dinar'], ['USD', 'US Dollar'], ['EUR', 'Euro'], ['GBP', 'British Pound'], ['INR', 'Indian Rupee'], ['PKR', 'Pakistani Rupee'],
+// The currencies a purchase order can be in (the server's PB_CURRENCIES). OMR, AED and INR first.
+const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'Indian Rupee'], ['SAR', 'Saudi Riyal'], ['QAR', 'Qatari Riyal'], ['KWD', 'Kuwaiti Dinar'],
+  ['BHD', 'Bahraini Dinar'], ['USD', 'US Dollar'], ['EUR', 'Euro'], ['GBP', 'British Pound'], ['PKR', 'Pakistani Rupee'],
   ['EGP', 'Egyptian Pound'], ['JOD', 'Jordanian Dinar'], ['TRY', 'Turkish Lira'], ['CNY', 'Chinese Yuan'], ['JPY', 'Japanese Yen'], ['KRW', 'South Korean Won']]
   .map(([code, name]) => ({ id: code, code, name }));
 
@@ -2227,6 +2158,15 @@ const ITEM_ROUTE = 'masters/item/new';
 const DECIMAL_3 = /^\d{1,9}(\.\d{1,3})?$/;   // money and quantities: up to 3 decimals (OMR baisa)
 const itemEl = suffix => byId(`item-${suffix}`);
 
+// Footer: Available Stock, the opening stock of every sourcing line added up (22 + 22 = 44), as the server
+// saves it. Updated while typing; a cell that is not a number yet counts as 0.
+const stockNumber = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 });
+function showItemStock() {
+  const total = [...itemEl('source-body').querySelectorAll('[data-field="openingStock"]')]
+    .reduce((sum, cell) => sum + (DECIMAL_3.test(cell.value.trim()) ? Number(cell.value.trim()) : 0), 0);
+  itemEl('stock').textContent = stockNumber.format(Math.round(total * 1000) / 1000);
+}
+
 function addSourceRow({ focus = true } = {}) {
   const row = byId('item-source-row-template').content.firstElementChild.cloneNode(true);
   itemEl('source-body').append(row);
@@ -2242,6 +2182,7 @@ function removeSourceRow(row) {
   }
   const neighbour = row.nextElementSibling || row.previousElementSibling;
   row.remove();
+  showItemStock();
   neighbour.querySelector('input').focus();
 }
 
@@ -2393,6 +2334,7 @@ function resetItemForm() {
   itemEl('save-label').textContent = 'Save Item Record';
   itemEl('source-body').replaceChildren();
   addSourceRow({ focus: false });
+  showItemStock();
   resetItemFiles();
   // Enter skips Subcategory when the chosen category has none: that needs this list. Rack / Bin lists every location.
   loadLookup('subcategory');
@@ -2440,6 +2382,7 @@ async function editItem(id) {
       if (!item.sourcing.some(line => line.openingStock != null)) cell('openingStock').value = item.availableStock ?? '';
     }
   });
+  showItemStock();
 }
 
 function isHttpUrl(value) {
@@ -2615,6 +2558,7 @@ function initItemPage() {
   });
   for (const kind of Object.keys(ITEM_FILE_KINDS)) initItemFilePicker(kind);
   const body = itemEl('source-body');
+  body.addEventListener('input', event => { if (event.target.dataset.field === 'openingStock') showItemStock(); });
   body.addEventListener('click', event => {
     const del = event.target.closest('[data-action="delete-row"]');
     if (del) removeSourceRow(del.closest('tr'));
@@ -3081,10 +3025,6 @@ const categoryForm = createFormPage({
 /* ---------- Stock Point Creation  (#/masters/stock-point/new). Ids keep the "warehouse" prefix: the table is warehouses. ---------- */
 
 const warehouseEl = suffix => byId(`warehouse-${suffix}`);
-// Footer: the stock held here (every item line's opening stock at this stock point, added up). A new one holds none.
-function showWarehouseStock(point) {
-  warehouseEl('stock').textContent = point ? formatCount(point.availableStock || 0) : '0';
-}
 const warehouseItems = createLookupChips({ container: 'warehouse-chips', entry: 'warehouse-item-entry', onChange: () => warehouseForm.record() });
 
 const warehouseForm = createFormPage({
@@ -3120,9 +3060,7 @@ const warehouseForm = createFormPage({
     setPhoneField(warehouseEl('phone'), point.phone, countryNamed(point.country)?.dial || '+968');
     warehouseEl('type').value = ['Office', 'Warehouse', 'Shop'].includes(point.type) ? point.type : 'Warehouse';
     warehouseItems.set(point.items);
-    showWarehouseStock(point);
   },
-  onReset: () => showWarehouseStock(null),
   // Picking the country sets the phone's calling code. This runs before the form records the edit, as one change.
   init() {
     warehouseEl('country').addEventListener('input', () => {
@@ -4414,7 +4352,9 @@ function createMasterList(config) {
     allBox.setAttribute('aria-label', `Select all ${list.many}`);
     const allCell = el('th', 'ml-col-check');
     allCell.append(allBox);
-    $('head').replaceChildren(allCell, ...tableColumns.map(column => el('th', '', column.label)), el('th', 'ml-col-actions', 'Actions'));
+    // Number columns (Available Stock …) are right-aligned, heading and values alike.
+    $('head').replaceChildren(allCell, ...tableColumns.map(column => el('th', ['qty', 'qty-ok'].includes(column.type) ? 'ml-th-num' : '', column.label)),
+      el('th', 'ml-col-actions', 'Actions'));
     allBox.addEventListener('change', () => {
       for (const tr of $('body').rows) toggleRow(tr, allBox.checked, false);
       syncSelection();
@@ -5384,8 +5324,6 @@ function renderMasterImportPreview(file, sheet, entries) {
   // The sheet's columns that hold something, the list's code / document number first.
   const filled = sheet.columns.filter(column => entries.some(entry => entry.raw[column.key]));
   masterImport.columns = filled.slice(0, SI_MAX_COLUMNS);
-  const count = status => entries.filter(entry => entry.status === status).length;
-  const totals = { all: entries.length, new: count('new'), duplicate: count('duplicate'), error: count('error') };
   miEl('drop').hidden = true;
   miEl('file').hidden = false;
   miEl('stats').hidden = false;
@@ -5401,13 +5339,43 @@ function renderMasterImportPreview(file, sheet, entries) {
     chip.title = entry.how === 'content' ? 'Matched by what the column holds' : 'Matched by the column heading';
     return chip;
   }), ...(sheet.ignored.length ? [el('li', 'si-map si-map-ignored', `Not imported: ${sheet.ignored.join(', ')}`)] : []));
+  renderImportTotals();
+  miEl('head').replaceChildren(el('th', 'si-col-row', 'Row'), el('th', '', 'Status'), el('th', '', 'Details'),
+    ...masterImport.columns.map(column => el('th', '', column.label)));
+  renderMasterImportRows();
+  updateMasterImportSummary();
+}
+
+function renderImportTotals() {
+  const { entries } = masterImport;
+  const count = status => entries.filter(entry => entry.status === status).length;
+  const totals = { all: entries.length, new: count('new'), duplicate: count('duplicate'), error: count('error') };
   miEl('total').textContent = totals.all;
   miEl('new').textContent = totals.new;
   miEl('dup').textContent = totals.duplicate;
   miEl('err').textContent = totals.error;
   for (const [key, value] of Object.entries(totals)) miEl(`tab-${key}`).textContent = value;
-  miEl('head').replaceChildren(el('th', 'si-col-row', 'Row'), el('th', '', 'Status'), el('th', '', 'Details'),
-    ...masterImport.columns.map(column => el('th', '', column.label)));
+}
+
+// The list changed under an open preview (someone else saved or imported): mark again which rows
+// already exist, as masterImportEntries() did. Rows with errors stay as they are.
+function recheckImportDuplicates() {
+  const { list, entries } = masterImport;
+  if (!list || !entries.length) return;
+  const seen = [];
+  for (const entry of entries) {
+    if (!entry.row || entry.status === 'error') continue;
+    const existing = findMasterRow(list.rows, entry.row);
+    const earlier = existing ? null : seen.find(other => findMasterRow([other.row], entry.row, list));
+    if (!existing && !earlier) seen.push(entry);
+    Object.assign(entry, {
+      existing,
+      status: existing || earlier ? 'duplicate' : 'new',
+      details: existing ? `${list.config.noun} already exists${existing.code ? ` (${existing.code})` : ''}`
+        : earlier ? `Repeats row ${earlier.line} of this file` : `Ready to import${entry.row.sheetNote ? ` · ${entry.row.sheetNote}` : ''}`,
+    });
+  }
+  renderImportTotals();
   renderMasterImportRows();
   updateMasterImportSummary();
 }
@@ -5524,6 +5492,15 @@ async function startMasterImport() {
   const overwrite = miMode() === 'overwrite';
   masterImport.busy = true;
   miEl('start').disabled = true;
+  // The newest list first: rows someone else saved a moment ago count as duplicates here, not as new.
+  await list.load({ quiet: true });
+  recheckImportDuplicates();
+  if (!masterImport.entries.some(entry => entry.status === 'new' || (overwrite && entry.status === 'duplicate' && entry.existing))) {
+    masterImport.busy = false;
+    updateMasterImportSummary();
+    showToast('Nothing new to import', 'Every row of this file is already saved.');
+    return;
+  }
   miEl('summary').textContent = `Importing ${miEl('start-label').textContent.replace(/^Import /, '')}…`;
   let added = 0, updated = 0, skipped = 0;
   const failures = [];
@@ -5541,7 +5518,10 @@ async function startMasterImport() {
     if (existing && (!overwrite || !list.rows.includes(existing))) { skipped++; continue; }
     try {
       const payload = await list.config.toPayload(row);
-      jobs.push(existing ? { row, id: existing.id, data: filled(payload) } : { row, id: null, data: payload });
+      // New records carry what makes them a duplicate: the server checks it again against the saved rows,
+      // so two people importing the same file at once never add a record twice.
+      jobs.push(existing ? { row, id: existing.id, data: filled(payload) }
+        : { row, id: null, data: payload, dedupe: true, match: { code: row.code || row.docNo || '', name: row.name || '' } });
       if (!existing) added_.push(row);
     } catch (error) {
       failures.push(`${row.name}: ${error.message}`);
@@ -5553,24 +5533,31 @@ async function startMasterImport() {
     miEl('summary').textContent = `Importing… ${start} of ${jobs.length} saved`;
     let results;
     try {
-      results = await apiRequest(`${list.config.api}?bulk=1`, { method: 'POST', json: { records: batch.map(({ id, data }) => ({ id, data })) } });
+      results = await apiRequest(`${list.config.api}?bulk=1`, { method: 'POST',
+        json: { records: batch.map(({ id, data, dedupe, match }) => ({ id, data, ...(dedupe ? { dedupe, match } : {}) })) } });
     } catch (error) {
       failures.push(...batch.map(job => `${job.row.name}: ${error.message}`));
       continue;
     }
     results.forEach((result, index) => {
       const job = batch[index];
-      if (!result.ok) failures.push(`${job.row.name}: ${Object.values(result.fields || {})[0] || result.error}`);
+      if (result.duplicate) skipped++;                              // saved meanwhile by someone else
+      else if (!result.ok) failures.push(`${job.row.name}: ${Object.values(result.fields || {})[0] || result.error}`);
       else if (job.id) updated++;
       else added++;
     });
   }
   masterImport.busy = false;
   forgetLookups(...list.config.lookups);
-  if (!added && !updated && !failures.length) { updateMasterImportSummary(); return; }
+  if (!added && !updated && !failures.length) {           // all saved meanwhile by someone else
+    await list.load({ quiet: true });
+    recheckImportDuplicates();
+    showToast('Nothing new imported', `${skipped} ${skipped === 1 ? 'record was' : 'records were'} already saved.`);
+    return;
+  }
   closeMasterImport();
   await list.load();
-  const summary = `${added} added, ${overwrite ? `${updated} updated` : `${skipped} skipped`}`;
+  const summary = [`${added} added`, ...(overwrite ? [`${updated} updated`] : []), ...(skipped || !overwrite ? [`${skipped} skipped`] : [])].join(', ');
   if (failures.length) {
     const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : '';
     showToast(`Import finished: ${summary}, ${failures.length} failed`, `${failures[0]}${more}`, true);
@@ -6326,7 +6313,8 @@ async function importLookupId(kind, name, narrow = rows => rows) {
 
 const codeColumn = (...headers) => ({ key: 'code', label: 'Code', type: 'code', group: 'Identification', headers });
 const nameColumn = (noun, ...headers) => ({ key: 'name', label: `${noun} Name`, type: 'name', group: 'Identification', headers, read: value => value.toUpperCase() });
-const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', group: 'Identification',
+// Status is not a list column (View, filter, import and export still have it).
+const statusColumn = (statuses = ACTIVE_STATUSES) => ({ key: 'status', label: 'Status', type: 'status', group: 'Identification', inTable: false,
   read: readChoice('status', statuses, statuses === ITEM_STATUSES ? ITEM_STATUS_ALIASES : STATUS_ALIASES) });
 const detail = column => ({ ...column, inTable: false });
 const PHONE_HEADERS = ['mobile', 'mobile no', 'mobile number', 'phone', 'phone no', 'phone number', 'contact no', 'contact number'];
@@ -8221,7 +8209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMasterImport();
   initMasterView();
   initMasterConfirm();
-  initLiveUpdates();
+  if (typeof initLiveUpdates === 'function') initLiveUpdates();   // sync.js
   initQuickItem();
   initItemDescription();
   for (const list of MASTER_LISTS) list.init();
