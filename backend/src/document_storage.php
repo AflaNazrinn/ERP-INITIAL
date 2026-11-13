@@ -44,8 +44,9 @@ function post_list(string $field): array
     return is_array($values) ? array_values(array_map(static fn ($v) => is_scalar($v) ? (string) $v : '', $values)) : [];
 }
 
-/* Checks every file before any is stored; throws ValidationError on the first bad one. */
-function validate_uploads(array $files): void
+/* Checks every file before any is stored; throws ValidationError on the first bad one.
+   $allowed: the extensions this upload takes (default: every DOCUMENT_TYPES one). */
+function validate_uploads(array $files, ?array $allowed = null): void
 {
     if (!$files) {
         throw new ValidationError(['files' => 'Choose at least one file.']);
@@ -56,7 +57,7 @@ function validate_uploads(array $files): void
         if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
             throw new ValidationError(['files' => "$name could not be uploaded."]);
         }
-        if (!isset(DOCUMENT_TYPES[$extension])) {
+        if (!in_array($extension, $allowed ?? array_keys(DOCUMENT_TYPES), true)) {
             throw new ValidationError(['files' => "$name is not a supported file type."]);
         }
         if ($file['size'] > DOCUMENT_MAX_BYTES) {

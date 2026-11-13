@@ -21,6 +21,7 @@ function uom_format(array $row): array
         'baseName'         => $row['base_name'] ?? '',
         'conversionFactor' => $row['conversion_factor'],
         'status'           => $row['status'],
+        'isSystem'         => (int) ($row['is_system'] ?? 0),
         'createdAt'        => date_only($row['created_at']),
     ];
 }
@@ -69,8 +70,9 @@ function uom_input(array $uom): array
  */
 function uom_save(array $data, ?int $id = null): array
 {
-    if ($id !== null) {
-        $data = array_replace(uom_input(uom_find($id)), $data);
+    $saved = $id !== null ? uom_find($id) : null;
+    if ($saved !== null) {
+        $data = array_replace(uom_input($saved), $data);
     }
     $in = new Input($data);
     $name = $in->name('unitName', 'Unit of measure', 80);
@@ -85,6 +87,15 @@ function uom_save(array $data, ?int $id = null): array
         $in->fail('conversionFactor', 'Conversion factor must be above 0.');
     }
     $description = $in->text('description', 'Description', 255);
+    // Predefined units keep their name and stay active; the rest of the record can change.
+    if ($saved !== null && $saved['isSystem']) {
+        if ($name !== '' && strcasecmp($name, $saved['name']) !== 0) {
+            $in->fail('unitName', 'This is a predefined unit; its name cannot be changed.');
+        }
+        if ($status !== 'active') {
+            $in->fail('status', 'This is a predefined unit; it must stay active.');
+        }
+    }
     if ($name !== '' && query('SELECT 1 FROM uoms WHERE uom_name = ? AND id <> ?', [$name, $id ?? 0])->fetchColumn()) {
         $in->fail('unitName', 'A unit with this name already exists.');
     }
@@ -112,8 +123,11 @@ function uom_create(array $data): array
     return uom_save($data);
 }
 
-/* 409 while items or other units still use it. */
+/* 409 for a predefined unit, or while items or other units still use it. */
 function uom_delete(int $id): void
 {
+    if (uom_find($id)['isSystem']) {
+        throw new Conflict('This is a predefined unit and cannot be deleted.');
+    }
     delete_row('uoms', $id, 'Unit of measure not found.');
 }

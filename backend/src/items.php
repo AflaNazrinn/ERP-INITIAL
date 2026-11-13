@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/master_validation.php';
+require_once __DIR__ . '/document_storage.php';
 
 /*
  * Item master. Every lookup on the item form is a foreign key: uom_id, category_id,
@@ -251,8 +251,12 @@ function item_create(array $data): array
     return item_save($data);
 }
 
-/* Its sourcing rows and documents go with it. */
+/* Its sourcing rows and documents go with it, and the documents' stored files too. */
 function item_delete(int $id): void
 {
+    $files = query('SELECT file_path FROM item_documents WHERE item_id = ?', [$id])->fetchAll(PDO::FETCH_COLUMN);
     delete_row('items', $id, 'Item not found.');
+    foreach ($files as $path) {
+        delete_stored($path);
+    }
 }

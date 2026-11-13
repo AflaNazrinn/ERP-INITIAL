@@ -14,6 +14,9 @@ final class ValidationError extends RuntimeException
 
 final class NotFound extends RuntimeException {}
 
+/* A request that is not allowed for this record (a predefined unit's delete …): 409 with the message. */
+final class Conflict extends RuntimeException {}
+
 /*
  * Server-side checks shared by the master modules. Input wraps a decoded JSON body;
  * each reader returns a clean value and records a message under the payload key

@@ -1120,11 +1120,14 @@ function focusField(node) {
   if (node.select) node.select();
 }
 
-// Moving on with Enter (or a pick / Esc in a popup): a lookup field opens its "Select …" popup straight
-// away, and a field with suggestions shows them. Tab, arrows and other focus moves only focus the field.
+// Moving on with Enter (or a pick / Esc in a popup): every dropdown opens straight away — a lookup field
+// its "Select …" popup, a <select> its list, a type-to-search field (Unit …) all its rows, and a field with
+// suggestions shows them. Tab, arrows and other focus moves only focus the field.
 function enterField(node) {
   focusField(node);
   if (isLookupField(node)) openLookup(node, { byKeyboard: true });
+  else if (node instanceof HTMLSelectElement) { if (hasDropdownChoices(node)) openSelectMenu(node); }
+  else if (isSuggestField(node)) openSuggest(node, { browse: true });
   else if (node instanceof HTMLInputElement && node.list) showDropdown(node);
 }
 
@@ -1339,6 +1342,8 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
   }
   let result = null;
   try { result = await response.json(); } catch { /* not JSON: handled below */ }
+  const ownChange = response.headers.get('X-Data-Version');
+  if (ownChange) noteOwnChange(ownChange);
   // An expired session has a new token: fetch it and try once more.
   if (response.status === 403 && method !== 'GET' && !retried) {
     await loadCsrfToken();
@@ -1350,6 +1355,76 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
     throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
   }
   return result.data;
+}
+
+/* =====================================================================
+   Live updates between browsers
+   Every write bumps its endpoint's version on the server (data_versions). Each open dashboard asks
+   api/changes.php for those numbers every LIVE_POLL_MS while its tab is visible (and at once when it
+   comes back), then reloads only what changed: the dropdown / lookup lists of that endpoint and the open
+   list page (keeping its search, page and focus). Forms being typed in are never touched.
+   This browser's own writes come back in X-Data-Version and are not reloaded twice.
+   ===================================================================== */
+
+const LIVE_POLL_MS = 5000;
+const live = { versions: null, busy: false, pending: new Set() };
+const endpointName = url => url.split('?')[0].split('/').pop().replace(/\.php$/, '');
+
+// "uoms=42" from this browser's own write: when it is the very next version, nobody else changed it meanwhile.
+function noteOwnChange(header) {
+  const [name, value] = header.split('=');
+  const version = Number(value);
+  if (!live.versions || !name || !version) return;
+  if (version === (live.versions[name] ?? 0) + 1) live.versions[name] = version;
+}
+
+async function pollChanges() {
+  if (document.hidden || live.busy) return;
+  live.busy = true;
+  try {
+    const { versions } = await apiRequest('api/changes.php');
+    if (live.versions) {
+      for (const [name, version] of Object.entries(versions)) if (live.versions[name] !== version) live.pending.add(name);
+    }
+    live.versions = { ...versions };
+    if (live.pending.size) await applyLiveChanges();
+  } catch { /* offline for a moment: the next poll tries again */ } finally {
+    live.busy = false;
+  }
+}
+
+// Endpoints whose changes also show in another list (an item row shows its unit, category, stock points …).
+const LIVE_DEPENDS = {
+  'api/items.php': ['uoms', 'categories', 'sub-categories', 'brands', 'warehouses', 'rack-bins', 'suppliers', 'grns'],
+  'api/suppliers.php': ['brands'],
+};
+
+async function applyLiveChanges() {
+  const changed = new Set(live.pending);
+  // Cached lookup rows go stale: the next popup or dropdown loads them again. An open one keeps its rows.
+  const kinds = Object.keys(LOOKUPS).filter(kind => LOOKUPS[kind].api && changed.has(endpointName(LOOKUPS[kind].api)));
+  const openKind = byId('lookup').open ? lookup.kind : suggest.field?.dataset.suggest;
+  forgetLookups(...kinds.filter(kind => kind !== openKind));
+  if (changed.has('items')) pbData.items.clear();
+  if (changed.has('suppliers')) pbData.suppliers.clear();
+  if (changed.has('rack-bins')) apiRequest('api/rack-bins.php').then(racks => { pbData.racks = racks; }).catch(() => {});
+
+  // The open list page, unless a popup is over it (then on a later poll, once it has closed).
+  const list = allLists().find(entry => entry.pageKey === currentPage);
+  const affects = list && [endpointName(list.config.api), ...(LIVE_DEPENDS[list.config.api] || [])].some(name => changed.has(name));
+  const keep = new Set(kinds.includes(openKind) ? [endpointName(LOOKUPS[openKind].api)] : []);   // forget it once closed
+  if (affects) {
+    if (document.querySelector('dialog[open]') || masterImport.busy || !list.loaded) for (const name of changed) keep.add(name);
+    else await list.refresh();
+  }
+  live.pending = keep;
+}
+
+function initLiveUpdates() {
+  pollChanges();
+  setInterval(pollChanges, LIVE_POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollChanges(); });
+  window.addEventListener('focus', pollChanges);
 }
 
 /* =====================================================================
@@ -1963,14 +2038,16 @@ function initLookups() {
    Leaving the field keeps a picked row, takes an exact name match, or clears text that matches nothing.
    ===================================================================== */
 
-const suggest = { field: null, rows: [], shown: [], active: 0, picking: false };
+// browsing: opened on arrival (Enter) with nothing typed, so no row is highlighted until ↓; Enter then just moves on.
+const suggest = { field: null, rows: [], shown: [], active: 0, picking: false, browsing: false };
 const isSuggestField = node => node instanceof HTMLInputElement && node.dataset.suggest !== undefined;
 const suggestListOf = field => field.parentElement.querySelector('.fp-suggest');
 
-async function openSuggest(field) {
+// Opens while there is typed text, or with { browse } on arriving by Enter (then every row is listed).
+async function openSuggest(field, { browse = false } = {}) {
   const rows = await loadLookup(field.dataset.suggest);
-  if (document.activeElement !== field || field.value.trim() === '') return;   // only while there is typed text
-  Object.assign(suggest, { field, rows, active: -1 });
+  if (document.activeElement !== field || (!browse && field.value.trim() === '')) return;
+  Object.assign(suggest, { field, rows, active: -1, browsing: browse && !lookupIdInput(field).value });
   renderSuggest();
 }
 
@@ -1990,7 +2067,7 @@ function renderSuggest() {
   // A field still showing its picked row lists everything, with that row highlighted.
   const query = pickedId ? '' : field.value.trim().toLowerCase();
   suggest.shown = suggestMatches(config, suggest.rows, query);
-  if (suggest.active < 0) suggest.active = Math.max(0, suggest.shown.findIndex(row => String(row.id) === pickedId));
+  if (suggest.active < 0 && !suggest.browsing) suggest.active = Math.max(0, suggest.shown.findIndex(row => String(row.id) === pickedId));
   suggest.active = Math.min(suggest.active, Math.max(0, suggest.shown.length - 1));
   const list = suggestListOf(field);
   list.replaceChildren(...suggest.shown.map((row, index) => {
@@ -2042,6 +2119,7 @@ function placeSuggestList(field, list) {
 
 function syncSuggestActive() {
   const { field } = suggest;
+  if (suggest.active < 0) field.removeAttribute('aria-activedescendant');
   for (const item of suggestListOf(field).querySelectorAll('[data-index]')) {
     const active = Number(item.dataset.index) === suggest.active;
     item.classList.toggle('is-active', active);
@@ -2113,7 +2191,7 @@ function initSuggestFields() {
     if (!isSuggestField(field) || suggest.picking) return;
     lookupIdInput(field).value = '';                          // typed text: nothing picked until a row is chosen
     if (field.value.trim() === '') closeSuggest();           // cleared: hide the list again
-    else if (suggest.field === field) { suggest.active = 0; renderSuggest(); } else openSuggest(field);
+    else if (suggest.field === field) { Object.assign(suggest, { active: 0, browsing: false }); renderSuggest(); } else openSuggest(field);
   });
   document.addEventListener('scroll', event => {
     if (suggest.field && !event.target.closest?.('.fp-suggest') && suggestListOf(suggest.field).style.position === 'fixed') closeSuggest();
@@ -2169,6 +2247,141 @@ function removeSourceRow(row) {
 
 let itemEditing = null;                     // { id } while an item is being edited; null on Item Creation
 
+/* ---------- Item files: Media & Specification Assets ----------
+   Doc / PDF Spec and CAD / Image each have an Upload button (click, Enter or drop files on it) and a list
+   under it. Chosen files wait in memory and are uploaded (api/item-documents.php) once the item is saved;
+   on Edit Item the stored ones are listed too: the name opens the file, × removes it from the server. */
+const ITEM_FILE_KINDS = {
+  spec: { label: 'Doc / PDF Spec', types: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'], note: 'PDF, Word, Excel or an image' },
+  image: { label: 'CAD / Image', types: ['jpg', 'jpeg', 'png', 'pdf', 'dwg', 'dxf'], note: 'JPG, PNG, PDF, DWG or DXF' },
+};
+const itemFiles = { pending: { spec: [], image: [] }, stored: [], loadingFor: null };
+
+function resetItemFiles() {
+  itemFiles.pending = { spec: [], image: [] };
+  itemFiles.stored = [];
+  itemFiles.loadingFor = null;
+  for (const kind of Object.keys(ITEM_FILE_KINDS)) renderItemFiles(kind);
+}
+
+async function loadItemFiles(itemId) {
+  itemFiles.loadingFor = itemId;
+  let files;
+  try {
+    files = await apiRequest(`api/item-documents.php?itemId=${itemId}`);
+  } catch (error) {
+    showToast('The item’s files could not be loaded', error.message, true);
+    return;
+  }
+  if (itemFiles.loadingFor !== itemId || itemEditing?.id !== itemId) return;   // another item was opened meanwhile
+  itemFiles.stored = files;
+  for (const kind of Object.keys(ITEM_FILE_KINDS)) renderItemFiles(kind);
+}
+
+function renderItemFiles(kind) {
+  const remove = (label, data) => {
+    const button = el('button', 'fp-del');
+    button.type = 'button';
+    button.textContent = '×';
+    Object.assign(button.dataset, data);
+    button.setAttribute('aria-label', `Remove ${label}`);
+    button.title = 'Remove';
+    return button;
+  };
+  const stored = itemFiles.stored.filter(file => file.kind === kind).map(file => {
+    const item = el('li', 'fp-file');
+    const link = el('a', '', file.originalName);
+    link.href = `api/item-documents.php?id=${file.id}&inline=1`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Open';
+    item.append(link, remove(file.originalName, { storedFile: String(file.id) }));
+    return item;
+  });
+  const pending = itemFiles.pending[kind].map((file, index) => {
+    const item = el('li', 'fp-file');
+    const name = el('span', '', file.name);
+    name.append(el('span', 'fp-file-new', ' · uploads on save'));
+    item.append(name, remove(file.name, { pendingFile: String(index) }));
+    return item;
+  });
+  itemEl(`${kind}-files`).replaceChildren(...stored, ...pending);
+  const count = stored.length + pending.length;
+  itemEl(`${kind}-btn`).querySelector('span').textContent = count
+    ? `${count} file${count === 1 ? '' : 's'} · add more…`
+    : (kind === 'spec' ? 'Upload spec…' : 'Upload CAD / image…');
+}
+
+// Keeps the files this box takes (type and size); names the rest.
+function addItemFiles(kind, files) {
+  const { types, note, label } = ITEM_FILE_KINDS[kind];
+  const rejected = [];
+  for (const file of files) {
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!types.includes(extension) || file.name.indexOf('.') === -1) rejected.push(`${file.name} (not ${note})`);
+    else if (file.size > DOC_MAX_BYTES) rejected.push(`${file.name} (over 10 MB)`);
+    else itemFiles.pending[kind].push(file);
+  }
+  renderItemFiles(kind);
+  if (rejected.length) showToast(`${label}: ${rejected.length === 1 ? 'a file was' : 'some files were'} not added`, rejected.join(', '), true);
+}
+
+function initItemFilePicker(kind) {
+  const button = itemEl(`${kind}-btn`);
+  const input = itemEl(`${kind}-input`);
+  button.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { addItemFiles(kind, [...input.files]); input.value = ''; });
+  enableFileDrop(button, files => addItemFiles(kind, files));
+  itemEl(`${kind}-files`).addEventListener('click', async event => {
+    const target = event.target.closest('[data-pending-file], [data-stored-file]');
+    if (!target) return;
+    if (target.dataset.pendingFile !== undefined) {
+      itemFiles.pending[kind].splice(Number(target.dataset.pendingFile), 1);
+      renderItemFiles(kind);
+      button.focus();
+      return;
+    }
+    const id = Number(target.dataset.storedFile);
+    const file = itemFiles.stored.find(entry => entry.id === id);
+    const ok = await confirmAction({
+      title: 'Remove this file?',
+      message: `${file?.originalName ?? 'The file'} will be deleted from this item now.`,
+      confirm: 'Remove File',
+    });
+    if (!ok) return;
+    try {
+      await apiRequest(`api/item-documents.php?id=${id}`, { method: 'DELETE' });
+    } catch (error) {
+      showToast('The file was not removed', error.message, true);
+      return;
+    }
+    itemFiles.stored = itemFiles.stored.filter(entry => entry.id !== id);
+    renderItemFiles(kind);
+    button.focus();
+  });
+}
+
+// After the item is saved: one upload per box with new files. Returns an error message, or null.
+async function uploadItemFiles(itemId) {
+  const errors = [];
+  for (const kind of Object.keys(ITEM_FILE_KINDS)) {
+    const files = itemFiles.pending[kind];
+    if (!files.length) continue;
+    const body = new FormData();
+    body.append('itemId', String(itemId));
+    body.append('kind', kind);
+    for (const file of files) body.append('files[]', file, file.name);
+    try {
+      itemFiles.stored = await apiRequest('api/item-documents.php', { method: 'POST', body });
+      itemFiles.pending[kind] = [];
+    } catch (error) {
+      errors.push(`${ITEM_FILE_KINDS[kind].label}: ${error.message}`);
+    }
+    renderItemFiles(kind);
+  }
+  return errors.length ? errors.join(' ') : null;
+}
+
 function resetItemForm() {
   itemEditing = null;
   itemEl('form').reset();
@@ -2180,6 +2393,7 @@ function resetItemForm() {
   itemEl('save-label').textContent = 'Save Item Record';
   itemEl('source-body').replaceChildren();
   addSourceRow({ focus: false });
+  resetItemFiles();
   // Enter skips Subcategory when the chosen category has none: that needs this list. Rack / Bin lists every location.
   loadLookup('subcategory');
   loadLookup('rack');
@@ -2209,8 +2423,8 @@ async function editItem(id) {
   fillLookup(itemEl('rack'), item.rackId && { id: item.rackId, code: item.rackCode });
   itemEl('comments').value = item.description;
   itemEl('status').value = item.status;
-  itemEl('image-link').value = item.imagePath;
   itemEl('supplier-url').value = item.webLink;
+  loadItemFiles(id);
   if (item.sourcing.length) itemEl('source-body').replaceChildren();
   item.sourcing.forEach((source, index) => {
     const row = addSourceRow({ focus: false });
@@ -2249,8 +2463,6 @@ function readItemForm() {
     warehouseId: id('rack-id') === null ? id('warehouse-id') : null,   // with a rack the server takes the rack's stock point
     rackId: id('rack-id'),
     status: text('status'),
-    docLink: text('doc-link'),
-    imageLink: text('image-link'),
     supplierUrl: text('supplier-url'),
   };
   if (payload.itemName === '') fail(itemEl('name'), 'Item designation is required.');
@@ -2267,7 +2479,7 @@ function readItemForm() {
     payload.sourcing.push(line);
   }
 
-  for (const [suffix, label] of [['doc-link', 'PDF spec link'], ['image-link', 'CAD / image URL'], ['supplier-url', 'Supplier URL']]) {
+  for (const [suffix, label] of [['supplier-url', 'Supplier URL']]) {
     if (text(suffix) !== '' && !isHttpUrl(text(suffix))) fail(itemEl(suffix), `${label} must start with http:// or https://`);
   }
   return { payload, errors };
@@ -2275,7 +2487,7 @@ function readItemForm() {
 
 const ITEM_FIELD_NODES = {
   itemName: 'name', uomId: 'uom', categoryId: 'category', subCategoryId: 'subcategory',
-  warehouseId: 'rack', rackId: 'rack', status: 'status', comments: 'comments', imageLink: 'image-link', supplierUrl: 'supplier-url',
+  warehouseId: 'rack', rackId: 'rack', status: 'status', comments: 'comments', supplierUrl: 'supplier-url',
 };
 let itemSaving = false;
 
@@ -2295,7 +2507,9 @@ async function saveItem() {
   try {
     const item = await apiRequest(editing ? `api/items.php?id=${editing.id}` : 'api/items.php', { method: editing ? 'PUT' : 'POST', json: payload });
     forgetLookups('item');
+    const uploadError = await uploadItemFiles(item.id);
     showToast(editing ? 'Item updated' : 'Item saved', `${item.code} · ${item.name}`);
+    if (uploadError) showToast('Some files were not uploaded', `The item is saved. ${uploadError}`, true);
     if (showSavedInList('masters/item', item.code, { edited: Boolean(editing) })) return;
     resetItemForm();                       // opened from Masters › Create: stay for the next item
     itemEl('name').focus();
@@ -2346,39 +2560,49 @@ function handleItemPageKeys(event) {
   return false;
 }
 
-// Arrow keys inside a form table: ↑/↓ same column in the row above/below (↓ on a filled
-// last row calls addRow); ←/→ move cells once the caret is at the edge. Past the table's
-// edges (or ↓ on a blank last row) the arrow leaves the table.
-function handleTableArrows(event, addRow) {
+// Arrow keys inside a form table: ↑/↓ same column in the row above/below; ←/→ move cells once the caret is
+// at the edge, and from a row's last cell → goes on to the next row's first (← the reverse). At the table's
+// edges the arrows leave it: ↓ on the last row or → on its last cell go to the first field after the table,
+// ↑ on the first row or ← on its first cell to the last field before it. New rows: Shift+X or Alt+A.
+function handleTableArrows(event) {
   const input = event.target;
   const row = input.closest('.fp-row');
   if (!row || !['INPUT', 'SELECT'].includes(input.tagName) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   const rows = [...row.parentElement.rows].filter(other => other.matches('.fp-row'));
   const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select')];
   const col = columnCells(row).indexOf(input);
-  const cells = columnCells(row).filter(cell => !cell.disabled);
+  const usable = r => columnCells(r).filter(cell => !cell.disabled);
+  const cells = usable(row);
   const cellAt = r => {
     const cell = columnCells(r)[col];
-    return cell && !cell.disabled ? cell : columnCells(r).find(other => !other.disabled);
+    return cell && !cell.disabled ? cell : usable(r)[0];
   };
   const index = rows.indexOf(row);
-  const isLastRow = index === rows.length - 1;
-  // Dropdowns always hold a value, so only typed cells count as filling the row.
-  const isFilled = cells.some(cell => cell.tagName === 'INPUT' && isCellFilled(cell));
+  const leave = forward => { const next = fieldOutsideTable(row, forward); if (next) focusByArrow(next); };
 
   if (event.key === 'ArrowUp') {
     event.preventDefault();
-    if (index > 0) focusField(cellAt(rows[index - 1])); else moveFocusByArrow(event.key);
+    if (index > 0) focusField(cellAt(rows[index - 1])); else leave(false);
   } else if (event.key === 'ArrowDown') {
     event.preventDefault();
-    if (!isLastRow) focusField(cellAt(rows[index + 1]));
-    else if (isFilled && addRow) focusField(cellAt(addRow()));
-    else moveFocusByArrow(event.key);
+    if (index < rows.length - 1) focusField(cellAt(rows[index + 1])); else leave(true);
   } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && caretAtEdge(input, event.key)) {
     event.preventDefault();
-    const neighbour = cells[cells.indexOf(input) + (event.key === 'ArrowLeft' ? -1 : 1)];
-    if (neighbour) focusField(neighbour); else moveFocusByArrow(event.key);
+    const forward = event.key === 'ArrowRight';
+    const neighbour = cells[cells.indexOf(input) + (forward ? 1 : -1)];
+    if (neighbour) { focusField(neighbour); return; }
+    const nextRow = rows[index + (forward ? 1 : -1)];
+    const wrapped = nextRow && usable(nextRow).at(forward ? 0 : -1);
+    if (wrapped) focusField(wrapped); else leave(forward);
   }
+}
+
+// The nearest field (input, dropdown or text box, not a button) after or before the table holding row.
+function fieldOutsideTable(row, forward) {
+  const table = row.closest('table');
+  const fields = focusableControls().filter(node => ['INPUT', 'SELECT', 'TEXTAREA'].includes(node.tagName) && !table.contains(node));
+  const after = node => Boolean(table.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return forward ? fields.find(after) : fields.filter(node => !after(node)).at(-1);
 }
 
 function initItemPage() {
@@ -2389,22 +2613,23 @@ function initItemPage() {
   itemEl('form').addEventListener('input', event => {
     if (event.target.classList.contains('is-invalid')) clearFieldError(event.target);
   });
+  for (const kind of Object.keys(ITEM_FILE_KINDS)) initItemFilePicker(kind);
   const body = itemEl('source-body');
   body.addEventListener('click', event => {
     const del = event.target.closest('[data-action="delete-row"]');
     if (del) removeSourceRow(del.closest('tr'));
   });
-  body.addEventListener('keydown', event => handleTableArrows(event, () => addSourceRow({ focus: false })));
+  body.addEventListener('keydown', handleTableArrows);
 }
 
 /* =====================================================================
    Form page engine (UOM, Party, Brand, Category, Warehouse)
-   Each page is <section id="KEY-page"> holding #KEY-form, #KEY-undo,
+   Each page is <section id="KEY-page"> holding #KEY-form, #KEY-undo (the Clear All button),
    #KEY-back and #KEY-save. Enter moves to the next field (textareas with
    data-enter-newline take Enter themselves, and dropdowns with
    data-enter-opens open on it, as do other dropdowns with choices; in the open
-   list Enter picks and moves on to the next field), Shift+Enter saves, Ctrl+Z undoes the last edit (including added and removed
-   rows), Shift+X or Alt+A adds a row (Shift+X also inside a row table's
+   list Enter picks and moves on to the next field), Shift+Enter saves, Clear All puts the form back as it was opened,
+   Shift+X or Alt+A adds a row (Shift+X also inside a row table's
    text cells; type a capital X there with Caps Lock), Esc goes back to the
    previous page.
    Each page also edits saved records (#/masters/<list>/edit/<id>): edit(id)
@@ -2425,7 +2650,8 @@ const DECIMAL_2 = /^\d{1,3}(\.\d{1,2})?$/;
 function createFormPage(config) {
   const el = suffix => byId(`${config.key}-${suffix}`);
   const lists = config.lists || {};
-  let history = [];                           // states before each edit, newest last
+  let history = [];                           // states before each edit, newest last (non-empty: something changed)
+  let start = null;                           // the form as it was opened (blank, or the saved record): Clear All returns here
   let current = null;
   let lastEdit = { key: null, time: 0 };
   let editing = null;                         // { id } while a saved record is open; null while creating
@@ -2442,7 +2668,7 @@ function createFormPage(config) {
     rows: Object.fromEntries(Object.keys(lists).map(name => [name, rowsOf(name).map(readRow)])),
     extra: config.extra ? config.extra.read() : null,
   });
-  const syncUndoButton = () => { el('undo').disabled = history.length === 0; };
+  const syncUndoButton = () => { el('undo').disabled = history.length === 0; };   // #KEY-undo is the Clear All button
 
   function refresh() {
     for (const [name, list] of Object.entries(lists)) {
@@ -2524,18 +2750,22 @@ function createFormPage(config) {
     refresh();
   }
 
-  function undo() {
-    const previous = history.pop();
-    if (!previous) return;
-    const changed = fields().filter(node => node.value !== previous.fields[node.id]).pop();
-    const changedList = Object.keys(lists).find(name => JSON.stringify(current.rows[name]) !== JSON.stringify(previous.rows[name]));
-    restore(previous);
-    let target = changed;
-    if (!target && changedList) target = rowsOf(changedList).at(-1)?.querySelector('input');
-    target = target || config.extraFocus?.() || config.firstField();
+  // Clear All: back to the form as it was opened — empty on a new record, the saved values on Edit —
+  // after a confirmation. history only tells whether anything changed since.
+  async function clearAll() {
+    if (!history.length || !start) return;
+    const ok = await confirmAction({
+      title: editing ? 'Clear all changes?' : 'Clear all fields?',
+      message: editing ? 'Everything you changed is put back to the saved record.' : 'Everything typed on this form is cleared.',
+      confirm: 'Clear All',
+    });
+    if (!ok) return;
+    restore(start);
+    history = [];
+    syncUndoButton();
+    const target = config.firstField();
     config.reveal?.(target);
-    if (target.getClientRects().length === 0) target = config.firstField();
-    focusField(target);
+    focusField(target.getClientRects().length ? target : config.firstField());
   }
 
   function showMode() {
@@ -2558,7 +2788,7 @@ function createFormPage(config) {
     config.onReset?.();
     history = [];
     lastEdit = { key: null, time: 0 };
-    current = snapshot();
+    current = start = snapshot();
     syncUndoButton();
     refresh();
     showMode();
@@ -2582,7 +2812,7 @@ function createFormPage(config) {
     config.fill(record);
     history = [];
     lastEdit = { key: null, time: 0 };
-    current = snapshot();
+    current = start = snapshot();
     syncUndoButton();
     refresh();
     showMode();
@@ -2625,7 +2855,6 @@ function createFormPage(config) {
   function handleKeys(event) {
     const { target, key } = event;
     const ctrl = event.ctrlKey && !event.metaKey;
-    const plainCtrl = ctrl && !event.altKey && !event.shiftKey;
     if (key === 'Escape' && !ctrl && !event.altKey) {
       event.preventDefault();
       if (!event.repeat) goBack();
@@ -2639,11 +2868,6 @@ function createFormPage(config) {
     if (isBrowserSaveKey(event)) {
       event.preventDefault();                 // the browser's "Save page"; pages with ctrlSave save the form instead
       if (config.ctrlSave && !event.repeat) save();
-      return true;
-    }
-    if (plainCtrl && key.toLowerCase() === 'z') {
-      event.preventDefault();                 // the form's undo replaces the browser's per-field one
-      undo();
       return true;
     }
     const list = config.addRowList?.();
@@ -2676,7 +2900,7 @@ function createFormPage(config) {
 
   function init() {
     el('save').addEventListener('click', save);
-    el('undo').addEventListener('click', undo);
+    el('undo').addEventListener('click', clearAll);
     el('back').addEventListener('click', () => { location.hash = '#/home'; });
     el('form').addEventListener('submit', event => event.preventDefault());
     el('form').addEventListener('input', event => {
@@ -2693,7 +2917,7 @@ function createFormPage(config) {
       if (del) deleteRow(del.closest('tr'));
     });
     for (const [name, list] of Object.entries(lists)) {
-      byId(list.body).addEventListener('keydown', event => handleTableArrows(event, () => addRow(name)));
+      byId(list.body).addEventListener('keydown', handleTableArrows);
     }
     config.init?.();
   }
@@ -2729,6 +2953,14 @@ const UOM_FACTOR = /^\d{1,9}(\.\d{1,4})?$/;   // conversion factor: up to 4 deci
 const UOM_MAX_DECIMALS = 6;
 const uomEl = suffix => byId(`uom-${suffix}`);
 const isValidUomFactor = value => UOM_FACTOR.test(value) && Number(value) > 0;
+
+// A predefined unit (PCS, BOX … PAIRS) keeps its name and stays active; the server checks this too.
+function lockPredefinedUom(locked) {
+  uomEl('name').readOnly = locked;
+  uomEl('status').disabled = locked;
+  uomEl('name').title = locked ? 'Predefined unit: the name cannot be changed.' : '';
+  uomEl('status').title = locked ? 'Predefined unit: it always stays active.' : '';
+}
 
 const uomForm = createFormPage({
   key: 'uom', route: 'masters/uom/new', listRoute: 'masters/uom', noun: 'UOM', api: 'api/uoms.php', lookups: ['uom'],
@@ -2766,7 +2998,9 @@ const uomForm = createFormPage({
     fillLookup(uomEl('base'), uom.conversionBaseId && { id: uom.conversionBaseId, name: uom.baseName });
     uomEl('factor').value = uom.conversionFactor;
     uomEl('description').value = uom.description;
+    lockPredefinedUom(Boolean(uom.isSystem));
   },
+  onReset: () => lockPredefinedUom(false),
   init() {
     // Show the factor in its full format once the user leaves the field. Not an undo step.
     uomEl('factor').addEventListener('blur', () => {
@@ -2889,7 +3123,7 @@ const warehouseForm = createFormPage({
     showWarehouseStock(point);
   },
   onReset: () => showWarehouseStock(null),
-  // Picking the country sets the phone's calling code. This runs before the form records the edit, so Ctrl+Z undoes both.
+  // Picking the country sets the phone's calling code. This runs before the form records the edit, as one change.
   init() {
     warehouseEl('country').addEventListener('input', () => {
       const dial = countryNamed(warehouseEl('country').value)?.dial;
@@ -3641,7 +3875,7 @@ const partyForm = createFormPage({
       if (wasPending) partyForm.el(`${partyVariant()}-name`).focus();   // first choice: go straight to the form
     });
     // Picking the supplier's country sets its currency. This runs before the form records the edit,
-    // so Ctrl+Z undoes both together.
+    // as one change.
     partyEl('sup-country').addEventListener('input', () => {
       const country = countryNamed(partyEl('sup-country').value);
       if (country) partyEl('sup-currency').value = country.currency;
@@ -3664,7 +3898,7 @@ const partyForm = createFormPage({
     });
     enableFileDrop(partyEl('doc-drop'), addDocuments);
     initPartyOrders();
-    partyEl('doc-rows').addEventListener('keydown', event => handleTableArrows(event, null));
+    partyEl('doc-rows').addEventListener('keydown', handleTableArrows);
     // Runs before the form's own input listener, so the undo step sees the cleared expiry date.
     partyEl('doc-rows').addEventListener('input', event => {
       const row = event.target.closest('.fp-row');
@@ -3835,14 +4069,16 @@ function createMasterList(config) {
   list.count = count => `${count} ${count === 1 ? list.one : list.many}`;
 
   // Every record from the API, newest first. A failed load shows an empty list and says why.
-  list.load = async () => {
-    $('empty').textContent = `Loading ${list.many}…`;
+  // quiet: a live update (another browser changed the data): no "Loading…", and a failed load keeps the rows shown.
+  list.load = async ({ quiet = false } = {}) => {
+    if (!quiet) $('empty').textContent = `Loading ${list.many}…`;
     try {
       const records = await apiRequest(`${config.api}?all=1`);
       // createdOn drives the Filter's date range: a document's own date (config.dateOf), else the day it was created.
       list.rows = records.map(record => ({ ...config.fromApi(record), id: record.id, code: record.code, createdOn: config.dateOf?.(record) || record.createdAt || '' }));
       $('empty').textContent = `No ${list.many} match your search.`;
     } catch (error) {
+      if (quiet) return;
       list.rows = [];
       $('empty').textContent = `The ${list.many} could not be loaded: ${error.message}`;
       showToast(`Could not load ${list.many}`, error.message, true);
@@ -3850,6 +4086,20 @@ function createMasterList(config) {
     list.loaded = true;
     render();
   };
+  // Live update of the open list: same search, filter, page and ticks; focus stays on the row (or the
+  // row's button) it was on.
+  list.refresh = async () => {
+    const active = document.activeElement;
+    const tr = $('body').contains(active) ? active.closest('tr') : null;
+    const code = tr?.dataset.code;
+    const action = tr && active !== tr ? active.dataset.action : null;
+    await list.load({ quiet: true });
+    if (!code || currentPage !== page || document.contains(active)) return;
+    const row = [...$('body').rows].find(entry => entry.dataset.code === code);
+    const target = (row && action && row.querySelector(`[data-action="${action}"]`)) || row || $('body').rows[0];
+    target?.focus({ preventScroll: true });
+  };
+  list.pageKey = page;
 
   function render() {
     const query = $('search').value.trim().toLowerCase();
@@ -3884,7 +4134,9 @@ function createMasterList(config) {
       tr.classList.toggle('is-selected', box.checked);
       const actions = el('td', 'ml-col-actions');
       const group = el('div', 'ml-actions');
-      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ['delete', 'Delete']]) {
+      // A locked record (a predefined unit) has no Delete; the server refuses it too.
+      const canDelete = !config.locked?.(row);
+      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ...(canDelete ? [['delete', 'Delete']] : [])]) {
         const button = el('button', `ml-act${action === 'delete' ? ' ml-act-danger' : ''}`);
         button.type = 'button';
         button.dataset.action = action;
@@ -3946,16 +4198,32 @@ function createMasterList(config) {
   });
 
   // Row navigation: ↑/↓ highlight the previous/next row (↓ from the search box enters the table, ↑ from the
-  // first row returns to it), PgUp/PgDn jump a screenful, Home/End the first/last row, → steps along the
-  // row's View / Edit / Delete buttons, ← steps back and from the first button returns to the row.
-  // Enter on a highlighted row opens View; Enter on a button presses it.
+  // first row returns to it, or to the previous page's last row), ↓ on the page's last row goes down to the
+  // pager, PgUp/PgDn jump a screenful, Home/End the first/last row, → steps along the row's View / Edit /
+  // Delete buttons, ← steps back and from the first button returns to the row.
+  // On the pager ←/→ move between Previous, the page numbers and Next (Enter presses one), ↑ goes back up
+  // to the last row. Enter on a highlighted row opens View; Enter on a button presses it.
   const ROW_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Enter'];
   const focusRow = tr => {
     if (!tr) return;
     tr.focus({ preventScroll: true });
     tr.scrollIntoView({ block: 'nearest' });
   };
+  const pagerButtons = () => [...pager.querySelectorAll('button')].filter(button => !button.disabled);
+  const focusPager = () => (pager.querySelector('[aria-current="page"]') || pagerButtons()[0])?.focus();
+  function handlePagerKeys(event) {
+    const { key, target } = event;
+    if (!pager.contains(target) || event.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) return false;
+    event.preventDefault();
+    if (key === 'ArrowUp') { const rows = [...$('body').rows]; if (rows.length) focusRow(rows.at(-1)); else $('search').focus(); return true; }
+    if (key === 'ArrowDown') return true;                       // the bottom of the page
+    const buttons = pagerButtons();
+    const at = buttons.indexOf(target);
+    buttons[Math.max(0, Math.min(buttons.length - 1, at + (key === 'ArrowRight' ? 1 : -1)))]?.focus();
+    return true;
+  }
   function handleRowKeys(event) {
+    if (handlePagerKeys(event)) return true;
     if (event.key === ' ' && event.target.matches?.('tr') && $('body').contains(event.target)) {
       event.preventDefault();
       if (!event.repeat) toggleRow(event.target, !list.selected.has(event.target.dataset.code));
@@ -3981,10 +4249,10 @@ function createMasterList(config) {
     const index = rows.indexOf(tr);
     const pageSize = Math.max(1, Math.floor(window.innerHeight / Math.max(tr.offsetHeight, 1)) - 4);
     switch (event.key) {
-      // ↓ on a page's last row and ↑ on its first row carry on into the next / previous page.
+      // ↓ on a page's last row goes down to the pager; ↑ on its first row back to the previous page.
       case 'ArrowDown':
-        if (index === rows.length - 1 && list.page * ML_PAGE_SIZE < list.shown.length) goToPage(list.page + 1, 'first');
-        else focusRow(rows[Math.min(index + 1, rows.length - 1)]);
+        if (index === rows.length - 1) focusPager();
+        else focusRow(rows[index + 1]);
         break;
       case 'ArrowUp':
         if (index > 0) focusRow(rows[index - 1]);
@@ -5248,6 +5516,8 @@ function closeMasterImport() {
   (back && document.contains(back) && back !== document.body ? back : masterImport.list.$('import')).focus();
 }
 
+const IMPORT_BATCH = 100;                    // rows a bulk request (the server takes up to 200)
+
 async function startMasterImport() {
   const { list } = masterImport;
   if (!masterImport.entries.length || masterImport.busy) return;
@@ -5262,6 +5532,7 @@ async function startMasterImport() {
   // Only rows the preview passed: errors never, duplicates only as updates (Update / Overwrite), and a
   // record added meanwhile (another tab) is checked again so it is not added twice.
   const added_ = [];
+  const jobs = [];
   for (const entry of masterImport.entries) {
     if (entry.status === 'error') continue;
     const { row } = entry;
@@ -5270,17 +5541,29 @@ async function startMasterImport() {
     if (existing && (!overwrite || !list.rows.includes(existing))) { skipped++; continue; }
     try {
       const payload = await list.config.toPayload(row);
-      if (existing) {
-        await apiRequest(`${list.config.api}?id=${existing.id}`, { method: 'PUT', json: filled(payload) });
-        updated++;
-      } else {
-        await apiRequest(list.config.api, { method: 'POST', json: payload });
-        added_.push(row);
-        added++;
-      }
+      jobs.push(existing ? { row, id: existing.id, data: filled(payload) } : { row, id: null, data: payload });
+      if (!existing) added_.push(row);
     } catch (error) {
       failures.push(`${row.name}: ${error.message}`);
     }
+  }
+  // IMPORT_BATCH rows a request (api ?bulk=1): one round trip per batch instead of one per row.
+  for (let start = 0; start < jobs.length; start += IMPORT_BATCH) {
+    const batch = jobs.slice(start, start + IMPORT_BATCH);
+    miEl('summary').textContent = `Importing… ${start} of ${jobs.length} saved`;
+    let results;
+    try {
+      results = await apiRequest(`${list.config.api}?bulk=1`, { method: 'POST', json: { records: batch.map(({ id, data }) => ({ id, data })) } });
+    } catch (error) {
+      failures.push(...batch.map(job => `${job.row.name}: ${error.message}`));
+      continue;
+    }
+    results.forEach((result, index) => {
+      const job = batch[index];
+      if (!result.ok) failures.push(`${job.row.name}: ${Object.values(result.fields || {})[0] || result.error}`);
+      else if (job.id) updated++;
+      else added++;
+    });
   }
   masterImport.busy = false;
   forgetLookups(...list.config.lookups);
@@ -5764,6 +6047,7 @@ function renderMasterView(list, row, record, loadError) {
 
 function renderMasterViewTabs() {
   const { tabs } = masterView;
+  const tabFocused = Boolean(document.activeElement?.closest?.('#master-view-tabs'));   // re-rendering would drop it
   masterView.tab = Math.min(masterView.tab, tabs.length - 1);
   byId('master-view-tabs').replaceChildren(...tabs.map((tab, index) => {
     const button = el('button', 'mv-tab');
@@ -5783,6 +6067,7 @@ function renderMasterViewTabs() {
   const panel = byId('master-view-fields');
   panel.setAttribute('aria-labelledby', `master-view-tab-${masterView.tab}`);
   panel.replaceChildren(...tabs[masterView.tab].sections);
+  if (tabFocused) focusMasterViewTab();
 }
 
 function showMasterViewTab(index) {
@@ -5798,6 +6083,7 @@ async function openMasterView(list, row) {
   byId('master-view-title').textContent = list.config.viewTitle?.(row) || row.name || list.config.noun;
   byId('master-view-sub').textContent = row.code;
   byId('master-view-edit-label').textContent = `Edit ${list.config.noun}`;
+  byId('master-view').querySelector('[data-mv="delete"]').hidden = Boolean(list.config.locked?.(row));
   renderMasterView(list, row, null);
   document.documentElement.classList.add('has-modal');
   byId('master-view').showModal();
@@ -5822,22 +6108,42 @@ function masterViewAction(action) {
   const { list, row } = masterView;
   if (action === 'close') closeMasterView();
   else if (action === 'edit') { closeMasterView({ restoreFocus: false }); openMasterEdit(list, row); }
-  else if (action === 'delete') { closeMasterView(); deleteMasterRow(list, row); }
+  else if (action === 'delete' && !list.config.locked?.(row)) { closeMasterView(); deleteMasterRow(list, row); }
 }
 
+// Arrow keys in the View popup move focus like the rest of the app:
+//   on the footer buttons (Delete · Close · Edit)  ←/→ move between them; ↑/↓ scroll the record, and ↑ at its
+//                                                 top goes up to the tabs (records with more than one tab);
+//   on a tab                                      ←/→ switch tab (focus follows); ↓ goes back down to Edit.
+// Page Up/Down scroll; E edits, Del deletes, Esc closes.
 function handleMasterViewKeys(event) {
-  const { key } = event;
+  const { key, target } = event;
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
-  // ←/→ change tab; ↑/↓ and Page Up/Down scroll the tab (long records such as a full supplier).
+  const dialog = byId('master-view');
+  const body = byId('master-view-fields');
+  const footer = [...dialog.querySelectorAll('.mv-foot button')].filter(button => !button.hidden);
+  const onTab = Boolean(target.closest?.('[data-mv-tab]'));
+  const hasTabs = masterView.tabs.length > 1;
   if (key === 'ArrowLeft' || key === 'ArrowRight') {
     event.preventDefault();
-    showMasterViewTab(masterView.tab + (key === 'ArrowRight' ? 1 : -1));
+    const step = key === 'ArrowRight' ? 1 : -1;
+    if (onTab) { showMasterViewTab(masterView.tab + step); focusMasterViewTab(); return true; }
+    const at = footer.indexOf(target);
+    if (at === -1) footer.at(-1)?.focus();                 // the body or the × button: back to the footer
+    else footer[Math.max(0, Math.min(footer.length - 1, at + step))].focus();
     return true;
   }
-  const scroll = { ArrowUp: -60, ArrowDown: 60, PageUp: -300, PageDown: 300 }[key];
+  if (key === 'ArrowUp' || key === 'ArrowDown') {
+    event.preventDefault();
+    if (onTab) { if (key === 'ArrowDown') dialog.querySelector('[data-mv="edit"]').focus(); return true; }
+    if (key === 'ArrowUp' && body.scrollTop <= 0 && hasTabs) { focusMasterViewTab(); return true; }
+    body.scrollBy({ top: key === 'ArrowUp' ? -60 : 60 });
+    return true;
+  }
+  const scroll = { PageUp: -300, PageDown: 300 }[key];
   if (scroll) {
     event.preventDefault();
-    byId('master-view-fields').scrollBy({ top: scroll });
+    body.scrollBy({ top: scroll });
     return true;
   }
   const action = key === 'Escape' ? 'close' : key === 'Delete' ? 'delete' : key.toLowerCase() === 'e' ? 'edit' : null;
@@ -5845,6 +6151,10 @@ function handleMasterViewKeys(event) {
   event.preventDefault();
   if (!event.repeat) masterViewAction(action);
   return true;
+}
+
+function focusMasterViewTab() {
+  byId(`master-view-tab-${masterView.tab}`)?.focus();
 }
 
 function initMasterView() {
@@ -6135,13 +6445,14 @@ const uomList = createMasterList({
     statusColumn(),
     detail({ key: 'description', label: 'Description', type: 'wrap', group: 'Other Details', headers: ['remarks', 'notes'] })],
   fromApi: record => ({ ...record, decimals: String(record.decimalAllowed), baseUnit: record.baseName, factor: record.conversionFactor }),
+  locked: row => Boolean(row.isSystem),   // the predefined units (PCS, BOX … PAIRS) cannot be deleted
   async toPayload(row) {
     return {
       unitName: row.name, decimalAllowed: row.decimals, conversionFactor: row.factor, status: row.status, description: row.description,
       conversionBaseId: await importLookupId('uom', row.baseUnit),
     };
   },
-  sample: { name: 'DOZEN', decimals: '0', baseUnit: 'Pieces', factor: '12.0000', status: 'active' },
+  sample: { name: 'GROSS', decimals: '0', baseUnit: 'PCS', factor: '144.0000', status: 'active' },
 });
 
 const brandList = createMasterList({
@@ -6348,7 +6659,7 @@ function renderRoute() {
    Purchase orders and GRNs total their lines as the server does (backend/src/purchase_book.php):
    the Discount Amount is shared across the lines by value before tax; VAT is each line's VAT % on
    what is left, included in the prices or added on top (Include / Exclude VAT); Shipping is added last.
-   Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Alt+I create an item, Ctrl+Z undo, Esc back.
+   Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Alt+I create an item, Esc back.
    ===================================================================== */
 
 const pbData = { items: new Map(), suppliers: new Map(), racks: [] };
@@ -7296,7 +7607,7 @@ async function poShowSupplier({ fresh = false } = {}) {
 const poSupplierDial = supplier => countryNamed(supplier?.country)?.dial || byId('po-contact-number-code').value || '+968';
 
 // VAT follows the currency: none on an order in OMR (Omani Rial), VAT Enabled in any other currency.
-// The VAT button can still change it for one order; Ctrl+Z undoes the currency (or supplier) and this together.
+// The VAT button can still change it for one order.
 function poVatFromCurrency(form) {
   form.setVat(poCurrency() !== 'OMR');
 }
@@ -7910,6 +8221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMasterImport();
   initMasterView();
   initMasterConfirm();
+  initLiveUpdates();
   initQuickItem();
   initItemDescription();
   for (const list of MASTER_LISTS) list.init();

@@ -275,18 +275,16 @@
         <h2 class="fp-section-title">4. Media &amp; Specification Assets</h2>
         <div class="fp-grid-3">
           <div class="fp-field">
-            <label class="fp-label fp-label-sm" for="item-doc-link">Doc / PDF Spec</label>
-            <div class="fp-input-wrap">
-              <span class="fp-input-icon-left" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg></span>
-              <input id="item-doc-link" name="docLink" class="fp-input fp-input-sm fp-mono fp-has-icon" type="url" autocomplete="off" placeholder="PDF spec link...">
-            </div>
+            <span class="fp-label fp-label-sm" id="item-spec-label">Doc / PDF Spec</span>
+            <button type="button" id="item-spec-btn" class="fp-input fp-input-sm fp-upload" aria-describedby="item-spec-label" title="PDF, Word, Excel or image · up to 10 MB each · or drop files here"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg><span>Upload spec…</span></button>
+            <input id="item-spec-input" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+            <ul id="item-spec-files" class="fp-file-list fp-file-list-sm" aria-label="Doc / PDF Spec files"></ul>
           </div>
           <div class="fp-field">
-            <label class="fp-label fp-label-sm" for="item-image-link">CAD / Image</label>
-            <div class="fp-input-wrap">
-              <span class="fp-input-icon-left" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"></path></svg></span>
-              <input id="item-image-link" name="imageLink" class="fp-input fp-input-sm fp-mono fp-has-icon" type="url" autocomplete="off" placeholder="CAD or image URL...">
-            </div>
+            <span class="fp-label fp-label-sm" id="item-image-label">CAD / Image</span>
+            <button type="button" id="item-image-btn" class="fp-input fp-input-sm fp-upload" aria-describedby="item-image-label" title="JPG, PNG, PDF, DWG or DXF · up to 10 MB each · or drop files here"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg><span>Upload CAD / image…</span></button>
+            <input id="item-image-input" type="file" multiple hidden accept=".jpg,.jpeg,.png,.pdf,.dwg,.dxf">
+            <ul id="item-image-files" class="fp-file-list fp-file-list-sm" aria-label="CAD / Image files"></ul>
           </div>
           <div class="fp-field">
             <label class="fp-label fp-label-sm" for="item-supplier-url">Supplier URL</label>
@@ -338,9 +336,9 @@
         <span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Back</span>
       </div>
-      <button type="button" id="uom-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
-        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      <button type="button" id="uom-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
       </button>
     </div>
   </header>
@@ -871,7 +869,7 @@
         <span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Back</span>
       </div>
-      <button type="button" id="party-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+      <button type="button" id="party-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
     </div>
   </header>
 
@@ -1273,7 +1271,7 @@
   </form>
   <template id="party-doc-row"><tr class="fp-row"><td><div class="fp-doc"><span class="fp-doc-badge" data-doc-badge></span><div class="fp-doc-text"><strong class="fp-doc-name" data-doc-name></strong><span class="fp-doc-size" data-doc-size></span></div></div></td><td><select class="fp-cell fp-select fp-cell-select" data-field="type" aria-label="Document type"><option value="">Select type</option><option>Commercial Registration</option><option>VAT Certificate</option><option>Trade Licence</option><option>Bank Letter</option><option>Agreement</option><option>Other</option></select></td><td><input class="fp-cell fp-cell-date" data-field="expiry" type="date" aria-label="Expiry date"></td><td><input class="fp-cell" data-field="uploadedOn" type="text" readonly tabindex="-1" aria-label="Uploaded on"></td><td class="fp-col-del"><button type="button" class="fp-del" data-doc-preview title="View file" aria-label="View file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="fp-del" data-doc-remove title="Remove file" aria-label="Remove file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" data-letters placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" data-letters placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><div class="fp-phone fp-phone-cell"><select class="fp-cell fp-select fp-select-list fp-phone-code" data-field="mobileCode" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" inputmode="tel" data-check="phone" placeholder="9XXX XXXX" aria-label="Mobile number"></div></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-cpo-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><input class="fp-cell" data-field="unit" type="text" autocomplete="off" placeholder="PCS" aria-label="Unit"></td><td><input class="fp-cell fp-cell-num" data-field="qty" type="text" autocomplete="off" inputmode="decimal" placeholder="0" aria-label="Qty"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><output class="cpo-amount" data-amount>0.000</output></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-cpo-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="qty" type="text" autocomplete="off" inputmode="decimal" placeholder="0" aria-label="Qty"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><output class="cpo-amount" data-amount>0.000</output></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
   <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
 </section>
 
@@ -1292,7 +1290,7 @@
         <span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Back</span>
       </div>
-      <button type="button" id="brand-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+      <button type="button" id="brand-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
     </div>
   </header>
 
@@ -1357,7 +1355,7 @@
         <span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Back</span>
       </div>
-      <button type="button" id="category-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+      <button type="button" id="category-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
     </div>
   </header>
 
@@ -1417,7 +1415,7 @@
         <span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Back</span>
       </div>
-      <button type="button" id="warehouse-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><span>Undo</span><kbd>Ctrl+Z</kbd></button>
+      <button type="button" id="warehouse-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
     </div>
   </header>
 
@@ -1788,9 +1786,9 @@
         <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
       </div>
-      <button type="button" id="pr-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
-        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      <button type="button" id="pr-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
       </button>
     </div>
   </header>
@@ -1898,9 +1896,9 @@
         <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
       </div>
-      <button type="button" id="rfq-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
-        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      <button type="button" id="rfq-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
       </button>
     </div>
   </header>
@@ -1997,9 +1995,9 @@
         <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
       </div>
-      <button type="button" id="po-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
-        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      <button type="button" id="po-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
       </button>
     </div>
   </header>
@@ -2176,9 +2174,9 @@
         <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
         <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
       </div>
-      <button type="button" id="grn-undo" class="fp-undo" aria-keyshortcuts="Control+Z" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>
-        <span>Undo</span><kbd>Ctrl+Z</kbd>
+      <button type="button" id="grn-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
       </button>
     </div>
   </header>
@@ -2530,7 +2528,7 @@
       <h2 id="master-view-title" class="sf-title mv-title"></h2>
       <p class="mv-sub"><span id="master-view-sub" class="mv-code-chip"></span></p>
     </div>
-    <span class="lk-keys mv-keys" aria-hidden="true"><span class="lk-key"><kbd>←→</kbd> Tabs</span><span class="lk-key"><kbd>E</kbd> Edit</span><span class="lk-key"><kbd>Del</kbd> Delete</span><span class="lk-key"><kbd>Esc</kbd> Close</span></span>
+    <span class="lk-keys mv-keys" aria-hidden="true"><span class="lk-key"><kbd>←→</kbd> Move</span><span class="lk-key"><kbd>↑↓</kbd> Scroll · Tabs</span><span class="lk-key"><kbd>E</kbd> Edit</span><span class="lk-key"><kbd>Del</kbd> Delete</span><span class="lk-key"><kbd>Esc</kbd> Close</span></span>
     <button type="button" class="lk-close" data-mv="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
   </div>
   <div id="master-view-tabs" class="mv-tabs" role="tablist" aria-label="Record sections"></div>

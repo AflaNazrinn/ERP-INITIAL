@@ -9,7 +9,9 @@ declare(strict_types=1);
  *   ValidationError → 422 { "error": "...", "fields": { "field": "message" } }
  *   NotFound        → 404 { "error": "..." }
  *   anything else   → 500 { "error": "Something went wrong." } (details only in the PHP log)
- * Success responses are { "data": ... }.
+ * Success responses are { "data": ... }. A successful write (POST / PUT / DELETE) also bumps this endpoint's
+ * row in data_versions and names it in the X-Data-Version header ("uoms=42"), so other open browsers
+ * (polling api/changes.php) reload it and this one knows the change was its own.
  */
 
 require_once __DIR__ . '/security.php';
@@ -17,6 +19,10 @@ require_once __DIR__ . '/master_validation.php';   // ValidationError, NotFound
 
 function json_out(mixed $data, int $status = 200): never
 {
+    if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true) && !defined('PUBLIC_ENDPOINT') && $status < 400) {
+        $name = data_version_name();
+        header("X-Data-Version: $name=" . bump_data_version($name));
+    }
     http_response_code($status);
     echo json_encode(['data' => $data], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     exit;
@@ -31,6 +37,24 @@ function json_error(string $message, int $status, array $fields = []): never
     }
     echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+/* This endpoint's name in data_versions: its file name ("uoms", "item-documents" …). */
+function data_version_name(): string
+{
+    return basename((string) ($_SERVER['SCRIPT_FILENAME'] ?? 'unknown'), '.php');
+}
+
+/* Counts one more change to $name; returns the new version. Never fails the request it belongs to. */
+function bump_data_version(string $name): int
+{
+    try {
+        query('INSERT INTO data_versions (name, version) VALUES (?, 1) ON DUPLICATE KEY UPDATE version = version + 1', [$name]);
+        return (int) query('SELECT version FROM data_versions WHERE name = ?', [$name])->fetchColumn();
+    } catch (Throwable $e) {
+        error_log((string) $e);   // e.g. the data_versions migration is not imported yet
+        return 0;
+    }
 }
 
 /* The request body as an array (JSON endpoints only). */
@@ -91,6 +115,9 @@ function query_search(): string
 function serve_master(callable $list, callable $find, callable $nextCode, callable $save, callable $delete): never
 {
     $method = allow_methods('GET', 'POST', 'PUT', 'DELETE');
+    if ($method === 'POST' && isset($_GET['bulk'])) {
+        json_out(serve_bulk_save($save));
+    }
     if ($method === 'POST') {
         json_out($save(json_input(), null), 201);
     }
@@ -107,6 +134,53 @@ function serve_master(callable $list, callable $find, callable $nextCode, callab
     }
     $id = query_id('id');
     json_out($id !== null ? $find($id) : $list(query_search(), isset($_GET['all'])));
+}
+
+/*
+ * POST ?bulk=1 { "records": [ { "id": null | N, "data": { …the usual payload… } }, … ] } → one result per
+ * record, in order: { "ok": true, "record": … } or { "ok": false, "error": "...", "fields": {…} }.
+ * Each record is saved on its own (one bad row never undoes the others): an import of hundreds of rows
+ * is one request instead of one per row. At most BULK_MAX_RECORDS records a request.
+ */
+const BULK_MAX_RECORDS = 200;
+
+function serve_bulk_save(callable $save): array
+{
+    $records = json_input()['records'] ?? null;
+    if (!is_array($records) || !array_is_list($records)) {
+        json_error('records must be a list.', 400);
+    }
+    if (count($records) > BULK_MAX_RECORDS) {
+        json_error('Send at most ' . BULK_MAX_RECORDS . ' records a request.', 413);
+    }
+    set_time_limit(120);
+    $results = [];
+    foreach ($records as $entry) {
+        $id = $entry['id'] ?? null;
+        $data = $entry['data'] ?? null;
+        if (!is_array($data) || ($id !== null && (!is_int($id) || $id < 1))) {
+            $results[] = ['ok' => false, 'error' => 'Each record needs data (and a whole-number id to update).'];
+            continue;
+        }
+        try {
+            $results[] = ['ok' => true, 'record' => $save($data, $id)];
+        } catch (ValidationError $e) {
+            $results[] = ['ok' => false, 'error' => $e->getMessage(), 'fields' => $e->fields];
+        } catch (NotFound | Conflict $e) {
+            $results[] = ['ok' => false, 'error' => $e->getMessage()];
+        } catch (Throwable $e) {
+            $code = $e instanceof PDOException ? ($e->errorInfo[1] ?? null) : null;
+            if ($code !== 1062 && $code !== 1451) {
+                error_log((string) $e);          // the rows before it are saved; this one is reported
+            }
+            $results[] = ['ok' => false, 'error' => match ($code) {
+                1062    => 'A record with the same code or name already exists.',
+                1451    => 'This record is used by other records, so it cannot be changed this way.',
+                default => 'Something went wrong saving this row.',
+            }];
+        }
+    }
+    return $results;
 }
 
 /* What to fix when $e comes from a missing .env, a database that cannot be reached, or a schema that is not up to date; null otherwise. */
@@ -148,6 +222,9 @@ set_exception_handler(static function (Throwable $e): void {
     if ($e instanceof NotFound) {
         json_error($e->getMessage(), 404);
     }
+    if ($e instanceof Conflict) {
+        json_error($e->getMessage(), 409);
+    }
     // MySQL duplicate key: two people saved the same unique value at once.
     if ($e instanceof PDOException && ($e->errorInfo[1] ?? null) === 1062) {
         json_error('A record with the same code or name already exists.', 409);
@@ -176,4 +253,10 @@ if (!defined('PUBLIC_ENDPOINT') && current_user() === null) {
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)
     && !csrf_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
     json_error('Your session has expired. Reload the page and try again.', 403);
+}
+
+// Reads never change the session: release its file lock now, so one user's requests (a list, its lookups,
+// the change poll) run side by side instead of waiting for each other.
+if (!defined('PUBLIC_ENDPOINT') && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) {
+    session_write_close();
 }

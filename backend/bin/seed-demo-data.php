@@ -19,7 +19,8 @@ require_once __DIR__ . '/../src/suppliers.php';
 require_once __DIR__ . '/../src/customers.php';
 require_once __DIR__ . '/../src/items.php';
 
-if (query('SELECT COUNT(*) FROM uoms')->fetchColumn() > 0) {
+// The predefined units (migration 2026_11_13_009) are always there; items mean the demo data already ran.
+if (query('SELECT COUNT(*) FROM items')->fetchColumn() > 0) {
     fwrite(STDERR, "The database already has data; seeding skipped.\n");
     exit(1);
 }
@@ -27,7 +28,10 @@ if (query('SELECT COUNT(*) FROM uoms')->fetchColumn() > 0) {
 try {
     $uom = [];
     foreach ([['Pieces', 0], ['Numbers', 0], ['Box', 0], ['Set', 0], ['Packet', 0], ['Pair', 0], ['Kilogram', 3], ['Litre', 3], ['Metre', 2], ['Roll', 0]] as [$name, $decimals]) {
-        $uom[$name] = uom_create(['unitName' => $name, 'decimalAllowed' => $decimals, 'conversionFactor' => '1'])['id'];
+        // A predefined unit with the same name (BOX, SET …) is reused rather than duplicated.
+        $existing = query('SELECT id FROM uoms WHERE uom_name = ?', [$name])->fetchColumn();
+        $uom[$name] = $existing !== false ? (int) $existing
+            : uom_create(['unitName' => $name, 'decimalAllowed' => $decimals, 'conversionFactor' => '1'])['id'];
     }
     uom_create(['unitName' => 'Gram', 'decimalAllowed' => 0, 'conversionBaseId' => $uom['Kilogram'], 'conversionFactor' => '0.0010']);
     uom_create(['unitName' => 'Metric Tonne', 'decimalAllowed' => 3, 'conversionBaseId' => $uom['Kilogram'], 'conversionFactor' => '1000']);
