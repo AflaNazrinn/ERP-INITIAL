@@ -1500,3 +1500,13 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
   .idp .idp-btn { flex: 1 1 auto; justify-content: center; }
   .idp-primary { margin-left: 0; }
 }
+
+/* Safari adds its own AutoFill contacts button to fields it guesses are names or addresses
+   (it ignores autocomplete="off"). These are master-data fields, not personal details: hide it. */
+input::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
