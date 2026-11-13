@@ -1219,6 +1219,20 @@ function splitPhone(value, fallback) {
   const dial = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length).find(country => text.startsWith(`${country.dial} `) || text === country.dial)?.dial;
   return dial ? [dial, text.slice(dial.length).trim()] : [fallback, text];
 }
+// A phone input's own calling-code dropdown (the select in the same .fp-phone).
+const phoneCodeOf = input => input.closest('.fp-phone').querySelector('select[data-phone-code]');
+// Shows a stored number in a phone input and its dropdown; a number without a known code takes fallbackDial.
+function setPhoneField(input, value, fallbackDial) {
+  const [code, number] = splitPhone(value, fallbackDial);
+  phoneCodeOf(input).value = code;
+  input.value = number;
+}
+// The value to store: code + number. A short extension (data-allow-extension, e.g. 204) is kept without a code.
+function readPhoneField(input) {
+  const number = input.value.trim();
+  if (input.dataset.allowExtension !== undefined && /^\d{1,5}$/.test(number)) return number;
+  return joinPhone(phoneCodeOf(input).value, number);
+}
 
 /* ---------- Email and phone checks ----------
    Fields with data-check="email" or data-check="phone" are checked when the user leaves them (marked red,
@@ -2663,7 +2677,7 @@ const warehouseForm = createFormPage({
       errors: check.errors,
       payload: {
         warehouseName: check.text('name'), type: check.text('type'), address: check.text('address'), country: check.text('country'), city: check.text('city'),
-        contactPerson: check.text('contact'), phone: check.text('phone'), email: check.text('email'), manager: check.text('manager'),
+        contactPerson: check.text('contact'), phone: readPhoneField(warehouseEl('phone')), email: check.text('email'), manager: check.text('manager'),
         itemIds: warehouseItems.ids(), capacity: check.text('capacity'), status: check.text('status'), remarks: check.text('remarks'),
       },
     };
@@ -2671,10 +2685,18 @@ const warehouseForm = createFormPage({
   fill(point) {
     showRecordCode(warehouseEl('code'), point.code);
     const values = { name: point.name, address: point.address, country: point.country, city: point.city, contact: point.contactPerson,
-      phone: point.phone, email: point.email, manager: point.manager, capacity: point.capacity ?? '', status: point.status, remarks: point.remarks };
+      email: point.email, manager: point.manager, capacity: point.capacity ?? '', status: point.status, remarks: point.remarks };
     for (const [suffix, value] of Object.entries(values)) warehouseEl(suffix).value = value;
+    setPhoneField(warehouseEl('phone'), point.phone, countryNamed(point.country)?.dial || '+968');
     warehouseEl('type').value = ['Office', 'Warehouse', 'Shop'].includes(point.type) ? point.type : 'Warehouse';
     warehouseItems.set(point.items);
+  },
+  // Picking the country sets the phone's calling code. This runs before the form records the edit, so Ctrl+Z undoes both.
+  init() {
+    warehouseEl('country').addEventListener('input', () => {
+      const dial = countryNamed(warehouseEl('country').value)?.dial;
+      if (dial) warehouseEl('phone-code').value = dial;
+    });
   },
 });
 
@@ -5736,13 +5758,18 @@ async function poShowSupplier({ fresh = false } = {}) {
   }));
   if (fresh) {
     if (supplier.currency) poSetCurrency(supplier.currency);
+    const dial = poSupplierDial(supplier);
+    byId('po-contact-number-code').value = dial;            // the contact's calling code follows the supplier's country
     if (contacts.length === 1) {
       byId('po-contact').value = contacts[0].name;
-      byId('po-contact-number').value = contacts[0].number || '';
+      setPhoneField(byId('po-contact-number'), contacts[0].number, dial);
     }
   }
   return supplier;
 }
+
+// The supplier's calling code: its country's, else the code already shown.
+const poSupplierDial = supplier => countryNamed(supplier?.country)?.dial || byId('po-contact-number-code').value || '+968';
 
 // VAT follows the currency: none on an order in OMR (Omani Rial), VAT Enabled in any other currency.
 // The VAT button can still change it for one order; Ctrl+Z undoes the currency (or supplier) and this together.
@@ -5770,20 +5797,16 @@ const poForm = createPurchaseForm({
     return {
       poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
-      salesman: byId('po-salesman').value.trim(), salesmanContact: byId('po-salesman-contact').value.trim(),
+      salesman: byId('po-salesman').value.trim(), salesmanContact: readPhoneField(byId('po-salesman-contact')),
       certifications: byId('po-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
       supplierId: byId('po-supplier-id').value || null, contactName: byId('po-contact').value.trim(),
-      contactNumber: byId('po-contact-number').value.trim(), currency: poCurrency(),
+      contactNumber: readPhoneField(byId('po-contact-number')), currency: poCurrency(),
     };
   },
   check(form, errors) {
     if (!byId('po-supplier-id').value) errors.push({ node: byId('po-supplier'), message: 'Select the supplier.' });
     if (byId('po-delivery-date').value && byId('po-delivery-date').value < byId('po-date').value) {
       errors.push({ node: byId('po-delivery-date'), message: 'The delivery date cannot be before the PO date.' });
-    }
-    for (const id of ['po-salesman-contact', 'po-contact-number']) {
-      const value = byId(id).value.trim();
-      if (value && !/^[0-9+\-\s()]{3,40}$/.test(value)) errors.push({ node: byId(id), message: 'Enter a phone number (digits, spaces, + - ( ) only).' });
     }
   },
   afterRestore() { poShowCertifications(); poShowSupplier(); },
@@ -5796,12 +5819,12 @@ const poForm = createPurchaseForm({
     byId('po-terms').value = po.deliveryTerms;
     setSelectValue(byId('po-payment'), po.paymentMode || 'As usual');
     byId('po-salesman').value = po.salesman || '';
-    byId('po-salesman-contact').value = po.salesmanContact || '';
+    setPhoneField(byId('po-salesman-contact'), po.salesmanContact, '+968');
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
     fillLookup(byId('po-supplier'), po.supplierId ? { id: po.supplierId, name: po.supplierName } : null);   // the Select Supplier popup field
     byId('po-contact').value = po.contactName;
-    byId('po-contact-number').value = po.contactNumber || '';
+    setPhoneField(byId('po-contact-number'), po.contactNumber, '+968');
     poSetCurrency(po.currency);
   },
   afterFill: () => poShowSupplier(),
@@ -5827,7 +5850,7 @@ const poForm = createPurchaseForm({
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
       const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
-      if (contact?.number) { byId('po-contact-number').value = contact.number; form.page.absorb(); }
+      if (contact?.number) { setPhoneField(byId('po-contact-number'), contact.number, poSupplierDial(supplier)); form.page.absorb(); }
     });
     // A pick in the Select Currency popup: the form records it first (its listener is older), then VAT follows in the same step.
     byId('po-form').addEventListener('input', event => {

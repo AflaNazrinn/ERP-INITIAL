@@ -1356,7 +1356,7 @@
         </div>
         <div class="fp-field fp-span-6">
           <label class="fp-label" for="warehouse-phone">Phone / Extension</label>
-          <input id="warehouse-phone" class="fp-input" type="text" autocomplete="off" inputmode="tel" data-check="phone" data-country-field="warehouse-country" data-allow-extension placeholder="+968 2XXX XXXX">
+          <div class="fp-phone"><select id="warehouse-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Phone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="warehouse-phone" class="fp-input" type="text" autocomplete="off" inputmode="tel" data-check="phone" data-allow-extension placeholder="2XXX XXXX or extension"></div>
         </div>
         <div class="fp-field fp-span-6">
           <label class="fp-label" for="warehouse-email">Email Address</label>
@@ -1933,7 +1933,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
-          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="40" autocomplete="off" placeholder="Enter salesman contact number">
+          <div class="fp-phone"><select id="po-salesman-contact-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Salesman contact country code" title="To change it: Enter or Space opens the list"></select><input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
       </div>
       <div class="fp-field pb-cert">
@@ -1963,7 +1963,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-contact-number">Contact Person Number</label>
-          <input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="40" autocomplete="off" placeholder="e.g. +968 9123 4567">
+          <div class="fp-phone"><select id="po-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Contact person number country code" title="Set from the supplier's country. To change it: Enter or Space opens the list"></select><input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-currency">Currency</label>
