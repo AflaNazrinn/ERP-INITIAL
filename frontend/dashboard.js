@@ -542,6 +542,11 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
+    if (byId('item-desc').open) {
+      handleItemDescKeys(event);
+      event.stopPropagation();
+      return;
+    }
     if (handleSuggestKeys(event) || handleLookupFieldKeys(event)) {
       event.stopPropagation();
       return;
@@ -1582,6 +1587,12 @@ function handleLookupFieldKeys(event) {
   if (key === 'Backspace' || key === 'Delete') {
     event.preventDefault();
     if (chips) chips.onClear(); else if (field.value !== '') setLookupValue(field, null);
+    return true;
+  }
+  // A Purchase Book line's filled Item Name: Enter / Space show the Full Item Description instead (typing or F4 still change it).
+  if (((key === 'Enter' && !event.shiftKey) || key === ' ') && isItemDescField(field)) {
+    event.preventDefault();
+    if (!event.repeat) openItemDescription(field);
     return true;
   }
   // Enter always opens the popup, with the current value highlighted: Enter again keeps it and moves on, Esc moves on.
@@ -4934,6 +4945,186 @@ async function applyPurchaseItem(form, row, itemId) {
   form.refresh();
 }
 
+/* ---------- Full Item Description popup (#item-desc; design/masters/item_description.png) ----------
+   Enter or Space on a line's Item Name that already holds an item (you arrive there by arrow, Tab or click:
+   Enter skips filled names) shows the item instead of the Select Item list. Typing, F4 or Alt+↓ there
+   still opens Select Item to change the item.
+   Keys: Enter close, Esc close, Ctrl+C copy the name, ←/→ between the buttons.
+   Edit / Edit Name rename the item in the Item master: Enter saves, Esc cancels the edit.
+   Every line holding that item shows the new name. */
+const itemDesc = { field: null, row: null, itemId: '', item: null, editing: false, saving: false };
+const idpEl = suffix => byId(`item-desc-${suffix}`);
+
+// A Purchase Book line's Item Name cell with an Item master item in it.
+const isItemDescField = field => field.dataset.field === 'itemName' && field.dataset.lookup === 'item'
+  && Boolean(lookupCreateForm(field)) && Boolean(lookupIdInput(field)?.value);
+
+function openItemDescription(field) {
+  const dialog = byId('item-desc');
+  if (dialog.open) return;
+  const row = field.closest('.fp-row');
+  const itemId = lookupIdInput(field).value;
+  const lineNo = [...row.parentElement.rows].filter(other => other.matches('.fp-row')).indexOf(row) + 1;
+  Object.assign(itemDesc, { field, row, itemId, item: null, editing: false, saving: false });
+  idpEl('sub').textContent = `Line Item #${lineNo}`;
+  idpEl('code').textContent = `Code: ${pbCell(row, 'itemCode').value || '—'}`;
+  idpEl('name').value = field.value;
+  idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
+  showItemDescPrice(null);
+  setItemDescEditing(false);
+  document.documentElement.classList.add('has-modal');
+  dialog.showModal();
+  idpEl('primary').focus();
+  pbItem(itemId).then(item => {
+    if (!dialog.open || itemDesc.itemId !== itemId) return;
+    itemDesc.item = item;
+    if (!itemDesc.editing) idpEl('name').value = item.name;
+    idpEl('code').textContent = `Code: ${item.code}`;
+    if (!pbCell(row, 'unit')?.value) idpEl('unit').textContent = item.unit || '—';
+    showItemDescPrice(item);
+  }).catch(() => {});
+}
+
+// Unit Price: the line's price (PO) or unit cost (GRN); lines without a price show the item's buying rate.
+function showItemDescPrice(item) {
+  const cell = pbCell(itemDesc.row, 'price') || pbCell(itemDesc.row, 'unitCost');
+  idpEl('price-label').textContent = cell ? 'Unit Price' : 'Buying Rate';
+  if (cell) idpEl('price').textContent = pbMoney(pbNum(cell.value));
+  else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
+}
+
+// While editing, the name is typed in and the primary button turns into Save.
+function setItemDescEditing(editing) {
+  itemDesc.editing = editing;
+  idpEl('name').readOnly = !editing;
+  for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
+  idpEl('primary-label').textContent = editing ? (itemDesc.saving ? 'Saving…' : 'Save') : 'Close';
+  idpEl('primary').disabled = itemDesc.saving;
+  idpEl('error').hidden = true;
+  if (editing) focusField(idpEl('name'));
+}
+
+function cancelItemDescEdit() {
+  idpEl('name').value = itemDesc.item ? itemDesc.item.name : itemDesc.field.value;
+  setItemDescEditing(false);
+  idpEl('primary').focus();
+}
+
+function closeItemDescription() {
+  const dialog = byId('item-desc');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open && !byId('lookup').open) document.documentElement.classList.remove('has-modal');
+  if (itemDesc.field && document.contains(itemDesc.field)) focusField(itemDesc.field);
+}
+
+async function copyItemDescName() {
+  const name = idpEl('name').value;
+  try {
+    await navigator.clipboard.writeText(name);
+  } catch {
+    const input = idpEl('name');
+    input.select();
+    if (!document.execCommand('copy')) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
+  }
+  showToast('Item name copied', name);
+}
+
+// Saves the new name to the Item master, then shows it on every line holding the item.
+async function saveItemDescName() {
+  const { itemId } = itemDesc;
+  if (!itemDesc.editing || itemDesc.saving) return;
+  const name = idpEl('name').value.trim();
+  if (name === '') { showItemDescError('Enter the item name.'); return; }
+  if (name === (itemDesc.item?.name ?? itemDesc.field.value)) { setItemDescEditing(false); idpEl('primary').focus(); return; }
+  itemDesc.saving = true;
+  setItemDescEditing(true);
+  let saved;
+  try {
+    saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name } });
+  } catch (error) {
+    itemDesc.saving = false;
+    setItemDescEditing(true);
+    showItemDescError(Object.values(error.fields || {})[0] || error.message);
+    return;
+  }
+  itemDesc.saving = false;
+  pbData.items.set(itemId, Promise.resolve(saved));
+  forgetLookups('item', 'itemcode');
+  for (const form of PURCHASE_FORMS) {
+    if (!form.page) continue;
+    let changed = false;
+    for (const row of form.page.rowsOf('items')) {
+      if (pbCell(row, 'itemId').value !== itemId) continue;
+      pbCell(row, 'itemName').value = saved.name;
+      pbCell(row, 'itemCode').value = saved.code;
+      changed = true;
+    }
+    if (changed) form.page.absorb();      // the master changed, not the document: nothing to undo
+  }
+  if (!byId('item-desc').open || itemDesc.itemId !== itemId) return;
+  itemDesc.item = saved;
+  idpEl('name').value = saved.name;
+  setItemDescEditing(false);
+  idpEl('primary').focus();
+  showToast('Item renamed', `${saved.code} · ${saved.name} (Item master)`);
+}
+
+function showItemDescError(message) {
+  idpEl('error').textContent = message;
+  idpEl('error').hidden = false;
+}
+
+function itemDescAction(action) {
+  if (itemDesc.saving) return;
+  if (action === 'close') closeItemDescription();
+  else if (action === 'copy') copyItemDescName();
+  else if (action === 'primary') { if (itemDesc.editing) saveItemDescName(); else closeItemDescription(); }
+  else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else setItemDescEditing(true); }
+}
+
+// Keys while the popup is open; it takes every key, so nothing reaches the form behind it.
+function handleItemDescKeys(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  const editingHere = itemDesc.editing && target === idpEl('name');
+  if (key === 'Escape') {
+    event.preventDefault();
+    if (event.repeat) return;
+    if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription();
+    return;
+  }
+  if (key === 'Enter' && !event.altKey && !event.shiftKey && !ctrl) {
+    if (target.tagName === 'BUTTON' && target !== idpEl('primary')) return;   // the focused button presses itself
+    event.preventDefault();
+    if (!event.repeat) itemDescAction('primary');
+    return;
+  }
+  if (ctrl && key.toLowerCase() === 'c' && !editingHere) {
+    if (target.matches?.('input') && target.selectionStart !== target.selectionEnd) return;   // a selected part: the browser copies it
+    event.preventDefault();
+    if (!event.repeat) copyItemDescName();
+    return;
+  }
+  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase()) && !editingHere) { event.preventDefault(); return; }   // the form's shortcuts wait
+  if ((key === 'ArrowLeft' || key === 'ArrowRight') && target.tagName === 'BUTTON' && !ctrl && !event.altKey) {
+    const buttons = [...byId('item-desc').querySelectorAll('.idp-foot button')];
+    const next = buttons[buttons.indexOf(target) + (key === 'ArrowRight' ? 1 : -1)];
+    event.preventDefault();
+    next?.focus();
+  }
+}
+
+function initItemDescription() {
+  const dialog = byId('item-desc');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeItemDescription(); return; }   // backdrop
+    const action = event.target.closest('[data-idp]')?.dataset.idp;
+    if (action) itemDescAction(action);
+  });
+}
+
 // A document's lines (from a purchase request, quotation request or purchase order) into the item table.
 async function loadPurchaseLines(form, lines, toRow) {
   form.page.setRows('items', lines.map(toRow));
@@ -6168,6 +6359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMasterView();
   initMasterConfirm();
   initQuickItem();
+  initItemDescription();
   for (const list of MASTER_LISTS) list.init();
   loadDashboard();
   window.addEventListener('hashchange', renderRoute);

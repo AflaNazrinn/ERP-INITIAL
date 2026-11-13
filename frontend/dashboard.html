@@ -2461,6 +2461,58 @@
   </div>
 </dialog>
 
+<!-- FULL ITEM DESCRIPTION (design/masters/item_description.png): Enter or Space on a filled Item Name in a
+     Purchase Book line. Typing, F4 or Alt+↓ on that cell still opens Select Item to change the item. -->
+<dialog id="item-desc" class="lookup sf idp" aria-labelledby="item-desc-title" aria-describedby="item-desc-sub">
+  <div class="sf-head idp-head">
+    <span class="idp-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path></svg></span>
+    <div class="sf-heading">
+      <h2 id="item-desc-title" class="sf-title idp-title">Full Item Description</h2>
+      <p id="item-desc-sub" class="sf-sub idp-sub"></p>
+    </div>
+    <span class="lk-keys idp-keys" aria-hidden="true"><span class="lk-key"><kbd>Ctrl+C</kbd> Copy</span><span class="lk-key"><kbd>Esc</kbd> Close</span></span>
+    <button type="button" class="lk-close" data-idp="close" aria-label="Close" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="idp-body">
+    <section class="idp-card">
+      <div class="idp-card-head">
+        <h3 class="idp-card-title">Item Name</h3>
+        <span id="item-desc-code" class="idp-code"></span>
+      </div>
+      <div class="idp-card-body">
+        <div class="idp-label-row">
+          <label class="idp-label" for="item-desc-name">Complete Item Name</label>
+          <button type="button" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+            <span>Edit</span>
+          </button>
+        </div>
+        <input id="item-desc-name" class="idp-name" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper readonly>
+        <div class="idp-facts">
+          <div class="idp-fact"><span class="idp-fact-label">Unit</span><span id="item-desc-unit" class="idp-fact-value"></span></div>
+          <div class="idp-fact"><span id="item-desc-price-label" class="idp-fact-label">Unit Price</span><span id="item-desc-price" class="idp-fact-value"></span></div>
+        </div>
+        <p id="item-desc-error" class="qi-error idp-error" role="alert" hidden></p>
+      </div>
+    </section>
+  </div>
+  <div class="sf-foot idp-foot">
+    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="copy">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+      <span>Copy Name</span>
+    </button>
+    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="edit-name" title="Rename the item in the Item master">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="m18 14 3 3-5 5h-3v-3z"></path></svg>
+      <span>Edit Name</span>
+    </button>
+    <button type="button" id="item-desc-primary" class="ml-btn ml-btn-green idp-btn idp-primary" data-idp="primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m8 12 3 3 5-6"></path></svg>
+      <span id="item-desc-primary-label">Close</span>
+      <kbd id="item-desc-primary-key">Enter</kbd>
+    </button>
+  </div>
+</dialog>
+
 <!-- Notification toast (shared by all screens) -->
 <div id="toast" class="toast" role="status" aria-live="polite">
   <span id="toast-icon" class="toast-icon" aria-hidden="true"></span>
