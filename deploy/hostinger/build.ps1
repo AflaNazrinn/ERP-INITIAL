@@ -4,9 +4,11 @@
 #
 # The zip unpacks into your domain folder (domains/<your-domain>/ in hPanel's File Manager):
 #   public_html/        frontend files + backend/public/api, with .htaccess   (the only part on the web)
-#   src/, config.php, db.php, migrations/, bin/, storage/, .env.example        (outside the web root)
+#   src/, config.php, db.php, migrations/, bin/, storage/, .env.example,
+#   companyconfig.example.php                                                (outside the web root)
 # public_html/api/*.php reach ../../src, exactly as backend/public/api does in the repository.
-# backend/.env is never packed: create it on the server from .env.example.
+# backend/.env and backend/companyconfig.php (every company's database password) are never packed, so an
+# update never overwrites the server's list of companies.
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
@@ -24,7 +26,7 @@ Copy-Item (Join-Path $root 'backend\public\*') (Join-Path $out 'public_html') -R
 Copy-Item (Join-Path $PSScriptRoot 'public_html.htaccess') (Join-Path $out 'public_html\.htaccess')
 
 # Application code, outside the web root.
-foreach ($item in 'src', 'migrations', 'bin', 'config.php', 'db.php', '.env.example') {
+foreach ($item in 'src', 'migrations', 'bin', 'config.php', 'db.php', '.env.example', 'companyconfig.example.php') {
     Copy-Item (Join-Path $root "backend\$item") $out -Recurse
 }
 foreach ($dir in 'storage', 'src', 'migrations', 'bin') {
@@ -35,7 +37,7 @@ foreach ($dir in 'storage', 'src', 'migrations', 'bin') {
 # Production defaults in the example settings.
 $example = Join-Path $out '.env.example'
 $text = (Get-Content $example -Raw) `
-    -replace '(?m)^# Copy to backend/\.env.*$', '# Copy to .env in this folder (next to config.php) and fill in from hPanel > Databases.' `
+    -replace '(?m)^# Copy to backend/\.env.*$', '# Copy to .env in this folder (next to config.php).' `
     -replace 'APP_ENV=development', 'APP_ENV=production' -replace 'DB_HOST=127.0.0.1', 'DB_HOST=localhost' `
     -replace 'Defaults to backend/storage\.', 'Defaults to storage/ in this folder.'
 [System.IO.File]::WriteAllText($example, $text)   # UTF-8 without a BOM
@@ -43,7 +45,9 @@ $text = (Get-Content $example -Raw) `
 # The local dev-router is not needed on the server.
 Remove-Item (Join-Path $out 'bin\dev-router.php') -ErrorAction SilentlyContinue
 
-if (Test-Path (Join-Path $out '.env')) { throw 'A .env file ended up in the package; stop and check.' }
+foreach ($secret in '.env', 'companyconfig.php') {
+    if (Test-Path (Join-Path $out $secret)) { throw "$secret ended up in the package; stop and check." }
+}
 
 # Zip with forward-slash entry names (Compress-Archive in Windows PowerShell 5.1 writes backslashes,
 # which Linux unpacks as file names like "public_html\api\items.php").

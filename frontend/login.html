@@ -20,12 +20,24 @@
         <circle cx="28" cy="28" r="8.5" fill="#fbbf24"></circle>
       </svg>
       <div class="login-brand-text">
-        <h1 id="login-title" class="login-company">Bluesun International LLC</h1>
-        <p class="login-product">Growth Engine</p>
+        <h1 id="login-title" class="login-company">Growth Engine</h1>
+        <p id="login-product" class="login-product">Sign in to your company</p>
       </div>
     </header>
 
     <div id="login-error" class="login-alert" role="alert" hidden></div>
+
+    <div id="login-created" class="login-success" role="status" hidden></div>
+
+    <div class="login-field">
+      <label class="login-label" for="login-company">Company Code :</label>
+      <div class="login-control">
+        <svg class="login-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4h2a2 2 0 0 1 2 2v10h-6v-4h-4v4zm4-14v2h2V7zm4 0v2h2V7zm-4 4v2h2v-2zm4 0v2h2v-2z"></path></svg>
+        <input id="login-company" class="login-input login-code" type="text" name="company" autocomplete="organization"
+               autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="e.g. BLUESUN" required>
+      </div>
+      <p id="login-company-error" class="login-field-error" hidden></p>
+    </div>
 
     <div class="login-field">
       <label class="login-label" for="login-username">Username :</label>
@@ -61,8 +73,7 @@
     </div>
   </form>
 
-  <button type="button" id="login-create" class="login-link" aria-controls="login-note" aria-expanded="false">Create a company</button>
-  <p id="login-note" class="login-note" role="status" hidden></p>
+  <a id="login-create" class="login-link" href="company.html">Create a company</a>
 </div>
 </main>
 </body>

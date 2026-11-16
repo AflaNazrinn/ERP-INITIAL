@@ -20,7 +20,7 @@ const SEAL_TYPES = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'imag
 function seal_current(): ?string
 {
     foreach (['png', 'jpg'] as $extension) {
-        if (is_file(rtrim(config()['storage'], '/') . "/company/seal.$extension")) {
+        if (is_file(storage_dir() . "/company/seal.$extension")) {
             return "company/seal.$extension";
         }
     }
@@ -35,14 +35,14 @@ if ($method === 'GET') {
         if ($current === null) {
             throw new NotFound('There is no company seal.');
         }
-        $path = rtrim(config()['storage'], '/') . '/' . $current;
+        $path = storage_dir() . '/' . $current;
         header_remove('Content-Type');
         header('Content-Type: ' . SEAL_TYPES[pathinfo($current, PATHINFO_EXTENSION)]);
         header('Content-Length: ' . filesize($path));
         readfile($path);
         exit;
     }
-    json_out($current === null ? null : ['name' => basename($current), 'size' => filesize(rtrim(config()['storage'], '/') . '/' . $current)]);
+    json_out($current === null ? null : ['name' => basename($current), 'size' => filesize(storage_dir() . '/' . $current)]);
 }
 
 if ($method === 'DELETE') {
@@ -66,7 +66,7 @@ if (!isset(SEAL_TYPES[$extension]) || !in_array(@getimagesize($file['tmp_name'])
 if ($file['size'] > SEAL_MAX_BYTES) {
     throw new ValidationError(['seal' => 'The seal image must be at most 2 MB.'], 'The seal image must be at most 2 MB.');
 }
-$directory = rtrim(config()['storage'], '/') . '/company';
+$directory = storage_dir() . '/company';
 if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
     throw new RuntimeException("Cannot create $directory");
 }

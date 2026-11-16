@@ -123,10 +123,6 @@ body {
   margin: -14px 0 22px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--danger-line);
   background: var(--danger-soft); color: #b91c1c; font-size: 15px; font-weight: 500;
 }
-.login-note {
-  margin: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--note-line);
-  background: var(--note-soft); color: var(--blue-hover); font-size: 14px;
-}
 
 @media (max-width: 560px) {
   .login-card { padding: 32px 22px 26px; }
@@ -139,4 +135,13 @@ body {
   .login-label { grid-row: auto; }
   .login-actions { padding-left: 0; grid-template-columns: 110px minmax(0, 1fr); column-gap: 12px; margin-top: 24px; }
   .login-link { margin-right: 0; }
+}
+
+/* Company code: capitals, like the code on the Create a Company page. */
+.login-code { text-transform: uppercase; letter-spacing: .04em; }
+.login-code::placeholder { text-transform: none; letter-spacing: 0; }
+/* After Create a Company: the new company is ready. */
+.login-success {
+  margin: -14px 0 22px; padding: 12px 14px; border-radius: 10px; border: 1px solid #bbf7d0; background: #f0fdf4;
+  color: #166534; font-size: 14px; font-weight: 600;
 }

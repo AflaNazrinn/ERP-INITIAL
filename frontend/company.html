@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create a Company · Growth Engine</title>
+<link rel="stylesheet" href="company.css">
+<script src="letterheads.js" defer></script>
+<script src="company.js" defer></script>
+</head>
+<body>
+<form id="cc-form" class="cc" novalidate autocomplete="off" aria-labelledby="cc-title">
+
+  <header class="cc-top">
+    <div class="cc-heading">
+      <p class="cc-product">Growth Engine</p>
+      <h1 id="cc-title" class="cc-title">Create a Company</h1>
+    </div>
+    <div class="cc-top-right">
+      <ul class="cc-keys" aria-label="Keyboard shortcuts">
+        <li><kbd>Enter</kbd> Next Field</li>
+        <li><kbd>↑↓←→</kbd> Move</li>
+        <li><kbd>Shift+Enter</kbd> Create</li>
+        <li><kbd>Esc</kbd> Sign in</li>
+      </ul>
+      <a class="cc-btn cc-btn-outline" href="login.html" data-back>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+        Back to sign in
+      </a>
+    </div>
+  </header>
+
+  <div id="cc-alert" class="cc-alert" role="alert" hidden></div>
+
+  <div class="cc-grid">
+    <!-- Column 1 -->
+    <div class="cc-col">
+      <section class="cc-card" data-section="basic" aria-labelledby="cc-s1">
+        <header class="cc-card-head"><span class="cc-num">01</span><h2 id="cc-s1">Basic Details</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-companyName">Company Name&nbsp;<span class="cc-req">*</span></label>
+          <input id="cc-companyName" name="companyName" class="cc-input" type="text" maxlength="150" data-upper required placeholder="e.g. BLUESUN INTERNATIONAL LLC">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-companyCode">Company Code&nbsp;<span class="cc-req">*</span></label>
+          <div class="cc-code">
+            <input id="cc-companyCode" name="companyCode" class="cc-input cc-mono" type="text" maxlength="12" required readonly
+                   placeholder="Generating…" spellcheck="false" autocapitalize="characters" aria-describedby="cc-code-hint"
+                   title="Given automatically (CMP0001, CMP0002 …); the pencil lets you type your own. Used to sign in. 2–12 letters or digits.">
+            <span id="cc-code-auto" class="cc-auto">Auto</span>
+            <button type="button" id="cc-code-edit" class="cc-icon-btn" aria-label="Type the company code yourself" aria-pressed="false" title="Type the code yourself">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+            </button>
+          </div>
+          <p id="cc-code-hint" class="cc-sr">Given automatically (CMP0001, CMP0002 …); the pencil lets you type your own. Used to sign in. 2–12 letters or digits.</p>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-companyType">Company Type</label>
+          <select id="cc-companyType" name="companyType" class="cc-input cc-select">
+            <option>Main Company</option><option>Branch</option><option>Subsidiary</option><option>Sister Concern</option>
+          </select>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-businessType">Business Type</label>
+          <select id="cc-businessType" name="businessType" class="cc-input cc-select">
+            <option>Trading</option><option>Manufacturing</option><option>Services</option><option>Contracting</option><option>Retail</option><option>Distribution</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="cc-card" data-section="registration" aria-labelledby="cc-s2">
+        <header class="cc-card-head"><span class="cc-num">02</span><h2 id="cc-s2">Registration Details</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-crNumber">CR Number</label>
+          <input id="cc-crNumber" name="crNumber" class="cc-input cc-mono" type="text" maxlength="30" inputmode="numeric" placeholder="e.g. 1111715">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-crExpiry">CR Expiry Date</label>
+          <input id="cc-crExpiry" name="crExpiry" class="cc-input" type="date">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-vatNumber">VAT Reg. Number</label>
+          <input id="cc-vatNumber" name="vatNumber" class="cc-input cc-mono" type="text" maxlength="30" data-upper placeholder="e.g. OM1100468691">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-legalStructure">Legal Structure</label>
+          <select id="cc-legalStructure" name="legalStructure" class="cc-input cc-select">
+            <option value="">Select...</option><option>LLC</option><option>SAOC</option><option>SAOG</option><option>Sole Proprietorship</option>
+            <option>Partnership</option><option>Branch of Foreign Company</option><option>Free Zone Company</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="cc-card" data-section="financial" aria-labelledby="cc-s3">
+        <header class="cc-card-head"><span class="cc-num">03</span><h2 id="cc-s3">Financial Details</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-baseCurrency">Base Currency</label>
+          <!-- A "Select Currency" popup, as on the other modules (Purchase Order): the field shows "OMR – Omani Rial",
+               the hidden input sends the code. Picking a country sets it. -->
+          <div class="cc-lookup-wrap"><input id="cc-baseCurrency" class="cc-input cc-lookup" type="text" data-lookup="currency" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select currency..." value="OMR – Omani Rial" title="Set from the country. To change it: Enter, Space or a click opens the list"><input id="cc-baseCurrency-id" type="hidden" name="baseCurrency" value="OMR"><span class="cc-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-financialYearStart">Financial Year Start</label>
+          <input id="cc-financialYearStart" name="financialYearStart" class="cc-input" type="date">
+        </div>
+        <div class="cc-row">
+          <span class="cc-label" id="cc-vat-label">VAT Applicable</span>
+          <div class="cc-toggle" role="group" aria-labelledby="cc-vat-label">
+            <input type="hidden" id="cc-vatApplicable" name="vatApplicable" value="1">
+            <button type="button" class="cc-toggle-btn" data-vat="1" aria-pressed="true">Yes</button>
+            <button type="button" class="cc-toggle-btn" data-vat="0" aria-pressed="false">No</button>
+          </div>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-vatPercentage">VAT Percentage</label>
+          <div class="cc-suffix">
+            <input id="cc-vatPercentage" name="vatPercentage" class="cc-input" type="text" inputmode="decimal" maxlength="6" value="5">
+            <span aria-hidden="true">%</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Column 2 -->
+    <div class="cc-col">
+      <section class="cc-card" data-section="address" aria-labelledby="cc-s4">
+        <header class="cc-card-head"><span class="cc-num">04</span><h2 id="cc-s4">Company Address</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-building">Building / Office No.</label>
+          <input id="cc-building" name="building" class="cc-input" type="text" maxlength="100" placeholder="e.g. Office 12, Building 245">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-street">Street</label>
+          <input id="cc-street" name="street" class="cc-input" type="text" maxlength="150" placeholder="e.g. Way 3301, Sultan Qaboos St">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-area">Area</label>
+          <input id="cc-area" name="area" class="cc-input" type="text" maxlength="100" placeholder="e.g. Al Khuwair">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-city">City</label>
+          <input id="cc-city" name="city" class="cc-input" type="text" maxlength="100" placeholder="e.g. Muscat">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-country">Country</label>
+          <!-- A "Select Country" popup with the same countries, in the same order, as the other modules. -->
+          <div class="cc-lookup-wrap"><input id="cc-country" name="country" class="cc-input cc-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman"><span class="cc-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-poBox">P O Box</label>
+          <input id="cc-poBox" name="poBox" class="cc-input cc-mono" type="text" maxlength="20" inputmode="numeric" placeholder="e.g. 778">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-postalCode">Postal Code</label>
+          <input id="cc-postalCode" name="postalCode" class="cc-input cc-mono" type="text" maxlength="20" inputmode="numeric" placeholder="e.g. 111">
+        </div>
+        <!-- Contact details: printed on the generated letterhead (email, phone, website). -->
+        <div class="cc-row">
+          <label class="cc-label" for="cc-phone">Phone</label>
+          <!-- Calling code + number, as on the other modules: the code follows the Country, Enter passes it by. -->
+          <div class="cc-phone">
+            <select id="cc-phoneCode" class="cc-input cc-select cc-phone-code" data-enter-skip aria-label="Phone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select>
+            <input id="cc-phone" name="phone" data-check="phone" class="cc-input cc-mono" type="text" maxlength="30" inputmode="tel" placeholder="2XXX XXXX">
+          </div>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-email">Email</label>
+          <input id="cc-email" name="email" data-check="email" class="cc-input" type="text" maxlength="150" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="e.g. sales@bluesun-om.com">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-website">Website</label>
+          <input id="cc-website" name="website" class="cc-input" type="text" maxlength="150" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="e.g. www.bluesun-om.com">
+        </div>
+      </section>
+
+      <section class="cc-card" data-section="bank" aria-labelledby="cc-s5">
+        <header class="cc-card-head"><span class="cc-num">05</span><h2 id="cc-s5">Bank Details</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-bankName">Bank Name</label>
+          <input id="cc-bankName" name="bankName" class="cc-input" type="text" maxlength="100" list="cc-banks" placeholder="Type or pick a bank">
+          <datalist id="cc-banks">
+            <option value="Bank Muscat"></option><option value="National Bank of Oman"></option><option value="Bank Dhofar"></option>
+            <option value="Sohar International"></option><option value="Oman Arab Bank"></option><option value="HSBC Bank Oman"></option>
+            <option value="Ahli Bank"></option><option value="Bank Nizwa"></option><option value="Alizz Islamic Bank"></option>
+            <option value="Oman Housing Bank"></option><option value="Standard Chartered Oman"></option>
+          </datalist>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-accountHolder">Account Holder</label>
+          <input id="cc-accountHolder" name="accountHolder" class="cc-input" type="text" maxlength="150" data-upper placeholder="Same as company name">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-accountNumber">Account Number</label>
+          <input id="cc-accountNumber" name="accountNumber" class="cc-input cc-mono" type="text" maxlength="40" inputmode="numeric" placeholder="e.g. 0312045678900018">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-iban">IBAN</label>
+          <input id="cc-iban" name="iban" class="cc-input cc-mono" type="text" maxlength="40" data-upper placeholder="e.g. OM810270312045678900018">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-swiftCode">SWIFT Code</label>
+          <input id="cc-swiftCode" name="swiftCode" class="cc-input cc-mono" type="text" maxlength="11" data-upper placeholder="e.g. BMUSOMRX">
+        </div>
+      </section>
+    </div>
+
+    <!-- Column 3 -->
+    <div class="cc-col">
+      <section class="cc-card" data-section="documents" aria-labelledby="cc-s6">
+        <header class="cc-card-head"><span class="cc-num">06</span><h2 id="cc-s6">Documents &amp; Branding</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-docs">
+          <div class="cc-doc" data-file="logo" data-hint="PNG, JPG or SVG">
+            <span class="cc-doc-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></span>
+            <span class="cc-doc-text"><span class="cc-doc-title" id="cc-logo-title">Company Logo&nbsp;<span class="cc-req">*</span></span><span class="cc-doc-sub" data-sub>PNG, JPG or SVG</span></span>
+            <button type="button" class="cc-mini-btn" data-pick="logo" aria-describedby="cc-logo-title">Upload</button>
+            <input type="file" id="cc-logo" class="cc-file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml" tabindex="-1" aria-hidden="true">
+          </div>
+          <div class="cc-doc" data-file="letterhead" data-hint="Not added yet">
+            <span class="cc-doc-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
+            <span class="cc-doc-text"><span class="cc-doc-title" id="cc-letterhead-title">Letterhead&nbsp;<span class="cc-req">*</span></span><span class="cc-doc-sub" data-sub>Not added yet</span></span>
+            <input type="file" id="cc-letterhead" class="cc-file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" tabindex="-1" aria-hidden="true">
+          </div>
+          <div class="cc-doc" data-file="crCertificate" data-hint="PDF, JPG or PNG">
+            <span class="cc-doc-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M9 15l2 2 4-4"></path></svg></span>
+            <span class="cc-doc-text"><span class="cc-doc-title" id="cc-cr-title">CR Certificate</span><span class="cc-doc-sub" data-sub>PDF, JPG or PNG</span></span>
+            <button type="button" class="cc-mini-btn" data-pick="crCertificate" aria-describedby="cc-cr-title">Upload</button>
+            <input type="file" id="cc-crCertificate" class="cc-file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" tabindex="-1" aria-hidden="true">
+          </div>
+          <div class="cc-doc" data-file="vatCertificate" data-hint="PDF, JPG or PNG">
+            <span class="cc-doc-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M9 13h6M9 17h6"></path></svg></span>
+            <span class="cc-doc-text"><span class="cc-doc-title" id="cc-vat-title">VAT Certificate</span><span class="cc-doc-sub" data-sub>PDF, JPG or PNG</span></span>
+            <button type="button" class="cc-mini-btn" data-pick="vatCertificate" aria-describedby="cc-vat-title">Upload</button>
+            <input type="file" id="cc-vatCertificate" class="cc-file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" tabindex="-1" aria-hidden="true">
+          </div>
+        </div>
+
+        <p class="cc-sub-head">Letterhead Preview</p>
+        <div id="cc-preview" class="cc-preview">
+          <div id="cc-preview-empty" class="cc-preview-empty">
+            <span class="cc-preview-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M8 13h8M8 17h5"></path></svg></span>
+            <strong id="cc-preview-title">No letterhead yet</strong>
+            <span id="cc-preview-text">Upload your letterhead or generate one from the company details</span>
+          </div>
+          <img id="cc-preview-img" class="cc-preview-img" alt="Letterhead preview" hidden>
+          <div id="cc-generating" class="cc-generating" role="status" aria-live="polite" hidden>
+            <span class="cc-generating-spinner" aria-hidden="true"></span>
+            <strong>Generating letterhead…</strong>
+            <span id="cc-generating-step">Choosing a design</span>
+            <span class="cc-generating-bar" aria-hidden="true"><span id="cc-generating-progress"></span></span>
+          </div>
+          <div class="cc-preview-actions">
+            <button type="button" class="cc-btn cc-btn-outline cc-btn-sm" data-pick="letterhead">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>
+              <span>Upload</span>
+            </button>
+            <button type="button" id="cc-generate" class="cc-btn cc-btn-primary cc-btn-sm">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1"></path></svg>
+              <span>Generate</span>
+            </button>
+            <button type="button" id="cc-letterhead-remove" class="cc-btn cc-btn-ghost cc-btn-sm" hidden>Remove</button>
+          </div>
+        </div>
+        <p id="cc-error-letterhead" class="cc-error" hidden></p>
+        <p id="cc-error-files" class="cc-error" hidden></p>
+      </section>
+
+      <section class="cc-card" data-section="login" aria-labelledby="cc-s7">
+        <header class="cc-card-head"><span class="cc-num">07</span><h2 id="cc-s7">Login Account</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-username">Username&nbsp;<span class="cc-req">*</span></label>
+          <input id="cc-username" name="username" class="cc-input" type="text" maxlength="50" required autocomplete="username"
+                 autocapitalize="none" spellcheck="false" placeholder="Enter a username">
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-password">Password&nbsp;<span class="cc-req">*</span></label>
+          <div class="cc-pass">
+            <input id="cc-password" name="password" class="cc-input" type="password" maxlength="200" required autocomplete="new-password" placeholder="At least 8 characters">
+            <button type="button" class="cc-eye" data-eye="cc-password" aria-label="Show password" aria-pressed="false"></button>
+          </div>
+        </div>
+        <div class="cc-row">
+          <label class="cc-label" for="cc-confirmPassword">Confirm Password&nbsp;<span class="cc-req">*</span></label>
+          <div class="cc-pass">
+            <input id="cc-confirmPassword" name="confirmPassword" class="cc-input" type="password" maxlength="200" required autocomplete="new-password" placeholder="Type the password again">
+            <button type="button" class="cc-eye" data-eye="cc-confirmPassword" aria-label="Show password" aria-pressed="false"></button>
+          </div>
+        </div>
+        <div class="cc-row" id="cc-key-row" hidden>
+          <label class="cc-label" for="cc-accessKey">Access Key&nbsp;<span class="cc-req">*</span></label>
+          <input id="cc-accessKey" name="accessKey" class="cc-input" type="password" maxlength="200" autocomplete="off" placeholder="Given by the server administrator" data-skip-count>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="cc-foot">
+    <a class="cc-foot-back" href="login.html" data-back>Back to sign in</a>
+    <div class="cc-progress" aria-hidden="true"><span id="cc-progress-bar"></span></div>
+    <p class="cc-progress-text" role="status"><strong id="cc-progress-count">0 of 7</strong> sections complete</p>
+    <p id="cc-required" class="cc-required"></p>
+    <div class="cc-foot-actions">
+      <button type="button" id="cc-clear" class="cc-btn cc-btn-outline">Clear</button>
+      <button type="submit" id="cc-submit" class="cc-btn cc-btn-primary">
+        <span class="cc-spinner" aria-hidden="true"></span>
+        <span id="cc-submit-label">Create Company</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+      </button>
+    </div>
+  </footer>
+</form>
+
+<!-- The "Select …" popup, the same as on the other modules (dashboard.html #lookup). -->
+<dialog id="lookup" class="lookup" aria-labelledby="lookup-title">
+  <div class="lk-head">
+    <span id="lookup-letter" class="lk-letter" aria-hidden="true"></span>
+    <h2 id="lookup-title" class="lk-title"></h2>
+    <div class="lk-keys" aria-hidden="true">
+      <span class="lk-key"><kbd>↑↓</kbd> Navigate</span>
+      <span class="lk-key"><kbd>Enter</kbd> Select</span>
+      <span class="lk-key"><kbd>Esc</kbd> Close</span>
+    </div>
+    <button type="button" class="lk-close" data-lookup-action="cancel" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="lk-body">
+    <section class="lk-card" aria-labelledby="lookup-list-title">
+      <h3 id="lookup-list-title" class="lk-list-title"></h3>
+      <label class="lk-label" for="lookup-search">Search</label>
+      <div class="lk-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="lookup-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-controls="lookup-rows" aria-expanded="true" aria-autocomplete="list">
+        <span id="lookup-count" class="lk-count" aria-live="polite"></span>
+      </div>
+      <div class="lk-table-wrap">
+        <table class="lk-table">
+          <thead><tr id="lookup-head"></tr></thead>
+          <tbody id="lookup-rows" role="listbox" aria-labelledby="lookup-list-title"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <div class="lk-foot">
+    <button type="button" id="lookup-cancel" class="lk-btn lk-btn-secondary" data-lookup-action="cancel">Cancel</button>
+    <button type="button" id="lookup-select" class="lk-btn lk-btn-primary" data-lookup-action="select"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="lookup-select-label"></span></button>
+  </div>
+</dialog>
+
+<div id="cc-done" class="cc-done" role="dialog" aria-modal="true" aria-labelledby="cc-done-title" hidden>
+  <div class="cc-done-card">
+    <span class="cc-done-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg></span>
+    <h2 id="cc-done-title">Company created</h2>
+    <p id="cc-done-text"></p>
+    <a id="cc-done-link" class="cc-btn cc-btn-primary" href="login.html">Sign in</a>
+  </div>
+</div>
+</body>
+</html>

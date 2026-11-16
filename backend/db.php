@@ -2,23 +2,21 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/src/company_registry.php';
 
-/* One PDO connection per request. Real prepared statements, exceptions on error. */
+/*
+ * One PDO connection per request, to the database of the company this request works on
+ * (active_company() in src/company_registry.php): never to another company's.
+ * Real prepared statements, exceptions on error.
+ */
 function db(): PDO
 {
     static $pdo = null;
-    if ($pdo === null) {
-        $c = config()['db'];
-        $pdo = new PDO(
-            sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $c['host'], $c['port'], $c['name']),
-            $c['user'],
-            $c['pass'],
-            [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES   => false,
-            ]
-        );
+    static $for = null;
+    $company = active_company();
+    if ($pdo === null || $for !== $company['code']) {
+        $pdo = db_connect($company['database']);
+        $for = $company['code'];
     }
     return $pdo;
 }

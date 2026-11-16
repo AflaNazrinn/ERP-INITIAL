@@ -3,8 +3,11 @@ declare(strict_types=1);
 
 /*
  * Settings come from the environment, or from backend/.env (KEY=value lines) when present.
- * Required database settings fail closed: a missing value stops the request instead of
- * guessing a default. Copy backend/.env.example to backend/.env to start.
+ * Copy backend/.env.example to backend/.env to start.
+ *
+ * The databases are not set here: every company has its own, listed in backend/companyconfig.php
+ * (src/company_registry.php reads and writes it). DB_* lines left in an older .env are read only once,
+ * to write the first companyconfig.php.
  */
 
 function load_env_file(string $path): void
@@ -48,13 +51,7 @@ function config(): array
     if ($config === null) {
         $config = [
             'env'     => env('APP_ENV', 'production'),
-            'db'      => [
-                'host'    => env('DB_HOST', '127.0.0.1'),
-                'port'    => (int) env('DB_PORT', '3306'),
-                'name'    => env('DB_NAME'),
-                'user'    => env('DB_USER'),
-                'pass'    => env('DB_PASS', ''),
-            ],
+            // The base folder; each company's files are in a folder of their own under it (storage_dir()).
             'storage' => env('STORAGE_DIR', __DIR__ . '/storage'),
         ];
     }

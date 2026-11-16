@@ -11,7 +11,10 @@ backend/
   src/security.php             secure session (__Host-auth), CSRF token
   src/master_validation.php    Input checks, next_code(), ValidationError / NotFound
   src/<module>.php             business rules and SQL per master
-  config.php, db.php           .env settings, PDO connection
+  config.php, db.php           .env settings, PDO connection to the signed-in company's database
+  companyconfig.php            companies and their databases, written by the program (not committed)
+  src/company_registry.php     reads/writes companyconfig.php, use_company(), storage_dir()
+  src/company_setup.php        Create a Company: its own database, tables, first user, files
   migrations/*.sql             schema, applied by bin/migrate.php
   bin/                         CLI: migrate.php, seed-demo-data.php
   storage/                     uploaded documents (outside the web root, not committed)
@@ -27,7 +30,9 @@ Writes need the `X-CSRF-Token` header from `GET /api/session.php`.
 
 | Endpoint | GET | POST |
 |---|---|---|
-| `session.php` | CSRF token | |
+| `session.php` | CSRF token, signed-in user and company | |
+| `companies.php` (public) | `{ enabled, keyRequired }` | create a company (multipart: fields + `logo`, `letterhead`, `crCertificate`, `vatCertificate`) |
+| `company-profile.php` | the signed-in company's details; `?file=logo` … its files | |
 | `uoms.php`, `categories.php`, `brands.php`, `warehouses.php`, `suppliers.php`, `customers.php`, `items.php` | list (`?q=`; `?all=1` adds inactive records), one (`?id=`), next code (`?nextCode`) | create (JSON); also `PUT ?id=` update (only the keys sent change) and `DELETE ?id=` (409 while in use) |
 | `sub-categories.php` | list, `?categoryId=` | |
 | `rack-bins.php` | list, `?warehouseId=` | |
@@ -38,17 +43,16 @@ Writes need the `X-CSRF-Token` header from `GET /api/session.php`.
 Needs PHP 8.2+ with `pdo_mysql` and `mbstring`, PHP-FPM, MySQL 8 or MariaDB 10.6+, and Caddy 2.
 
 ```sh
-# 1. Database and user
-mysql -u root -p -e "CREATE DATABASE growth_engine CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-  CREATE USER 'growth_engine'@'localhost' IDENTIFIED BY 'change-me';
-  GRANT ALL ON growth_engine.* TO 'growth_engine'@'localhost';"
+# 1. A MySQL login that may create the company databases (ge_<company_name>, e.g. ge_bluesun_international)
+mysql -u root -p -e "CREATE USER 'growth_engine'@'localhost' IDENTIFIED BY 'change-me';
+  GRANT ALL ON \`ge\\_%\`.* TO 'growth_engine'@'localhost';"
 
 # 2. Settings
-cp backend/.env.example backend/.env      # then set DB_PASS
+cp backend/.env.example backend/.env
+cp backend/companyconfig.example.php backend/companyconfig.php   # then fill in 'server'
 
-# 3. Schema and demo data
-php backend/bin/migrate.php
-php backend/bin/seed-demo-data.php        # optional: units, categories, brands, warehouses, racks, items
+# 3. Start the server (step 4), open /company.html and create a company. Optional demo data for it:
+php backend/bin/seed-demo-data.php --company=CODE
 
 # 4. Start PHP-FPM (listening on 127.0.0.1:9000), then Caddy from the repository root
 APP_ROOT=$PWD caddy run --config Caddyfile

@@ -69,13 +69,13 @@ function validate_uploads(array $files, ?array $allowed = null): void
 /* Moves one validated upload into storage/$folder; returns [storedPath, originalName]. */
 function store_upload(array $file, string $folder): array
 {
-    $directory = rtrim(config()['storage'], '/') . '/' . $folder;
+    $directory = storage_dir() . '/' . $folder;
     if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
         throw new RuntimeException("Cannot create $directory");
     }
     $extension = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
     $stored = $folder . '/' . bin2hex(random_bytes(16)) . '.' . $extension;
-    if (!move_uploaded_file($file['tmp_name'], rtrim(config()['storage'], '/') . '/' . $stored)) {
+    if (!move_uploaded_file($file['tmp_name'], storage_dir() . '/' . $stored)) {
         throw new RuntimeException('Could not store the uploaded file.');
     }
     $original = mb_substr(basename(str_replace('\\', '/', (string) $file['name'])), 0, 255);
@@ -84,7 +84,7 @@ function store_upload(array $file, string $folder): array
 
 function delete_stored(string $storedPath): void
 {
-    $path = rtrim(config()['storage'], '/') . '/' . $storedPath;
+    $path = storage_dir() . '/' . $storedPath;
     if (is_file($path)) {
         unlink($path);
     }
@@ -94,7 +94,7 @@ function delete_stored(string $storedPath): void
    for the browser to show in a tab. */
 function send_stored_file(string $storedPath, string $originalName, bool $inline = false): never
 {
-    $path = rtrim(config()['storage'], '/') . '/' . $storedPath;
+    $path = storage_dir() . '/' . $storedPath;
     if (!is_file($path)) {
         throw new NotFound('File not found.');
     }

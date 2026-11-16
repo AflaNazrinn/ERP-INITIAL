@@ -18,6 +18,19 @@
       <div class="brand-mark" aria-hidden="true">G</div>
       <h1 class="brand-name">Growth Engine</h1>
     </div>
+    <!-- The signed-in company's financial year start and CR expiry (company_profile, via api/company-profile.php). -->
+    <dl id="company-dates" class="company-dates" hidden>
+      <div class="company-date">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+        <dt>Financial Year Start</dt>
+        <dd id="company-fy-start">Not set</dd>
+      </div>
+      <div id="company-cr" class="company-date">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M9 15l2 2 4-4"></path></svg>
+        <dt>CR Expiry</dt>
+        <dd id="company-cr-expiry">Not set</dd>
+      </div>
+    </dl>
     <div class="header-actions">
       <button type="button" id="dashboard-range-btn" class="range-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>

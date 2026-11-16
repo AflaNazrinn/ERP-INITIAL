@@ -2,3 +2,7 @@ backend/.env
 backend/storage/
 backend/vendor/
 dist/
+# Companies and their database passwords: written by the program, never committed.
+backend/companyconfig.php
+backend/companyconfig.lock
+backend/companyconfig.php.*.tmp

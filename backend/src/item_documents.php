@@ -16,7 +16,7 @@ const ITEM_DOCUMENT_KINDS = [
 
 function item_document_format(array $row): array
 {
-    $path = rtrim(config()['storage'], '/') . '/' . $row['file_path'];
+    $path = storage_dir() . '/' . $row['file_path'];
     return [
         'id'           => (int) $row['id'],
         'kind'         => $row['doc_kind'],

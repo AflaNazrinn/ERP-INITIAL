@@ -9,9 +9,10 @@ declare(strict_types=1);
  * Item master items, so at least one item is needed). Every demo document's remarks start with "Demo data", so they are easy to find and delete.
  * Refuses to run twice (when a demo purchase request already exists).
  *
- *   With SSH:     php backend/bin/seed-purchase-book.php
+ *   With SSH:     php backend/bin/seed-purchase-book.php --company=CODE
  *   Without SSH:  upload this file to public_html/api/seed-purchase-book.php, open
- *                 https://<your-domain>/api/seed-purchase-book.php once, read the result, then DELETE the file.
+ *                 https://<your-domain>/api/seed-purchase-book.php?company=CODE once, read the result, then DELETE the file.
+ * Each company has its own database: the documents go into that company's only.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -23,6 +24,13 @@ if (PHP_SAPI !== 'cli') {
 // backend/bin/ in the repository, or public_html/api/ on Hostinger (src/ is next to public_html).
 $root = is_dir(__DIR__ . '/../src') ? dirname(__DIR__) : dirname(__DIR__, 2);
 require_once "$root/src/purchase_book.php";
+if (PHP_SAPI !== 'cli') {
+    try {
+        use_company((string) ($_GET['company'] ?? ''));
+    } catch (CompanyMissing) {
+        exit("Add ?company=CODE to the address: the company to add the demo documents to.\n");
+    }
+}
 
 const DEMO = 'Demo data';
 $say = static fn (string $line) => print($line . "\n");

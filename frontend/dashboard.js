@@ -1317,6 +1317,27 @@ async function checkSignedIn() {
   goToSignIn();
   return null;
 }
+// The header's Financial Year Start and CR Expiry, from the signed-in company's profile. A company without a
+// profile (one from before Create a Company) keeps them hidden; a date that was left blank shows "Not set".
+const CR_EXPIRY_WARN_DAYS = 30;
+async function showCompanyDates() {
+  let profile;
+  try { profile = await apiRequest('api/company-profile.php'); } catch { return; }
+  const show = iso => (iso ? formatDate(new Date(`${iso}T00:00`)) : 'Not set');
+  byId('company-fy-start').textContent = show(profile.financialYearStart);
+  byId('company-cr-expiry').textContent = show(profile.crExpiryDate);
+  const cr = byId('company-cr');
+  if (profile.crExpiryDate) {
+    const today = new Date(`${todayInputValue()}T00:00`);
+    const days = Math.round((new Date(`${profile.crExpiryDate}T00:00`) - today) / 86400000);
+    cr.classList.toggle('is-expired', days < 0);
+    cr.classList.toggle('is-soon', days >= 0 && days <= CR_EXPIRY_WARN_DAYS);
+    cr.title = days < 0 ? `The CR expired ${-days} day${days === -1 ? '' : 's'} ago`
+      : days === 0 ? 'The CR expires today' : `The CR expires in ${days} day${days === 1 ? '' : 's'}`;
+  }
+  byId('company-dates').hidden = false;
+}
+
 async function signOut() {
   try { await apiRequest('api/login.php', { method: 'DELETE' }); } catch { /* signed out anyway below */ }
   location.replace('login.html');
@@ -8217,7 +8238,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!user) return;
   document.documentElement.classList.remove('auth-pending');
   byId('header-user').textContent = user.fullName || user.username;
+  // The signed-in company's name in the header (also printed on Purchase Book PDFs, which read it from there).
+  if (user.company?.name) {
+    document.querySelector('#app .brand-name, .brand-name').textContent = user.company.name;
+    document.title = `${user.company.name} · Growth Engine`;
+  }
   byId('sign-out').addEventListener('click', signOut);
+  showCompanyDates();
   byId('footer-year').textContent = String(today.getFullYear());
   for (const select of [...document.querySelectorAll('select[data-phone-code]'),
     ...[...document.querySelectorAll('template')].flatMap(template => [...template.content.querySelectorAll('select[data-phone-code]')])]) fillPhoneCodes(select);

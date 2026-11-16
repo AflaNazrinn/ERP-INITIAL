@@ -278,21 +278,21 @@ function serve_bulk_save(callable $save): array
     return $results;
 }
 
-/* What to fix when $e comes from a missing .env, a database that cannot be reached, or a schema that is not up to date; null otherwise. */
+/* What to fix when $e comes from missing settings, a database that cannot be reached, or a schema that is not up to date; null otherwise. */
 function setup_problem(Throwable $e): ?string
 {
-    if ($e instanceof RuntimeException && str_starts_with($e->getMessage(), 'Missing required setting')) {
-        return 'the .env file next to config.php is missing or incomplete (DB_NAME, DB_USER and DB_PASS are needed).';
+    if ($e instanceof RuntimeException && str_contains($e->getMessage(), 'companyconfig')) {
+        return $e->getMessage();
     }
     if (!$e instanceof PDOException) {
         return null;
     }
     $code = (int) ($e->errorInfo[1] ?? $e->getCode());
     return match ($code) {
-        1044       => 'this database user may not open that database: check DB_NAME and DB_USER in .env (full names, with the hosting prefix).',
-        1045       => 'the database refused the login: check DB_USER and DB_PASS in .env (full names, with the hosting prefix).',
-        1049       => 'the database was not found: check DB_NAME in .env (the full name, with the hosting prefix).',
-        2002, 2005 => 'the database server cannot be reached: check DB_HOST in .env (localhost on Hostinger).',
+        1044       => "this company's database login may not open its database: check the company's entry in companyconfig.php.",
+        1045       => "the database refused the login: check the company's entry (or 'server') in companyconfig.php.",
+        1049       => "the company's database was not found: check its entry in companyconfig.php.",
+        2002, 2005 => "the database server cannot be reached: check 'host' in companyconfig.php (localhost on Hostinger).",
         1146       => 'a database table is missing: import the files in migrations/ (see the deploy guide).',
         1054       => 'the database is not up to date: import the newest file in migrations/ (see the deploy guide).',
         default    => null,
@@ -311,6 +311,13 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
 set_exception_handler(static function (Throwable $e): void {
+    // The session's company is gone from companyconfig.php (or there never was one): sign in again.
+    if ($e instanceof CompanyMissing) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            unset($_SESSION['user'], $_SESSION['company']);
+        }
+        json_error('Please sign in.', 401);
+    }
     if ($e instanceof ValidationError) {
         json_error($e->getMessage(), 422, $e->fields);
     }

@@ -15,7 +15,7 @@ const PARTY_DOCUMENTS = [
 
 function party_document_format(array $row): array
 {
-    $path = rtrim(config()['storage'], '/') . '/' . $row['file_path'];
+    $path = storage_dir() . '/' . $row['file_path'];
     return [
         'id'           => (int) $row['id'],
         'originalName' => $row['original_name'],

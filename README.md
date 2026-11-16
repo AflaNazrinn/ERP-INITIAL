@@ -33,8 +33,25 @@ browser ──► Caddy ──► file exists in frontend/?  ──► served as
                                          uses db.php → PDO → MySQL
 ```
 
-`backend/src`, `backend/storage` (uploaded files) and `backend/.env` sit outside both web roots,
-so they can never be downloaded.
+`backend/src`, `backend/storage` (uploaded files), `backend/.env` and `backend/companyconfig.php` sit outside
+both web roots, so they can never be downloaded.
+
+### One database per company
+
+Every company has its own MySQL database; nothing is shared between companies. **Create a company** on the
+sign-in page opens `frontend/company.html`, which posts to `api/companies.php`. That creates the company's database
+(or, where the host forbids `CREATE DATABASE`, such as Hostinger shared hosting, takes an empty one from
+`spare_databases`), runs every migration in it, adds the first user and the `company_profile` row, stores the
+logo, letterhead and certificates in `storage/companies/<CODE>/`, and records the company in
+**`backend/companyconfig.php`**.
+
+`companyconfig.php` is written by the program (layout: `backend/companyconfig.example.php`). You fill in the
+`server` login once and never type a company's database in by hand. It holds passwords: it is git-ignored and never
+packed for Hostinger.
+
+Sign-in takes a **company code**, username and password. The session remembers the company, and `db()`
+(`backend/db.php`) only ever opens that company's database, and `storage_dir()` only that company's folder
+(`src/company_registry.php`). CLI scripts take `--company=CODE` (`migrate.php` with no flag migrates every company).
 
 ## Folder layout
 
@@ -48,7 +65,8 @@ frontend/
 backend/
   .env.example            copy to .env (never committed)
   config.php              reads .env
-  db.php                  db(), query(), transaction()
+  companyconfig.php       companies and their databases (written by the program, not committed)
+  db.php                  db() (the signed-in company's database), query(), transaction()
   public/api/             thin endpoints (kebab-case file names)
   src/                    api_bootstrap.php, security.php, master_validation.php, one module per master
   migrations/             dated .sql files, applied in name order
@@ -92,7 +110,7 @@ item batch expiry and PDF spec link; brand and category descriptions.
 - Success: `{ "data": … }`. Failure: `{ "error": "message", "fields": { "payloadKey": "message" } }` with 4xx/5xx.
 - `422` = validation (the form highlights the fields named in `fields`), `404` not found, `409` duplicate, `500` logged server-side.
 - Writes need the `X-CSRF-Token` header; the page gets it from `GET /api/session.php`.
-- **Sign-in:** `frontend/login.html` posts to `api/login.php` (DELETE there signs out). Every other endpoint except `api/session.php` answers `401` until the session has a user (`current_user()` in `backend/src/security.php`); the dashboard sends a signed-out visitor to the sign-in page. Users are in the `users` table (bcrypt hashes). The first one is **admin / admin@1234**: change it on a live server.
+- **Sign-in:** `frontend/login.html` posts `{ company, username, password }` to `api/login.php` (DELETE there signs out). Every other endpoint except `api/session.php` and `api/companies.php` answers `401` until the session has a company and a user (`current_user()` in `backend/src/security.php`); the dashboard sends a signed-out visitor to the sign-in page. Users are in each company's own `users` table (bcrypt hashes); a new company's only user is the one chosen on the Create a Company page.
 
 The full endpoint list is in [backend/README.md](backend/README.md).
 
@@ -102,11 +120,13 @@ Needs PHP 8.2+ with `pdo_mysql` and `mbstring`, PHP-FPM, MySQL 8 or MariaDB 10.6
 Step by step: [backend/README.md](backend/README.md#run-it-locally). In short:
 
 ```sh
-cp backend/.env.example backend/.env      # database name, user, password, port
-php backend/bin/migrate.php                # create the tables
-php backend/bin/seed-demo-data.php         # optional demo masters
-php backend/bin/seed-more-demo-data.php    # optional: more brands, suppliers, customers, items (safe to rerun)
-php backend/bin/seed-purchase-book.php     # optional: demo PRs, RFQs, POs and GRNs
+cp backend/.env.example backend/.env      # APP_ENV; old DB_* lines become company MAIN once
+# fill in 'server' in backend/companyconfig.php (written on the first request or migrate run):
+# a MySQL login that may CREATE DATABASE, then create companies at /company.html
+php backend/bin/migrate.php                # update every company's tables
+php backend/bin/seed-demo-data.php --company=CODE         # optional demo masters
+php backend/bin/seed-more-demo-data.php --company=CODE    # optional: more masters (safe to rerun)
+php backend/bin/seed-purchase-book.php --company=CODE     # optional: demo PRs, RFQs, POs and GRNs
 # start PHP-FPM on 127.0.0.1:9000, then:
 APP_ROOT=$PWD caddy run --config Caddyfile # https://localhost
 ```
