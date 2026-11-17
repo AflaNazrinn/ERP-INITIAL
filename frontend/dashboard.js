@@ -8247,7 +8247,111 @@ const grnList = purchaseList({
 
 const PURCHASE_LISTS = [prList, rfqList, poList, grnList];
 
+/* ---------- The company letterhead behind every printed page ----------
+   The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
+   A4 page, on every page, and the document is laid out between its header and its footer, inside its side
+   margins. Where those are is read from the letterhead itself: the rows of ink at the top (logo, contact details,
+   rules) up to the first wide blank band, the same at the bottom, and how far in from the edges the ink starts.
+   A PDF letterhead's first page is drawn to an image with pdf.js (vendor/pdfjs, loaded only then).
+   Resolves to { src, top, bottom, side } (fractions of the page height / width), or null without a letterhead. */
+let letterheadPromise = null;
+function companyLetterhead() {
+  letterheadPromise ||= loadLetterhead().catch(error => { console.warn('Letterhead not used:', error); return null; });
+  return letterheadPromise;
+}
+
+async function loadLetterhead() {
+  const profile = await apiRequest('api/company-profile.php');
+  const name = profile?.files?.letterhead;
+  if (!name) return null;
+  const url = 'api/company-profile.php?file=letterhead';
+  const source = /\.pdf$/i.test(name) ? await pdfFirstPage(url) : await loadPrintImage(url);
+  const width = source.naturalWidth || source.width, height = source.naturalHeight || source.height;
+  const bands = letterheadBands(source, width, height);
+  const src = source instanceof HTMLCanvasElement
+    ? URL.createObjectURL(await new Promise(resolve => source.toBlob(resolve, 'image/png')))
+    : url;
+  return { src, ...bands };
+}
+
+function loadPrintImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('the letterhead image could not be loaded'));
+    img.src = url;
+  });
+}
+
+// The first page of a PDF as a canvas, A4 width at 200 dpi.
+async function pdfFirstPage(url) {
+  const pdfjs = await import('./vendor/pdfjs/pdf.min.js');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.js', location.href).href;
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error('the letterhead PDF could not be loaded');
+  const pdf = await pdfjs.getDocument({ data: await response.arrayBuffer(), isEvalSupported: false }).promise;
+  try {
+    const page = await pdf.getPage(1);
+    const scale = 1654 / page.getViewport({ scale: 1 }).width;
+    const viewport = page.getViewport({ scale });
+    const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(viewport.width), height: Math.round(viewport.height) });
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas;
+  } finally {
+    pdf.destroy();
+  }
+}
+
+/* Where the letterhead's header ends and its footer starts, and its side margin, as fractions of the page.
+   Ink: a pixel clearly darker than the paper (a faint watermark behind the text area does not count). The header
+   is the ink in the top 45 % up to the first blank band of 4 % of the page; the footer the same from the bottom
+   in the lowest 35 %. A gap is kept after the header and before the footer. */
+function letterheadBands(source, width, height) {
+  const W = 240, H = Math.max(1, Math.round(W * height / width));
+  const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(source, 0, 0, W, H);
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const inkAt = (x, y) => { const i = (y * W + x) * 4; return Math.min(data[i], data[i + 1], data[i + 2]) < 200; };
+  const rowInk = y => { let n = 0; for (let x = 0; x < W; x++) if (inkAt(x, y)) n++; return n > 1; };
+  const gap = Math.round(H * 0.04);
+  let headerEnd = 0;
+  for (let y = 0, last = -1; y < H * 0.45; y++) {
+    if (rowInk(y)) last = y;
+    else if (last >= 0 && y - last > gap) break;
+    headerEnd = last + 1;
+  }
+  let footerStart = H;
+  for (let y = H - 1, last = -1; y > H * 0.65; y--) {
+    if (rowInk(y)) last = y;
+    else if (last >= 0 && last - y > gap) break;
+    footerStart = last >= 0 ? last : H;
+  }
+  // Side margin: where the header's and footer's ink starts from the left and right edges.
+  let left = W, right = W;
+  for (const [from, to] of [[0, headerEnd], [footerStart, H]]) {
+    for (let y = from; y < to; y++) {
+      for (let x = 0; x < W; x++) if (inkAt(x, y)) { left = Math.min(left, x); right = Math.min(right, W - 1 - x); }
+    }
+  }
+  const side = Math.min(0.1, Math.max(0.04, Math.min(left, right) / W));
+  return {
+    top: headerEnd ? Math.min(0.45, headerEnd / H + 0.025) : 0.05,
+    bottom: footerStart < H ? Math.min(0.35, (H - footerStart) / H + 0.02) : 0.05,
+    side,
+  };
+}
+
 /* ---------- PDF: the document laid out on A4 and handed to the browser's print dialog ("Save as PDF") ----------
+   On the company letterhead when there is one (companyLetterhead): the letterhead fills every page and the
+   document sits between its header and footer. Without one, the company name heads the first page. Laid out as
+   in the quotation design: the title centred, Ref and Date under it, the details in a box, a ruled item table,
+   the totals in a box, remarks, signatory slots and the seal.
    Ticked "Include Signatory Slots" adds Prepared / Checked / Approved boxes; "Attach Seal" prints the company seal. */
 async function printPurchaseDocument(spec, id) {
   let doc;
@@ -8278,18 +8382,34 @@ async function printPurchaseDocument(spec, id) {
     grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbQty(pbNum(l.vatRate)), pbAmount(l.lineTotal)],
   }[spec.kind]);
 
-  const head = el('header', 'ps-head');
-  const brand = el('div', 'ps-brand');
-  brand.append(el('div', 'ps-company', byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine'), el('div', 'ps-sub', 'Purchase Book'));
-  const titleBox = el('div', 'ps-title-box');
-  titleBox.append(el('h1', 'ps-title', title), el('div', 'ps-code', doc.code));
-  head.append(brand, titleBox);
+  const letterhead = await companyLetterhead();
+  const parts = [];
+  if (!letterhead) {                                   // no letterhead: the company name heads the page
+    const brand = el('div', 'ps-brand');
+    brand.append(el('div', 'ps-company', byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine'));
+    parts.push(brand);
+  }
+  // The title, then Ref (the document's ID) on the left and Date on the right: the first two details.
+  const [[refLabel, refValue], [dateLabel, dateValue], ...details] = meta;
+  const titleBlock = el('div', 'ps-title-block');
+  titleBlock.append(el('h1', 'ps-title', title));
+  const refRow = el('div', 'ps-ref');
+  for (const [label, value] of [[refLabel, refValue], [dateLabel, dateValue]]) {
+    const span = el('span', '');
+    span.append(`${label}: `, el('strong', '', String(value ?? '') || '—'));
+    refRow.append(span);
+  }
+  titleBlock.append(refRow);
+  parts.push(titleBlock);
 
-  const metaGrid = el('dl', 'ps-meta');
-  for (const [label, value] of meta) {
-    const item = el('div', 'ps-meta-item');
-    item.append(cell('dt', '', label), cell('dd', '', value));
-    metaGrid.append(item);
+  if (details.length) {
+    const metaGrid = el('dl', 'ps-meta');
+    for (const [label, value] of details) {
+      const item = el('div', 'ps-meta-item');
+      item.append(cell('dt', '', label), cell('dd', '', value));
+      metaGrid.append(item);
+    }
+    parts.push(metaGrid);
   }
 
   const table = el('table', 'ps-table');
@@ -8304,12 +8424,14 @@ async function printPurchaseDocument(spec, id) {
     tbody.append(tr);
   });
   table.append(thead, tbody);
+  table.classList.add(`ps-table-${spec.kind}`);
+  parts.push(table);
 
-  const parts = [head, metaGrid, table];
   if (spec.kind !== 'simple') {
     const totals = el('dl', 'ps-totals');
-    for (const [label, value, strong] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT' : 'VAT (included)', doc.vatAmount],
+    for (const [label, value, strong] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT (Tax)' : 'VAT (included)', doc.vatAmount],
       ['Discount', doc.discountAmount], ['Shipping', doc.shipping], [`Grand Total${doc.currency ? ` (${doc.currency})` : ''}`, doc.grandTotal, true]]) {
+      if (!strong && !pbNum(value) && label !== 'Subtotal') continue;          // a zero discount / shipping is left out
       const row = el('div', strong ? 'ps-total-grand' : '');
       row.append(el('dt', '', label), el('dd', '', pbAmount(value)));
       totals.append(row);
@@ -8318,12 +8440,13 @@ async function printPurchaseDocument(spec, id) {
   }
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');
+    remarks.append(el('div', 'ps-label', 'Remarks'));
     if (spec.kind === 'po' && isRemarksHtml(doc.remarks)) {
       const body = el('div', 'ps-remarks-body');
       body.append(remarksFragment(doc.remarks));
-      remarks.append(el('strong', '', 'Remarks:'), body);
+      remarks.append(body);
     } else {
-      remarks.append(el('strong', '', 'Remarks: '), document.createTextNode(doc.remarks));
+      remarks.append(el('div', 'ps-remarks-text', doc.remarks));
     }
     parts.push(remarks);
   }
@@ -8333,17 +8456,41 @@ async function printPurchaseDocument(spec, id) {
     for (const label of ['Prepared By', 'Checked By', 'Approved By']) signs.append(el('div', 'ps-sign', label));
     foot.append(signs);
   }
-  let sealLoaded = Promise.resolve();
+  const loading = [];
+  const imageLoaded = img => new Promise(resolve => { img.onload = resolve; img.onerror = () => { img.remove(); resolve(); }; });
   if (doc.attachSeal) {
     const seal = el('img', 'ps-seal');
     seal.alt = 'Company seal';
-    sealLoaded = new Promise(resolve => { seal.onload = resolve; seal.onerror = () => { seal.remove(); resolve(); }; });
+    loading.push(imageLoaded(seal));
     seal.src = `api/company-seal.php?file=1&t=${Date.now()}`;
     foot.append(seal);
   }
-  parts.push(foot);
-  sheet.replaceChildren(...parts);
-  await sealLoaded;
+  if (foot.childElementCount) parts.push(foot);
+
+  // The page frame: a table whose header and footer rows repeat on every printed page, keeping the letterhead's
+  // header and footer clear (or a plain margin without a letterhead); the letterhead image is fixed behind it,
+  // so the browser prints it on every page.
+  const frame = el('table', 'ps-frame');
+  const spacer = className => { const row = el('tr'); const td = el('td'); td.append(el('div', className)); row.append(td); return row; };
+  const frameHead = el('thead'); frameHead.append(spacer('ps-space-top'));
+  const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
+  const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
+  bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);
+  frame.append(frameHead, frameBody, frameFoot);
+  const sheetParts = [frame];
+  sheet.classList.toggle('has-letterhead', Boolean(letterhead));
+  sheet.style.setProperty('--ps-top', `${((letterhead?.top ?? 0.05) * 297).toFixed(1)}mm`);
+  sheet.style.setProperty('--ps-bottom', `${((letterhead?.bottom ?? 0.05) * 297).toFixed(1)}mm`);
+  sheet.style.setProperty('--ps-side', `${((letterhead?.side ?? 0.06) * 210).toFixed(1)}mm`);
+  if (letterhead) {
+    const back = el('img', 'ps-letterhead');
+    back.alt = '';
+    loading.push(imageLoaded(back));
+    back.src = letterhead.src;
+    sheetParts.unshift(back);
+  }
+  sheet.replaceChildren(...sheetParts);
+  await Promise.all(loading);
 
   const pageTitle = document.title;
   document.title = `${doc.code} ${title}`;              // the browser's suggested PDF file name

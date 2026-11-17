@@ -1599,37 +1599,72 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
 .pb-list-table .ml-act[data-action="view"] { color: #15803d; border-color: #bbf7d0; }
 .pb-list-table .ml-act[data-action="view"]:hover { background: #f0fdf4; }
 
-/* ---------- Purchase Book PDF (printPurchaseDocument): A4, only the document is printed ---------- */
+/* ---------- Purchase Book PDF (printPurchaseDocument): A4, only the document is printed ----------
+   The page has no margin (so the browser adds no URL / date lines); the frame table's repeating header and footer
+   rows keep the space instead: the letterhead's header and footer (--ps-top / --ps-bottom), or a plain margin.
+   The letterhead image is fixed behind the frame, so it prints on every page. Laid out as the quotation design:
+   centred title, Ref / Date, a details box, a ruled table, a totals box. */
 .print-sheet { display: none; }
 @media print {
-  @page { size: A4; margin: 14mm 12mm; }
-  body.is-printing { background: #fff !important; }
+  @page { size: A4; margin: 0; }
+  body.is-printing { background: #fff !important; margin: 0; }
   body.is-printing > :not(#pb-print-sheet) { display: none !important; }
-  body.is-printing .print-sheet { display: block; color: #0f172a; font-family: var(--font-sans, system-ui, sans-serif); font-size: 11px; }
-  .ps-head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 10px; border-bottom: 3px solid #15803d; }
-  .ps-company { font-size: 20px; font-weight: 800; color: #14532d; }
-  .ps-sub { margin-top: 2px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #64748b; }
-  .ps-title-box { text-align: right; }
-  .ps-title { margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-  .ps-code { margin-top: 2px; font-family: var(--font-mono, monospace); font-size: 13px; font-weight: 700; color: #15803d; }
-  .ps-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; margin: 14px 0; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
-  .ps-meta-item dt { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
-  .ps-meta-item dd { margin: 2px 0 0; font-weight: 600; }
-  .ps-table { width: 100%; border-collapse: collapse; }
-  .ps-table th { padding: 6px 8px; background: #f0fdf4; border-bottom: 2px solid #15803d; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; text-align: left; }
-  .ps-table td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  body.is-printing .print-sheet {
+    display: block; position: relative; color: #0f172a; font-family: var(--font-ui); font-size: 10.5px; line-height: 1.4;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .ps-letterhead { position: fixed; top: 0; left: 0; z-index: 0; width: 210mm; height: 297mm; object-fit: fill; }
+  .ps-frame { position: relative; z-index: 1; width: 100%; border-collapse: collapse; }
+  .ps-frame > thead > tr > td, .ps-frame > tfoot > tr > td { padding: 0; }
+  .ps-space-top { height: var(--ps-top, 14mm); }
+  .ps-space-bottom { height: var(--ps-bottom, 14mm); }
+  .ps-body { padding: 0 var(--ps-side, 12mm); vertical-align: top; }
+
+  .ps-brand { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 2px solid #0f172a; }
+  .ps-company { font-size: 18px; font-weight: 800; color: #0f172a; }
+  .ps-title-block { margin-bottom: 12px; }
+  .ps-title { margin: 6px 0 12px; text-align: center; font-size: 19px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #0f172a; }
+  .ps-ref {
+    display: flex; justify-content: space-between; gap: 16px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;
+    font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: #64748b;
+  }
+  .ps-ref strong { font-family: var(--font-mono); font-size: 10.5px; color: #0f172a; text-transform: none; letter-spacing: 0; }
+  .ps-meta {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px 14px; margin: 0 0 12px; padding: 10px 12px;
+    border: 1px solid #dbe1ea; border-radius: 8px; background: rgba(248, 250, 252, .85);
+  }
+  .ps-meta-item dt { font-size: 8.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .ps-meta-item dd { margin: 2px 0 0; font-weight: 600; color: #0f172a; overflow-wrap: anywhere; }
+  .ps-table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; background: rgba(255, 255, 255, .9); }
+  .ps-table th {
+    padding: 7px 8px; background: #f1f5f9; border: 1px solid #cbd5e1;
+    font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-align: left; color: #334155;
+  }
+  .ps-table td { padding: 7px 8px; border: 1px solid #dbe1ea; vertical-align: top; }
+  .ps-table td:first-child, .ps-table th:first-child { width: 30px; text-align: center; color: #64748b; }
+  .ps-table td:nth-child(2) { font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; white-space: nowrap; }
+  .ps-table td:nth-child(3) { font-size: 11px; font-weight: 500; }
   .ps-table th:nth-child(n+4), .ps-table td:nth-child(n+4) { text-align: right; }
+  .ps-table td:nth-child(n+4) { font-family: var(--font-mono); font-size: 10px; white-space: nowrap; }
+  .ps-table-simple th:nth-child(4), .ps-table-simple td:nth-child(4) { text-align: left; font-family: inherit; }
+  .ps-table td:last-child { font-weight: 700; }
   .ps-table tr { break-inside: avoid; }
-  .ps-totals { width: 260px; margin: 12px 0 0 auto; }
-  .ps-totals > div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .ps-totals {
+    margin: 14px 0 0; padding: 10px 14px; border: 1px solid #dbe1ea; border-radius: 8px; background: rgba(248, 250, 252, .85);
+    break-inside: avoid;
+  }
+  .ps-totals > div { display: flex; justify-content: space-between; padding: 3px 0; }
   .ps-totals dt { color: #475569; }
-  .ps-totals dd { margin: 0; font-family: var(--font-mono, monospace); font-weight: 700; }
-  .ps-total-grand { margin-top: 4px; padding-top: 8px !important; border-top: 2px solid #0f172a; font-size: 13px; }
-  .ps-total-grand dd { color: #15803d; }
-  .ps-remarks { margin-top: 14px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; white-space: pre-wrap; }
-  .ps-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 36px; break-inside: avoid; }
+  .ps-totals dd { margin: 0; font-family: var(--font-mono); font-weight: 700; }
+  .ps-total-grand { margin-top: 6px; padding-top: 9px !important; border-top: 1px solid #cbd5e1; }
+  .ps-total-grand dt { font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
+  .ps-total-grand dd { font-size: 15px; color: #0f172a; }
+  .ps-label { font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .ps-remarks { margin-top: 14px; break-inside: avoid; }
+  .ps-remarks-text { margin-top: 3px; white-space: pre-wrap; }
+  .ps-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 30px; break-inside: avoid; }
   .ps-signs { display: flex; flex: 1; gap: 24px; }
-  .ps-sign { flex: 1; margin-top: 36px; padding-top: 6px; border-top: 1px solid #0f172a; font-size: 10px; font-weight: 700; text-align: center; color: #334155; }
+  .ps-sign { flex: 1; margin-top: 36px; padding-top: 6px; border-top: 1px solid #0f172a; font-size: 9.5px; font-weight: 700; text-align: center; color: #334155; }
   .ps-seal { width: 110px; height: 110px; object-fit: contain; margin-left: auto; }
 }
 
