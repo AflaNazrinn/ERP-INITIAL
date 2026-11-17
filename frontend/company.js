@@ -286,10 +286,10 @@ function showLetterhead() {
 /* ---------- letterhead from the company details (A4 at 150 dpi, PNG) ----------
    Generate opens the Generate Letterhead popup (#cc-gen): it makes two letterheads from the designs in
    letterheads.js (in a random order), filled with the logo and the details typed so far, and shows them side by
-   side. The popup's own Generate makes one more, with a design not shown yet, and moves the view on to it
-   (1–2 → 2–3); the arrows page back and forward. Select makes the ticked one the company's letterhead. Each round
-   first plays a short "being generated" sequence: the drawing itself is instant, the steps make it read as work
-   being done. */
+   side. The popup's own Generate makes one more and moves the view on to it (1–2 → 2–3); the arrows page back and
+   forward. A click on a letterhead chooses it (again: unchooses it); Save makes the chosen one the company's
+   letterhead. Every Generate first plays the "being generated" sequence: the drawing itself is instant, the steps
+   make it read as work being done. */
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -304,8 +304,6 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const GENERATE_STEPS = ['Choosing a design', 'Matching your logo colours', 'Placing your logo', 'Adding company details', 'Adding CR & VAT number', 'Finishing the letterhead'];
 const GENERATE_STEP_MS = 380;
-const GENERATE_MORE_STEPS = ['Choosing another design', 'Adding company details', 'Finishing the letterhead'];
-const GENERATE_MORE_STEP_MS = 330;
 
 function letterheadData(logo) {
   const value = key => field(key).value.trim();
@@ -337,10 +335,12 @@ async function drawLetterhead(design, logo) {
   return toBlob();
 }
 
-/* The popup's state: the letterheads made so far ({ design, url, blob }), the designs still to use, the first
-   one shown (two at a time), the ticked one. */
-const gen = { made: [], order: [], start: 0, picked: 0, chosen: -1, busy: false, logo: null };   // chosen: Select pressed on it
+/* The popup's state: the letterheads made so far ({ design, url, blob }), the designs still to use (refilled,
+   shuffled again, when every design has been shown), the first one shown (two at a time), the chosen one
+   (-1: none yet; a click on a letterhead chooses it, a second click unchooses it). */
+const gen = { made: [], order: [], start: 0, picked: -1, busy: false };
 const GEN_PER_VIEW = 2;
+const GEN_SUB = 'Made from your company details. Click a template to choose it.';
 const genDialog = () => $('cc-gen');
 
 // What the letterheads leave out because it is not filled in yet.
@@ -355,14 +355,17 @@ function letterheadMissing() {
   return missing;
 }
 
-function shuffledDesigns() {
+function shuffledDesigns(avoidFirst = -1) {
   const order = LETTERHEADS.map((_, index) => index);
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [order[i], order[j]] = [order[j], order[i]];
   }
+  if (order.length > 1 && order[0] === avoidFirst) order.push(order.shift());   // never the same design twice in a row
   return order;
 }
+
+const CHECK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>';
 
 function renderGen() {
   const cards = $('cc-gen-cards');
@@ -373,16 +376,12 @@ function renderGen() {
     card.type = 'button';
     card.className = 'lg-card';
     card.dataset.index = String(index);
-    card.setAttribute('role', 'radio');
-    card.setAttribute('aria-checked', String(index === gen.picked));
-    card.tabIndex = index === gen.picked || (gen.picked < gen.start || gen.picked >= gen.start + GEN_PER_VIEW) && i === 0 ? 0 : -1;
+    card.setAttribute('aria-pressed', String(index === gen.picked));
     const head = document.createElement('span');
     head.className = 'lg-card-head';
-    head.innerHTML = '<span class="lg-radio" aria-hidden="true"></span>';
-    const chosen = index === gen.chosen && index === gen.picked;
-    card.classList.toggle('is-chosen', chosen);
+    head.innerHTML = `<span class="lg-radio" aria-hidden="true">${CHECK_ICON}</span>`;
     head.append(Object.assign(document.createElement('span'), { className: 'lg-card-name', textContent: item.design.name }),
-      Object.assign(document.createElement('span'), { className: 'lg-card-num', textContent: chosen ? 'Selected' : `Template ${index + 1}` }));
+      Object.assign(document.createElement('span'), { className: 'lg-card-num', textContent: `Template ${index + 1}` }));
     const sheet = document.createElement('span');
     sheet.className = 'lg-sheet';
     sheet.append(Object.assign(new Image(), { src: item.url, alt: `${item.design.name} letterhead` }));
@@ -404,25 +403,20 @@ function renderGen() {
   const dialog = genDialog();
   dialog.querySelector('[data-gen="prev"]').disabled = gen.busy || gen.start === 0;
   dialog.querySelector('[data-gen="next"]').disabled = gen.busy || gen.start >= last;
-  const dots = total > GEN_PER_VIEW ? Array.from({ length: last + 1 }, (_, i) => {
+  // A dot per pair the arrows can show (one dot while there are only two).
+  const dots = total ? Array.from({ length: last + 1 }, (_, i) => {
     const dot = document.createElement('span');
     dot.className = i === gen.start ? 'is-current' : '';
     return dot;
   }) : [];
   $('cc-gen-dots').replaceChildren(...dots);
-  const more = $('cc-gen-more');
-  more.disabled = gen.busy || !gen.order.length;
-  more.title = gen.order.length ? 'Make one more letterhead' : `All ${LETTERHEADS.length} designs are shown`;
-  // Select, then Save: Select marks the ticked letterhead, the button becomes Save, and Save uses it and closes.
-  // Ticking another one first turns it back into Select.
-  const select = $('cc-gen-select');
-  const saving = gen.chosen >= 0 && gen.chosen === gen.picked;
-  select.disabled = gen.busy || !total;
-  select.classList.toggle('is-save', saving);
-  select.innerHTML = saving
-    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg>Save'
-    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Select';
-  $('cc-gen-cards').classList.toggle('is-busy', gen.busy);
+  $('cc-gen-more').disabled = gen.busy;
+  // Save shows once a letterhead is chosen; the line under the title says which, and how to undo it.
+  const chosen = gen.made[gen.picked];
+  $('cc-gen-sub').textContent = chosen ? `${chosen.design.name} selected. Press Save to use it, or click it again to unselect.` : GEN_SUB;
+  $('cc-gen-select').hidden = !chosen;
+  $('cc-gen-select').disabled = gen.busy;
+  cards.classList.toggle('is-busy', gen.busy);
 }
 
 // The "being generated" sequence over the cards; the fonts and the logo load while it plays.
@@ -438,9 +432,10 @@ async function playGenerating(steps, stepMs) {
   $('cc-gen-loading').hidden = true;
 }
 
-// Makes `count` more letterheads (designs not used yet), with the loading sequence first; shows the last two.
-async function generateMore(count, steps, stepMs) {
-  if (gen.busy || !gen.order.length) return;
+// Makes `count` more letterheads, always after the full loading sequence; shows the last two. The chosen one
+// stays chosen.
+async function generateMore(count) {
+  if (gen.busy) return;
   gen.busy = true;
   renderGen();
   try {
@@ -449,15 +444,15 @@ async function generateMore(count, steps, stepMs) {
       document.fonts.load('600 17px "Roboto Mono"').catch(() => null),
       objectUrls.logo ? loadImage(objectUrls.logo).then(lhWithoutBackground).catch(() => null) : null,   // only the logo, no background
     ]);
-    await playGenerating(steps, stepMs);
+    await playGenerating(GENERATE_STEPS, GENERATE_STEP_MS);
     const [, , logo] = await ready;
-    for (let n = 0; n < count && gen.order.length; n++) {
+    for (let n = 0; n < count; n++) {
+      if (!gen.order.length) gen.order = shuffledDesigns(LETTERHEADS.indexOf(gen.made.at(-1)?.design));
       const design = LETTERHEADS[gen.order.shift()];
       const blob = await drawLetterhead(design, logo);
       if (!blob) throw new Error('no image');
       gen.made.push({ design, blob, url: URL.createObjectURL(blob) });
     }
-    gen.picked = gen.made.length - 1 - (gen.made.length === count ? count - 1 : 0);   // the first round ticks the first
     gen.start = Math.max(0, gen.made.length - GEN_PER_VIEW);
   } catch {
     setFieldError('letterhead', 'The letterhead could not be generated in this browser. Upload one instead.');
@@ -468,14 +463,14 @@ async function generateMore(count, steps, stepMs) {
     gen.busy = false;
   }
   renderGen();
-  (genDialog().querySelector('.lg-card[aria-checked="true"]') || $('cc-gen-select')).focus();
+  genDialog().querySelector(`.lg-card[data-index="${gen.made.length - 1}"]`)?.focus();   // the newest
 }
 
 function openGen() {
   if (gen.busy || genDialog().open) return;
   setFieldError('letterhead', '');
   for (const item of gen.made) URL.revokeObjectURL(item.url);
-  Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: 0, chosen: -1 });
+  Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: -1 });
   const missing = letterheadMissing();
   $('cc-gen-missing').textContent = missing.length
     ? `Not on the letterhead yet: ${missing.join(', ')}. Fill them in and press Generate.` : '';
@@ -483,8 +478,8 @@ function openGen() {
   renderGen();
   document.documentElement.classList.add('has-modal');
   genDialog().showModal();
-  $('cc-gen-select').focus();
-  generateMore(Math.min(GEN_PER_VIEW, LETTERHEADS.length), GENERATE_STEPS, GENERATE_STEP_MS);
+  genDialog().querySelector('[data-gen="cancel"].lk-btn').focus();
+  generateMore(Math.min(GEN_PER_VIEW, LETTERHEADS.length));
 }
 
 /* The letterhead full size: an image in a popup (#cc-view); a PDF in a new tab (the page may not embed one). */
@@ -523,50 +518,41 @@ function pageGen(step) {
   if (start === gen.start || gen.busy) return;
   gen.start = start;
   renderGen();
-  genDialog().querySelector('.lg-card[tabindex="0"]')?.focus();
 }
 
-// Select marks the ticked letterhead (the button turns into Save); Save makes it the letterhead and closes.
-function selectGen() {
+// A click on a letterhead chooses it; on the chosen one, unchooses it.
+function toggleGen(index) {
+  if (gen.busy || !gen.made[index]) return;
+  gen.picked = gen.picked === index ? -1 : index;
+  renderGen();
+  genDialog().querySelector(`.lg-card[data-index="${index}"]`)?.focus();
+}
+
+// Save: the chosen letterhead becomes the company's letterhead; the popup closes.
+function saveGen() {
   const item = gen.made[gen.picked];
   if (!item || gen.busy) return;
-  if (gen.chosen !== gen.picked) {
-    gen.chosen = gen.picked;
-    renderGen();
-    $('cc-gen-select').focus();
-    return;
-  }
   dirty = true;
   setFile('letterhead', new File([item.blob], 'letterhead.png', { type: 'image/png' }));
   closeGen();
 }
 
-// Keys while the popup is open: ← → page (or move between the two shown), Enter on a card selects it (then Save), Esc closes.
+// Keys while the popup is open: ← → move between the letterheads (paging on at the ends), Enter or Space on one
+// chooses / unchooses it, Esc closes.
 function handleGenKeys(event) {
   const { key } = event;
   if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeGen(); return; }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   const card = event.target.closest?.('.lg-card[data-index]');
-  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+  if ((key === 'ArrowLeft' || key === 'ArrowRight') && card) {
     event.preventDefault();
-    const step = key === 'ArrowLeft' ? -1 : 1;
-    const at = card ? Number(card.dataset.index) : null;
-    const target = at === null ? null : at + step;
-    if (target !== null && target >= gen.start && target < gen.start + GEN_PER_VIEW && target < gen.made.length) {
-      gen.picked = target;
-      renderGen();
-      genDialog().querySelector(`.lg-card[data-index="${target}"]`).focus();
-    } else {
-      pageGen(step);
-      if (card && gen.made[gen.start + (step > 0 ? GEN_PER_VIEW - 1 : 0)]) {
-        gen.picked = gen.start + (step > 0 ? GEN_PER_VIEW - 1 : 0);
-        renderGen();
-        genDialog().querySelector(`.lg-card[data-index="${gen.picked}"]`)?.focus();
-      }
-    }
+    const target = Number(card.dataset.index) + (key === 'ArrowLeft' ? -1 : 1);
+    if (!gen.made[target]) return;
+    if (target < gen.start || target >= gen.start + GEN_PER_VIEW) pageGen(key === 'ArrowLeft' ? -1 : 1);
+    genDialog().querySelector(`.lg-card[data-index="${target}"]`)?.focus();
     return;
   }
-  if (key === 'Enter' && card) { event.preventDefault(); gen.picked = Number(card.dataset.index); selectGen(); }
+  if ((key === 'Enter' || key === ' ') && card) { event.preventDefault(); if (!event.repeat) toggleGen(Number(card.dataset.index)); }
 }
 
 function initGen() {
@@ -575,23 +561,13 @@ function initGen() {
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeGen(); return; }        // the backdrop
     const card = event.target.closest('.lg-card[data-index]');
-    if (card && !gen.busy) {
-      gen.picked = Number(card.dataset.index);
-      renderGen();
-      dialog.querySelector(`.lg-card[data-index="${gen.picked}"]`).focus();
-      return;
-    }
+    if (card) { toggleGen(Number(card.dataset.index)); return; }
     const action = event.target.closest('[data-gen]')?.dataset.gen;
     if (action === 'cancel') closeGen();
     if (action === 'prev') pageGen(-1);
     if (action === 'next') pageGen(1);
-    if (action === 'more') generateMore(1, GENERATE_MORE_STEPS, GENERATE_MORE_STEP_MS);
-    if (action === 'select') selectGen();
-  });
-  // A double click ticks and selects in one go (Save still confirms).
-  dialog.addEventListener('dblclick', event => {
-    const card = event.target.closest('.lg-card[data-index]');
-    if (card && !gen.busy) { gen.picked = Number(card.dataset.index); selectGen(); }
+    if (action === 'more') generateMore(1);
+    if (action === 'select') saveGen();
   });
 }
 

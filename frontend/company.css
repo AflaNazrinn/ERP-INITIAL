@@ -333,63 +333,62 @@ html.has-modal { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .cc-generating-spinner { animation-duration: 2.4s; } .cc-generating-bar span { transition: none; } }
 .cc-preview-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
-/* Generate Letterhead popup (#cc-gen): two letterheads side by side, arrows either side, the loading
-   sequence over them while they are made. */
-.lookup.lg { width: min(880px, calc(100vw - 32px)); }
+/* Generate Letterhead popup (#cc-gen): two letterheads side by side on a light grey stage, round arrows either
+   side, the loading sequence over them while they are made. A click chooses a letterhead (blue frame and tick);
+   Save shows once one is chosen. */
+.lookup.lg { width: min(1000px, calc(100vw - 32px)); border-radius: 16px; }
+.lg .lk-head { padding: 16px 20px; gap: 14px; }
 .lg-badge {
-  flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px;
-  background: var(--blue-soft); border: 1px solid #cddbf2; color: var(--blue);
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px;
+  background: var(--page); border: 1px solid var(--card-line); color: var(--blue);
 }
 .lg-heading { flex: 1; min-width: 0; }
-.lg .lk-title { font-size: 16px; }
-.lg-sub { margin: 2px 0 0; font-size: 12px; color: var(--ink-500); }
+.lg .lk-title { font-size: 16px; font-weight: 800; }
+.lg-sub { margin: 3px 0 0; font-size: 12px; color: var(--ink-500); }
 .lg-count:empty { display: none; }
 .lg-count {
-  flex: none; padding: 3px 10px; border-radius: 999px; background: var(--blue-soft); border: 1px solid #cddbf2;
-  font-size: 11px; font-weight: 800; color: var(--blue); white-space: nowrap;
+  flex: none; padding: 4px 12px; border-radius: 999px; background: var(--blue-soft); border: 1px solid #c9d8f1;
+  font-size: 11.5px; font-weight: 800; color: var(--blue); white-space: nowrap;
 }
+.lg .lk-close { border: 0; background: none; color: var(--ink-500); }
+.lg .lk-close:hover { background: var(--page); color: var(--ink-900); }
 .lg-body {
-  position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; gap: 12px;
-  padding: 16px 14px 10px; background: var(--page); overflow: auto;
+  position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; gap: 18px;
+  padding: 18px 16px 14px; background: #f4f6f9; overflow: auto;
 }
-.lg-cards { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; transition: opacity .2s; }
+.lg-cards { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; transition: opacity .2s; }
 .lg-cards.is-busy { opacity: .3; pointer-events: none; }
 .lg-arrow {
-  flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; cursor: pointer;
-  border: 1px solid var(--card-line); background: var(--card); color: var(--ink-700); box-shadow: 0 2px 6px rgba(17, 24, 39, .08);
+  flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--card-line); background: var(--card); color: var(--ink-500); box-shadow: 0 2px 8px rgba(17, 24, 39, .06);
 }
 .lg-arrow:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
-.lg-arrow:disabled { opacity: .35; cursor: default; box-shadow: none; }
+.lg-arrow:disabled { opacity: .45; cursor: default; box-shadow: none; }
 .lg-arrow:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--blue-ring); }
 .lg-card {
-  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 10px 12px 12px; text-align: left; cursor: pointer;
-  border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); font: inherit; color: var(--ink-900);
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 12px 12px 12px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--card-line); border-radius: 12px; background: var(--card); font: inherit; color: var(--ink-900);
   transition: border-color .15s, box-shadow .15s;
 }
 .lg-card:hover { border-color: #b9c8e3; }
-.lg-card[aria-checked="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-ring); }
+.lg-card[aria-pressed="true"] { border: 2px solid var(--blue); padding: 11.5px; }
 .lg-card:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--blue-ring); }
-.lg-card-head { display: flex; align-items: center; gap: 8px; }
+.lg-card-head { display: flex; align-items: center; gap: 9px; padding: 0 2px; }
 .lg-radio {
-  flex: none; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--input-line); background: var(--card);
-  display: grid; place-items: center;
+  flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #b6c0cf; background: var(--card);
+  display: grid; place-items: center; color: #fff;
 }
-.lg-card[aria-checked="true"] .lg-radio { border-color: var(--blue); background: var(--blue); }
-.lg-card[aria-checked="true"] .lg-radio::after {
-  content: ""; width: 7px; height: 4px; margin-top: -2px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg);
-}
-.lg-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 800; }
-.lg-card.is-chosen .lg-card-num { color: var(--green); }
-.lg-card.is-chosen { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22, 163, 74, .18); }
-.lg-card.is-chosen .lg-radio { border-color: var(--green); background: var(--green); }
-.lk-btn-primary.is-save { background: var(--green); border-color: var(--green); }
-.lk-btn-primary.is-save:hover { background: #15803d; border-color: #15803d; }
-.lg-card-num { flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
+.lg-radio svg { width: 11px; height: 11px; display: none; }
+.lg-card[aria-pressed="true"] .lg-radio { border-color: var(--blue); background: var(--blue); }
+.lg-card[aria-pressed="true"] .lg-radio svg { display: block; }
+.lg-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; }
+.lg-card-num { flex: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+.lg-card[aria-pressed="true"] .lg-card-num { color: var(--blue); }
 /* An A4 sheet (1 : 1.414) on a light grey mat. */
-.lg-sheet { display: flex; justify-content: center; padding: 6px; border-radius: 6px; background: #eef1f6; }
+.lg-sheet { display: flex; justify-content: center; padding: 10px; border-radius: 8px; background: #eef1f5; }
 .lg-sheet img, .lg-card.is-blank .lg-sheet::before {
-  display: block; width: 100%; max-width: 260px; aspect-ratio: 1240 / 1754; height: auto; background: #fff;
-  box-shadow: 0 6px 16px -10px rgba(17, 24, 39, .45);
+  display: block; width: 100%; max-width: 360px; aspect-ratio: 1240 / 1754; height: auto; background: #fff;
+  box-shadow: 0 6px 18px -10px rgba(17, 24, 39, .4);
 }
 .lg-card.is-blank { cursor: default; }
 .lg-card.is-blank .lg-sheet { position: relative; }
@@ -408,10 +407,10 @@ html.has-modal { overflow: hidden; }
   background: var(--card); border: 1px solid var(--card-line); color: var(--blue); animation: lg-pulse 1.2s ease-in-out infinite;
 }
 @keyframes lg-pulse { 50% { transform: scale(1.08); box-shadow: 0 0 0 6px var(--blue-ring); } }
-.lg-dots { flex: none; display: flex; justify-content: center; gap: 6px; padding: 0 0 10px; background: var(--page); min-height: 16px; }
+.lg-dots { flex: none; display: flex; justify-content: center; gap: 6px; padding: 0 0 14px; background: #f4f6f9; min-height: 20px; }
 .lg-dots span { width: 6px; height: 6px; border-radius: 99px; background: var(--card-line); transition: width .2s, background .2s; }
-.lg-dots span.is-current { width: 18px; background: var(--blue); }
-.lg-foot { align-items: center; }
+.lg-dots span.is-current { width: 22px; background: var(--blue); }
+.lg-foot { align-items: center; padding: 14px 20px; background: var(--card); }
 .lg-missing { flex: 1; min-width: 0; margin: 0 auto 0 0; font-size: 11.5px; font-weight: 600; color: #c2410c; }
 .lg-foot .lk-btn:disabled { opacity: .5; }
 @media (max-width: 700px) {
