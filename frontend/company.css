@@ -379,6 +379,11 @@ html.has-modal { overflow: hidden; }
   content: ""; width: 7px; height: 4px; margin-top: -2px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg);
 }
 .lg-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 800; }
+.lg-card.is-chosen .lg-card-num { color: var(--green); }
+.lg-card.is-chosen { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22, 163, 74, .18); }
+.lg-card.is-chosen .lg-radio { border-color: var(--green); background: var(--green); }
+.lk-btn-primary.is-save { background: var(--green); border-color: var(--green); }
+.lk-btn-primary.is-save:hover { background: #15803d; border-color: #15803d; }
 .lg-card-num { flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
 /* An A4 sheet (1 : 1.414) on a light grey mat. */
 .lg-sheet { display: flex; justify-content: center; padding: 6px; border-radius: 6px; background: #eef1f6; }

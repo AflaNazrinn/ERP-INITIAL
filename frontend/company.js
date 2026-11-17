@@ -339,7 +339,7 @@ async function drawLetterhead(design, logo) {
 
 /* The popup's state: the letterheads made so far ({ design, url, blob }), the designs still to use, the first
    one shown (two at a time), the ticked one. */
-const gen = { made: [], order: [], start: 0, picked: 0, busy: false, logo: null };
+const gen = { made: [], order: [], start: 0, picked: 0, chosen: -1, busy: false, logo: null };   // chosen: Select pressed on it
 const GEN_PER_VIEW = 2;
 const genDialog = () => $('cc-gen');
 
@@ -379,8 +379,10 @@ function renderGen() {
     const head = document.createElement('span');
     head.className = 'lg-card-head';
     head.innerHTML = '<span class="lg-radio" aria-hidden="true"></span>';
+    const chosen = index === gen.chosen && index === gen.picked;
+    card.classList.toggle('is-chosen', chosen);
     head.append(Object.assign(document.createElement('span'), { className: 'lg-card-name', textContent: item.design.name }),
-      Object.assign(document.createElement('span'), { className: 'lg-card-num', textContent: `Template ${index + 1}` }));
+      Object.assign(document.createElement('span'), { className: 'lg-card-num', textContent: chosen ? 'Selected' : `Template ${index + 1}` }));
     const sheet = document.createElement('span');
     sheet.className = 'lg-sheet';
     sheet.append(Object.assign(new Image(), { src: item.url, alt: `${item.design.name} letterhead` }));
@@ -411,7 +413,15 @@ function renderGen() {
   const more = $('cc-gen-more');
   more.disabled = gen.busy || !gen.order.length;
   more.title = gen.order.length ? 'Make one more letterhead' : `All ${LETTERHEADS.length} designs are shown`;
-  $('cc-gen-select').disabled = gen.busy || !total;
+  // Select, then Save: Select marks the ticked letterhead, the button becomes Save, and Save uses it and closes.
+  // Ticking another one first turns it back into Select.
+  const select = $('cc-gen-select');
+  const saving = gen.chosen >= 0 && gen.chosen === gen.picked;
+  select.disabled = gen.busy || !total;
+  select.classList.toggle('is-save', saving);
+  select.innerHTML = saving
+    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg>Save'
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Select';
   $('cc-gen-cards').classList.toggle('is-busy', gen.busy);
 }
 
@@ -465,7 +475,7 @@ function openGen() {
   if (gen.busy || genDialog().open) return;
   setFieldError('letterhead', '');
   for (const item of gen.made) URL.revokeObjectURL(item.url);
-  Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: 0 });
+  Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: 0, chosen: -1 });
   const missing = letterheadMissing();
   $('cc-gen-missing').textContent = missing.length
     ? `Not on the letterhead yet: ${missing.join(', ')}. Fill them in and press Generate.` : '';
@@ -516,15 +526,22 @@ function pageGen(step) {
   genDialog().querySelector('.lg-card[tabindex="0"]')?.focus();
 }
 
+// Select marks the ticked letterhead (the button turns into Save); Save makes it the letterhead and closes.
 function selectGen() {
   const item = gen.made[gen.picked];
   if (!item || gen.busy) return;
+  if (gen.chosen !== gen.picked) {
+    gen.chosen = gen.picked;
+    renderGen();
+    $('cc-gen-select').focus();
+    return;
+  }
   dirty = true;
   setFile('letterhead', new File([item.blob], 'letterhead.png', { type: 'image/png' }));
   closeGen();
 }
 
-// Keys while the popup is open: ← → page (or move between the two shown), Enter selects, Esc closes.
+// Keys while the popup is open: ← → page (or move between the two shown), Enter on a card selects it (then Save), Esc closes.
 function handleGenKeys(event) {
   const { key } = event;
   if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeGen(); return; }
@@ -571,7 +588,7 @@ function initGen() {
     if (action === 'more') generateMore(1, GENERATE_MORE_STEPS, GENERATE_MORE_STEP_MS);
     if (action === 'select') selectGen();
   });
-  // A double click picks and selects in one go.
+  // A double click ticks and selects in one go (Save still confirms).
   dialog.addEventListener('dblclick', event => {
     const card = event.target.closest('.lg-card[data-index]');
     if (card && !gen.busy) { gen.picked = Number(card.dataset.index); selectGen(); }
