@@ -520,6 +520,7 @@ function po_format(array $row): array
         'quotationRequestId' => $row['quotation_request_id'] === null ? null : (int) $row['quotation_request_id'], 'quotationRequestCode' => $rfq,
         'quotationNumber' => $row['quotation_number'], 'status' => $row['status'], 'deliveryDate' => $row['delivery_date'] ?? '',
         'deliveryLocation' => $row['delivery_location'], 'deliveryTerms' => $row['delivery_terms'], 'paymentMode' => $row['payment_mode'],
+        'creditPeriod' => $row['credit_period'] ?? '', 'signatories' => po_signatories_out($row['signatories'] ?? null),
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
         'supplierName' => $supplier ? $supplier['supplier_name'] : '', 'contactName' => $row['contact_name'], 'email' => $row['email'],
         'contactNumber' => $row['contact_number'], 'salesman' => $row['salesman'], 'salesmanContact' => $row['salesman_contact'],
@@ -558,8 +559,8 @@ function purchase_order_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
         $data = array_replace(pb_as_input(purchase_order_find($id), ['poDate', 'purchaseRequestId', 'quotationRequestId', 'quotationNumber',
-            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'salesman', 'salesmanContact', 'certifications',
-            'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
+            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'creditPeriod', 'salesman', 'salesmanContact',
+            'certifications', 'signatories', 'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
     }
     $in = new Input($data);
     $supplierId = $in->id('supplierId', 'supplier', 'suppliers');
@@ -574,6 +575,7 @@ function purchase_order_save(array $data, ?int $id = null): array
         'delivery_location' => $in->text('deliveryLocation', 'Delivery location', 200),
         'delivery_terms' => $in->text('deliveryTerms', 'Delivery terms', 200),
         'payment_mode' => $in->text('paymentMode', 'Payment mode', 40),
+        'credit_period' => $in->text('creditPeriod', 'Credit period', 40),
         'salesman' => $in->text('salesman', 'Salesman / created by', 100),
         'salesman_contact' => $in->text('salesmanContact', 'Salesman contact', 40),
         'certifications' => po_certifications($in, $data['certifications'] ?? []),
@@ -585,9 +587,14 @@ function purchase_order_save(array $data, ?int $id = null): array
         'vat_mode' => $vatMode,
         'remarks' => pb_clean_html($in->text('remarks', 'Remarks', 20000)),
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
+        'signatories' => po_signatories_in($in, $data['signatories'] ?? null),
     ];
     if ($supplierId === null) {
         $in->fail('supplierId', 'Select the supplier.');
+    }
+    // Credit Period goes with the Credit payment mode only (the page requires it there); any other mode drops it.
+    if ($v['payment_mode'] !== 'Credit') {
+        $v['credit_period'] = '';
     }
     if ($v['payment_mode'] !== '' && !in_array($v['payment_mode'], PB_PAYMENT_MODES, true)) {
         $in->fail('paymentMode', 'Payment mode must be one of: ' . implode(', ', PB_PAYMENT_MODES) . '.');
@@ -629,6 +636,44 @@ function po_certifications(Input $in, mixed $raw): string
     }
     usort($picked, static fn ($a, $b) => array_search($a, PB_CERTIFICATIONS, true) <=> array_search($b, PB_CERTIFICATIONS, true));
     return implode(', ', $picked);
+}
+
+/* Signatory slots: a list of { name, title } (blank rows dropped), stored as JSON; none stores NULL. */
+const PO_MAX_SIGNATORIES = 6;
+
+function po_signatories_in(Input $in, mixed $raw): ?string
+{
+    if ($raw === null || $raw === '' || $raw === []) {
+        return null;
+    }
+    if (!is_array($raw) || !array_is_list($raw)) {
+        $in->fail('signatories', 'Signatories must be a list.');
+        return null;
+    }
+    $list = [];
+    foreach ($raw as $entry) {
+        $name = trim((string) (is_array($entry) ? ($entry['name'] ?? '') : ''));
+        $title = trim((string) (is_array($entry) ? ($entry['title'] ?? '') : ''));
+        if ($name === '' && $title === '') {
+            continue;
+        }
+        if (mb_strlen($name) > 100 || mb_strlen($title) > 100) {
+            $in->fail('signatories', 'A signatory name or title can have at most 100 characters.');
+            return null;
+        }
+        $list[] = ['name' => $name, 'title' => $title];
+    }
+    if (count($list) > PO_MAX_SIGNATORIES) {
+        $in->fail('signatories', 'At most ' . PO_MAX_SIGNATORIES . ' signatories.');
+        return null;
+    }
+    return $list ? json_encode($list, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
+}
+
+function po_signatories_out(?string $json): array
+{
+    $list = $json === null || $json === '' ? [] : json_decode($json, true);
+    return is_array($list) ? array_values(array_filter($list, 'is_array')) : [];
 }
 
 /* The order's currency: the one picked on the form, else the supplier's, else OMR. */

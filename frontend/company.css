@@ -411,12 +411,11 @@ html.has-modal { overflow: hidden; }
 .lg-dots span { width: 6px; height: 6px; border-radius: 99px; background: var(--card-line); transition: width .2s, background .2s; }
 .lg-dots span.is-current { width: 22px; background: var(--blue); }
 .lg-foot { align-items: center; padding: 14px 20px; background: var(--card); }
-.lg-missing { flex: 1; min-width: 0; margin: 0 auto 0 0; font-size: 11.5px; font-weight: 600; color: #c2410c; }
 .lg-foot .lk-btn:disabled { opacity: .5; }
 @media (max-width: 700px) {
   .lg-cards { grid-template-columns: minmax(0, 1fr); }
   .lg-cards > :nth-child(2) { display: none; }
-  .lg-sub, .lg-missing { display: none; }
+  .lg-sub { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .lg-loading-icon { animation: none; } }
 

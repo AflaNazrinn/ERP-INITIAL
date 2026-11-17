@@ -562,6 +562,10 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
+    if (byId('quick-supplier').open && handleQuickSupplierKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
 
     // The open form's own keys (Esc, Shift+Enter, Enter …) come first, unless the menu is over it.
     const pageKeys = FORM_KEY_HANDLERS[currentPage];
@@ -1670,7 +1674,10 @@ const LOOKUPS = {
   brand: { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands', api: 'api/brands.php',
     columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
   supplier: { title: 'Select Supplier', letter: 'S', list: 'Supplier List', plural: 'suppliers', api: 'api/suppliers.php',
-    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name },
+    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name,
+    // The card style (a field with data-lookup-cards: the Purchase Order's Supplier Name).
+    subtitle: 'Choose a supplier from the database catalog.', search: 'Search supplier by name or code...',
+    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Supplier' },
   warehouse: { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points', api: 'api/warehouses.php',
     columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: codeAndName },
   rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
@@ -1687,7 +1694,23 @@ const LOOKUPS = {
   // Purchase Order currency: the hidden id holds the code (OMR), the field shows "OMR – Omani Rial".
   currency: { title: 'Select Currency', letter: '$', list: 'Currency List', plural: 'currencies', rows: () => PO_CURRENCIES,
     columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}` },
+  // Purchase Order type-to-search text (free text kept as typed): the usual values, then those used on saved orders.
+  poLocation: { plural: 'locations', rows: () => poTextRows('deliveryLocation', PO_LOCATIONS), display: row => row.name, meta: () => '' },
+  poTerms: { plural: 'delivery terms', rows: () => poTextRows('deliveryTerms', PO_TERMS), display: row => row.name, meta: () => '' },
+  poCredit: { plural: 'credit periods', rows: () => poTextRows('creditPeriod', PO_CREDIT_PERIODS), display: row => row.name, meta: () => '' },
 };
+
+const PO_LOCATIONS = ['DDP MUSCAT LIMIT', 'DAP MUSCAT', 'EX-WORKS', 'MUSCAT MAIN WAREHOUSE', 'SOHAR SITE STORE'];
+const PO_TERMS = ['2-3 days from PO date', '2-3 weeks from PO date, DAF', '1 week from PO date', '4-6 weeks from PO date', 'Immediate delivery', 'Ex-stock'];
+const PO_CREDIT_PERIODS = ['7 Days', '15 Days', '30 Days', '45 Days', '60 Days', '90 Days'];
+// The suggestions for a Purchase Order text field: the presets, then other values saved orders used (once each).
+async function poTextRows(key, presets) {
+  let used = [];
+  try { used = (await loadLookup('purchaseorder')).map(po => String(po[key] ?? '').trim()).filter(Boolean); } catch { /* presets only */ }
+  const seen = new Set();
+  return [...presets, ...used].filter(text => !seen.has(text.toLowerCase()) && seen.add(text.toLowerCase()))
+    .map(text => ({ id: text, code: '', name: text }));
+}
 
 // The currencies a purchase order can be in (the server's PB_CURRENCIES). OMR, AED and INR first.
 const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'Indian Rupee'], ['SAR', 'Saudi Riyal'], ['QAR', 'Qatari Riyal'], ['KWD', 'Kuwaiti Dinar'],
@@ -1802,6 +1825,13 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
   lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
     || (!lookupIdInput(field) && config.display(row) === field.value)));
+  // Card style: a subtitle, the search box with + Create … beside it, rows as name over "code • city", no key hints.
+  lookup.cards = field.dataset.lookupCards !== undefined;
+  dialog.classList.toggle('lk-cards', lookup.cards);
+  byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
+  byId('lookup-sub').hidden = !lookup.cards;
+  byId('lookup-new').hidden = !(lookup.cards && config.create);
+  byId('lookup-new-label').textContent = config.create || '';
   byId('lookup-letter').textContent = config.letter;
   byId('lookup-title').textContent = config.title;
   byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
@@ -1814,7 +1844,8 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-create-hint').hidden = !canCreate;
   const search = byId('lookup-search');
   search.value = query;
-  search.placeholder = `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
+  search.placeholder = lookup.cards && config.search ? config.search
+    : `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
   renderLookupRows();
   document.documentElement.classList.add('has-modal');
   dialog.showModal();
@@ -1846,12 +1877,27 @@ function renderLookupRows() {
       box.append(el('span', 'lk-box'));
       tr.append(box);
     }
+    if (lookup.cards) {
+      const cell = el('td', 'lk-card-cell');
+      cell.colSpan = config.columns.length;
+      const text = el('div', 'lk-card-text');
+      text.append(el('div', 'lk-card-name', config.display(row)));
+      const meta = config.cardMeta ? config.cardMeta(row) : row.code;
+      if (meta) text.append(el('div', 'lk-card-meta', meta));
+      const tick = el('span', 'lk-card-tick');
+      tick.setAttribute('aria-hidden', 'true');
+      tick.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"></circle><path d="m8 12.2 2.7 2.7L16 9.6"></path></svg>';
+      cell.append(text, tick);
+      tr.append(cell);
+      return tr;
+    }
     config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
     return tr;
   });
   if (rows.length === 0) {
     const tr = el('tr');
-    const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.' : '';
+    const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.'
+      : !byId('lookup-new').hidden ? ` Press Enter to create it as a new ${config.plural.replace(/s$/, '')}.` : '';
     const td = el('td', 'lk-empty', (query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`) + createHint);
     td.colSpan = config.columns.length + (lookup.multi ? 1 : 0);
     tr.append(td);
@@ -1913,7 +1959,7 @@ function closeLookup({ advance = false } = {}) {
   const dialog = byId('lookup');
   if (!dialog.open) return;
   dialog.close();
-  if (!byId('quick-menu').open && !byId('quick-item').open) document.documentElement.classList.remove('has-modal');
+  if (!byId('quick-menu').open && !byId('quick-item').open && !byId('quick-supplier').open) document.documentElement.classList.remove('has-modal');
   if (!document.contains(lookup.field)) return;
   if (advance) focusNextField(lookup.field); else focusField(lookup.field);
 }
@@ -1983,6 +2029,11 @@ function handleLookupDialogKeys(event) {
     if (!event.repeat) createItemFromLookup();
     return;
   }
+  if (event.altKey && !ctrl && event.code === 'KeyN' && !byId('lookup-new').hidden) {
+    event.preventDefault();
+    if (!event.repeat) createSupplierFromLookup();
+    return;
+  }
   if (ctrl || event.altKey) return;
   const search = byId('lookup-search');
   const [cancel, select] = [byId('lookup-cancel'), byId('lookup-select')];
@@ -2017,6 +2068,7 @@ function handleLookupDialogKeys(event) {
     event.preventDefault();
     if (event.repeat) return;
     if (lookup.shown.length === 0 && !lookup.multi && !byId('lookup-create').hidden) createItemFromLookup();
+    else if (lookup.shown.length === 0 && !byId('lookup-new').hidden) createSupplierFromLookup();
     else pickLookupRow({ advance: true });
   }
 }
@@ -2103,7 +2155,7 @@ function initLookups() {
     lookup.active = Number(tr.dataset.index);
     syncLookupActive();
     if (lookup.multi) toggleLookupRow();        // multi-select: each click ticks or unticks
-    else if (event.detail >= 2) pickLookupRow();   // double-click picks
+    else if (lookup.cards || event.detail >= 2) pickLookupRow();   // card style: a click picks; else a double-click
   });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) {           // the backdrop, outside the panel
@@ -2115,6 +2167,7 @@ function initLookups() {
     if (action === 'cancel') closeLookup();
     else if (action === 'select') { if (lookup.multi) applyLookupMulti(); else pickLookupRow(); }
     else if (action === 'create') createItemFromLookup();
+    else if (action === 'new') createSupplierFromLookup();
   });
 }
 
@@ -5980,6 +6033,125 @@ function initQuickItem() {
   });
 }
 
+/* ---------- Quick Add Supplier (Purchase Order › Select Supplier › + Create Supplier) ----------
+   Saved to the Supplier master with its contact, then picked into the field the popup was opened from. */
+
+const quickSupplier = { field: null, saving: false };
+const qsEl = suffix => byId(`quick-supplier-${suffix}`);
+const QUICK_SUPPLIER_FIELDS = ['name', 'contact', 'phone', 'email', 'country', 'currency'];
+
+// The Select Supplier popup's + Create Supplier: its searched text becomes the new supplier's name.
+function createSupplierFromLookup() {
+  const { field } = lookup;
+  const name = byId('lookup-search').value.trim();
+  closeLookup();
+  openQuickSupplier(field, name);
+}
+
+function openQuickSupplier(field, name = '') {
+  quickSupplier.field = field;
+  byId('quick-supplier-form').reset();
+  clearFormErrors(byId('quick-supplier-form'));
+  qsEl('error').hidden = true;
+  qsEl('name').value = name.toUpperCase();
+  qsEl('country').value = 'Oman';
+  qsEl('currency').value = 'OMR';
+  document.documentElement.classList.add('has-modal');
+  byId('quick-supplier').showModal();
+  qsEl('name').focus();
+}
+
+function closeQuickSupplier({ picked = false } = {}) {
+  const dialog = byId('quick-supplier');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open && !byId('quick-item').open) document.documentElement.classList.remove('has-modal');
+  const { field } = quickSupplier;
+  if (!field || !document.contains(field)) return;
+  if (picked) focusNextField(field); else focusField(field);
+}
+
+function quickSupplierError(node, message) {
+  qsEl('error').textContent = message;
+  qsEl('error').hidden = false;
+  if (node) { node.classList.add('is-invalid'); node.focus(); }
+}
+
+async function saveQuickSupplier() {
+  if (quickSupplier.saving) return;
+  clearFormErrors(byId('quick-supplier-form'));
+  qsEl('error').hidden = true;
+  const value = suffix => qsEl(suffix).value.trim();
+  if (!value('name')) return quickSupplierError(qsEl('name'), 'Enter the supplier name.');
+  const phone = value('phone');
+  const email = value('email');
+  const problem = phoneProblem(phone, '');
+  if (problem) return quickSupplierError(qsEl('phone'), problem);
+  if (email && !EMAIL.test(email)) return quickSupplierError(qsEl('email'), 'Enter a valid email address.');
+  const payload = {
+    supplierName: value('name'), country: value('country'), currency: qsEl('currency').value || 'OMR', phone, email,
+    contacts: value('contact') || phone || email ? [{ name: value('contact'), designation: '', number: phone, email }] : [],
+  };
+  quickSupplier.saving = true;
+  qsEl('save').disabled = true;
+  try {
+    const supplier = await apiRequest('api/suppliers.php', { method: 'POST', json: payload });
+    forgetLookups('supplier');
+    const { field } = quickSupplier;
+    closeQuickSupplier({ picked: true });
+    showToast('Supplier created', `${supplier.code} · ${supplier.name}`);
+    if (field && document.contains(field)) setLookupValue(field, supplier);   // the order takes it (contact, currency, VAT)
+  } catch (error) {
+    const fields = { supplierName: 'name', phone: 'phone', email: 'email', country: 'country', currency: 'currency' };
+    const key = Object.keys(error.fields || {}).find(field => fields[field] || field.startsWith('contacts'));
+    const target = key ? qsEl(fields[key] || 'contact') : null;
+    quickSupplierError(target, key ? error.fields[key] : error.message);
+  } finally {
+    quickSupplier.saving = false;
+    qsEl('save').disabled = false;
+  }
+}
+
+function handleQuickSupplierKeys(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (!event.repeat) closeQuickSupplier();
+    return true;
+  }
+  if (isBrowserSaveKey(event) || isSaveKey(event)) {
+    event.preventDefault();
+    if (!event.repeat) saveQuickSupplier();
+    return true;
+  }
+  if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    const index = QUICK_SUPPLIER_FIELDS.findIndex(suffix => qsEl(suffix) === event.target);
+    if (index === -1) return false;                       // buttons: their own click
+    event.preventDefault();
+    if (index === QUICK_SUPPLIER_FIELDS.length - 1) saveQuickSupplier();
+    else qsEl(QUICK_SUPPLIER_FIELDS[index + 1]).focus();
+    return true;
+  }
+  return false;
+}
+
+function initQuickSupplier() {
+  const dialog = byId('quick-supplier');
+  qsEl('currency').replaceChildren(...PO_CURRENCIES.map(row => new Option(`${row.code} - ${row.name}`, row.code)));
+  qsEl('countries').replaceChildren(...COUNTRIES.map(country => new Option(country.name)));
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeQuickSupplier(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeQuickSupplier(); return; }   // backdrop
+    const action = event.target.closest('[data-qs]')?.dataset.qs;
+    if (action === 'close') closeQuickSupplier();
+    if (action === 'save') saveQuickSupplier();
+  });
+  byId('quick-supplier-form').addEventListener('submit', event => event.preventDefault());
+  byId('quick-supplier-form').addEventListener('input', event => {
+    event.target.classList.remove('is-invalid');
+    qsEl('error').hidden = true;
+  });
+}
+
 /* ---------- Delete ---------- */
 
 async function deleteMasterRow(list, row) {
@@ -7768,23 +7940,63 @@ async function poShowSupplier({ fresh = false } = {}) {
   }));
   if (fresh) {
     if (supplier.currency) poSetCurrency(supplier.currency);
-    const dial = poSupplierDial(supplier);
-    byId('po-contact-number-code').value = dial;            // the contact's calling code follows the supplier's country
     if (contacts.length === 1) {
       byId('po-contact').value = contacts[0].name;
-      setPhoneField(byId('po-contact-number'), contacts[0].number, dial);
+      byId('po-contact-number').value = poSupplierPhone(contacts[0].number, supplier);
     }
   }
   return supplier;
 }
 
-// The supplier's calling code: its country's, else the code already shown.
-const poSupplierDial = supplier => countryNamed(supplier?.country)?.dial || byId('po-contact-number-code').value || '+968';
+// A supplier contact's number as one text ("+968 9123 4567"): a number without a + code takes the supplier's country code.
+function poSupplierPhone(number, supplier) {
+  const text = String(number ?? '').trim();
+  if (!text || text.startsWith('+')) return text;
+  return `${countryNamed(supplier?.country)?.dial || '+968'} ${text}`;
+}
 
-// VAT follows the currency: none on an order in OMR (Omani Rial), VAT Enabled in any other currency.
+// Credit Period: shown (and required) only while Payment Mode is Credit, in the place after Payment Mode.
+const poIsCredit = () => byId('po-payment').value === 'Credit';
+async function poShowCredit({ fill = false } = {}) {
+  byId('po-credit-field').hidden = !poIsCredit();
+  if (!fill || !poIsCredit() || byId('po-credit-period').value.trim()) return;
+  // Just switched to Credit: the supplier's credit days, else 30 Days.
+  const supplierId = byId('po-supplier-id').value;
+  const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
+  const days = Number(supplier?.debitDays) || 30;
+  byId('po-credit-period').value = `${days} Days`;
+}
+
+// Signatory slots (Include Signatory Slots ticked): name + position rows, kept as JSON in #po-signatories.
+function poReadSignatories() {
+  try { const list = JSON.parse(byId('po-signatories').value || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
+}
+function poStoreSignatories() {
+  const list = [...byId('po-sign-rows').querySelectorAll('.pb-sign-row')].map(row => ({
+    name: row.querySelector('[data-sign="name"]').value, title: row.querySelector('[data-sign="title"]').value,
+  }));
+  byId('po-signatories').value = JSON.stringify(list);
+}
+function poAddSignatoryRow(entry = {}) {
+  const row = byId('po-sign-row').content.firstElementChild.cloneNode(true);
+  row.querySelector('[data-sign="name"]').value = entry.name || '';
+  row.querySelector('[data-sign="title"]').value = entry.title || '';
+  byId('po-sign-rows').append(row);
+  return row;
+}
+// Shows the rows the hidden value holds, under the print box while Include Signatory Slots is ticked.
+function poShowSignatories() {
+  const on = byId('po-signatory')?.checked ?? false;
+  byId('po-signs').hidden = !on;
+  byId('po-sign-rows').replaceChildren();
+  for (const entry of poReadSignatories()) poAddSignatoryRow(entry);
+  if (on && !byId('po-sign-rows').childElementCount) poAddSignatoryRow();
+}
+
+// VAT follows the currency: VAT Enabled (5%) on an order in OMR (Omani Rial, Oman), none in any other currency.
 // The VAT button can still change it for one order.
 function poVatFromCurrency(form) {
-  form.setVat(poCurrency() !== 'OMR');
+  form.setVat(poCurrency() === 'OMR');
 }
 
 // The order's currency code, and setting it (a code not in the list is shown as it is).
@@ -7800,26 +8012,30 @@ const poForm = createPurchaseForm({
   firstField: () => byId('po-date'),
   fieldNodes: { poDate: 'po-date', quotationNumber: 'po-quotation-no',
     deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
-    salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
+    creditPeriod: 'po-credit-period', signatories: 'po-sign-rows', salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
     supplierId: 'po-supplier', contactName: 'po-contact', contactNumber: 'po-contact-number', currency: 'po-currency',
     discountAmount: 'po-discount', shipping: 'po-shipping' },
   header() {
     return {
       poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
-      salesman: byId('po-salesman').value.trim(), salesmanContact: readPhoneField(byId('po-salesman-contact')),
+      creditPeriod: poIsCredit() ? byId('po-credit-period').value.trim() : '',
+      signatories: byId('po-signatory')?.checked ? poReadSignatories().filter(entry => entry.name.trim() || entry.title.trim()) : [],
+      salesman: byId('po-salesman').value.trim(), salesmanContact: byId('po-salesman-contact').value.trim(),
       certifications: byId('po-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
       supplierId: byId('po-supplier-id').value || null, contactName: byId('po-contact').value.trim(),
-      contactNumber: readPhoneField(byId('po-contact-number')), currency: poCurrency(),
+      contactNumber: byId('po-contact-number').value.trim(), currency: poCurrency(),
     };
   },
   check(form, errors) {
+    if (poIsCredit() && !byId('po-credit-period').value.trim()) errors.push({ node: byId('po-credit-period'), message: 'Enter the credit period (e.g. 30 Days).' });
+    if (!byId('po-salesman').value.trim()) errors.push({ node: byId('po-salesman'), message: 'Enter the salesman name.' });
     if (!byId('po-supplier-id').value) errors.push({ node: byId('po-supplier'), message: 'Select the supplier.' });
     if (byId('po-delivery-date').value && byId('po-delivery-date').value < byId('po-date').value) {
       errors.push({ node: byId('po-delivery-date'), message: 'The delivery date cannot be before the PO date.' });
     }
   },
-  afterRestore() { poShowCertifications(); poShowSupplier(); },
+  afterRestore() { poShowCertifications(); poShowSupplier(); poShowCredit(); poShowSignatories(); },
   listRoute: 'purchase-book/purchase-order',
   fill(form, po) {
     byId('po-date').value = po.poDate;
@@ -7828,22 +8044,28 @@ const poForm = createPurchaseForm({
     byId('po-location').value = po.deliveryLocation;
     byId('po-terms').value = po.deliveryTerms;
     setSelectValue(byId('po-payment'), po.paymentMode || 'As usual');
+    byId('po-credit-period').value = po.creditPeriod || '';
+    poShowCredit();
+    byId('po-signatories').value = JSON.stringify(po.signatories || []);
     byId('po-salesman').value = po.salesman || '';
-    setPhoneField(byId('po-salesman-contact'), po.salesmanContact, '+968');
+    byId('po-salesman-contact').value = po.salesmanContact || '';
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
     fillLookup(byId('po-supplier'), po.supplierId ? { id: po.supplierId, name: po.supplierName } : null);   // the Select Supplier popup field
     byId('po-contact').value = po.contactName;
-    setPhoneField(byId('po-contact-number'), po.contactNumber, '+968');
+    byId('po-contact-number').value = po.contactNumber || '';
     poSetCurrency(po.currency);
   },
-  afterFill: () => poShowSupplier(),
+  afterFill: () => { poShowSignatories(); return poShowSupplier(); },
   async onReset(form) {
     byId('po-date').value = todayInputValue();
     poSetCurrency('OMR');                        // hidden ids were cleared by the reset
-    poVatFromCurrency(form);                     // a new order is in OMR: VAT Disabled
+    poVatFromCurrency(form);                     // a new order is in OMR: VAT Enabled
     byId('po-certifications').value = 'N/A';
     poShowCertifications();
+    poShowCredit();
+    byId('po-signatories').value = '[]';
+    poShowSignatories();
     poShowSupplier();
   },
   init(form) {
@@ -7860,7 +8082,7 @@ const poForm = createPurchaseForm({
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
       const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
-      if (contact?.number) { setPhoneField(byId('po-contact-number'), contact.number, poSupplierDial(supplier)); form.page.absorb(); }
+      if (contact?.number) { byId('po-contact-number').value = poSupplierPhone(contact.number, supplier); form.page.absorb(); }
     });
     // A pick in the Select Currency popup: the form records it first (its listener is older), then VAT follows in the same step.
     byId('po-form').addEventListener('input', event => {
@@ -7868,6 +8090,30 @@ const poForm = createPurchaseForm({
       poVatFromCurrency(form);
       form.page.absorb();
     });
+    // Payment Mode: Credit shows Credit Period (filled with the supplier's days); any other mode hides it.
+    byId('po-payment').addEventListener('change', async () => {
+      await poShowCredit({ fill: true });
+      form.page.absorb();
+    });
+    // Include Signatory Slots: ticked shows the signatory rows (one empty row to start), unticked hides them.
+    byId('po-form').addEventListener('change', event => {
+      if (event.target.id !== 'po-signatory') return;
+      poShowSignatories();
+      if (event.target.checked) byId('po-sign-rows').querySelector('[data-sign="name"]')?.focus();
+    });
+    byId('po-sign-add').addEventListener('click', () => {
+      poAddSignatoryRow().querySelector('[data-sign="name"]').focus();
+      poStoreSignatories();
+      form.page.record();
+    });
+    byId('po-sign-rows').addEventListener('click', event => {
+      const remove = event.target.closest('[data-sign-remove]');
+      if (!remove) return;
+      remove.closest('.pb-sign-row').remove();
+      poStoreSignatories();
+      form.page.record();
+    });
+    byId('po-sign-rows').addEventListener('input', () => { poStoreSignatories(); form.page.record(); });
     byId('po-form').addEventListener('change', event => {
       const box = event.target.closest('[data-cert]');
       if (!box) return;
@@ -7980,7 +8226,8 @@ function purchaseItemsSection(kind) {
     }
     general.push(viewCard({ title: 'Remarks & Print' }, viewFields([
       { label: 'Remarks', value: kind === 'po' && isRemarksHtml(record.remarks) ? remarksPlainText(record.remarks) : record.remarks, column: { type: 'wrap' } },
-      { label: 'Signatory Slots', value: record.includeSignatory ? 'Included' : 'Not included' },
+      { label: 'Signatory Slots', value: !record.includeSignatory ? 'Not included'
+        : (record.signatories || []).length ? record.signatories.map(entry => [entry.name, entry.title].filter(Boolean).join(', ')).join(' · ') : 'Included' },
       { label: 'Seal', value: record.attachSeal ? 'Attached' : 'Not attached' },
     ])));
     return { general, tabs: [{ label: 'Items', count: record.items.length,
@@ -8142,6 +8389,7 @@ const poList = purchaseList({
     detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Delivery & Payment' }),
     detail({ key: 'deliveryTerms', label: 'Delivery Terms', group: 'Delivery & Payment' }),
     detail({ key: 'paymentMode', label: 'Payment Mode', group: 'Delivery & Payment' }),
+    detail({ key: 'creditPeriod', label: 'Credit Period', group: 'Delivery & Payment' }),
     detail({ key: 'contactName', label: 'Contact Person', group: 'Supplier' }),
     detail({ key: 'contactNumber', label: 'Contact Number', group: 'Supplier' }),
     detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
@@ -8345,7 +8593,7 @@ async function printPurchaseDocument(spec, id) {
       ['Suppliers', doc.suppliers.map(s => s.name).join(', ')]],
     po: () => [['PO ID', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
       ['Supplier', doc.supplierName], ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber], ['Currency', doc.currency],
-      ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
+      ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode], ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
       ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact], ['Certification Required', (doc.certifications || []).join(', ')],
       ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode]],
     grn: () => [['GRN ID', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['Supplier', doc.supplierName], ['Warehouse', doc.warehouseName], ['PO Number', doc.poNumber]],
@@ -8432,7 +8680,17 @@ async function printPurchaseDocument(spec, id) {
   const foot = el('footer', 'ps-foot');
   if (doc.includeSignatory) {
     const signs = el('div', 'ps-signs');
-    for (const label of ['Prepared By', 'Checked By', 'Approved By']) signs.append(el('div', 'ps-sign', label));
+    // A Purchase Order's named signatories (name over the line, position under it), else the standard three boxes.
+    const named = (doc.signatories || []).filter(entry => String(entry.name || '').trim() || String(entry.title || '').trim());
+    if (named.length) {
+      for (const entry of named) {
+        const sign = el('div', 'ps-sign', String(entry.name || '').trim());
+        if (String(entry.title || '').trim()) sign.append(el('div', 'ps-sign-title', String(entry.title).trim()));
+        signs.append(sign);
+      }
+    } else {
+      for (const label of ['Prepared By', 'Checked By', 'Approved By']) signs.append(el('div', 'ps-sign', label));
+    }
     foot.append(signs);
   }
   const loading = [];
@@ -8552,6 +8810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMasterConfirm();
   if (typeof initLiveUpdates === 'function') initLiveUpdates();   // sync.js
   initQuickItem();
+  initQuickSupplier();
   initItemDescription();
   for (const list of MASTER_LISTS) list.init();
   loadDashboard();

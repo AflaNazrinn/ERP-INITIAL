@@ -1644,6 +1644,7 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
   .ps-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 30px; break-inside: avoid; }
   .ps-signs { display: flex; flex: 1; gap: 24px; }
   .ps-sign { flex: 1; margin-top: 36px; padding-top: 6px; border-top: 1px solid #0f172a; font-size: 9.5px; font-weight: 700; text-align: center; color: #334155; }
+  .ps-sign-title { margin-top: 2px; font-size: 8.5px; font-weight: 500; color: #64748b; }
   .ps-seal { width: 110px; height: 110px; object-fit: contain; margin-left: auto; }
 }
 
@@ -1677,7 +1678,6 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
 .pb-vat-switch[aria-pressed="true"] { border-color: #86efac; background: #f0fdf4; color: #15803d; }
 .pb-vat-switch:hover { border-color: var(--accent); }
 .pb-vat-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.pb-table-po { min-width: 1080px; }
 .pb-table-po .pb-col-code { width: 150px; }
 .pb-table-po .pb-col-total { text-align: right !important; }
 .pb-table-po .pb-line-total { display: block; text-align: right; background: none; font-weight: 800; }
@@ -1714,16 +1714,31 @@ body:is([data-page="pr-list"], [data-page="rfq-list"], [data-page="po-list"], [d
 .pb-editor-area:empty::before { content: attr(data-placeholder); color: var(--ink-400); pointer-events: none; }
 .pb-editor-area ul, .pb-editor-area ol, .ps-remarks-body ul, .ps-remarks-body ol { margin: 4px 0; padding-left: 22px; }
 
-/* Financial Summary: the figures in a soft box, the grand total in its own green box. */
-.pb-summary-po { display: flex; flex-direction: column; gap: 14px; }
-.pb-sum-box { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted); gap: 10px; }
-.pb-sum-box .pb-sum-input { background: var(--surface); }
-.pb-grand-box {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px;
-  border: 1px solid #bbf7d0; border-radius: 10px; background: #f0fdf4;
-  font-size: 15px; font-weight: 800; color: var(--ink-900);
+/* Purchase Order only (#po-page): required marks in green, no S.No column, a plain Summary list. */
+#po-page .fp-req { color: #16a34a; }
+.pb-table-po .pb-col-sno { display: none; }
+.pb-table-po { min-width: 1020px; }
+.pb-summary-po { display: flex; flex-direction: column; }
+.pb-sum-po { gap: 10px; }
+.pb-sum-po > div:not(.pb-sum-grand) dt { color: var(--ink-600); }
+.pb-sum-po .pb-sum-grand { margin-top: 8px; padding-top: 18px; }
+.pb-sum-po .pb-sum-grand dt { font-size: 15px; font-weight: 800; color: var(--ink-900); }
+.pb-sum-po .pb-sum-grand dd { font-family: var(--font-mono); font-size: 22px; font-weight: 800; color: #15803d; }
+/* Signatory slots under the print box: name + position rows, with Add Signatory inside the box. */
+.pb-signs {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted);
 }
-.pb-grand-box strong { font-family: var(--font-mono); font-size: 24px; color: #15803d; }
+.pb-sign-rows { display: flex; flex-direction: column; gap: 10px; }
+.pb-sign-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; gap: 14px; align-items: end; }
+.pb-sign-row .fp-input { background: var(--surface); }
+.pb-sign-remove {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 40px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--danger); cursor: pointer;
+}
+.pb-sign-remove:hover, .pb-sign-remove:focus-visible { background: var(--danger-soft); outline: none; }
+.pb-sign-add { align-self: flex-start; }
+@media (max-width: 600px) { .pb-sign-row { grid-template-columns: minmax(0, 1fr) 36px; } .pb-sign-row .fp-field:nth-child(2) { grid-column: 1; } }
 
 .ps-remarks-body { margin-top: 4px; white-space: normal; }
 
@@ -1912,3 +1927,41 @@ input::-webkit-contacts-auto-fill-button {
 .mv .mv-tab:focus { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: none; background: var(--accent-soft); color: var(--ink-900); }
 .mv .lk-close:focus, .mv .mv-doc-act:focus { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(217, 119, 6, .25); }
 @media (prefers-reduced-motion: reduce) { .mv .ml-btn:focus, .mc .ml-btn:focus { transform: none; } }
+
+/* ---------- Select Supplier, card style (Purchase Order › Supplier Name: .lookup.lk-cards) ----------
+   A subtitle under the title, no key hints, the search box with + Create Supplier beside it,
+   each supplier as its name over "code • city" with a tick circle, and Cancel only (a click picks). */
+.lk-heading { flex: 1; min-width: 0; }
+.lk-sub { margin: 3px 0 0; font-size: 13px; color: var(--ink-500); }
+.lk-search-row { flex: none; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.lk-search-row .lk-search { flex: 1; min-width: 0; margin-bottom: 0; }
+.lk-new {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 16px; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap;
+}
+.lk-new:hover { background: var(--accent-hover); }
+.lk-new:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+.lk-new[hidden] { display: none; }
+.lk-cards { width: min(620px, calc(100vw - 32px)); }
+.lk-cards .lk-head { align-items: flex-start; padding: 20px 24px 16px; background: var(--surface-muted); }
+.lk-cards .lk-letter, .lk-cards .lk-keys, .lk-cards .lk-list-title, .lk-cards .lk-label, .lk-cards .lk-count, .lk-cards #lookup-select { display: none; }
+.lk-cards .lk-close { border: 0; background: none; }
+.lk-cards .lk-body { padding: 18px 24px 4px; background: var(--surface); }
+.lk-cards .lk-card { padding: 0; border: 0; }
+.lk-cards .lk-table-wrap { max-height: 380px; }
+.lk-cards .lk-table thead { display: none; }
+.lk-cards .lk-table td.lk-card-cell { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.lk-card-text { flex: 1; min-width: 0; }
+.lk-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; color: var(--ink-900); }
+.lk-card-meta { margin-top: 2px; font-size: 12px; color: var(--ink-500); }
+.lk-card-tick { flex: none; display: flex; color: var(--ink-300, #cbd5e1); }
+.lk-cards .lk-table tbody tr.is-active td:first-child { box-shadow: inset 4px 0 0 var(--accent-hover); }
+.lk-cards .lk-table tbody tr.is-active .lk-card-tick { color: var(--accent-hover); }
+.lk-cards .lk-foot { border-top: 0; padding: 14px 24px 20px; }
+@media (max-width: 600px) { .lk-search-row { flex-wrap: wrap; } .lk-new { width: 100%; justify-content: center; } }
+
+/* Quick Add Supplier: one column, Country beside Currency. */
+.qs { width: min(520px, calc(100vw - 32px)); }
+.qs .sf-head { padding: 20px 24px 16px; background: var(--surface-muted); }
+.qs .lk-close { border: 0; background: none; }
+.qs-body { padding: 20px 24px; }
