@@ -17,8 +17,8 @@ let busy = false;
 const SECTIONS = {
   basic:        ['companyName', 'companyCode', 'companyType', 'businessType'],
   registration: ['crNumber', 'crExpiry', 'vatNumber', 'legalStructure'],
-  financial:    ['baseCurrency', 'financialYearStart', 'vatApplicable', 'vatPercentage'],
-  address:      ['building', 'street', 'area', 'city', 'country', 'poBox', 'postalCode', 'phone', 'email', 'website'],
+  financial:    ['financialYearStart', 'vatApplicable', 'vatPercentage'],
+  address:      ['building', 'street', 'area', 'city', 'country', 'baseCurrency', 'poBox', 'postalCode', 'phone', 'email', 'website'],
   bank:         ['bankName', 'accountHolder', 'accountNumber', 'iban', 'swiftCode'],
   documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate'],
   login:        ['username', 'password', 'confirmPassword'],
@@ -138,10 +138,33 @@ function updateProgress() {
 }
 
 /* ---------- company code ----------
-   Automatic, like every other record's code: the server says which code the next company gets (CMP0001,
-   CMP0002 …) and the page shows it from the start. The server assigns it when the company is saved (codeAuto),
-   so two people creating companies at once never get the same code. The pencil lets you type your own. */
+   Automatic, like every other record's code: the first two letters of the company name and the next number
+   for them (BLUESUN INTERNATIONAL → BL0001, the next BL… company BL0002). The page asks the server for it as
+   the name is typed (once per two letters); the server assigns it when the company is saved (codeAuto), so two
+   people creating companies at once never get the same code. The pencil lets you type your own. */
 let nextCode = '';
+const CODE_FALLBACK_PREFIX = 'CO';     // a name without two Latin letters, as company_code_prefix() on the server
+const codePrefix = name => {
+  const letters = name.toUpperCase().replace(/[^A-Z]/g, '');
+  return letters.length >= 2 ? letters.slice(0, 2) : CODE_FALLBACK_PREFIX;
+};
+const nextCodes = new Map();           // two letters → the code the server said they get next
+async function refreshNextCode() {
+  const name = field('companyName').value.trim();
+  const prefix = name ? codePrefix(name) : '';
+  if (prefix && !nextCodes.has(prefix)) {
+    try {
+      const response = await fetch(`api/companies.php?name=${encodeURIComponent(prefix)}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      const code = (await response.json()).data?.nextCode;
+      if (code) nextCodes.set(prefix, code);
+    } catch { return; }                // the server is not reachable: the page says so when it loads
+  }
+  if (prefix !== (field('companyName').value.trim() ? codePrefix(field('companyName').value.trim()) : '')) return;  // typed on meanwhile
+  nextCode = prefix ? nextCodes.get(prefix) || '' : '';
+  if (codeIsAuto) { field('companyCode').value = nextCode; updateProgress(); }
+}
+let nextCodeTimer = 0;
+const refreshNextCodeSoon = () => { clearTimeout(nextCodeTimer); nextCodeTimer = setTimeout(refreshNextCode, 200); };
 function setCodeMode(auto) {
   codeIsAuto = auto;
   const input = field('companyCode');
@@ -150,7 +173,7 @@ function setCodeMode(auto) {
   $('cc-code-edit').setAttribute('aria-pressed', String(!auto));
   $('cc-code-edit').title = auto ? 'Type the code yourself' : 'Use the automatic code again';
   $('cc-code-edit').setAttribute('aria-label', auto ? 'Type the company code yourself' : 'Use the automatic company code again');
-  if (auto) { input.value = nextCode; setFieldError('companyCode', ''); }
+  if (auto) { input.value = nextCode; setFieldError('companyCode', ''); refreshNextCode(); }
   else { input.focus(); input.select(); }
   updateProgress();
 }
@@ -247,7 +270,8 @@ function setFile(key, file) {
 function showLetterhead() {
   const file = files.letterhead;
   const img = $('cc-preview-img');
-  img.hidden = !(file && objectUrls.letterhead);
+  $('cc-preview-open').hidden = !(file && objectUrls.letterhead);
+  $('cc-letterhead-view').hidden = !(file && !objectUrls.letterhead);          // a PDF: opens in a new tab
   if (objectUrls.letterhead) img.src = objectUrls.letterhead; else img.removeAttribute('src');
   $('cc-preview-empty').hidden = Boolean(file && objectUrls.letterhead);
   $('cc-preview-title').textContent = file ? file.name : 'No letterhead yet';
@@ -260,9 +284,12 @@ function showLetterhead() {
 }
 
 /* ---------- letterhead from the company details (A4 at 150 dpi, PNG) ----------
-   Generate picks one of the designs in letterheads.js at random (not the one it used last, when there are more)
-   and fills it with the logo and the details typed so far. The preview first shows a short "being generated"
-   sequence: the drawing itself is instant, the steps make it read as work being done. */
+   Generate opens the Generate Letterhead popup (#cc-gen): it makes two letterheads from the designs in
+   letterheads.js (in a random order), filled with the logo and the details typed so far, and shows them side by
+   side. The popup's own Generate makes one more, with a design not shown yet, and moves the view on to it
+   (1–2 → 2–3); the arrows page back and forward. Select makes the ticked one the company's letterhead. Each round
+   first plays a short "being generated" sequence: the drawing itself is instant, the steps make it read as work
+   being done. */
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -274,29 +301,23 @@ function loadImage(url) {
 }
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-let lastDesign = -1;
-let generating = false;
 
-const GENERATE_STEPS = ['Choosing a design', 'Matching your logo colours', 'Placing your logo', 'Adding company details', 'Finishing the letterhead'];
-const GENERATE_STEP_MS = 450;
+const GENERATE_STEPS = ['Choosing a design', 'Matching your logo colours', 'Placing your logo', 'Adding company details', 'Adding CR & VAT number', 'Finishing the letterhead'];
+const GENERATE_STEP_MS = 380;
+const GENERATE_MORE_STEPS = ['Choosing another design', 'Adding company details', 'Finishing the letterhead'];
+const GENERATE_MORE_STEP_MS = 330;
 
 function letterheadData(logo) {
   const value = key => field(key).value.trim();
   return {
-    name: value('companyName'), businessType: value('businessType'), logo,
+    name: value('companyName'), logo,
+    businessType: value('businessType') === 'Others' ? '' : value('businessType'),   // "OTHERS" is not printed
     email: value('email'), phone: phoneValue(), website: value('website'),
     cr: value('crNumber'), vat: value('vatNumber'),
     building: value('building'), street: value('street'), area: value('area'), city: value('city'), country: value('country'),
     poBox: value('poBox'), postalCode: value('postalCode'),
     colors: lhPalette(logo),                                    // the design takes its colours from the logo
   };
-}
-
-function pickDesign() {
-  if (LETTERHEADS.length === 1) return 0;
-  let index;
-  do index = Math.floor(Math.random() * LETTERHEADS.length); while (index === lastDesign);
-  return index;
 }
 
 // The design drawn to a PNG; without the logo when the browser will not draw it (some SVGs taint the canvas).
@@ -316,49 +337,245 @@ async function drawLetterhead(design, logo) {
   return toBlob();
 }
 
-function showGenerating(on) {
-  $('cc-generating').hidden = !on;
-  $('cc-preview').setAttribute('aria-busy', String(on));
-  $('cc-generate').disabled = on;
-  $('cc-generate').querySelector('span').textContent = on ? 'Generating…' : (files.letterhead ? 'Generate again' : 'Generate');
-  form.querySelector('[data-pick="letterhead"]').disabled = on;
+/* The popup's state: the letterheads made so far ({ design, url, blob }), the designs still to use, the first
+   one shown (two at a time), the ticked one. */
+const gen = { made: [], order: [], start: 0, picked: 0, busy: false, logo: null };
+const GEN_PER_VIEW = 2;
+const genDialog = () => $('cc-gen');
+
+// What the letterheads leave out because it is not filled in yet.
+function letterheadMissing() {
+  const missing = [];
+  if (!field('companyName').value.trim() && !files.logo) missing.push('company name');   // with a logo, the name is not printed
+  if (!files.logo) missing.push('logo');
+  if (!field('crNumber').value.trim()) missing.push('CR number');
+  if (!field('vatNumber').value.trim()) missing.push('VAT number');
+  if (!field('phone').value.trim()) missing.push('phone');
+  if (!field('email').value.trim()) missing.push('email');
+  return missing;
 }
 
-async function generateLetterhead() {
-  if (generating) return;
-  if (!field('companyName').value.trim()) {
-    setFieldError('companyName', 'Enter the company name first: the letterhead is made from it.');
-    field('companyName').focus();
-    return;
+function shuffledDesigns() {
+  const order = LETTERHEADS.map((_, index) => index);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
   }
-  generating = true;
-  setFieldError('letterhead', '');
-  showGenerating(true);
+  return order;
+}
+
+function renderGen() {
+  const cards = $('cc-gen-cards');
+  const shown = gen.made.slice(gen.start, gen.start + GEN_PER_VIEW);
+  const nodes = shown.map((item, i) => {
+    const index = gen.start + i;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'lg-card';
+    card.dataset.index = String(index);
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', String(index === gen.picked));
+    card.tabIndex = index === gen.picked || (gen.picked < gen.start || gen.picked >= gen.start + GEN_PER_VIEW) && i === 0 ? 0 : -1;
+    const head = document.createElement('span');
+    head.className = 'lg-card-head';
+    head.innerHTML = '<span class="lg-radio" aria-hidden="true"></span>';
+    head.append(Object.assign(document.createElement('span'), { className: 'lg-card-name', textContent: item.design.name }),
+      Object.assign(document.createElement('span'), { className: 'lg-card-num', textContent: `Template ${index + 1}` }));
+    const sheet = document.createElement('span');
+    sheet.className = 'lg-sheet';
+    sheet.append(Object.assign(new Image(), { src: item.url, alt: `${item.design.name} letterhead` }));
+    card.append(head, sheet);
+    return card;
+  });
+  // Before the first two are made: two blank sheets behind the loading message.
+  while (nodes.length < GEN_PER_VIEW && !gen.made.length) {
+    const blank = document.createElement('div');
+    blank.className = 'lg-card is-blank';
+    blank.innerHTML = '<span class="lg-card-head"><span class="lg-radio"></span><span class="lg-skel"></span></span><span class="lg-sheet"><span class="lg-skel lg-skel-top"></span></span>';
+    nodes.push(blank);
+  }
+  cards.replaceChildren(...nodes);
+
+  const total = gen.made.length;
+  const last = Math.max(0, total - GEN_PER_VIEW);
+  $('cc-gen-count').textContent = total ? `${gen.start + 1}–${Math.min(total, gen.start + GEN_PER_VIEW)} of ${total}` : '';
+  const dialog = genDialog();
+  dialog.querySelector('[data-gen="prev"]').disabled = gen.busy || gen.start === 0;
+  dialog.querySelector('[data-gen="next"]').disabled = gen.busy || gen.start >= last;
+  const dots = total > GEN_PER_VIEW ? Array.from({ length: last + 1 }, (_, i) => {
+    const dot = document.createElement('span');
+    dot.className = i === gen.start ? 'is-current' : '';
+    return dot;
+  }) : [];
+  $('cc-gen-dots').replaceChildren(...dots);
+  const more = $('cc-gen-more');
+  more.disabled = gen.busy || !gen.order.length;
+  more.title = gen.order.length ? 'Make one more letterhead' : `All ${LETTERHEADS.length} designs are shown`;
+  $('cc-gen-select').disabled = gen.busy || !total;
+  $('cc-gen-cards').classList.toggle('is-busy', gen.busy);
+}
+
+// The "being generated" sequence over the cards; the fonts and the logo load while it plays.
+async function playGenerating(steps, stepMs) {
+  $('cc-gen-loading').hidden = false;
+  $('cc-gen-progress').style.width = '0';
+  for (const [index, step] of steps.entries()) {
+    const noLogo = !objectUrls.logo && /logo/.test(step);
+    $('cc-gen-step').textContent = step + (noLogo ? ' (no logo uploaded yet)' : '');
+    $('cc-gen-progress').style.width = `${((index + 1) / steps.length) * 100}%`;
+    await wait(stepMs);
+  }
+  $('cc-gen-loading').hidden = true;
+}
+
+// Makes `count` more letterheads (designs not used yet), with the loading sequence first; shows the last two.
+async function generateMore(count, steps, stepMs) {
+  if (gen.busy || !gen.order.length) return;
+  gen.busy = true;
+  renderGen();
   try {
-    // The fonts and the logo load while the steps play.
     const ready = Promise.all([
       document.fonts.load('700 40px Roboto').catch(() => null),
       document.fonts.load('600 17px "Roboto Mono"').catch(() => null),
-      objectUrls.logo ? loadImage(objectUrls.logo).catch(() => null) : null,
+      objectUrls.logo ? loadImage(objectUrls.logo).then(lhWithoutBackground).catch(() => null) : null,   // only the logo, no background
     ]);
-    for (const [index, step] of GENERATE_STEPS.entries()) {
-      const noLogo = !objectUrls.logo && (step === 'Placing your logo' || step === 'Matching your logo colours');
-      $('cc-generating-step').textContent = step + (noLogo ? ' (no logo uploaded yet)' : '');
-      $('cc-generating-progress').style.width = `${((index + 1) / GENERATE_STEPS.length) * 100}%`;
-      await wait(GENERATE_STEP_MS);
-    }
+    await playGenerating(steps, stepMs);
     const [, , logo] = await ready;
-    const index = pickDesign();
-    lastDesign = index;
-    const blob = await drawLetterhead(LETTERHEADS[index], logo);
-    if (!blob) throw new Error('no image');
-    setFile('letterhead', new File([blob], 'letterhead.png', { type: 'image/png' }));
+    for (let n = 0; n < count && gen.order.length; n++) {
+      const design = LETTERHEADS[gen.order.shift()];
+      const blob = await drawLetterhead(design, logo);
+      if (!blob) throw new Error('no image');
+      gen.made.push({ design, blob, url: URL.createObjectURL(blob) });
+    }
+    gen.picked = gen.made.length - 1 - (gen.made.length === count ? count - 1 : 0);   // the first round ticks the first
+    gen.start = Math.max(0, gen.made.length - GEN_PER_VIEW);
   } catch {
     setFieldError('letterhead', 'The letterhead could not be generated in this browser. Upload one instead.');
+    closeGen();
+    return;
   } finally {
-    generating = false;
-    showGenerating(false);
+    $('cc-gen-loading').hidden = true;
+    gen.busy = false;
   }
+  renderGen();
+  (genDialog().querySelector('.lg-card[aria-checked="true"]') || $('cc-gen-select')).focus();
+}
+
+function openGen() {
+  if (gen.busy || genDialog().open) return;
+  setFieldError('letterhead', '');
+  for (const item of gen.made) URL.revokeObjectURL(item.url);
+  Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: 0 });
+  const missing = letterheadMissing();
+  $('cc-gen-missing').textContent = missing.length
+    ? `Not on the letterhead yet: ${missing.join(', ')}. Fill them in and press Generate.` : '';
+  $('cc-gen-missing').hidden = !missing.length;
+  renderGen();
+  document.documentElement.classList.add('has-modal');
+  genDialog().showModal();
+  $('cc-gen-select').focus();
+  generateMore(Math.min(GEN_PER_VIEW, LETTERHEADS.length), GENERATE_STEPS, GENERATE_STEP_MS);
+}
+
+/* The letterhead full size: an image in a popup (#cc-view); a PDF in a new tab (the page may not embed one). */
+let pdfUrl = null;
+function viewLetterhead() {
+  const file = files.letterhead;
+  if (!file) return;
+  if (!objectUrls.letterhead) {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    pdfUrl = URL.createObjectURL(file);
+    window.open(pdfUrl, '_blank', 'noopener');
+    return;
+  }
+  $('cc-view-img').src = objectUrls.letterhead;
+  $('cc-view-name').textContent = `${file.name} · ${sizeText(file.size)}`;
+  document.documentElement.classList.add('has-modal');
+  $('cc-view').showModal();
+  $('cc-view').querySelector('[data-view="close"]').focus();
+}
+function closeView() {
+  if ($('cc-view').open) $('cc-view').close();
+  document.documentElement.classList.remove('has-modal');
+  $('cc-preview-open').focus();
+}
+
+function closeGen() {
+  const dialog = genDialog();
+  if (dialog.open) dialog.close();
+  document.documentElement.classList.remove('has-modal');
+  $('cc-generate').focus();
+}
+
+function pageGen(step) {
+  const last = Math.max(0, gen.made.length - GEN_PER_VIEW);
+  const start = Math.min(last, Math.max(0, gen.start + step));
+  if (start === gen.start || gen.busy) return;
+  gen.start = start;
+  renderGen();
+  genDialog().querySelector('.lg-card[tabindex="0"]')?.focus();
+}
+
+function selectGen() {
+  const item = gen.made[gen.picked];
+  if (!item || gen.busy) return;
+  dirty = true;
+  setFile('letterhead', new File([item.blob], 'letterhead.png', { type: 'image/png' }));
+  closeGen();
+}
+
+// Keys while the popup is open: ← → page (or move between the two shown), Enter selects, Esc closes.
+function handleGenKeys(event) {
+  const { key } = event;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeGen(); return; }
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const card = event.target.closest?.('.lg-card[data-index]');
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    event.preventDefault();
+    const step = key === 'ArrowLeft' ? -1 : 1;
+    const at = card ? Number(card.dataset.index) : null;
+    const target = at === null ? null : at + step;
+    if (target !== null && target >= gen.start && target < gen.start + GEN_PER_VIEW && target < gen.made.length) {
+      gen.picked = target;
+      renderGen();
+      genDialog().querySelector(`.lg-card[data-index="${target}"]`).focus();
+    } else {
+      pageGen(step);
+      if (card && gen.made[gen.start + (step > 0 ? GEN_PER_VIEW - 1 : 0)]) {
+        gen.picked = gen.start + (step > 0 ? GEN_PER_VIEW - 1 : 0);
+        renderGen();
+        genDialog().querySelector(`.lg-card[data-index="${gen.picked}"]`)?.focus();
+      }
+    }
+    return;
+  }
+  if (key === 'Enter' && card) { event.preventDefault(); gen.picked = Number(card.dataset.index); selectGen(); }
+}
+
+function initGen() {
+  const dialog = genDialog();
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeGen(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeGen(); return; }        // the backdrop
+    const card = event.target.closest('.lg-card[data-index]');
+    if (card && !gen.busy) {
+      gen.picked = Number(card.dataset.index);
+      renderGen();
+      dialog.querySelector(`.lg-card[data-index="${gen.picked}"]`).focus();
+      return;
+    }
+    const action = event.target.closest('[data-gen]')?.dataset.gen;
+    if (action === 'cancel') closeGen();
+    if (action === 'prev') pageGen(-1);
+    if (action === 'next') pageGen(1);
+    if (action === 'more') generateMore(1, GENERATE_MORE_STEPS, GENERATE_MORE_STEP_MS);
+    if (action === 'select') selectGen();
+  });
+  // A double click picks and selects in one go.
+  dialog.addEventListener('dblclick', event => {
+    const card = event.target.closest('.lg-card[data-index]');
+    if (card && !gen.busy) { gen.picked = Number(card.dataset.index); selectGen(); }
+  });
 }
 
 /* ---------- keyboard: the same keys as the other modules (dashboard.js) ----------
@@ -992,6 +1209,12 @@ function handleKeys(event) {
   if (event.defaultPrevented || event.isComposing) return;
   if (handleSelectMenuKeys(event)) { event.stopPropagation(); return; }
   if ($('lookup').open) { handleLookupDialogKeys(event); event.stopPropagation(); return; }
+  if ($('cc-gen').open) { handleGenKeys(event); event.stopPropagation(); return; }
+  if ($('cc-view').open) {                                       // the full-size letterhead: only Esc (and Tab)
+    if (event.key === 'Escape') { event.preventDefault(); closeView(); }
+    event.stopPropagation();
+    return;
+  }
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
 
@@ -1148,10 +1371,11 @@ async function submit(event) {
 
 function done({ code, name }) {
   dirty = false;
-  try { localStorage.setItem('ge-company', code); } catch { /* private window: the link still carries it */ }
+  // The sign-in page shows this company's name as its heading.
+  try { localStorage.setItem('ge-company', code); localStorage.setItem('ge-company-name', name); } catch { /* private window */ }
   const text = $('cc-done-text');
-  text.replaceChildren(document.createTextNode(`${name} has its own database now. Sign in with company code `),
-    Object.assign(document.createElement('strong'), { textContent: code }), document.createTextNode(' and the username you chose.'));
+  text.replaceChildren(document.createTextNode(`${name} has its own database now (company code `),
+    Object.assign(document.createElement('strong'), { textContent: code }), document.createTextNode('). Sign in with the username and password you chose.'));
   $('cc-done-link').href = `login.html?company=${encodeURIComponent(code)}`;
   $('cc-done').hidden = false;
   $('cc-done-link').focus();
@@ -1220,6 +1444,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('cc-code-edit').addEventListener('click', () => setCodeMode(!codeIsAuto));
+  field('companyName').addEventListener('input', refreshNextCodeSoon);
   for (const button of form.querySelectorAll('[data-vat]')) button.addEventListener('click', () => { dirty = true; setVat(button.dataset.vat); });
 
   for (const button of form.querySelectorAll('[data-eye]')) {
@@ -1244,12 +1469,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       setFile(key, file);
     });
   }
-  $('cc-generate').addEventListener('click', () => { dirty = true; generateLetterhead(); });
+  $('cc-generate').addEventListener('click', openGen);
+  $('cc-preview-open').addEventListener('click', viewLetterhead);
+  $('cc-letterhead-view').addEventListener('click', viewLetterhead);
+  $('cc-view').addEventListener('cancel', event => { event.preventDefault(); closeView(); });
+  $('cc-view').addEventListener('click', event => {
+    if (event.target === $('cc-view') || event.target.closest('[data-view="close"]')) closeView();   // backdrop or ✕
+  });
+  initGen();
   $('cc-letterhead-remove').addEventListener('click', () => setFile('letterhead', null));
   $('cc-clear').addEventListener('click', clearAll);
   for (const link of document.querySelectorAll('[data-back]')) link.addEventListener('click', event => { event.preventDefault(); leave(); });
 
-  window.addEventListener('keydown', handleKeys, true);
+  keepFullScreenOnEscape();
+  window.addEventListener('keydown', event => {
+    handleKeys(event);
+    if (event.cancelBubble) finishEscape(event);   // stopped here: it never reaches the window's bubbling listener
+  }, true);
   document.addEventListener('focusout', event => {
     if (event.target === selectMenu.select) closeSelectMenu();
     if (event.target instanceof HTMLElement) delete event.target.dataset.pickerOpen;
@@ -1269,8 +1505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSession();
     const settings = (await (await fetch('api/companies.php', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })).json()).data;
     keyRequired = Boolean(settings.keyRequired);
-    nextCode = settings.nextCode || '';
-    if (codeIsAuto) field('companyCode').value = nextCode;
+    refreshNextCode();
     $('cc-key-row').hidden = !keyRequired;
     if (!settings.enabled) {
       showAlert('Creating companies is turned off on this server. Ask your administrator.');
@@ -1281,3 +1516,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     showAlert('The server could not be reached. Check that the backend is running.');
   }
 });
+
+/* Esc never takes the browser out of full screen. Firefox-based browsers leave full screen on any Esc the page
+   does not claim (preventDefault), and a popup closed by the browser's own Esc handling never claims it. So
+   every Esc is claimed (finishEscape), after the page's own handlers: last on the way back up (window,
+   bubbling), or straight after the page's key handler when that stopped the key there. A popup that nothing
+   closed yet gets the browser's usual "cancel" (its own cancel handler still decides what closing means).
+   The popups open when the key went down are noted first, so one Esc never closes two popups. */
+let escapeOpenAtStart = [];
+function keepFullScreenOnEscape() {
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') escapeOpenAtStart = [...document.querySelectorAll('dialog[open]')];
+  }, true);
+  window.addEventListener('keydown', finishEscape);
+}
+function finishEscape(event) {
+  if (event.key !== 'Escape' || event.isComposing || escapeOpenAtStart === null) return;
+  const before = escapeOpenAtStart;
+  escapeOpenAtStart = null;                       // once per key press
+  const handled = event.defaultPrevented;
+  event.preventDefault();
+  if (handled) return;
+  const open = [...document.querySelectorAll('dialog[open]')];
+  if (!open.length || open.length !== before.length || open.some((dialog, i) => dialog !== before[i])) return;
+  const top = open.find(dialog => dialog.contains(document.activeElement)) || open[open.length - 1];
+  if (top.dispatchEvent(new Event('cancel', { cancelable: true }))) top.close();
+}

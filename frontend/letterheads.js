@@ -2,6 +2,8 @@
    Each design draws an A4 page (1240 × 1754 px, 150 dpi) on a canvas from the company's details; Generate picks
    one at random (not the same one twice in a row) and the PNG becomes the company's letterhead.
    To add a design: push one more { name, draw(ctx, data) } onto LETTERHEADS.
+   With a logo the header shows the logo, larger, and not the company name (the logo carries it); without one, the
+   name (and the business type) take its place.
    data: { name, businessType, logo (an Image or null), email, phone, website, cr, vat, building, street, area, city,
            country, poBox, postalCode, colors } — every text is a string, '' when the field was left blank; a design leaves
            out whatever is blank.
@@ -85,6 +87,49 @@ function lhLogo(ctx, logo, x, y, maxWidth, maxHeight) {
   const w = w0 * scale, h = h0 * scale;
   ctx.drawImage(logo, x, y + (maxHeight - h) / 2, w, h);
   return w;
+}
+
+/* The logo with its plain background (the colour all four corners share, e.g. the grey or white around a JPG
+   logo) made see-through, as a canvas the designs draw like an image; the logo's soft edges fade into the page
+   instead of keeping a fringe. A logo whose corners differ or are already transparent, or that the browser will
+   not let the page read (some SVGs), is returned as it is. Same method as the company icon (dashboard.js). */
+function lhWithoutBackground(logo) {
+  try {
+    const width = logo.naturalWidth || logo.width, height = logo.naturalHeight || logo.height;
+    if (!width || !height) return logo;
+    const canvas = Object.assign(document.createElement('canvas'), { width, height });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(logo, 0, 0, width, height);
+    const pixels = ctx.getImageData(0, 0, width, height);
+    const data = pixels.data;
+    const at = (x, y) => (y * width + x) * 4;
+    const corners = [at(0, 0), at(width - 1, 0), at(0, height - 1), at(width - 1, height - 1)];
+    if (corners.some(i => data[i + 3] < 250)) return logo;                       // already transparent
+    const distance = (i, rgb) => Math.max(Math.abs(data[i] - rgb[0]), Math.abs(data[i + 1] - rgb[1]), Math.abs(data[i + 2] - rgb[2]));
+    const background = [0, 1, 2].map(c => Math.round(corners.reduce((sum, i) => sum + data[i + c], 0) / 4));
+    if (corners.some(i => distance(i, background) > 12)) return logo;            // no single plain background
+    const CLEAR = 14, SOLID = 70;
+    for (let i = 0; i < data.length; i += 4) {
+      const d = distance(i, background);
+      if (d >= SOLID) continue;
+      const alpha = d <= CLEAR ? 0 : (d - CLEAR) / (SOLID - CLEAR);
+      if (alpha === 0) { data[i + 3] = 0; continue; }
+      for (let c = 0; c < 3; c++) data[i + c] = Math.max(0, Math.min(255, Math.round((data[i + c] - background[c] * (1 - alpha)) / alpha)));
+      data[i + 3] = Math.round(alpha * data[i + 3]);
+    }
+    ctx.putImageData(pixels, 0, 0);
+    return canvas;
+  } catch {
+    return logo;
+  }
+}
+
+// The logo scaled to fit a box, centred on cx (and vertically in the box).
+function lhLogoCentered(ctx, logo, cx, y, maxWidth, maxHeight) {
+  const w0 = logo.naturalWidth || logo.width || maxHeight;
+  const h0 = logo.naturalHeight || logo.height || maxHeight;
+  const scale = Math.min(maxWidth / w0, maxHeight / h0);
+  lhLogo(ctx, logo, cx - (w0 * scale) / 2, y, maxWidth, maxHeight);
 }
 
 // The company name as the designs show it: the first word on top (bold), the rest under it. A short first word
@@ -326,13 +371,14 @@ const LETTERHEADS = [
         ctx.fillRect(dividerX, top, 2, bottom - top);
       }
 
-      // Left: the logo, then the name (first word bold on top, the rest under it).
-      const logoW = lhLogo(ctx, d.logo, M, top + 4, 150, 100);
-      const nameX = M + (logoW ? logoW + 22 : 0);
-      const nameWidth = Math.max(160, (middle.length ? middleX : dividerX) - nameX - 36);
-      const lines = lhNameLines(d.name);
+      // Left: the logo, large (no name); without one, the name (first word bold on top, the rest under it).
+      const leftRoom = (middle.length ? middleX : dividerX) - M - 40;
+      if (d.logo) lhLogo(ctx, d.logo, M, top + 8, Math.min(360, leftRoom), 88);
+      const nameX = M;
+      const nameWidth = Math.max(160, leftRoom + 4);
+      const lines = d.logo ? [] : lhNameLines(d.name);
       ctx.fillStyle = NAVY;
-      if (lines.length === 1) {
+      if (!lines.length) { /* the logo is the name */ } else if (lines.length === 1) {
         lhFit(ctx, lines[0], nameWidth, 700, 46, 22);
         ctx.textBaseline = 'middle';
         ctx.fillText(lines[0], nameX, top + 54);
@@ -383,7 +429,7 @@ const LETTERHEADS = [
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
-      lhLogoOrMark(ctx, d, M, 88, 100, 'tile');
+      if (!d.logo) lhLogoOrMark(ctx, d, M, 88, 100, 'tile');
       let pillLeft = R;
       if (d.website) {
         ctx.font = '600 16px "Roboto Mono", ui-monospace, monospace';
@@ -397,14 +443,18 @@ const LETTERHEADS = [
         ctx.fillText(d.website, pillLeft + w / 2, 139);
         ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       }
-      const nameX = M + 120, nameW = pillLeft - nameX - 30;
-      ctx.fillStyle = DARK;
-      lhFit(ctx, d.name, nameW, 800, 40, 20);
-      ctx.fillText(d.name, nameX, 136);
-      if (d.businessType) {
-        ctx.fillStyle = LH_MUTED;
-        ctx.font = '700 14px Roboto, Arial, sans-serif';
-        lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 169, 2.4);
+      if (d.logo) {
+        lhLogo(ctx, d.logo, M, 86, Math.min(380, pillLeft - M - 40), 96);   // large, no name
+      } else {
+        const nameX = M + 120, nameW = pillLeft - nameX - 30;
+        ctx.fillStyle = DARK;
+        lhFit(ctx, d.name, nameW, 800, 40, 20);
+        ctx.fillText(d.name, nameX, 136);
+        if (d.businessType) {
+          ctx.fillStyle = LH_MUTED;
+          ctx.font = '700 14px Roboto, Arial, sans-serif';
+          lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 169, 2.4);
+        }
       }
 
       const y = 217, h = 8, a = M + 234, b = a + 9 + 117;
@@ -448,7 +498,7 @@ const LETTERHEADS = [
       lhPolygon(ctx, DARK, [[954, 0], [1006, 0], [958, t], [908, t]]);
       lhPolygon(ctx, P, [[1032, 0], [W, 0], [W, t], [980, t]]);
 
-      lhLogoOrMark(ctx, d, M, 125, 100, 'circle');
+      if (!d.logo) lhLogoOrMark(ctx, d, M, 125, 100, 'circle');
       const contact = [[d.phone, 700, DARK], [d.email, 400, LH_INK], [d.website, 400, LH_INK]].filter(([text]) => text);
       ctx.textAlign = 'right';
       let widest = 0;
@@ -459,14 +509,18 @@ const LETTERHEADS = [
         ctx.fillText(text, R, 156 + i * 23);
       });
       ctx.textAlign = 'left';
-      const nameX = M + 118, nameW = R - widest - nameX - 40;
-      ctx.fillStyle = DARK;
-      lhFit(ctx, d.name, nameW, 800, 41, 20);
-      ctx.fillText(d.name, nameX, 177);
-      if (d.businessType) {
-        ctx.fillStyle = P;
-        ctx.font = '800 14px Roboto, Arial, sans-serif';
-        lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 207, 2.4);
+      if (d.logo) {
+        lhLogo(ctx, d.logo, M, 120, Math.min(380, R - widest - M - 60), 96);   // large, no name
+      } else {
+        const nameX = M + 118, nameW = R - widest - nameX - 40;
+        ctx.fillStyle = DARK;
+        lhFit(ctx, d.name, nameW, 800, 41, 20);
+        ctx.fillText(d.name, nameX, 177);
+        if (d.businessType) {
+          ctx.fillStyle = P;
+          ctx.font = '800 14px Roboto, Arial, sans-serif';
+          lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 207, 2.4);
+        }
       }
       ctx.fillStyle = P; ctx.fillRect(M, 256, 238, 4);
       ctx.fillStyle = LH_RULE; ctx.fillRect(M + 238, 257, R - M - 238, 2);
@@ -494,18 +548,22 @@ const LETTERHEADS = [
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
-      lhLogoOrMark(ctx, d, C - 46, 89, 92, 'outline-circle');
-      ctx.fillStyle = DARK;
-      let size = 36;
-      for (; size > 18; size -= 1) {                        // fit the spaced name across the page
-        ctx.font = `800 ${size}px Roboto, Arial, sans-serif`;
-        if (ctx.measureText(d.name).width + d.name.length * size * 0.2 <= R - M) break;
-      }
-      lhSpaced(ctx, d.name, C, 228, size * 0.2, 'center');
-      if (d.businessType) {
-        ctx.fillStyle = P;
-        ctx.font = '800 13px Roboto, Arial, sans-serif';
-        lhSpaced(ctx, d.businessType.toUpperCase(), C, 263, 3.4, 'center');
+      if (d.logo) {
+        lhLogoCentered(ctx, d.logo, C, 110, 420, 130);      // large, centred, no name
+      } else {
+        lhLogoOrMark(ctx, d, C - 46, 89, 92, 'outline-circle');
+        ctx.fillStyle = DARK;
+        let size = 36;
+        for (; size > 18; size -= 1) {                      // fit the spaced name across the page
+          ctx.font = `800 ${size}px Roboto, Arial, sans-serif`;
+          if (ctx.measureText(d.name).width + d.name.length * size * 0.2 <= R - M) break;
+        }
+        lhSpaced(ctx, d.name, C, 228, size * 0.2, 'center');
+        if (d.businessType) {
+          ctx.fillStyle = P;
+          ctx.font = '800 13px Roboto, Arial, sans-serif';
+          lhSpaced(ctx, d.businessType.toUpperCase(), C, 263, 3.4, 'center');
+        }
       }
       ctx.fillStyle = DARK; ctx.fillRect(M, 300, R - M, 4);
       ctx.fillStyle = P; ctx.fillRect(M, 310, R - M, 2);
@@ -546,7 +604,7 @@ const LETTERHEADS = [
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
-      lhLogoOrMark(ctx, d, M, 70, 98, 'outline-tile');
+      if (!d.logo) lhLogoOrMark(ctx, d, M, 70, 98, 'outline-tile');
       const right = [lhJoin([d.building, d.street, d.area]),
         lhJoin([lhJoin([d.city, d.country]), d.poBox && `P O Box ${d.poBox}`, d.postalCode && `PC ${d.postalCode}`], ' · '),
         lhRegistration(d)].filter(Boolean);
@@ -559,14 +617,18 @@ const LETTERHEADS = [
         ctx.fillText(line, R, 101 + i * 23);
       });
       ctx.textAlign = 'left';
-      const nameX = M + 118;
-      ctx.fillStyle = DARK;
-      lhFit(ctx, d.name, R - widest - nameX - 40, 800, 41, 20);
-      ctx.fillText(d.name, nameX, 116);
-      if (d.businessType) {
-        ctx.fillStyle = P;
-        ctx.font = '800 14px Roboto, Arial, sans-serif';
-        lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 150, 2.4);
+      if (d.logo) {
+        lhLogo(ctx, d.logo, M, 70, Math.min(380, R - widest - M - 60), 92);   // large, no name
+      } else {
+        const nameX = M + 118;
+        ctx.fillStyle = DARK;
+        lhFit(ctx, d.name, R - widest - nameX - 40, 800, 41, 20);
+        ctx.fillText(d.name, nameX, 116);
+        if (d.businessType) {
+          ctx.fillStyle = P;
+          ctx.font = '800 14px Roboto, Arial, sans-serif';
+          lhSpaced(ctx, d.businessType.toUpperCase(), nameX, 150, 2.4);
+        }
       }
       ctx.fillStyle = LH_RULE; ctx.fillRect(M, 200, R - M, 2);
 
@@ -618,11 +680,11 @@ const LETTERHEADS = [
         y += 11;
       }
 
-      const logoW = lhLogo(ctx, d.logo, M, 72, 140, 92);
-      const nameX = M + (logoW ? logoW + 20 : 0), nameW = 600 - nameX;
-      const lines = lhNameLines(d.name);
+      if (d.logo) lhLogo(ctx, d.logo, M, 72, 380, 104);   // large, no name
+      const nameX = M, nameW = 600 - nameX;
+      const lines = d.logo ? [] : lhNameLines(d.name);
       ctx.fillStyle = DARK;
-      if (lines.length === 1) {
+      if (!lines.length) { /* the logo is the name */ } else if (lines.length === 1) {
         lhFit(ctx, lines[0], nameW, 700, 40, 20); ctx.fillText(lines[0], nameX, 132);
       } else {
         lhFit(ctx, lines[0], nameW, 700, 36, 18); ctx.fillText(lines[0], nameX, 112);

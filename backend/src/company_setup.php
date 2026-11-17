@@ -20,7 +20,7 @@ require_once __DIR__ . '/migrations.php';
  */
 
 const COMPANY_TYPES = ['Main Company', 'Branch', 'Subsidiary', 'Sister Concern'];
-const BUSINESS_TYPES = ['Trading', 'Manufacturing', 'Services', 'Contracting', 'Retail', 'Distribution'];
+const BUSINESS_TYPES = ['Trading', 'Manufacturing', 'Services', 'Contracting', 'Retail', 'Distribution', 'IT', 'Others'];
 const LEGAL_STRUCTURES = ['LLC', 'SAOC', 'SAOG', 'Sole Proprietorship', 'Partnership', 'Branch of Foreign Company', 'Free Zone Company'];
 // The same currencies as the other modules (PB_CURRENCIES in purchase_book.php, PO_CURRENCIES in dashboard.js).
 const CURRENCIES = ['OMR', 'AED', 'INR', 'SAR', 'QAR', 'KWD', 'BHD', 'USD', 'EUR', 'GBP', 'PKR', 'EGP', 'JOD', 'TRY', 'CNY', 'JPY', 'KRW'];
@@ -38,27 +38,38 @@ const COMPANY_CREATIONS_PER_HOUR = 3;   // per browser session
 // "This username / password is already used" answers per IP address an hour: the page is open to anyone, so
 // without a limit it could be used to try out passwords against every account on the server.
 const COMPANY_LOGIN_REFUSALS_PER_HOUR = 10;
-const COMPANY_CODE_PREFIX = 'CMP';       // automatic codes: CMP0001, CMP0002 …
+const COMPANY_CODE_FALLBACK_PREFIX = 'CO';   // a name without two Latin letters (e.g. only Arabic): CO0001 …
 
 /* What the page needs before it opens: may companies be created here, is an access key asked for, and the
-   code the next company gets when its code is left automatic (a preview: it is assigned when the company is saved). */
-function company_creation_settings(): array
+   code a company of this name gets when its code is left automatic (a preview: it is assigned when the company
+   is saved). */
+function company_creation_settings(string $name = ''): array
 {
     $config = company_config();
     $creation = $config['creation'];
-    return ['enabled' => $creation['enabled'], 'keyRequired' => $creation['key'] !== '', 'nextCode' => company_next_code($config)];
+    return ['enabled' => $creation['enabled'], 'keyRequired' => $creation['key'] !== '', 'nextCode' => company_next_code($config, $name)];
 }
 
-/* The next automatic code: CMP + one more than the highest CMP number so far, 4 digits (CMP0001, CMP0002 …). */
-function company_next_code(array $config): string
+/* The two letters an automatic code starts with: the first two letters of the company name
+   ("Bluesun International" → BL, "3M Oman" → MO), or CO when the name has fewer than two Latin letters. */
+function company_code_prefix(string $name): string
 {
+    $letters = preg_replace('/[^A-Z]/', '', strtoupper($name));
+    return strlen($letters) >= 2 ? substr($letters, 0, 2) : COMPANY_CODE_FALLBACK_PREFIX;
+}
+
+/* The next automatic code for a company of this name: its two letters + one more than the highest number
+   those letters have so far, 4 digits (BL0001, BL0002 …; another name's letters count on their own). */
+function company_next_code(array $config, string $name): string
+{
+    $prefix = company_code_prefix($name);
     $highest = 0;
     foreach (array_keys($config['companies']) as $code) {
-        if (preg_match('/^' . COMPANY_CODE_PREFIX . '(\d+)$/', (string) $code, $match)) {
+        if (preg_match('/^' . $prefix . '(\d+)$/', (string) $code, $match)) {
             $highest = max($highest, (int) $match[1]);
         }
     }
-    return COMPANY_CODE_PREFIX . str_pad((string) ($highest + 1), 4, '0', STR_PAD_LEFT);
+    return $prefix . str_pad((string) ($highest + 1), 4, '0', STR_PAD_LEFT);
 }
 
 /* Creates the company from the multipart form; returns { code, name }. */
@@ -80,7 +91,7 @@ function company_create(array $post, array $files): array
     // again under the lock below, so two companies created at the same moment never get the same one.
     $autoCode = ($post['codeAuto'] ?? '') === '1';
     if ($autoCode) {
-        $post['companyCode'] = company_next_code(company_config(true));
+        $post['companyCode'] = company_next_code(company_config(true), (string) ($post['companyName'] ?? ''));
     }
 
     $errors = [];                                            // fields and files are reported together
@@ -102,7 +113,7 @@ function company_create(array $post, array $files): array
     return company_config_locked(static function () use ($profile, $account, $uploads, $code, $recent, $autoCode): array {
         $config = company_config(true);
         if ($autoCode) {
-            $code = $profile['company_code'] = company_next_code($config);
+            $code = $profile['company_code'] = company_next_code($config, $profile['company_name']);
         }
         if (isset($config['companies'][$code])) {
             throw new ValidationError(['companyCode' => "Company code $code is already used. Choose another."]);

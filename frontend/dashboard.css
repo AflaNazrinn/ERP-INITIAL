@@ -116,10 +116,25 @@ button, select { font-family: inherit; }
 .header-user:empty { display: none; }
 .sign-out-btn:hover { color: var(--danger); border-color: #fecdd3; background: var(--danger-soft); }
 .sign-out-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.brand-mark {
-  width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--navy); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; letter-spacing: .05em;
+/* The company icon: a round "profile picture" with the company's first letter, or its uploaded logo. */
+.company-avatar {
+  flex: none; width: 42px; height: 42px; padding: 0; border-radius: 50%; overflow: hidden; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface);
+  background: var(--navy); color: #fff; font: inherit; font-size: 18px; font-weight: 800; line-height: 1;
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs); transition: box-shadow .15s, transform .15s;
 }
+.company-avatar:hover { box-shadow: 0 0 0 2px var(--accent-line), var(--shadow-xs); }
+.company-avatar:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* With a logo uploaded the circle goes: the logo shows as it is (its own shape, no ring or background), as tall
+   as the circle was and as wide as the logo is. */
+.company-avatar.has-logo,
+.company-avatar.has-logo:hover,
+.company-avatar.has-logo:focus,
+.company-avatar.has-logo:focus-visible {
+  width: auto; max-width: 220px; border: 0; border-radius: 0; background: transparent; overflow: visible;
+  box-shadow: none; outline: none;
+}
+.company-avatar img { display: block; height: 100%; width: auto; max-width: 220px; object-fit: contain; }
 .brand-name { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; color: var(--ink-900); }
 
 /* The company's financial year start and CR expiry, beside its name. The CR expiry turns amber within
@@ -1306,6 +1321,20 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .mv-foot [data-mv="delete"] { margin-right: auto; }
 .mv-btn-close { min-width: 84px; justify-content: center; }
 
+/* Company logo popup. */
+.ci { width: min(460px, calc(100vw - 32px)); }
+.ci-body { display: flex; align-items: center; gap: 18px; padding: 22px 22px 20px; }
+.company-avatar.ci-preview { width: 88px; height: 88px; font-size: 36px; cursor: default; }
+.company-avatar.ci-preview:not(.has-logo):hover { box-shadow: 0 0 0 1px var(--line), var(--shadow-xs); }
+.company-avatar.ci-preview.has-logo { width: auto; max-width: 260px; }
+.ci-preview img { max-width: 260px; }
+
+.ci-text { min-width: 0; }
+.ci-name { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink-900); overflow-wrap: anywhere; }
+.ci-hint { margin: 4px 0 0; font-size: 13px; color: var(--ink-500); }
+.ci-error { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--danger); }
+.ci-foot { justify-content: flex-end; }
+.ci-foot [data-ci="remove"] { margin-right: auto; }
 .mc { width: min(440px, calc(100vw - 32px)); }
 .mc-body { display: flex; gap: 14px; padding: 20px 20px 18px; }
 .mc-icon {

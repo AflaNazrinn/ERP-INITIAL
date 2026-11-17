@@ -90,9 +90,10 @@ Updates that add a file to `migrations/` must reach every company's database:
 
 **Upgrading an install from before companies** (one database named in `.env`): leave the old `DB_*` lines in
 `.env` once. On the first request the program writes `companyconfig.php` itself, with that login as `server`
-and the old database as company **`MAIN`** (its uploaded files stay where they are). Sign in with company code
-`MAIN`. You may change its `name` in `companyconfig.php`; keep the code. Then import
-`migrations/2026_11_16_001_company_profile.sql` into it (or run `php bin/migrate.php`).
+and the old database as company **`MAIN`** (its uploaded files stay where they are). Sign in with its username
+and password as before (no company code is asked for). You may change its `name` in `companyconfig.php`; keep the code. Then run `php bin/migrate.php`, or
+import `migrations/2026_11_16_001_company_profile.sql` and `migrations/2026_11_16_002_company_contact.sql` into it
+(in that order) and add both names to its `schema_migrations` table.
 
 ## 5. Check it
 

@@ -512,6 +512,7 @@ function focusPageAnchor() {
 // Browsers keep a few keys for themselves (Ctrl+T, Ctrl+N, Ctrl+W, Ctrl+Tab), so
 // the page never uses those.
 function initKeyboardNavigation() {
+  keepFullScreenOnEscape();
   focusPageAnchor();
   window.addEventListener('pageshow', focusPageAnchor);   // back/forward cache restores
   // Coming back to the window with nothing focused: give the keyboard to the page again.
@@ -519,7 +520,7 @@ function initKeyboardNavigation() {
     if (document.activeElement === document.body || !document.activeElement) focusPageAnchor();
   });
 
-  window.addEventListener('keydown', event => {
+  const handleWindowKeys = event => {
     if (event.defaultPrevented || event.isComposing) return;   // IME composition: not a shortcut
     // A dropdown list opened with Enter (openSelectMenu) takes every key while it is open.
     if (handleSelectMenuKeys(event)) {
@@ -536,6 +537,11 @@ function initKeyboardNavigation() {
       return;
     }
 
+    // The company logo popup: its buttons, Tab and Esc work as usual, no page shortcuts.
+    if (byId('company-icon').open) {
+      event.stopPropagation();
+      return;
+    }
     // An open "Select …" popup takes every key; a lookup field's own keys come before the page's.
     if (byId('lookup').open) {
       handleLookupDialogKeys(event);
@@ -590,6 +596,10 @@ function initKeyboardNavigation() {
     if (isTextEntry(event.target) && !arrowLeavesField(event)) return;  // the arrow moves the caret instead
     event.preventDefault();                 // also stops a closed <select> changing value
     moveFocusByArrow(event.key);
+  };
+  window.addEventListener('keydown', event => {
+    handleWindowKeys(event);
+    if (event.cancelBubble) finishEscape(event);   // stopped here: it never reaches the window's bubbling listener
   }, true);
 }
 
@@ -648,6 +658,32 @@ function initInputFilters() {
     field.value = kept;
     field.setSelectionRange(caret - removedBeforeCaret, caret - removedBeforeCaret);
   }, true);
+}
+
+/* Esc never takes the browser out of full screen. Firefox-based browsers leave full screen on any Esc the page
+   does not claim (preventDefault), and a popup closed by the browser's own Esc handling never claims it. So
+   every Esc is claimed (finishEscape), after the page's own handlers: last on the way back up (window,
+   bubbling), or straight after the page's key handler when that stopped the key there. A popup that nothing
+   closed yet gets the browser's usual "cancel" (its own cancel handler still decides what closing means).
+   The popups open when the key went down are noted first, so one Esc never closes two popups. */
+let escapeOpenAtStart = [];
+function keepFullScreenOnEscape() {
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') escapeOpenAtStart = [...document.querySelectorAll('dialog[open]')];
+  }, true);
+  window.addEventListener('keydown', finishEscape);
+}
+function finishEscape(event) {
+  if (event.key !== 'Escape' || event.isComposing || escapeOpenAtStart === null) return;
+  const before = escapeOpenAtStart;
+  escapeOpenAtStart = null;                       // once per key press
+  const handled = event.defaultPrevented;
+  event.preventDefault();
+  if (handled) return;
+  const open = [...document.querySelectorAll('dialog[open]')];
+  if (!open.length || open.length !== before.length || open.some((dialog, i) => dialog !== before[i])) return;
+  const top = open.find(dialog => dialog.contains(document.activeElement)) || open[open.length - 1];
+  if (top.dispatchEvent(new Event('cancel', { cancelable: true }))) top.close();
 }
 
 // On the form pages a field that takes focus scrolls into view with room below it for its dropdown
@@ -1320,6 +1356,129 @@ async function checkSignedIn() {
 // The header's Financial Year Start and CR Expiry, from the signed-in company's profile. A company without a
 // profile (one from before Create a Company) keeps them hidden; a date that was left blank shows "Not set".
 const CR_EXPIRY_WARN_DAYS = 30;
+/* ---------- Company icon (header, #company-avatar) ----------
+   A round icon with the company's first letter; the popup (#company-icon) uploads a logo (api/company-icon.php)
+   that then takes the letter's place. Removing the logo brings the letter back. */
+let companyIcon = null;   // { name, size, version } when a logo is uploaded
+const companyLetter = () => (byId('app').querySelector('.brand-name').textContent.match(/[A-Za-z0-9]/)?.[0] || 'G').toUpperCase();
+
+function renderCompanyIcon() {
+  for (const box of [byId('company-avatar'), byId('company-icon-preview')]) {
+    const letter = Object.assign(document.createElement('span'), { className: 'company-avatar-letter', textContent: companyLetter() });
+    box.classList.toggle('has-logo', !!companyIcon);
+    if (!companyIcon) { box.replaceChildren(letter); continue; }
+    const img = new Image();
+    img.alt = '';
+    img.addEventListener('error', () => { box.replaceChildren(letter); box.classList.remove('has-logo'); });
+    img.src = `api/company-icon.php?file=1&v=${companyIcon.version}`;
+    box.replaceChildren(img);
+  }
+  byId('company-avatar').setAttribute('aria-label', companyIcon ? 'Company logo: change or remove it' : 'Company logo: upload one');
+  byId('company-icon-name').textContent = companyIcon ? 'Logo uploaded' : 'No logo yet: the first letter is shown';
+  byId('company-icon-upload').textContent = companyIcon ? 'Change logo' : 'Upload logo';
+  byId('company-icon-remove').hidden = !companyIcon;
+}
+
+/* The logo with its plain background made transparent, as a PNG, so only the logo shows on the page.
+   The background is the colour all four corners share; every pixel near that colour (inside letters too) becomes
+   see-through, and the logo's soft edges fade into it instead of keeping a grey fringe. A logo whose corners
+   differ (a photo, a full-bleed design) or are already transparent is sent as it is. Large logos are scaled down
+   (they show at most 88 px tall), which also keeps the PNG well under the 2 MB limit. */
+const LOGO_MAX_HEIGHT = 320;
+const LOGO_MAX_WIDTH = 1280;
+async function logoWithoutBackground(file) {
+  let bitmap;
+  try { bitmap = await createImageBitmap(file); } catch { return file; }
+  const scale = Math.min(1, LOGO_MAX_HEIGHT / bitmap.height, LOGO_MAX_WIDTH / bitmap.width);
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = Object.assign(document.createElement('canvas'), { width, height });
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  const pixels = context.getImageData(0, 0, width, height);
+  const data = pixels.data;
+  const at = (x, y) => (y * width + x) * 4;
+  const corners = [at(0, 0), at(width - 1, 0), at(0, height - 1), at(width - 1, height - 1)];
+  if (corners.some(i => data[i + 3] < 250)) return file;                       // already transparent
+  const distance = (i, rgb) => Math.max(Math.abs(data[i] - rgb[0]), Math.abs(data[i + 1] - rgb[1]), Math.abs(data[i + 2] - rgb[2]));
+  const background = [0, 1, 2].map(c => Math.round(corners.reduce((sum, i) => sum + data[i + c], 0) / 4));
+  if (corners.some(i => distance(i, background) > 12)) return file;            // no single plain background
+  const CLEAR = 14;     // this close to the background: fully see-through
+  const SOLID = 70;     // this far: fully the logo; in between, the logo's anti-aliased edge
+  for (let i = 0; i < data.length; i += 4) {
+    const d = distance(i, background);
+    if (d >= SOLID) continue;
+    const alpha = d <= CLEAR ? 0 : (d - CLEAR) / (SOLID - CLEAR);
+    if (alpha === 0) { data[i + 3] = 0; continue; }
+    for (let c = 0; c < 3; c++) {                 // the edge colour without the background mixed into it
+      data[i + c] = Math.max(0, Math.min(255, Math.round((data[i + c] - background[c] * (1 - alpha)) / alpha)));
+    }
+    data[i + 3] = Math.round(alpha * data[i + 3]);
+  }
+  context.putImageData(pixels, 0, 0);
+  const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return png || file;
+}
+
+async function loadCompanyIcon() {
+  try {
+    const icon = await apiRequest('api/company-icon.php');
+    companyIcon = icon ? { ...icon, version: Date.now() } : null;
+  } catch { companyIcon = null; }
+  renderCompanyIcon();
+}
+
+function initCompanyIcon() {
+  const dialog = byId('company-icon');
+  const picker = byId('company-icon-file');
+  const error = message => { byId('company-icon-error').textContent = message || ''; byId('company-icon-error').hidden = !message; };
+  const busy = on => { for (const button of dialog.querySelectorAll('[data-ci="upload"], [data-ci="remove"]')) button.disabled = on; };
+  byId('company-avatar').addEventListener('click', () => {
+    error('');
+    renderCompanyIcon();
+    dialog.showModal();
+    byId('company-icon-upload').focus();
+  });
+  dialog.addEventListener('click', async event => {
+    if (event.target === dialog) { dialog.close(); return; }      // a click on the backdrop
+    const action = event.target.closest('[data-ci]')?.dataset.ci;
+    if (action === 'close') dialog.close();
+    if (action === 'upload') picker.click();
+    if (action === 'remove') {
+      error('');
+      busy(true);
+      try {
+        await apiRequest('api/company-icon.php', { method: 'DELETE' });
+        companyIcon = null;
+        renderCompanyIcon();
+        showToast('Logo removed', 'The company icon shows the first letter again.');
+        byId('company-icon-upload').focus();
+      } catch (problem) { error(problem.message); }
+      busy(false);
+    }
+  });
+  picker.addEventListener('change', async () => {
+    const file = picker.files[0];
+    picker.value = '';
+    if (!file) return;
+    error('');
+    if (!['image/png', 'image/jpeg'].includes(file.type)) { error('The logo must be a PNG or JPG image.'); return; }
+    if (file.size > 2 * 1024 * 1024) { error('The logo image must be at most 2 MB.'); return; }
+    busy(true);
+    try {
+      const image = await logoWithoutBackground(file);
+      const body = new FormData();
+      body.append('icon', image, image === file ? file.name : 'icon.png');
+      const icon = await apiRequest('api/company-icon.php', { method: 'POST', body });
+      companyIcon = { ...icon, version: Date.now() };
+      renderCompanyIcon();
+      showToast('Logo saved', 'The company icon now shows your logo.');
+    } catch (problem) { error(problem.message); }
+    busy(false);
+  });
+}
+
 async function showCompanyDates() {
   let profile;
   try { profile = await apiRequest('api/company-profile.php'); } catch { return; }
@@ -8244,6 +8403,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.title = `${user.company.name} · Growth Engine`;
   }
   byId('sign-out').addEventListener('click', signOut);
+  initCompanyIcon();
+  loadCompanyIcon();
   showCompanyDates();
   byId('footer-year').textContent = String(today.getFullYear());
   for (const select of [...document.querySelectorAll('select[data-phone-code]'),

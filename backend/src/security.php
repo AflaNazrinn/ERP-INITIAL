@@ -54,26 +54,47 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_LOCK_SECONDS = 60;
 
 /*
- * Checks a username and password against the users table of the company's own database. On success the
- * session gets a new id (so an id known before sign-in is useless after it) and holds the company and the
- * user. Returns the user, or null. A wrong company code, username or password all take as long and answer
- * the same, so none tells which one was wrong (or which companies exist).
+ * Checks a username and password. No company code is asked for: usernames are unique across every company
+ * on this server (Create a Company refuses one that is taken), so the company is the one whose users table
+ * has this username. On success the session gets a new id (so an id known before sign-in is useless after
+ * it) and holds the company and the user. Returns the user, or null. A wrong username or password take as
+ * long and answer the same, so neither tells which one was wrong (or which usernames exist).
  */
-function attempt_login(string $companyCode, string $username, string $password): ?array
+function attempt_login(string $username, string $password): ?array
 {
-    $company = company_find($companyCode);
-    if ($company === null) {
-        password_verify($password, '$2y$12$D4EJZkA5kqknHTWRnSGyGeI.6wC36KqWyEhm8WK0.TfQmdor14xi.');
-        return null;
-    }
-    use_company($company['code']);
-    $row = query('SELECT id, username, full_name, password_hash FROM users WHERE username = ?', [$username])->fetch();
     // A real bcrypt hash of a random password: an unknown username costs the same check as a known one.
-    $hash = $row['password_hash'] ?? '$2y$12$D4EJZkA5kqknHTWRnSGyGeI.6wC36KqWyEhm8WK0.TfQmdor14xi.';
-    $ok = password_verify($password, $hash) && $row !== false;
-    if (!$ok) {
+    $dummy = '$2y$12$D4EJZkA5kqknHTWRnSGyGeI.6wC36KqWyEhm8WK0.TfQmdor14xi.';
+    $found = null;
+    $checked = false;
+    foreach (array_keys(company_config()['companies']) as $code) {
+        $company = company_find((string) $code);
+        if ($company === null) {
+            continue;
+        }
+        try {
+            use_company($company['code']);
+            $row = query('SELECT id, username, full_name, password_hash FROM users WHERE username = ?', [$username])->fetch();
+        } catch (PDOException | RuntimeException $e) {   // one company's database down: the others still sign in
+            error_log("Sign-in: cannot read the users of company {$company['code']}: " . $e->getMessage());
+            continue;
+        }
+        if ($row === false) {
+            continue;
+        }
+        $checked = true;
+        if (password_verify($password, (string) $row['password_hash'])) {
+            $found = [$company, $row];
+            break;
+        }
+    }
+    if (!$checked) {
+        password_verify($password, $dummy);
+    }
+    if ($found === null) {
         return null;
     }
+    [$company, $row] = $found;
+    use_company($company['code']);
     if (password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {
         query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash_for($password), $row['id']]);
     }

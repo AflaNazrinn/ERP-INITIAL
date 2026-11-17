@@ -1,9 +1,10 @@
 /* Sign-in page (login.html).
    GET api/session.php gives the CSRF token (and the user, when already signed in: straight to the
-   dashboard). POST api/login.php { company, username, password } signs in to that company (each company
-   has its own database); then the page opens the dashboard, at the screen the user was sent away from
-   (?next=#/masters/item) when there is one. The company code is remembered in this browser, and
-   ?company=CODE (from Create a Company) fills it in. "Create a company" opens company.html. */
+   dashboard). POST api/login.php { username, password } signs in to the company the username belongs to
+   (usernames are unique across companies, each company has its own database); then the page opens the
+   dashboard, at the screen the user was sent away from (?next=#/masters/item) when there is one. The name of
+   the company this browser signed in to last is the heading; ?company=CODE (from Create a Company) says the
+   new company is ready. "Create a company" opens company.html. */
 
 'use strict';
 
@@ -43,34 +44,32 @@ function setBusy(busy) {
   $('login-submit-label').textContent = busy ? 'Signing in…' : 'Sign in';
 }
 
-const FIELDS = ['company', 'username', 'password'];
+const FIELDS = ['username', 'password'];
 const remember = (key, value) => { try { localStorage.setItem(key, value); } catch { /* private window */ } };
 const recall = key => { try { return localStorage.getItem(key) || ''; } catch { return ''; } };
 
 async function signIn(event) {
   event.preventDefault();
-  const company = $('login-company').value.trim().toUpperCase();
   const username = $('login-username').value.trim();
   const password = $('login-password').value;
   showAlert('');
-  showFieldError('company', company ? '' : 'Enter your company code.');
   showFieldError('username', username ? '' : 'Enter your username.');
   showFieldError('password', password ? '' : 'Enter your password.');
-  if (!company || !username || !password) {
+  if (!username || !password) {
     $(`login-${FIELDS.find(name => !$(`login-${name}`).value.trim())}`).focus();
     return;
   }
   setBusy(true);
   try {
     if (!csrfToken) await loadSession();
-    let response = await post(company, username, password);
+    let response = await post(username, password);
     if (response.status === 403) {            // the session expired since the page opened: new token, once more
       await loadSession();
-      response = await post(company, username, password);
+      response = await post(username, password);
     }
     const result = await response.json().catch(() => null);
     if (response.ok && result?.data?.user) {
-      remember('ge-company', company);
+      remember('ge-company', result.data.user.company?.code || '');
       remember('ge-company-name', result.data.user.company?.name || '');
       location.replace(nextPage());
       return;
@@ -87,35 +86,35 @@ async function signIn(event) {
   setBusy(false);
 }
 
-function post(company, username, password) {
+function post(username, password) {
   return fetch('api/login.php', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-    body: JSON.stringify({ company, username, password }),
+    body: JSON.stringify({ username, password }),
   });
 }
 
-// The company this browser signed in to last, or the one just created (?company=CODE): its code in the field,
-// its name as the heading.
+// The name of the company this browser signed in to last (or just created) as the heading, "Growth Engine"
+// under it. After Create a Company (?company=CODE) a note says the new company is ready.
 function showCompany() {
-  const fromLink = (new URLSearchParams(location.search).get('company') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-  const code = fromLink || recall('ge-company');
-  $('login-company').value = code;
-  const name = !fromLink && code === recall('ge-company') ? recall('ge-company-name') : '';
+  const name = recall('ge-company-name');
   if (name) {
     $('login-title').textContent = name;
     $('login-product').textContent = 'Growth Engine';
   }
+  const fromLink = (new URLSearchParams(location.search).get('company') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (fromLink) {
-    $('login-created').textContent = `Company ${fromLink} is ready. Sign in with the username and password you chose.`;
+    $('login-created').textContent = `${name || `Company ${fromLink}`} is ready. Sign in with the username and password you chose.`;
     $('login-created').hidden = false;
   }
-  return code;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('login-form').addEventListener('submit', signIn);
+  // Esc does nothing here, and must not take the browser out of full screen (Firefox-based browsers leave it on
+  // any Esc the page does not claim).
+  window.addEventListener('keydown', event => { if (event.key === 'Escape') event.preventDefault(); });
   $('login-toggle').addEventListener('click', () => {
     const show = $('login-password').type === 'password';
     $('login-password').type = show ? 'text' : 'password';
@@ -123,20 +122,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('login-toggle').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
   for (const name of FIELDS) $(`login-${name}`).addEventListener('input', () => showFieldError(name, ''));
-  $('login-company').addEventListener('input', () => {
-    const input = $('login-company');
-    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  });
-  // Clear: empty the username and password and their messages (the company code stays), then start at Username.
+  // Clear: empty the username and password and their messages, then start at Username.
   $('login-clear').addEventListener('click', () => {
-    for (const name of FIELDS.slice(1)) {
+    for (const name of FIELDS) {
       $(`login-${name}`).value = '';
       showFieldError(name, '');
     }
     showAlert('');
     $('login-username').focus();
   });
-  $(showCompany() ? 'login-username' : 'login-company').focus();
+  showCompany();
+  $('login-username').focus();
   try {
     const session = await loadSession();
     if (session.user) location.replace(nextPage());   // already signed in
