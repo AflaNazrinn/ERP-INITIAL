@@ -143,27 +143,6 @@ button, select { font-family: inherit; }
 /* A logo and the name: a hairline between them, so the two read as one brand, not a crowd. */
 .company-avatar.has-logo + .brand-name { padding-left: 16px; border-left: 1px solid var(--line); line-height: 36px; }
 
-/* The company's financial year start and CR expiry: on the right, before the date range, as quiet label / value
-   pairs split by hairlines (no boxes). The CR expiry turns amber within 30 days of the date and red once it has
-   passed. */
-.company-dates { display: flex; flex-wrap: wrap; align-items: center; margin: 0 0 0 auto; padding-right: 8px; border-right: 1px solid var(--line); }
-.company-date {
-  display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
-  padding: 4px 16px; border-radius: var(--radius-sm);
-}
-.company-date + .company-date { border-left: 1px solid var(--line); }
-.company-date.is-soon, .company-date.is-expired { border-left-color: transparent; }
-@media (max-width: 900px) {
-  .company-dates { margin: 0; padding-right: 0; border-right: 0; }
-  .company-date:first-child { padding-left: 0; }
-}
-.company-date svg { grid-row: 1 / 3; color: var(--ink-400); }
-.company-date dt { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); }
-.company-date dd { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink-800); font-variant-numeric: tabular-nums; }
-.company-date.is-soon { background: var(--tone-amber-bg); border-color: var(--tone-amber-line); }
-.company-date.is-soon svg, .company-date.is-soon dd { color: var(--tone-amber-ink); }
-.company-date.is-expired { background: var(--danger-soft); border-color: #fecdd3; }
-.company-date.is-expired svg, .company-date.is-expired dd { color: var(--danger); }
 .range-btn {
   display: flex; align-items: center; gap: 8px; min-height: var(--control-h); padding: 6px 14px;
   background: var(--surface-muted); border: 1px solid var(--line); border-radius: var(--radius-sm);

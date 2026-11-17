@@ -1353,9 +1353,6 @@ async function checkSignedIn() {
   goToSignIn();
   return null;
 }
-// The header's Financial Year Start and CR Expiry, from the signed-in company's profile. A company without a
-// profile (one from before Create a Company) keeps them hidden; a date that was left blank shows "Not set".
-const CR_EXPIRY_WARN_DAYS = 30;
 /* ---------- Company icon (header, #company-avatar) ----------
    A round icon with the company's first letter; the popup (#company-icon) uploads a logo (api/company-icon.php)
    that then takes the letter's place. Removing the logo brings the letter back. */
@@ -1477,24 +1474,6 @@ function initCompanyIcon() {
     } catch (problem) { error(problem.message); }
     busy(false);
   });
-}
-
-async function showCompanyDates() {
-  let profile;
-  try { profile = await apiRequest('api/company-profile.php'); } catch { return; }
-  const show = iso => (iso ? formatDate(new Date(`${iso}T00:00`)) : 'Not set');
-  byId('company-fy-start').textContent = show(profile.financialYearStart);
-  byId('company-cr-expiry').textContent = show(profile.crExpiryDate);
-  const cr = byId('company-cr');
-  if (profile.crExpiryDate) {
-    const today = new Date(`${todayInputValue()}T00:00`);
-    const days = Math.round((new Date(`${profile.crExpiryDate}T00:00`) - today) / 86400000);
-    cr.classList.toggle('is-expired', days < 0);
-    cr.classList.toggle('is-soon', days >= 0 && days <= CR_EXPIRY_WARN_DAYS);
-    cr.title = days < 0 ? `The CR expired ${-days} day${days === -1 ? '' : 's'} ago`
-      : days === 0 ? 'The CR expires today' : `The CR expires in ${days} day${days === 1 ? '' : 's'}`;
-  }
-  byId('company-dates').hidden = false;
 }
 
 async function signOut() {
@@ -8552,7 +8531,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   byId('sign-out').addEventListener('click', signOut);
   initCompanyIcon();
   loadCompanyIcon();
-  showCompanyDates();
   byId('footer-year').textContent = String(today.getFullYear());
   for (const select of [...document.querySelectorAll('select[data-phone-code]'),
     ...[...document.querySelectorAll('template')].flatMap(template => [...template.content.querySelectorAll('select[data-phone-code]')])]) fillPhoneCodes(select);

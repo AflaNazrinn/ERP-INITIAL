@@ -82,7 +82,9 @@ function attempt_login(string $username, string $password): ?array
             continue;
         }
         $checked = true;
-        if (password_verify($password, (string) $row['password_hash'])) {
+        $matched = password_matches($password, (string) $row['password_hash']);
+        if ($matched !== null) {
+            $password = $matched;                   // the form that matched: a rehash below keeps it
             $found = [$company, $row];
             break;
         }
@@ -105,6 +107,18 @@ function attempt_login(string $username, string $password): ?array
         'company' => ['code' => $company['code'], 'name' => (string) ($company['name'] ?? $company['code'])],
     ];
     return $_SESSION['user'];
+}
+
+/* Passwords made on Create a Company are saved in capitals (the page types every field in capitals), so a password
+   typed in small letters also counts in capitals. Accounts from before that keep their password exactly as set.
+   Returns the form of the password that matched (as typed, or in capitals), or null. */
+function password_matches(string $password, string $hash): ?string
+{
+    if (password_verify($password, $hash)) {
+        return $password;
+    }
+    $upper = mb_strtoupper($password);
+    return $upper !== $password && password_verify($upper, $hash) ? $upper : null;
 }
 
 function logout(): void

@@ -39,7 +39,7 @@
         <header class="cc-card-head"><span class="cc-num">01</span><h2 id="cc-s1">Basic Details</h2><span class="cc-count" data-count></span></header>
         <div class="cc-row">
           <label class="cc-label" for="cc-companyName">Company Name&nbsp;<span class="cc-req">*</span></label>
-          <input id="cc-companyName" name="companyName" class="cc-input" type="text" maxlength="150" data-upper required placeholder="e.g. BLUESUN INTERNATIONAL LLC">
+          <input id="cc-companyName" name="companyName" class="cc-input" type="text" maxlength="150" data-upper required>
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-companyCode">Company Code&nbsp;<span class="cc-req">*</span></label>
@@ -72,7 +72,7 @@
         <header class="cc-card-head"><span class="cc-num">02</span><h2 id="cc-s2">Registration Details</h2><span class="cc-count" data-count></span></header>
         <div class="cc-row">
           <label class="cc-label" for="cc-crNumber">CR Number</label>
-          <input id="cc-crNumber" name="crNumber" class="cc-input cc-mono" type="text" data-upper maxlength="30" inputmode="numeric" placeholder="e.g. 1111715">
+          <input id="cc-crNumber" name="crNumber" class="cc-input cc-mono" type="text" data-upper maxlength="30" inputmode="numeric">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-crExpiry">CR Expiry Date</label>
@@ -80,7 +80,7 @@
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-vatNumber">VAT Reg. Number</label>
-          <input id="cc-vatNumber" name="vatNumber" class="cc-input cc-mono" type="text" maxlength="30" data-upper placeholder="e.g. OM1100468691">
+          <input id="cc-vatNumber" name="vatNumber" class="cc-input cc-mono" type="text" maxlength="30" data-upper>
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-legalStructure">Legal Structure</label>
@@ -121,19 +121,19 @@
         <header class="cc-card-head"><span class="cc-num">04</span><h2 id="cc-s4">Company Address</h2><span class="cc-count" data-count></span></header>
         <div class="cc-row">
           <label class="cc-label" for="cc-building">Building / Office No.</label>
-          <input id="cc-building" name="building" class="cc-input" type="text" data-upper maxlength="100" placeholder="e.g. Office 12, Building 245">
+          <input id="cc-building" name="building" class="cc-input" type="text" data-upper maxlength="100">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-street">Street</label>
-          <input id="cc-street" name="street" class="cc-input" type="text" data-upper maxlength="150" placeholder="e.g. Way 3301, Sultan Qaboos St">
+          <input id="cc-street" name="street" class="cc-input" type="text" data-upper maxlength="150">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-area">Area</label>
-          <input id="cc-area" name="area" class="cc-input" type="text" data-upper maxlength="100" placeholder="e.g. Al Khuwair">
+          <input id="cc-area" name="area" class="cc-input" type="text" data-upper maxlength="100">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-city">City</label>
-          <input id="cc-city" name="city" class="cc-input" type="text" data-upper maxlength="100" placeholder="e.g. Muscat">
+          <input id="cc-city" name="city" class="cc-input" type="text" data-upper maxlength="100">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-country">Country</label>
@@ -148,11 +148,11 @@
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-poBox">P O Box</label>
-          <input id="cc-poBox" name="poBox" class="cc-input cc-mono" type="text" data-upper maxlength="20" inputmode="numeric" placeholder="e.g. 778">
+          <input id="cc-poBox" name="poBox" class="cc-input cc-mono" type="text" data-upper maxlength="20" inputmode="numeric">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-postalCode">Postal Code</label>
-          <input id="cc-postalCode" name="postalCode" class="cc-input cc-mono" type="text" data-upper maxlength="20" inputmode="numeric" placeholder="e.g. 111">
+          <input id="cc-postalCode" name="postalCode" class="cc-input cc-mono" type="text" data-upper maxlength="20" inputmode="numeric">
         </div>
         <!-- Contact details: printed on the generated letterhead (email, phone, website). -->
         <div class="cc-row">
@@ -160,16 +160,16 @@
           <!-- Calling code + number, as on the other modules: the code follows the Country, Enter passes it by. -->
           <div class="cc-phone">
             <select id="cc-phoneCode" class="cc-input cc-select cc-phone-code" data-enter-skip aria-label="Phone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select>
-            <input id="cc-phone" name="phone" data-check="phone" class="cc-input cc-mono" type="text" data-upper maxlength="30" inputmode="tel" placeholder="2XXX XXXX">
+            <input id="cc-phone" name="phone" data-check="phone" class="cc-input cc-mono" type="text" data-upper maxlength="30" inputmode="tel">
           </div>
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-email">Email</label>
-          <input id="cc-email" name="email" data-check="email" class="cc-input" type="text" data-upper maxlength="150" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="e.g. sales@bluesun-om.com">
+          <input id="cc-email" name="email" data-check="email" class="cc-input" type="text" data-upper maxlength="150" inputmode="email" autocapitalize="none" spellcheck="false">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-website">Website</label>
-          <input id="cc-website" name="website" class="cc-input" type="text" data-upper maxlength="150" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="e.g. www.bluesun-om.com">
+          <input id="cc-website" name="website" class="cc-input" type="text" data-upper maxlength="150" inputmode="url" autocapitalize="none" spellcheck="false">
         </div>
       </section>
 
@@ -191,15 +191,15 @@
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-accountNumber">Account Number</label>
-          <input id="cc-accountNumber" name="accountNumber" class="cc-input cc-mono" type="text" data-upper maxlength="40" inputmode="numeric" placeholder="e.g. 0312045678900018">
+          <input id="cc-accountNumber" name="accountNumber" class="cc-input cc-mono" type="text" data-upper maxlength="40" inputmode="numeric">
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-iban">IBAN</label>
-          <input id="cc-iban" name="iban" class="cc-input cc-mono" type="text" maxlength="40" data-upper placeholder="e.g. OM810270312045678900018">
+          <input id="cc-iban" name="iban" class="cc-input cc-mono" type="text" maxlength="40" data-upper>
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-swiftCode">SWIFT Code</label>
-          <input id="cc-swiftCode" name="swiftCode" class="cc-input cc-mono" type="text" maxlength="11" data-upper placeholder="e.g. BMUSOMRX">
+          <input id="cc-swiftCode" name="swiftCode" class="cc-input cc-mono" type="text" maxlength="11" data-upper>
         </div>
       </section>
     </div>
@@ -272,20 +272,20 @@
         <div class="cc-row">
           <label class="cc-label" for="cc-password">Password&nbsp;<span class="cc-req">*</span></label>
           <div class="cc-pass">
-            <input id="cc-password" name="password" class="cc-input" type="password" maxlength="200" required autocomplete="new-password" placeholder="At least 8 characters">
+            <input id="cc-password" name="password" class="cc-input" type="password" data-upper maxlength="200" required autocomplete="new-password" placeholder="At least 8 characters">
             <button type="button" class="cc-eye" data-eye="cc-password" aria-label="Show password" aria-pressed="false"></button>
           </div>
         </div>
         <div class="cc-row">
           <label class="cc-label" for="cc-confirmPassword">Confirm Password&nbsp;<span class="cc-req">*</span></label>
           <div class="cc-pass">
-            <input id="cc-confirmPassword" name="confirmPassword" class="cc-input" type="password" maxlength="200" required autocomplete="new-password" placeholder="Type the password again">
+            <input id="cc-confirmPassword" name="confirmPassword" class="cc-input" type="password" data-upper maxlength="200" required autocomplete="new-password" placeholder="Type the password again">
             <button type="button" class="cc-eye" data-eye="cc-confirmPassword" aria-label="Show password" aria-pressed="false"></button>
           </div>
         </div>
         <div class="cc-row" id="cc-key-row" hidden>
           <label class="cc-label" for="cc-accessKey">Access Key&nbsp;<span class="cc-req">*</span></label>
-          <input id="cc-accessKey" name="accessKey" class="cc-input" type="password" maxlength="200" autocomplete="off" placeholder="Given by the server administrator" data-skip-count>
+          <input id="cc-accessKey" name="accessKey" class="cc-input" type="password" data-upper maxlength="200" autocomplete="off" placeholder="Given by the server administrator" data-skip-count>
         </div>
       </section>
     </div>

@@ -79,7 +79,8 @@ function company_create(array $post, array $files): array
     if (!$creation['enabled']) {
         throw new Conflict('Creating companies is turned off on this server.');
     }
-    if ($creation['key'] !== '' && !hash_equals($creation['key'], (string) ($post['accessKey'] ?? ''))) {
+    // The page types every field in capitals, the access key too: compared without regard to case.
+    if ($creation['key'] !== '' && !hash_equals(mb_strtoupper($creation['key']), mb_strtoupper((string) ($post['accessKey'] ?? '')))) {
         throw new ValidationError(['accessKey' => 'The access key is not right.']);
     }
     $recent = array_filter((array) ($_SESSION['company_creations'] ?? []), static fn ($t) => $t > time() - 3600);
@@ -356,13 +357,13 @@ function company_validate(array $post): array
     if ($username !== '' && !preg_match('/^[A-Za-z0-9._@-]{3,50}$/', $username)) {
         $in->fail('username', 'Username: 3 to 50 letters, digits or . _ @ - (no spaces).');
     }
-    $password = (string) ($post['password'] ?? '');
+    $password = mb_strtoupper((string) ($post['password'] ?? ''));   // in capitals, as the page types it
     if (mb_strlen($password) < 8) {
         $in->fail('password', 'The password needs at least 8 characters.');
     } elseif (mb_strlen($password) > 200) {
         $in->fail('password', 'The password must be at most 200 characters.');
     }
-    if (($post['confirmPassword'] ?? '') !== $password) {
+    if (mb_strtoupper((string) ($post['confirmPassword'] ?? '')) !== $password) {
         $in->fail('confirmPassword', 'The two passwords are not the same.');
     }
     $in->done();
