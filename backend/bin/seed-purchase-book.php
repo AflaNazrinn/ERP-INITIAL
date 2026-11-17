@@ -80,8 +80,8 @@ try {
     // [purchase type, lines (index => quantity), required in days, location]
     $plans = [
         ['Against Order', [0 => 10, 1 => 24, 2 => 50], 7, 'Muscat Main Warehouse'],
-        ['Stock Replenishment', [3 => 6, 4 => 40], 14, 'Muscat Main Warehouse'],
-        ['Urgent', [5 => 4, 0 => 2], 3, 'Sohar Site Store'],
+        ['Against Stock', [3 => 6, 4 => 40], 14, 'Muscat Main Warehouse'],
+        ['Against Order', [5 => 4, 0 => 2], 3, 'Sohar Site Store'],
     ];
     $made = ['pr' => [], 'rfq' => [], 'po' => [], 'grn' => []];
     foreach ($plans as $i => [$type, $quantities, $within, $location]) {

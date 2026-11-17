@@ -75,6 +75,8 @@ async function applyLiveChanges() {
     }
   }
   live.pending = keep;
+  // The dashboard's figures (items, purchase orders, GRNs …) when it is the page on screen.
+  if (currentPage === 'dashboard' && changed.size) loadDashboard();
 }
 
 function initLiveUpdates() {

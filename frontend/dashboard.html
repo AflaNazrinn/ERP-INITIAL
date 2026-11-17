@@ -1822,7 +1822,7 @@
         <div class="fp-field">
           <label class="fp-label" for="pr-type">Purchase Type</label>
           <select id="pr-type" class="fp-input fp-select">
-            <option selected>Against Order</option><option>Stock Replenishment</option><option>Direct Purchase</option><option>Urgent</option>
+            <option selected>Against Order</option><option>Against Stock</option>
           </select>
         </div>
       </div>
@@ -1843,7 +1843,7 @@
         </div>
       </section>
       <section class="fp-card">
-        <h2 class="fp-section-title">3. Requester &amp; Delivery</h2>
+        <h2 class="fp-section-title">3. Requester</h2>
         <div class="pb-grid pb-grid-2">
           <div class="fp-field">
             <label class="fp-label" for="pr-requested-by">Requested By</label>
@@ -1851,10 +1851,6 @@
               <input id="pr-requested-by" class="fp-input" type="text" readonly tabindex="-1" value="admin">
               <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
             </div>
-          </div>
-          <div class="fp-field">
-            <label class="fp-label" for="pr-location">Delivery Location</label>
-            <input id="pr-location" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="Enter delivery location">
           </div>
         </div>
       </section>
@@ -1879,8 +1875,34 @@
     <section class="fp-card">
       <h2 class="fp-section-title">5. Remarks &amp; PDF Print Configuration</h2>
       <div class="fp-field">
-        <label class="fp-label" for="pr-remarks">Remarks</label>
-        <textarea id="pr-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="e.g. Urgent requirement"></textarea>
+        <div class="pb-label-row">
+          <label class="fp-label" id="pr-remarks-label" for="pr-remarks-editor">Remarks &amp; Notes</label>
+          <span class="pb-editor-hint"><span aria-hidden="true">◆</span> Select text to make it bold or change its colour</span>
+        </div>
+        <input id="pr-remarks" type="hidden">
+        <div class="pb-editor">
+          <div class="pb-editor-bar" role="toolbar" aria-label="Remarks formatting" aria-controls="pr-remarks-editor">
+            <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+            <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+            <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+            <span class="pb-tool-sep" aria-hidden="true"></span>
+            <span class="pb-tool-label">Colour</span>
+            <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+            <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+            <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+            <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+            <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+            <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+            <label class="pb-tool" title="Pick any colour">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+              Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+            </label>
+            <span class="pb-tool-sep" aria-hidden="true"></span>
+            <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+            <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+          </div>
+          <div id="pr-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="pr-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Urgent requirement"></div>
+        </div>
       </div>
       <div class="pb-print" data-print="pr"></div>
     </section>
@@ -2278,12 +2300,12 @@
 <!-- Purchase Book row templates. Cells shared by every document come first. -->
 <template id="pb-cell-item">
   <td class="pb-col-sno" data-row-label></td>
-  <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-code" data-field="itemCode" type="text" data-lookup="itemcode" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select code..." aria-label="Item code"><input type="hidden" data-code-id><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
-  <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-name" data-field="itemName" type="text" data-lookup="item" data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select item name..." aria-label="Item name"><input type="hidden" data-field="itemId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
+  <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-code" data-field="itemCode" type="text" data-lookup="itemcode" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Search code..." aria-label="Item code"><input type="hidden" data-code-id><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
+  <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-name" data-field="itemName" type="text" data-lookup="item" data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Type item name..." aria-label="Item name"><input type="hidden" data-field="itemId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
   <td data-brand-cell><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-brand" data-field="brandName" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..." aria-label="Brand"><input type="hidden" data-field="brandId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
 </template>
 <template id="pb-cell-unit">
-  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><span class="pb-unit-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
 </template>
 <template id="pb-cell-remove">
   <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
@@ -2329,13 +2351,20 @@
 <template id="pb-print-box">
   <span class="fp-label">PDF Print Configuration</span>
   <div class="pb-print-box">
-    <label class="pb-check"><input type="checkbox" data-print-field="includeSignatory"><span>Include Signatory Slots</span></label>
+    <div class="pb-check-row pb-sign-row">
+      <label class="pb-check"><input type="checkbox" data-print-field="includeSignatory"><span>Include Signatory Slots</span></label>
+      <button type="button" class="pb-btn pb-btn-solid pb-btn-sm" data-signatory="add" title="Add a signatory slot to the PDF"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Signatory</button>
+    </div>
+    <!-- Shown while Include Signatory Slots is ticked: the slots the PDF prints, a name and a position / title each. -->
+    <ul class="pb-signatories" data-signatories></ul>
     <div class="pb-check-row">
       <label class="pb-check"><input type="checkbox" data-print-field="attachSeal"><span>Attach Seal</span></label>
       <button type="button" class="pb-link" data-seal="replace">Replace</button>
       <button type="button" class="pb-link" data-seal="remove">Remove</button>
       <span class="pb-seal-name" data-seal-name></span>
     </div>
+    <!-- Shown while Attach Seal is ticked: the seal the PDF prints. -->
+    <div class="pb-seal-preview" data-seal-preview hidden><img alt="Company seal" data-seal-image></div>
   </div>
 </template>
 <input id="pb-seal-file" type="file" accept="image/png,image/jpeg" hidden>
@@ -2345,7 +2374,10 @@
 <dialog id="lookup" class="lookup" aria-labelledby="lookup-title">
   <div class="lk-head">
     <span id="lookup-letter" class="lk-letter" aria-hidden="true"></span>
-    <h2 id="lookup-title" class="lk-title"></h2>
+    <div class="lk-heading">
+      <h2 id="lookup-title" class="lk-title"></h2>
+      <p class="lk-sub">Choose an item from the catalog.</p>
+    </div>
     <div class="lk-keys" aria-hidden="true">
       <span class="lk-key"><kbd>↑↓</kbd> Navigate</span>
       <span class="lk-key"><kbd>Enter</kbd> <span id="lookup-enter-hint">Select</span></span>
@@ -2359,10 +2391,14 @@
     <section class="lk-card" aria-labelledby="lookup-list-title">
       <h3 id="lookup-list-title" class="fp-section-title lk-list-title"></h3>
       <label class="lk-label" for="lookup-search">Search</label>
+      <div class="lk-search-row">
       <div class="lk-search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
         <input id="lookup-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-controls="lookup-rows" aria-expanded="true" aria-autocomplete="list">
         <span id="lookup-count" class="lk-count" aria-live="polite"></span>
+      </div>
+      <!-- The item popups' Create Item, beside the search (the footer one serves the other popups). -->
+      <button type="button" class="fp-btn fp-btn-primary lk-create-inline" data-lookup-action="create" tabindex="-1" title="Create a new item in the Item master and pick it (Alt+N)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
       </div>
       <div class="lk-table-wrap">
         <table class="lk-table">
@@ -3429,7 +3465,29 @@
     </div>
   </section>
 </dialog>
-<!-- Purchase Book PDF: filled by printPurchaseDocument() just before the print dialog; hidden on screen. -->
-<div id="pb-print-sheet" class="print-sheet"></div>
+<!-- Purchase Book document preview (printPurchaseDocument): the A4 page with Print / Export PDF and Back. -->
+<dialog id="pb-preview" class="pv" aria-labelledby="pv-title">
+  <div class="pv-bar">
+    <span class="pv-dot" aria-hidden="true"></span>
+    <div class="pv-heading">
+      <span class="pv-kicker">Procurement Document</span>
+      <h2 id="pv-title" class="pv-title"></h2>
+    </div>
+    <div class="pv-actions">
+      <button type="button" class="pv-print" data-pv="print" aria-keyshortcuts="P Control+P">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="7" rx="1"></rect></svg>
+        <span>Print / Export PDF</span>
+      </button>
+      <button type="button" class="pv-back" data-pv="back" aria-keyshortcuts="Escape B">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+        <kbd>Esc / B</kbd>
+      </button>
+    </div>
+  </div>
+  <div class="pv-paper"><div class="pv-sheet ps-sheet"></div></div>
+</dialog>
+<!-- Purchase Book PDF: filled from the preview just before the print dialog; hidden on screen. -->
+<div id="pb-print-sheet" class="print-sheet ps-sheet"></div>
 </body>
 </html>
