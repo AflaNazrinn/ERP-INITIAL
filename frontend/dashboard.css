@@ -104,8 +104,8 @@ button, select { font-family: inherit; }
 
 /* ---------- Header ---------- */
 .app-header {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 20px; background: var(--surface); border: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px;
+  padding: 14px 24px; background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow-xs);
 }
 .brand { display: flex; align-items: center; gap: 14px; }
@@ -135,14 +135,27 @@ button, select { font-family: inherit; }
   box-shadow: none; outline: none;
 }
 .company-avatar img { display: block; height: 100%; width: auto; max-width: 220px; object-fit: contain; }
-.brand-name { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -.02em; color: var(--ink-900); }
+.brand { min-width: 0; gap: 16px; }
+.brand-name {
+  min-width: 0; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--ink-900);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A logo and the name: a hairline between them, so the two read as one brand, not a crowd. */
+.company-avatar.has-logo + .brand-name { padding-left: 16px; border-left: 1px solid var(--line); line-height: 36px; }
 
-/* The company's financial year start and CR expiry, beside its name. The CR expiry turns amber within
-   30 days of the date and red once it has passed. */
-.company-dates { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 auto 0 4px; }
+/* The company's financial year start and CR expiry: on the right, before the date range, as quiet label / value
+   pairs split by hairlines (no boxes). The CR expiry turns amber within 30 days of the date and red once it has
+   passed. */
+.company-dates { display: flex; flex-wrap: wrap; align-items: center; margin: 0 0 0 auto; padding-right: 8px; border-right: 1px solid var(--line); }
 .company-date {
   display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
-  padding: 5px 12px 5px 10px; background: var(--surface-muted); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 4px 16px; border-radius: var(--radius-sm);
+}
+.company-date + .company-date { border-left: 1px solid var(--line); }
+.company-date.is-soon, .company-date.is-expired { border-left-color: transparent; }
+@media (max-width: 900px) {
+  .company-dates { margin: 0; padding-right: 0; border-right: 0; }
+  .company-date:first-child { padding-left: 0; }
 }
 .company-date svg { grid-row: 1 / 3; color: var(--ink-400); }
 .company-date dt { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); }
