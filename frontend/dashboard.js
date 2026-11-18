@@ -10112,8 +10112,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     po: () => {
       const certifications = (doc.certifications || []).filter(value => value !== 'N/A').join(', ');
       return {
-        party: { label: 'Supplier', name: doc.supplierName,
-          lines: [['Country', supplier?.country], ['E-mail', supplier?.email], ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+        // Supplier / Vendor: the name, Country and E-mail only (a compact box).
+        party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [['Country', supplier?.country], ['E-mail', supplier?.email]] },
         // The buyer's contact on this order: the salesman who created it.
         buyerLines: [['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone]],
         cols: 3,
