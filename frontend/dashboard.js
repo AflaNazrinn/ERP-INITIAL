@@ -9235,7 +9235,7 @@ function letterheadBands(source, width, height) {
    Laid out as the procurement document design: the title, the Buyer (this company) beside the other party, the
    details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
-const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Receipt Note' };
+const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note' };
 let companyProfilePromise = null;
 function companyProfile() {
   companyProfilePromise ||= apiRequest('api/company-profile.php').catch(() => null);
@@ -9243,14 +9243,18 @@ function companyProfile() {
 }
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
-async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null } = {}) {
-  const [profile, uploadedLetterhead, poSupplier] = await Promise.all([companyProfile(), companyLetterhead(),
-    spec.key === 'po' && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
-  // The supplier this copy is addressed to: the one chosen on a Quotation Request, a Purchase Order's own.
-  const supplier = chosenSupplier || poSupplier;
-  // A Purchase Order always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
+async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false } = {}) {
+  // The Purchase Order and the GRN: the procurement document design (letterhead, supplier details, totals box).
+  const procurement = spec.key === 'po' || spec.key === 'grn';
+  const [profile, uploadedLetterhead, ownSupplier] = await Promise.all([companyProfile(), companyLetterhead(),
+    procurement && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
+  // The supplier this copy is addressed to: the one chosen on a Quotation Request, a Purchase Order's / GRN's own.
+  const supplier = chosenSupplier || ownSupplier;
+  // A Purchase Order and a GRN always print on a letterhead: the uploaded one, else the drawn "Blue bars" design.
   const letterhead = uploadedLetterhead
-    || (spec.key === 'po' ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
+    || (procurement ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
+  // GRN Inspection Mode: no Rate / VAT / Amount and no money totals, only the number of items.
+  const noPrices = spec.key === 'grn' && hidePrices;
   const title = PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
   const cell = (tag, className, value) => el(tag, className, text(value));
@@ -9287,26 +9291,32 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
           ['Delivery To', doc.deliveryLocation, 'full']],
       };
     },
+    // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Warehouse.
     grn: () => ({
-      party: { label: 'Supplier', name: doc.supplierName, lines: [] },
-      meta: [['GRN No', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['PO Number', doc.poNumber], ['Warehouse', doc.warehouseName]],
+      buyerLabel: 'Buyer / Receiver',
+      party: { label: 'Supplier / Vendor', name: doc.supplierName,
+        lines: [supplier?.address, ['Country', supplier?.country], ['E-mail', supplier?.email], ['Contact Person', supplier?.contactPerson],
+          ['Contact Number', supplier?.phone || supplier?.telephone]] },
+      cols: 4,
+      meta: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['PO Ref', doc.poNumber || doc.purchaseOrderCode],
+        ['Warehouse', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')]],
     }),
   }[spec.key]();
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
   const qty = value => pbQty(pbNum(value));
   const columns = [
-    ['SL.NO', 'sno', (l, i) => i + 1],
+    [spec.key === 'grn' ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
     ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
-    ['Item Name', 'name', l => l.itemName],
+    [spec.key === 'grn' ? 'Description of Goods' : 'Item Name', 'name', l => l.itemName],
     ...{
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
         [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc (%)', 'num', l => pbNum(l.discountPct).toFixed(2)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
-      grn: [['Received', 'num', l => qty(l.receivedQty)], ['Accepted', 'num', l => qty(l.acceptedQty)], ['Rejected', 'num', l => qty(l.rejectedQty)],
-        ['Unit', 'num', l => l.unit], ['Unit Cost', 'num', l => pbAmount(l.unitCost)], ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)],
-        ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+      grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
+        ...(noPrices ? [] : [['Rate', 'num', l => pbAmount(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
+          ['Amount', 'num total', l => pbAmount(l.lineTotal)]])],
     }[spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
@@ -9342,7 +9352,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     .map(value => String(value ?? '').trim()).filter(Boolean).join(', ');
   const parties = el('div', 'ps-parties');
   parties.append(
-    party('Buyer', companyName, layout.buyerLines
+    party(layout.buyerLabel || 'Buyer', companyName, layout.buyerLines
       ? [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ...layout.buyerLines]
       : [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ['Contact Number', p.phone]]),
     party(layout.party.label, layout.party.name, layout.party.lines),
@@ -9373,7 +9383,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   box.append(metaGrid);
   parts.push(box);
 
-  parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received Items' }[spec.key]));
+  parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items' }[spec.key]));
   const table = el('table', `ps-table ps-table-${spec.kind}`);
   const thead = el('thead');
   const headRow = el('tr');
@@ -9388,6 +9398,13 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     if (line.itemNameHtml) nameCell.replaceChildren(remarksFragment(line.itemNameHtml));
     const brand = String(line.brandName ?? '').trim();
     if (brand) nameCell.append(el('div', 'ps-make', `Make: ${brand}`));
+    const transfers = (line.transfers || []).filter(t => pbNum(t.quantity) > 0);
+    if (spec.key === 'grn' && transfers.length) {
+      const list = el('div', 'ps-transfers');
+      for (const t of transfers) list.append(el('div', 'ps-transfer', `${t.warehouseCode || t.warehouseName} : ${qty(t.quantity)}`));
+      const qtyCell = tr.querySelector('.ps-c-qty');
+      qtyCell.replaceChildren(el('div', 'ps-qty-main', qtyCell.textContent), list);   // the accepted quantity, the transfers under it
+    }
     tbody.append(tr);
   });
   table.append(thead, tbody);
@@ -9398,7 +9415,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const side = el('div', 'ps-side');
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');
-    remarks.append(el('div', 'ps-label', 'Remarks & Notes'));
+    remarks.append(el('div', 'ps-label', spec.key === 'grn' ? 'Remarks & Inward Notes' : 'Remarks & Notes'));
     if (isRemarksHtml(doc.remarks)) {
       const body = el('div', 'ps-remarks-body');
       body.append(remarksFragment(doc.remarks));
@@ -9415,14 +9432,23 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     side.append(certification);
   }
   if (side.childElementCount) bottom.append(side);
-  if (spec.kind !== 'simple') {
+  if (noPrices) {
+    const totals = el('dl', 'ps-totals ps-totals-count');
+    const row = el('div', 'ps-total-grand');
+    row.append(el('dt', '', 'Total Number of Items:'), el('dd', '', String(doc.items.length)));
+    totals.append(row);
+    bottom.append(totals);
+  } else if (spec.kind !== 'simple') {
     const totals = el('dl', 'ps-totals');
     const currency = doc.currency ? ` ${doc.currency}` : '';
-    for (const [label, value, strong] of [['Subtotal (Net)', doc.subtotal], [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
-      ['Discount', doc.discountAmount], ['Shipping', doc.shipping], ['Grand Total', doc.grandTotal, true]]) {
+    const grn = spec.key === 'grn';
+    for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
+      [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
+      ['Discount', doc.discountAmount], [grn ? 'Shipping / Freight' : 'Shipping', doc.shipping], ['Grand Total', doc.grandTotal, true]]) {
       if (!strong && !pbNum(value) && !label.startsWith('Subtotal') && !label.includes('VAT')) continue;   // a zero discount / shipping is left out
-      const row = el('div', strong ? 'ps-total-grand' : '');
-      row.append(el('dt', '', `${label}:`), el('dd', '', `${pbAmount(value)}${currency}`));
+      const discount = label === 'Discount';
+      const row = el('div', strong ? 'ps-total-grand' : discount && grn ? 'ps-total-discount' : '');
+      row.append(el('dt', '', `${label}:`), el('dd', '', `${discount && grn ? '-' : ''}${pbAmount(value)}${currency}`));
       totals.append(row);
     }
     bottom.append(totals);
@@ -9460,7 +9486,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);
-  if (spec.key === 'po' && profile?.files?.logo) {
+  if (procurement && profile?.files?.logo) {
     const mark = el('img', 'ps-watermark');
     mark.alt = '';
     loading.push(imageLoaded(mark));
@@ -9470,7 +9496,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   frame.append(frameHead, frameBody, frameFoot);
   const sheetParts = [frame];
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
-  sheet.classList.toggle('ps-po', spec.key === 'po');   // the Purchase Order's own look (dates, values, totals box)
+  sheet.classList.toggle('ps-po', procurement);   // the procurement look (bold capital values, totals box): PO and GRN
+  sheet.classList.toggle('ps-grn', spec.key === 'grn');
   sheet.style.setProperty('--ps-top', `${((letterhead?.top ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-bottom', `${((letterhead?.bottom ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-side', `${((letterhead?.side ?? 0.06) * 210).toFixed(1)}mm`);
@@ -9516,7 +9543,9 @@ async function printPurchaseDocument(spec, id) {
   switcher.replaceChildren(new Option('All Suppliers', ''), ...suppliers.map(s => new Option(s.name, String(s.id))));
   switcher.value = previewDoc.supplierId;
   switcher.closest('.pv-supplier').hidden = suppliers.length < 2;
-  dialog.classList.toggle('pv-po', spec.key === 'po');   // a Purchase Order: the dark bar scrolls away with the page
+  dialog.classList.toggle('pv-po', spec.key === 'po' || spec.key === 'grn');   // the dark bar scrolls away with the page
+  previewDoc.hidePrices = false;
+  syncPriceToggle();
   byId('pv-title').textContent = `${PB_TITLES[spec.key]} • ${doc.code}`;
   if (!dialog.open) dialog.showModal();
   dialog.querySelector('[data-pv="print"]').focus();
@@ -9543,7 +9572,7 @@ async function showPreviewSheet() {
   try {
     const supplier = await previewSupplier();
     if (previewDoc !== current) return;
-    await fillPurchaseSheet(sheet, current.spec, current.doc, { screen: true, supplier });
+    await fillPurchaseSheet(sheet, current.spec, current.doc, { screen: true, supplier, hidePrices: current.hidePrices });
   } catch (error) {
     showToast('The document could not be shown', error.message, true);
   }
@@ -9551,10 +9580,10 @@ async function showPreviewSheet() {
 
 async function printPreviewDocument() {
   if (!previewDoc) return;
-  const { spec, doc } = previewDoc;
+  const { spec, doc, hidePrices } = previewDoc;
   const sheet = byId('pb-print-sheet');
   const supplier = await previewSupplier();
-  await fillPurchaseSheet(sheet, spec, doc, { supplier });
+  await fillPurchaseSheet(sheet, spec, doc, { supplier, hidePrices });
   const pageTitle = document.title;
   // The browser's suggested PDF file name (a Quotation Request's names the supplier too).
   document.title = `${doc.code} ${PB_TITLES[spec.key]}${supplier?.name ? ` - ${supplier.name}` : ''}`;
@@ -9582,10 +9611,27 @@ function handlePreviewKeys(event) {
   }
 }
 
+// GRN: Hide Prices (Inspection Mode) / Show Prices (Commercial Mode).
+function syncPriceToggle() {
+  const button = byId('pv-prices');
+  const grn = previewDoc?.spec.key === 'grn';
+  button.hidden = !grn;
+  if (!grn) return;
+  const hidden = Boolean(previewDoc.hidePrices);
+  button.classList.toggle('is-on', hidden);
+  button.setAttribute('aria-pressed', String(hidden));
+  button.querySelector('span').textContent = hidden ? 'Show Prices (Commercial Mode)' : 'Hide Prices (Inspection Mode)';
+}
+
 function initPurchasePreview() {
   const dialog = byId('pb-preview');
   dialog.addEventListener('click', event => {
     const action = event.target.closest('[data-pv]')?.dataset.pv;
+    if (action === 'prices' && previewDoc) {
+      previewDoc.hidePrices = !previewDoc.hidePrices;
+      syncPriceToggle();
+      showPreviewSheet();
+    }
     if (action === 'print') printPreviewDocument();
     if (action === 'back') dialog.close();
   });

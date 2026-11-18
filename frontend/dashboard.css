@@ -1794,6 +1794,16 @@ dialog.pv::backdrop { background: #eef2f6; }
 .pv-print:focus-visible, .pv-back:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
 .pv-supplier { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 16px; border: 1px solid #3f3f46; border-radius: 999px; background: #18181b; }
 .pv-supplier[hidden] { display: none; }
+/* GRN: Hide / Show Prices. */
+.pv-prices {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border: 0; border-radius: 999px;
+  background: #4f46e5; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.pv-prices:hover { background: #4338ca; }
+.pv-prices.is-on { background: #059669; }
+.pv-prices.is-on:hover { background: #047857; }
+.pv-prices:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+.pv-prices[hidden] { display: none; }
 .pv-supplier-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a1a1aa; }
 .pv-supplier select {
   max-width: 260px; height: 34px; padding: 0 28px 0 12px; border: 0; border-radius: 999px; cursor: pointer;
@@ -2298,3 +2308,24 @@ input::-webkit-contacts-auto-fill-button {
 .ps-po .ps-total-grand { margin-top: 2px; padding-top: 8px !important; border-top: 0; }
 .ps-po .ps-total-grand dt { font-size: 11px; font-weight: 800; text-transform: none; color: #0f172a; }
 .ps-po .ps-total-grand dd { font-size: 14px; font-weight: 800; }
+
+/* ---------- Goods Received Note PDF (.ps-grn), as view_grn_pdf ----------
+   # · Description of Goods (wraps; MAKE under it) · Qty (accepted; stock transfers under it) · Unit · Rate · VAT % · Amount.
+   The PO Ref in blue; a discount in red; Inspection Mode (no prices) ends on the number of items. */
+.ps-table-grn th:first-child, .ps-table-grn td:first-child { width: 32px; text-align: center; }
+.ps-table-grn td.ps-c-name { font-family: inherit; font-size: 10.5px; font-weight: 800; text-transform: uppercase; white-space: normal; overflow-wrap: anywhere; color: #0f172a; }
+.ps-table-grn th.ps-c-qty, .ps-table-grn td.ps-c-qty { width: 70px; text-align: center; }
+.ps-table-grn td.ps-c-qty { font-family: var(--ps-mono); font-weight: 800; white-space: nowrap; vertical-align: top; }
+.ps-table-grn th.ps-c-center, .ps-table-grn td.ps-c-center { width: 56px; }
+.ps-table-grn td.ps-c-center { font-family: inherit; font-size: 10px; text-transform: uppercase; }
+.ps-table-grn td.ps-c-total { font-weight: 800; }
+.ps-transfers { display: inline-block; margin-top: 4px; padding-top: 3px; border-top: 1px solid #cbd5e1; text-align: left; }
+.ps-transfer {
+  display: flex; align-items: center; gap: 4px; margin-top: 2px; font-family: var(--ps-mono); font-size: 8.5px; font-weight: 800;
+  line-height: 1; letter-spacing: -.2px; color: #0f172a;
+}
+.ps-transfer::before { content: ''; flex: none; width: 2.5px; height: 10px; border-radius: 1px; background: #0284c7; }
+.ps-grn .ps-meta-item.is-ref dd { font-family: var(--ps-mono); color: #0284c7; text-transform: none; }
+.ps-grn .ps-total-discount dt, .ps-grn .ps-total-discount dd { color: #be123c; }
+.ps-grn .ps-totals-count .ps-total-grand { padding-top: 6px !important; }
+.ps-grn .ps-totals-count dt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
