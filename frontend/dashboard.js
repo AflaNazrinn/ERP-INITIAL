@@ -2406,6 +2406,11 @@ function initSuggestFields() {
       settleSuggest(field);
     }, 0);
   });
+  // A field marked data-select-on-focus (the Purchase Order's Unit) selects its text on arrival: typing replaces it.
+  document.addEventListener('focusin', event => {
+    const field = event.target;
+    if (isSuggestField(field) && field.dataset.selectOnFocus !== undefined && field.value) setTimeout(() => { if (document.activeElement === field) field.select(); }, 0);
+  });
   // On the document, so lists in table rows added later work too.
   document.addEventListener('mousedown', event => {
     if (event.target.closest?.('.fp-suggest')) event.preventDefault();   // keep focus (and typing) in the field
@@ -7095,6 +7100,15 @@ function composePurchaseTemplates() {
     const unitSlot = row.querySelector('[data-unit-cell]');
     if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
     else row.append(...cells('pb-cell-unit'), ...cells('pb-cell-remove'));
+    if (id === 'pb-line-po') {
+      // Purchase Order Unit: type to search, not a dropdown. The list shows only once a letter is typed ("k" → KG,
+      // "p" → PCS, PACKET, PAIRS); no arrow; arriving selects the unit, so typing replaces it.
+      const unit = row.querySelector('[data-field="unit"]');
+      unit.dataset.suggestTyped = '';
+      unit.dataset.selectOnFocus = '';
+      unit.placeholder = 'Type unit';
+      row.querySelector('.pb-unit-chevron')?.remove();
+    }
   }
 }
 
@@ -8899,6 +8913,33 @@ async function loadLetterhead() {
   return { src, ...bands };
 }
 
+/* A Purchase Order of a company without an uploaded letterhead: the "Blue bars" design (letterheads.js, the one the
+   Create a Company page generates) drawn from the company's details: logo or name on the left, e-mail and phone,
+   CR / address / VAT on the right, the bars under the header and the footer with the website. Blank details are
+   left out (a company without a profile shows its name only). */
+let drawnLetterheadPromise = null;
+function drawnLetterhead(fallbackName) {
+  drawnLetterheadPromise ||= (async () => {
+    if (typeof LETTERHEADS === 'undefined' || !LETTERHEADS.length) return null;
+    const p = (await companyProfile()) || {};
+    const logo = p.files?.logo ? await loadPrintImage('api/company-profile.php?file=logo').catch(() => null) : null;
+    try { await document.fonts?.ready; } catch { /* the default font then */ }
+    const s = value => String(value ?? '').trim();
+    const data = {
+      name: s(p.companyName) || s(fallbackName), businessType: s(p.businessType) === 'Others' ? '' : s(p.businessType), logo,
+      email: s(p.email), phone: s(p.phone), website: s(p.website), cr: s(p.crNumber), vat: s(p.vatRegNumber),
+      building: s(p.building), street: s(p.street), area: s(p.area), city: s(p.city), country: s(p.country),
+      poBox: s(p.poBox), postalCode: s(p.postalCode), colors: lhPalette(logo),
+    };
+    const canvas = Object.assign(document.createElement('canvas'), { width: LETTERHEAD_WIDTH, height: LETTERHEAD_HEIGHT });
+    const ctx = canvas.getContext('2d');
+    try { LETTERHEADS[0].draw(ctx, data); } catch { ctx.clearRect(0, 0, canvas.width, canvas.height); LETTERHEADS[0].draw(ctx, { ...data, logo: null }); }
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    return blob ? { src: URL.createObjectURL(blob), ...letterheadBands(canvas, canvas.width, canvas.height) } : null;
+  })().catch(error => { console.warn('Drawn letterhead not used:', error); return null; });
+  return drawnLetterheadPromise;
+}
+
 function loadPrintImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -8989,8 +9030,11 @@ function companyProfile() {
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
-  const [profile, letterhead, supplier] = await Promise.all([companyProfile(), companyLetterhead(),
+  const [profile, uploadedLetterhead, supplier] = await Promise.all([companyProfile(), companyLetterhead(),
     spec.key === 'po' && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
+  // A Purchase Order always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
+  const letterhead = uploadedLetterhead
+    || (spec.key === 'po' ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
   const title = PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
   const cell = (tag, className, value) => el(tag, className, text(value));
