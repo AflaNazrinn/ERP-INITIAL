@@ -8551,7 +8551,7 @@ const grnForm = createPurchaseForm({
   }),
   check(form, errors) {
     if (!byId('grn-supplier-id').value) errors.push({ node: byId('grn-supplier'), message: 'Select the supplier.' });
-    if (!byId('grn-warehouse-id').value) errors.push({ node: byId('grn-warehouse'), message: 'Select the warehouse the goods are received into.' });
+    if (!byId('grn-warehouse-id').value) errors.push({ node: byId('grn-warehouse'), message: 'Select the stock point the goods are received into.' });
   },
   onReset() {
     byId('grn-date').value = todayInputValue();
@@ -8560,7 +8560,7 @@ const grnForm = createPurchaseForm({
   listRoute: 'purchase-book/grn',
   fill(form, grn) {
     byId('grn-date').value = grn.grnDate;
-    // Supplier and Warehouse are "Select …" popups: show the saved record and keep its id.
+    // Supplier and Stock Point are "Select …" popups: show the saved record and keep its id.
     fillLookup(byId('grn-supplier'), grn.supplierId ? { id: grn.supplierId, name: grn.supplierName } : null);
     fillLookup(byId('grn-warehouse'), grn.warehouseId ? { id: grn.warehouseId, code: grn.warehouseCode, name: grn.warehouseName } : null);
     byId('grn-po').value = grn.poNumber;
@@ -9059,13 +9059,13 @@ const grnList = purchaseList({
     { key: 'name', label: 'Supplier', type: 'name', group: 'Document' },
     { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Quantities' },
     { key: 'acceptedQty', label: 'Accepted Qty', type: 'qty-ok', group: 'Quantities' },
-    detail({ key: 'warehouseName', label: 'Warehouse', group: 'Document' }),
+    detail({ key: 'warehouseName', label: 'Stock Point', group: 'Document' }),
     detail({ key: 'grandTotal', label: 'Grand Total', type: 'mono', group: 'Quantities' }),
   ],
   fromApi: r => ({ ...r, date: r.grnDate, grandTotal: pbAmount(r.grandTotal) }),
   importColumns: [{ key: 'grnDate', label: 'GRN Date', headers: ['date', 'receipt date'], read: readSheetDate('GRN date') },
     { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor'] },
-    { key: 'warehouse', label: 'Warehouse', headers: ['stock point', 'store'] },
+    { key: 'warehouse', label: 'Stock Point', headers: ['stock point', 'warehouse', 'store'] },
     { key: 'poNumber', label: 'PO Number', headers: ['po', 'po no', 'reference'] },
     { key: 'vatMode', label: 'VAT', headers: ['vat mode', 'costs'], read: readVatMode },
     ...PB_IMPORT_ITEM,
@@ -9291,7 +9291,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
           ['Delivery To', doc.deliveryLocation, 'full']],
       };
     },
-    // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Warehouse.
+    // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Stock Point.
     grn: () => ({
       buyerLabel: 'Buyer / Receiver',
       party: { label: 'Supplier / Vendor', name: doc.supplierName,
@@ -9299,7 +9299,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
           ['Contact Number', supplier?.phone || supplier?.telephone]] },
       cols: 4,
       meta: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['PO Ref', doc.poNumber || doc.purchaseOrderCode],
-        ['Warehouse', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')]],
+        ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')]],
     }),
   }[spec.key]();
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is

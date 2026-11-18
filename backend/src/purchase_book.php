@@ -876,7 +876,7 @@ function grn_save(array $data, ?int $id = null): array
     $v = [
         'grn_date' => $in->date('grnDate', 'GRN date') ?? date('Y-m-d'),
         'supplier_id' => $in->id('supplierId', 'supplier', 'suppliers'),
-        'warehouse_id' => $in->id('warehouseId', 'warehouse', 'warehouses'),
+        'warehouse_id' => $in->id('warehouseId', 'stock point', 'warehouses'),
         'purchase_order_id' => $in->id('purchaseOrderId', 'purchase order', 'purchase_orders'),
         'po_number' => $in->text('poNumber', 'PO number', 60),
         'vat_mode' => $vatMode,
@@ -888,7 +888,7 @@ function grn_save(array $data, ?int $id = null): array
         $in->fail('supplierId', 'Select the supplier.');
     }
     if ($v['warehouse_id'] === null) {
-        $in->fail('warehouseId', 'Select the warehouse the goods are received into.');
+        $in->fail('warehouseId', 'Select the stock point the goods are received into.');
     }
     $discount = (float) ($in->decimal('discountAmount', 'Discount amount', 14, 3) ?? '0');
     $shipping = (float) ($in->decimal('shipping', 'Shipping price', 14, 3) ?? '0');
