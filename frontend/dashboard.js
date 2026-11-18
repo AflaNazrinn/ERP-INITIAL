@@ -7106,7 +7106,7 @@ function composePurchaseTemplates() {
       const unit = row.querySelector('[data-field="unit"]');
       unit.dataset.suggestTyped = '';
       unit.dataset.selectOnFocus = '';
-      unit.placeholder = 'Type unit';
+      unit.placeholder = 'Unit';
       row.querySelector('.pb-unit-chevron')?.remove();
     }
   }
