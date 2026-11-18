@@ -203,6 +203,7 @@ function pb_read_lines(Input $in, string $kind): array
             'itemId' => $itemId, 'itemCode' => $r->text('itemCode', 'Item code', 30), 'itemName' => $name,
             'brandId' => $r->id('brandId', 'brand', 'brands'), 'brandName' => $r->text('brandName', 'Brand', 150),
             'uomId' => $r->id('uomId', 'unit', 'uoms'), 'unit' => $r->text('unit', 'Unit', 80),
+            'itemNameHtml' => $r->text('itemNameHtml', 'Formatted item name', 4000),
         ];
         if ($kind === 'grn') {
             $line += [
@@ -233,7 +234,6 @@ function pb_read_lines(Input $in, string $kind): array
                 'discountPct' => $r->decimal('discountPct', 'Disc %', 5, 2, false, '100') ?? '0',
                 'discountAmount' => $r->decimal('discountAmount', 'Disc. amount', 14, 3),
                 'foc' => !empty($raw['foc']) && $raw['foc'] !== 'No' && $raw['foc'] !== 'false',
-                'itemNameHtml' => $r->text('itemNameHtml', 'Formatted item name', 4000),
             ];
         }
         if ($itemId !== null) {
@@ -252,9 +252,8 @@ function pb_read_lines(Input $in, string $kind): array
         if ($line['uomId'] !== null) {
             $line['unit'] = (string) query('SELECT uom_name FROM uoms WHERE id = ?', [$line['uomId']])->fetchColumn();
         }
-        if ($kind === 'po') {
-            $line['itemNameHtml'] = pb_item_name_html($line['itemNameHtml'], $line['itemName']);
-        }
+        // The line's formatting (Full Item Description), kept only while its text is the line's item name.
+        $line['itemNameHtml'] = pb_item_name_html($line['itemNameHtml'], $line['itemName']);
         try {
             $r->done();
         } catch (ValidationError $e) {
@@ -311,7 +310,7 @@ function pb_totals(array $lines, string $kind, string $vatMode, float $discount,
 
 /* Replaces a document's lines inside the caller's transaction. */
 /*
- * A Purchase Order line's formatted item name (the Full Item Description's editing mode): cleaned as the remarks,
+ * A document line's formatted item name (the Full Item Description's editing mode; every Purchase Book document): cleaned as the remarks,
  * then only <b>, <strong> and coloured <span>s are kept (no lines or lists). Kept only when its text is the line's
  * item name (spaces and case aside); otherwise, or without any formatting, null.
  */
@@ -338,7 +337,8 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
     query("DELETE FROM `$table` WHERE `$owner` = ?", [$docId]);
     foreach ($lines as $order => $l) {
         $columns = ['sort_order' => $order + 1, 'item_id' => $l['itemId'], 'item_code' => $l['itemCode'], 'item_name' => $l['itemName'],
-            'brand_id' => $l['brandId'], 'brand_name' => $l['brandName'], 'uom_id' => $l['uomId'], 'unit' => $l['unit']];
+            'brand_id' => $l['brandId'], 'brand_name' => $l['brandName'], 'uom_id' => $l['uomId'], 'unit' => $l['unit'],
+            'item_name_html' => $l['itemNameHtml'] ?? null];
         if ($kind === 'grn') {
             $columns += ['received_qty' => $l['receivedQty'], 'accepted_qty' => $l['acceptedQty'], 'rejected_qty' => $l['rejectedQty'],
                 'expiry_date' => $l['expiryDate'], 'rack_id' => $l['rackId'], 'unit_cost' => $l['unitCost'], 'vat_rate' => $l['vatRate'],
@@ -348,8 +348,7 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
         }
         if ($kind === 'po') {
             $columns += ['price' => $l['price'], 'vat_rate' => $l['vatRate'], 'discount_pct' => $l['discountPct'],
-                'discount_amount' => $l['discountAmount'], 'foc' => $l['foc'] ? 1 : 0, 'line_total' => $l['lineTotal'],
-                'item_name_html' => $l['itemNameHtml'] ?? null];
+                'discount_amount' => $l['discountAmount'], 'foc' => $l['foc'] ? 1 : 0, 'line_total' => $l['lineTotal']];
         }
         $names = implode(', ', array_map(static fn ($c) => "`$c`", array_keys($columns)));
         $marks = implode(', ', array_fill(0, count($columns), '?'));
@@ -365,6 +364,8 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
     return array_map(static function (array $l) use ($kind): array {
         $line = [
             'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'],
+            // The line's formatting only while its text is still the line's name (a renamed item drops it).
+            'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), (string) $l['item_name']) ?? '',
             'brandId' => $l['brand_id'] === null ? null : (int) $l['brand_id'], 'brandName' => $l['brand_name'],
             'uomId' => $l['uom_id'] === null ? null : (int) $l['uom_id'], 'unit' => $l['unit'],
         ];
@@ -376,9 +377,7 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
         $line['quantity'] = $l['quantity'];
         if ($kind === 'po') {
             $line += ['price' => $l['price'], 'vatRate' => $l['vat_rate'], 'discountPct' => $l['discount_pct'],
-                'discountAmount' => $l['discount_amount'], 'foc' => (bool) $l['foc'], 'lineTotal' => $l['line_total'],
-                // The formatting only while its text is still the line's name (a renamed item drops it).
-                'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), (string) $l['item_name']) ?? ''];
+                'discountAmount' => $l['discount_amount'], 'foc' => (bool) $l['foc'], 'lineTotal' => $l['line_total']];
         }
         return $line;
     }, query($sql, [$docId])->fetchAll());

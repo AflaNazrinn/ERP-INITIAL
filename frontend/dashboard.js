@@ -2011,8 +2011,8 @@ function handleLookupFieldKeys(event) {
   const { key } = event;
   const chips = lookupChipFields.get(field);
   const open = query => { event.preventDefault(); if (!event.repeat) openLookup(field, { query, byKeyboard: true }); return true; };
-  // A Purchase Order line's filled Item Name opens only the Full Item Description (the Item Code changes the item).
-  if (isPoItemNameField(field)) {
+  // A Purchase Book line's filled Item Name opens only the Full Item Description (the Item Code changes the item).
+  if (isItemDescField(field)) {
     const opens = key === 'F4' || (event.altKey && key === 'ArrowDown') || ((key === 'Enter' || key === ' ') && !event.shiftKey)
       || (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.shiftKey && key.toLowerCase() === 'x'));
     if (opens) {
@@ -2199,7 +2199,7 @@ function initLookups() {
   document.addEventListener('click', event => {
     const field = event.target;
     if (!isLookupField(field)) return;
-    if (isPoItemNameField(field)) openItemDescription(field);   // a Purchase Order line's filled Item Name: its own popup
+    if (isItemDescField(field)) openItemDescription(field);   // a Purchase Book line's filled Item Name: its own popup
     else openLookup(field);
   });
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeLookup(); });
@@ -7088,13 +7088,15 @@ function composePurchaseTemplates() {
   for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
+    const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
+    const nameCell = row.querySelector('[data-field="itemName"]').closest('td');
+    const nameHtml = hidden(); nameHtml.dataset.field = 'itemNameHtml';     // the Full Item Description's formatting (every line)
+    nameCell.append(nameHtml);
     if (id === 'pb-line-po') {
       const brandCell = row.querySelector('[data-brand-cell]');
-      const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
-      const nameHtml = hidden(); nameHtml.dataset.field = 'itemNameHtml';   // the Full Item Description's formatting
-      row.querySelector('[data-field="itemName"]').closest('td').append(brandId, brandName, nameHtml);
+      nameCell.append(brandId, brandName);
       brandCell.remove();
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
@@ -7232,21 +7234,18 @@ async function applyPurchaseItem(form, row, itemId) {
 }
 
 /* ---------- Full Item Description popup (#item-desc; design/masters/item_description.png) ----------
-   Enter or Space on a line's Item Name that already holds an item (you arrive there by arrow, Tab or click:
-   Enter skips filled names) shows the item instead of the Select Item list. Typing, F4 or Alt+↓ there
-   still opens Select Item to change the item.
-
-   A Purchase Order line (.idp-po) has two pages of one fixed size:
+   Every Purchase Book line (Purchase Request, Quotation Request, Purchase Order, GRN): a click, Enter, Space, F4,
+   Alt+↓ or typing on an Item Name that holds an item opens this popup, never Select Item (the Item Code changes the
+   item; an empty Item Name still opens Select Item). It has two pages of one fixed size:
    - View: the name with its formatting, Unit and Unit Price; Copy Name, Edit Name, Close (Enter).
    - Editing mode (Edit / Edit Name): Bold, Bold All, Red, Blue, Black and Plain over the name, and the line's Unit
      editable. Save & Apply (Ctrl+Enter, or Enter) renames the item in the Item master when the text changed, keeps
-     the formatting on this line (printed on the PDF) and sets the line's unit. Cancel (Esc) leaves all as it was.
-   Other Purchase Book lines keep the plain popup: Edit renames the item in the Item master.
+     the formatting on this document's line (printed on its PDF) and sets the line's unit. Cancel (Esc) leaves all as it was.
 
    Keys (itemDescMove): ←/→ along a row of buttons, ↑/↓ between the rows (close ✕ · Edit · name · Unit · buttons);
    in the name or Unit box ←/→ move the caret, and ↑/↓ leave it at its start / end. Enter presses the focused
    button, else Close / Save; Esc cancels editing, then closes; Ctrl+C copies the name; Ctrl+B bolds. */
-const itemDesc = { field: null, row: null, form: null, itemId: '', item: null, editing: false, saving: false, rich: false, range: null };
+const itemDesc = { field: null, row: null, form: null, itemId: '', item: null, editing: false, saving: false, range: null };
 const idpEl = suffix => byId(`item-desc-${suffix}`);
 const idpText = text => String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
 
@@ -7254,11 +7253,7 @@ const idpText = text => String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCa
 const isItemDescField = field => field.dataset.field === 'itemName' && field.dataset.lookup === 'item'
   && Boolean(lookupCreateForm(field)) && Boolean(lookupIdInput(field)?.value);
 
-// A Purchase Order line's Item Name holding an item: click, Enter, Space, F4 or typing open the Full Item
-// Description, never Select Item (an empty Item Name still opens Select Item to pick one).
-const isPoItemNameField = field => isItemDescField(field) && lookupCreateForm(field)?.spec.kind === 'po';
-
-// The line's formatted name (Purchase Order), only while its text is still the item's name.
+// The line's formatted name, only while its text is still the item's name.
 function itemDescHtml(row, name) {
   const html = pbCell(row, 'itemNameHtml')?.value || '';
   if (!html) return '';
@@ -7269,11 +7264,10 @@ function itemDescHtml(row, name) {
 
 const itemDescName = () => itemDesc.item?.name ?? itemDesc.field.value;
 
-// The name in the view: the plain box, or (Purchase Order) the box showing the line's formatting.
+// The name in the view, with the line's formatting (the hidden plain box keeps the text for Copy's fallback).
 function showItemDescName() {
   const name = itemDescName();
   idpEl('name').value = name;
-  if (!itemDesc.rich) return;
   const html = itemDescHtml(itemDesc.row, name);
   idpEl('view').replaceChildren(html ? remarksFragment(html) : document.createTextNode(name));
 }
@@ -7284,14 +7278,8 @@ function openItemDescription(field) {
   const row = field.closest('.fp-row');
   const itemId = lookupIdInput(field).value;
   const form = lookupCreateForm(field);
-  const rich = form?.spec.kind === 'po' && Boolean(pbCell(row, 'itemNameHtml'));
   const lineNo = [...row.parentElement.rows].filter(other => other.matches('.fp-row')).indexOf(row) + 1;
-  Object.assign(itemDesc, { field, row, form, itemId, item: null, editing: false, saving: false, rich, range: null });
-  dialog.classList.toggle('idp-po', rich);
-  idpEl('name').hidden = rich;
-  idpEl('view').hidden = !rich;
-  const editTitle = rich ? 'Edit the name, its formatting and the unit of this line' : 'Rename the item in the Item master';
-  for (const button of dialog.querySelectorAll('[data-idp="edit-name"]')) button.title = editTitle;
+  Object.assign(itemDesc, { field, row, form, itemId, item: null, editing: false, saving: false, range: null });
   idpEl('sub').textContent = `Line Item #${lineNo}`;
   showItemDescCode(pbCell(row, 'itemCode').value || '—');
   idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
@@ -7311,7 +7299,7 @@ function openItemDescription(field) {
   }).catch(() => {});
 }
 
-// The item code: in the card's head, and (Purchase Order) at the right of the Complete Item Name row.
+// The item code, at the right of the Complete Item Name row (the card's head is hidden).
 function showItemDescCode(code) {
   idpEl('code').textContent = `Code: ${code}`;
   idpEl('code-inline').textContent = `Code: ${code}`;
@@ -7325,39 +7313,23 @@ function showItemDescPrice(item) {
   else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
 }
 
-// View ↔ editing mode. Plain popup: the name box turns editable and Close turns into Save.
-// Purchase Order: the toolbar, the editor, the tip and the Unit box show; Copy / Edit Name give way to Cancel.
+// View ↔ editing mode: the toolbar, the editor, the tip and the Unit box show; Copy / Edit Name give way to Cancel.
 function setItemDescEditing(editing) {
   itemDesc.editing = editing;
-  const { rich } = itemDesc;
-  idpEl('primary-label').textContent = itemDesc.saving ? 'Saving…' : editing ? (rich ? 'Save & Apply' : 'Save') : 'Close';
-  idpEl('primary-key').textContent = editing && rich ? 'Ctrl+Enter' : 'Enter';
+  idpEl('primary-label').textContent = itemDesc.saving ? 'Saving…' : editing ? 'Save & Apply' : 'Close';
+  idpEl('primary-key').textContent = editing ? 'Ctrl+Enter' : 'Enter';
   idpEl('primary').disabled = itemDesc.saving;
   idpEl('error').hidden = true;
   for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
-  byId('item-desc').classList.toggle('is-editing', editing && rich);
+  byId('item-desc').classList.toggle('is-editing', editing);
   const show = (suffix, on) => { idpEl(suffix).hidden = !on; };
-  show('mode', editing && rich);
-  show('editor', editing && rich);
-  show('tip', editing && rich);
-  show('unit-hint', editing && rich);
-  show('unit-input', editing && rich);
-  show('unit', !(editing && rich));
-  show('edit', !(editing && rich));
-  show('copy', !(editing && rich));
-  show('edit-name', !(editing && rich));
-  show('cancel', editing && rich);
-  if (rich) show('view', !editing);
-  idpEl('unit-label').textContent = editing && rich ? 'Unit (editable)' : 'Unit';
-  if (!rich) {
-    idpEl('name').readOnly = !editing;
-    if (editing) focusField(idpEl('name'));
-  }
+  for (const suffix of ['mode', 'editor', 'tip', 'unit-hint', 'unit-input', 'cancel']) show(suffix, editing);
+  for (const suffix of ['view', 'unit', 'edit', 'copy', 'edit-name']) show(suffix, !editing);
+  idpEl('unit-label').textContent = editing ? 'Unit (editable)' : 'Unit';
 }
 
-// Edit / Edit Name. Purchase Order: the editor starts with the line's name and formatting, the Unit box with its unit.
+// Edit / Edit Name: the editor starts with the line's name and formatting, the Unit box with its unit.
 function startItemDescEdit() {
-  if (!itemDesc.rich) { setItemDescEditing(true); return; }
   const name = itemDescName();
   const html = itemDescHtml(itemDesc.row, name);
   const editor = idpEl('rich');
@@ -7386,13 +7358,8 @@ function updateItemDescCount() {
 }
 
 function cancelItemDescEdit() {
-  if (itemDesc.rich) {
-    setItemDescEditing(false);
-    showItemDescName();
-  } else {
-    idpEl('name').value = itemDescName();
-    setItemDescEditing(false);
-  }
+  setItemDescEditing(false);
+  showItemDescName();
   idpEl('primary').focus();
 }
 
@@ -7413,7 +7380,7 @@ async function copyItemDescName() {
     input.hidden = false;
     input.select();
     const copied = document.execCommand('copy');
-    input.hidden = itemDesc.rich;
+    input.hidden = true;
     if (!copied) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
   }
   showToast('Item name copied', name);
@@ -7427,42 +7394,15 @@ async function renameItemInMaster(itemId, name) {
   for (const form of PURCHASE_FORMS) {
     if (!form.page) continue;
     let changed = false;
-    for (const row of form.page.rowsOf('items')) {
-      if (pbCell(row, 'itemId').value !== itemId) continue;
-      pbCell(row, 'itemName').value = saved.name;
-      pbCell(row, 'itemCode').value = saved.code;
+    for (const line of form.page.rowsOf('items')) {
+      if (pbCell(line, 'itemId').value !== itemId) continue;
+      pbCell(line, 'itemName').value = saved.name;
+      pbCell(line, 'itemCode').value = saved.code;
       changed = true;
     }
     if (changed) form.page.absorb();      // the master changed, not the document: nothing to undo
   }
   return saved;
-}
-
-// Plain popup: saves the new name to the Item master.
-async function saveItemDescName() {
-  const { itemId } = itemDesc;
-  if (!itemDesc.editing || itemDesc.saving) return;
-  const name = idpEl('name').value.trim();
-  if (name === '') { showItemDescError('Enter the item name.'); return; }
-  if (name === itemDescName()) { setItemDescEditing(false); idpEl('primary').focus(); return; }
-  itemDesc.saving = true;
-  setItemDescEditing(true);
-  let saved;
-  try {
-    saved = await renameItemInMaster(itemId, name);
-  } catch (error) {
-    itemDesc.saving = false;
-    setItemDescEditing(true);
-    showItemDescError(Object.values(error.fields || {})[0] || error.message);
-    return;
-  }
-  itemDesc.saving = false;
-  if (!byId('item-desc').open || itemDesc.itemId !== itemId) return;
-  itemDesc.item = saved;
-  idpEl('name').value = saved.name;
-  setItemDescEditing(false);
-  idpEl('primary').focus();
-  showToast('Item renamed', `${saved.code} · ${saved.name} (Item master)`);
 }
 
 // The editor's name, cleaned as the remarks and kept on one line: { text, html } (html '' without formatting).
@@ -7491,7 +7431,7 @@ async function itemDescUnit() {
   return close.length === 1 ? close[0] : false;
 }
 
-// Purchase Order: Save & Apply.
+// Save & Apply: the formatting (and unit) on this document's line; a changed text renames the item in the Item master.
 async function saveItemDescRich() {
   if (!itemDesc.editing || itemDesc.saving) return;
   const { row, form, itemId } = itemDesc;
@@ -7532,8 +7472,8 @@ async function saveItemDescRich() {
   showToast('Line item updated', `${itemDescName()}${changes.length ? ` · ${changes.join(', ')}` : ''}`);
 }
 
-// A Purchase Order line's item name for the View popup: bold, with the line's formatting when it has some.
-function poItemNameCell(line) {
+// A line's item name for the View popup: bold, with the line's formatting when it has some.
+function lineItemNameCell(line) {
   const name = el('strong', '', line.itemNameHtml ? '' : line.itemName || '—');
   if (line.itemNameHtml) name.append(remarksFragment(line.itemNameHtml));
   return name;
@@ -7581,7 +7521,7 @@ function itemDescAction(action, button) {
   if (itemDesc.saving) return;
   if (action === 'close') closeItemDescription();
   else if (action === 'copy') copyItemDescName();
-  else if (action === 'primary') { if (!itemDesc.editing) closeItemDescription(); else if (itemDesc.rich) saveItemDescRich(); else saveItemDescName(); }
+  else if (action === 'primary') { if (!itemDesc.editing) closeItemDescription(); else saveItemDescRich(); }
   else if (action === 'cancel-edit') cancelItemDescEdit();
   else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else startItemDescEdit(); }
   else if (action === 'tool') itemDescTool(button.dataset.idpTool, button.dataset.colour);
@@ -7595,13 +7535,11 @@ function itemDescRows() {
     [dialog.querySelector('.lk-close')],
     [idpEl('edit')],
     [...dialog.querySelectorAll('.idp-tools .idp-tool')],
-    [itemDesc.rich ? idpEl('rich') : idpEl('name')],
+    [idpEl('rich')],
     [idpEl('unit-input')],
     [...dialog.querySelectorAll('.idp-foot button')],
   ];
-  return rows.map(row => row.filter(shown)).filter(row => row.length)
-    // The name box takes part only while it can be typed in.
-    .filter(row => !(row[0] === idpEl('name') && idpEl('name').readOnly));
+  return rows.map(row => row.filter(shown)).filter(row => row.length);
 }
 
 // Whether the caret in a text box / the editor is at its start or end (so ↑ / ↓ may leave it).
@@ -7655,7 +7593,7 @@ function itemDescMove(event) {
 function handleItemDescKeys(event) {
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
-  const typing = itemDesc.editing && (target === idpEl('name') || target === idpEl('rich') || target === idpEl('unit-input'));
+  const typing = itemDesc.editing && (target === idpEl('rich') || target === idpEl('unit-input'));
   if (key === 'Escape') {
     event.preventDefault();
     if (event.repeat) return;
@@ -7675,7 +7613,7 @@ function handleItemDescKeys(event) {
     return;
   }
   if (key === 'Enter') { event.preventDefault(); return; }   // no new lines in the name
-  if (ctrl && key.toLowerCase() === 'b' && itemDesc.rich && itemDesc.editing) {
+  if (ctrl && key.toLowerCase() === 'b' && itemDesc.editing) {
     event.preventDefault();
     if (!event.repeat) itemDescTool('bold');
     return;
@@ -7826,6 +7764,7 @@ function createPurchaseForm(spec) {
       const line = {
         itemId: value('itemId') || null, itemCode: value('itemCode'), itemName: value('itemName'),
         brandId: value('brandId') || null, brandName: value('brandName'), uomId: value('uomId') || null, unit: value('unit'),
+        itemNameHtml: value('itemNameHtml'),
       };
       const fail = (field, message) => errors.push({ node: pbCell(row, field), message: `Row ${index + 1}: ${message}` });
       if (spec.itemsFromMaster && !line.itemId) fail('itemName', 'pick an item from the Item master, or create one (Alt+N in the popup).');
@@ -7847,7 +7786,7 @@ function createPurchaseForm(spec) {
       if (spec.kind === 'po') {
         Object.assign(line, {
           price: value('price'), vatRate: value('vatRate'), discountPct: value('discountPct'),
-          discountAmount: value('discountAmount'), foc: value('foc') === 'Yes', itemNameHtml: value('itemNameHtml'),
+          discountAmount: value('discountAmount'), foc: value('foc') === 'Yes',
         });
       }
       for (const [field, ok] of Object.entries(line)) {
@@ -8221,8 +8160,6 @@ async function showSealName() {
   let seal = null;
   try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
   sealOnFile = Boolean(seal);
-  for (const label of document.querySelectorAll('[data-seal-name]')) label.textContent = seal ? '(seal on file)' : '(no seal yet)';
-  for (const button of document.querySelectorAll('[data-seal="remove"]')) button.disabled = !seal;
   // The seal under Attach Seal (shown while it is ticked), as the PDF prints it.
   const src = seal ? `api/company-seal.php?file=1&t=${Date.now()}` : '';
   for (const preview of document.querySelectorAll('[data-seal-preview]')) {
@@ -8232,42 +8169,19 @@ async function showSealName() {
   }
 }
 
+/* Attach Seal is a checkbox only: the seal itself is added on Create a Company. Ticked without a seal on file,
+   it says so (the PDF prints without one). */
 function initSealButtons() {
-  const picker = byId('pb-seal-file');
-  // Ticking Attach Seal without a seal on file asks for the seal image first.
   document.addEventListener('change', event => {
     if (event.target.matches?.('[data-print-field="attachSeal"]') && event.target.checked && !sealOnFile) {
-      showToast('Upload the company seal', 'Choose the seal image (PNG or JPG) to print on the PDF.');
-      picker.click();
+      showToast('No company seal on file', 'The seal is added on Create a Company; this PDF will print without one.', true);
     }
-  });
-  document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-seal]');
-    if (!button) return;
-    if (button.dataset.seal === 'replace') { picker.click(); return; }
-    try {
-      await apiRequest('api/company-seal.php', { method: 'DELETE' });
-      showToast('Seal removed', 'Purchase Book PDFs will print without a seal.');
-    } catch (error) { showToast('The seal could not be removed', error.message, true); }
-    showSealName();
-  });
-  picker.addEventListener('change', async () => {
-    const file = picker.files[0];
-    picker.value = '';
-    if (!file) return;
-    const body = new FormData();
-    body.append('seal', file);
-    try {
-      await apiRequest('api/company-seal.php', { method: 'POST', body });
-      showToast('Seal saved', `${file.name} will be printed when Attach Seal is ticked.`);
-    } catch (error) { showToast('The seal could not be saved', error.message, true); }
-    showSealName();
   });
 }
 
 const purchaseLineRow = line => ({
   itemId: line.itemId ?? '', itemCode: line.itemCode, itemName: line.itemName, brandId: line.brandId ?? '', brandName: line.brandName,
-  uomId: line.uomId ?? '', unit: line.unit,
+  uomId: line.uomId ?? '', unit: line.unit, itemNameHtml: line.itemNameHtml || '',
 });
 
 // A saved line as a row's cell values (edit mode), formatted as the form shows them.
@@ -8281,7 +8195,7 @@ function purchaseLineValues(kind, line) {
   values.quantity = pbQty(pbNum(line.quantity));
   if (kind === 'po') {
     Object.assign(values, { price: pbMoney(pbNum(line.price)), vatRate: pbNum(line.vatRate).toFixed(2), discountPct: pbNum(line.discountPct).toFixed(2),
-      discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No', itemNameHtml: line.itemNameHtml || '' });
+      discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No' });
   }
   return values;
 }
@@ -8616,7 +8530,7 @@ const pbAmount = value => (value === null || value === undefined || value === ''
 function purchaseItemsSection(kind) {
   return (record, note) => {
     if (!record) return { general: [], tabs: [{ label: 'Items', sections: [viewCard({ title: 'Items', wide: true }, viewNote(note))] }] };
-    const item = line => [line.itemCode, el('strong', '', line.itemName || '—'), line.brandName];
+    const item = line => [line.itemCode, lineItemNameCell(line), line.brandName];
     const mono = value => viewMono(value);
     const table = kind === 'grn'
       ? viewTable(['Code', 'Item', 'Brand', 'Received', 'Accepted', 'Rejected', 'Unit', 'Expiry', 'Rack', 'Unit Cost', 'VAT %', 'Disc %', 'Total'],
@@ -8624,7 +8538,7 @@ function purchaseItemsSection(kind) {
           pbDate(l.expiryDate), l.rackCode, mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.lineTotal))]), 'No items.')
       : kind === 'po'
         ? viewTable(['Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'Line Total'],
-          record.items.map(l => [l.itemCode, poItemNameCell(l), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
+          record.items.map(l => [l.itemCode, lineItemNameCell(l), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
             mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.discountAmount)), mono(pbAmount(l.lineTotal))]), 'No items.')
         : viewTable(['Code', 'Item', 'Brand', 'Quantity', 'Unit'],
           record.items.map(l => [...item(l), mono(pbQty(pbNum(l.quantity))), l.unit]), 'No items.');
@@ -9152,7 +9066,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
-    if (spec.kind === 'po' && line.itemNameHtml) tr.children[1].replaceChildren(remarksFragment(line.itemNameHtml));   // bold / colour
+    // The line's bold / colour on its Item Name cell (column 1 on a Purchase Order, which has no Item Code column).
+    if (line.itemNameHtml) tr.children[spec.kind === 'po' ? 1 : 2].replaceChildren(remarksFragment(line.itemNameHtml));
     tbody.append(tr);
   });
   table.append(thead, tbody);

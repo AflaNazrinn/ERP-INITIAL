@@ -831,7 +831,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 /* Item popups (LOOKUPS item / itemcode): a card per item instead of table columns. */
 .lk-cards .lk-table thead { display: none; }
 /* Item popups: title and "Choose an item from the catalog." with ✕; the search beside Create Item; Cancel below. */
-.lookup.lk-cards { width: min(880px, calc(100vw - 32px)); border-radius: 18px; }
+.lookup.lk-cards { border-radius: 18px; }
 .lk-cards .lk-head { padding: 22px 26px 18px; background: var(--surface-muted); }
 .lk-cards .lk-letter, .lk-cards .lk-keys, .lk-cards .lk-list-title, .lk-cards .lk-label, .lk-cards .lk-count { display: none; }
 .lk-cards .lk-sub { display: block; }
@@ -844,7 +844,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .lk-cards.lk-can-create .lk-create-inline { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 46px; padding: 0 20px; white-space: nowrap; }
 .lk-cards .lk-foot { margin: 0 26px; padding: 16px 0 20px; }
 .lk-cards .lk-foot .lk-create, .lk-cards #lookup-select { display: none; }
-.lk-cards .lk-table-wrap { max-height: 420px; scroll-padding-top: 0; }
+.lk-cards .lk-table-wrap { scroll-padding-top: 0; }
 .lk-cards .lk-table tbody tr[data-index] { background: var(--surface); }               /* white until navigated to */
 .lk-cards .lk-table tbody tr[data-index]:hover { background: #f3fbf6; }
 .lk-cards.lk-navigated .lk-table tbody tr.is-active { background: #dcf5e6; }           /* the item ↑/↓ is on: light green */
@@ -867,6 +867,11 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .lk-stock-wide { padding: 4px 10px; font-size: 12.5px; }
 .lk-cards .lk-table tr.is-active td.lk-item { box-shadow: inset 4px 0 0 var(--accent-hover); }
 .lk-cards .lk-table tr.is-active .lk-item-name { font-weight: 600; }
+/* Every "Select …" popup (#lookup: items, UOM, stock point, supplier …) is the same size in every module,
+   however many rows it lists: the list scrolls inside. */
+#lookup { width: min(680px, calc(100vw - 32px)); height: min(680px, calc(100vh - 48px)); }
+#lookup .lk-card { min-height: 0; }
+#lookup .lk-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
 .lk-foot { flex: none; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line); }
 .lk-foot .fp-btn { white-space: nowrap; }
 .lk-foot .lk-create { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }   /* left, away from Cancel / Select */
@@ -2065,25 +2070,22 @@ input::-webkit-contacts-auto-fill-button {
 /* Keyboard focus on the item popups' + Create Item (→ from the search box), as + Create Supplier. */
 .lk-create-inline:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
 
-/* ---------- Full Item Description on a Purchase Order line (.idp.idp-po) ----------
+/* ---------- Full Item Description on a Purchase Book line (.idp.idp-line: every module) ----------
    Two fixed sizes: the view 600 × 315, editing mode 600 × 464 (a smaller window: it shrinks and the body scrolls).
    No separate "Item Name" bar and no key hints in the title bar: the code sits at the right of Complete Item Name. */
-.idp.idp-po { width: min(600px, calc(100vw - 32px)); height: min(315px, calc(100vh - 32px)); }
-.idp.idp-po.is-editing { height: min(464px, calc(100vh - 32px)); }
-.idp.idp-po .idp-keys, .idp.idp-po .idp-card-head { display: none; }
-.idp.idp-po .idp-head { padding: 12px 14px; }
-.idp.idp-po .idp-body { display: flex; flex-direction: column; padding: 12px 14px; }
-.idp.idp-po .idp-card { flex: 1 1 auto; display: flex; flex-direction: column; }
-.idp.idp-po .idp-card-body { flex: 1 1 auto; display: flex; flex-direction: column; padding: 12px 12px 12px; }
-.idp.idp-po .idp-label-row { margin-bottom: 8px; }
-.idp.idp-po .idp-facts { margin-top: 10px; }
-.idp.idp-po .idp-foot { padding: 10px 14px; }
-.idp.idp-po .idp-editor { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.idp.idp-po .idp-rich { flex: 1 1 auto; max-height: none; }
+.idp.idp-line { width: min(600px, calc(100vw - 32px)); height: min(315px, calc(100vh - 32px)); }
+.idp.idp-line.is-editing { height: min(464px, calc(100vh - 32px)); }
+.idp.idp-line .idp-keys, .idp.idp-line .idp-card-head { display: none; }
+.idp.idp-line .idp-head { padding: 12px 14px; }
+.idp.idp-line .idp-body { display: flex; flex-direction: column; padding: 12px 14px; }
+.idp.idp-line .idp-card { flex: 1 1 auto; display: flex; flex-direction: column; }
+.idp.idp-line .idp-card-body { flex: 1 1 auto; display: flex; flex-direction: column; padding: 12px 12px 12px; }
+.idp.idp-line .idp-label-row { margin-bottom: 8px; }
+.idp.idp-line .idp-facts { margin-top: 10px; }
+.idp.idp-line .idp-foot { padding: 10px 14px; }
+.idp.idp-line .idp-editor { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.idp.idp-line .idp-rich { flex: 1 1 auto; max-height: none; }
 .idp-code-inline { margin-left: auto; }
-.idp:not(.idp-po) .idp-code-inline { display: none; }
-/* Other Purchase Book lines: the label on the left, Edit on the right, as before. */
-.idp:not(.idp-po) .idp-label-group { flex: 1; justify-content: space-between; }
 .idp-label-group { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .idp-mode {
   display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 5px;

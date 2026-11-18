@@ -39,7 +39,14 @@ body {
   background-size: 40px 40px;
 }
 
-.login { min-height: 100%; display: flex; justify-content: center; padding: 36px 16px 48px; }
+.login { min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: 36px 16px 24px; }
+/* Product name, pinned to the bottom of the page. */
+.login-footer {
+  margin-top: auto; padding-top: 40px; display: flex; align-items: center; gap: 14px;
+  font-size: 20px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-800);
+}
+.login-footer::before, .login-footer::after { content: ''; width: 44px; height: 1.5px; background: var(--card-line); }
+.login-footer-erp { padding: 3px 9px; border-radius: 6px; background: var(--blue); color: #fff; font-size: 15px; letter-spacing: .12em; }
 .login-stack { width: min(100%, 600px); display: flex; flex-direction: column; gap: 18px; }
 .login-card {
   width: 100%; padding: 44px 44px 42px; border-radius: 16px; background: var(--card);

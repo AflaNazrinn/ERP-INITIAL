@@ -32,6 +32,8 @@ const COMPANY_FILES = [
     'letterhead'     => ['Letterhead', ['pdf', 'png', 'jpg', 'jpeg'], 10 * 1024 * 1024, 'letterhead', true],
     'crCertificate'  => ['CR certificate', ['pdf', 'png', 'jpg', 'jpeg'], 10 * 1024 * 1024, 'cr_certificate', false],
     'vatCertificate' => ['VAT certificate', ['pdf', 'png', 'jpg', 'jpeg'], 10 * 1024 * 1024, 'vat_certificate', false],
+    // The seal printed on Purchase Book PDFs (Attach Seal): stored as company/seal.png|jpg, where api/company-seal.php reads it.
+    'seal'           => ['Company seal', ['png', 'jpg', 'jpeg'], 2 * 1024 * 1024, 'seal', false],
 ];
 
 const COMPANY_CREATIONS_PER_HOUR = 3;   // per browser session
@@ -151,6 +153,9 @@ function company_create(array $post, array $files): array
                 $stored = "company/$column." . $file['extension'];
                 if (!move_uploaded_file($file['tmp_name'], "$directory/$stored")) {
                     throw new RuntimeException('Could not store the uploaded file.');
+                }
+                if ($key === 'seal') {
+                    continue;                             // no profile column: the file itself is the seal
                 }
                 $profile["{$column}_path"] = $stored;
                 $profile["{$column}_name"] = $file['name'];

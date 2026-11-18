@@ -20,7 +20,7 @@ const SECTIONS = {
   financial:    ['financialYearStart', 'vatApplicable', 'vatPercentage'],
   address:      ['building', 'street', 'area', 'city', 'country', 'baseCurrency', 'poBox', 'postalCode', 'phone', 'email', 'website'],
   bank:         ['bankName', 'accountHolder', 'accountNumber', 'iban', 'swiftCode'],
-  documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate'],
+  documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate', 'seal'],
   login:        ['username', 'password', 'confirmPassword'],
 };
 const FILE_KEYS = SECTIONS.documents;
@@ -98,6 +98,7 @@ const FILE_RULES = {
   letterhead:     { label: 'Letterhead', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
   crCertificate:  { label: 'CR certificate', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
   vatCertificate: { label: 'VAT certificate', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
+  seal:           { label: 'Company seal', types: ['png', 'jpg', 'jpeg'], maxMb: 2 },
 };
 
 const files = Object.fromEntries(FILE_KEYS.map(key => [key, null]));
@@ -290,6 +291,25 @@ function showLetterhead() {
    forward. A click on a letterhead chooses it (again: unchooses it); Save makes the chosen one the company's
    letterhead. Every Generate first plays the "being generated" sequence: the drawing itself is instant, the steps
    make it read as work being done. */
+
+/* The logo or seal with its plain background removed (letterheads.js: the colour the four corners share becomes
+   see-through), saved as a PNG so only the logo or seal shows wherever it is printed. An SVG, an image that is
+   already transparent or has no plain background, or one that would pass the size limit is kept as it is. */
+async function withoutBackground(key, file) {
+  if (!/\.(png|jpe?g)$/i.test(file.name)) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const canvas = lhWithoutBackground(await loadImage(url));
+    if (!(canvas instanceof HTMLCanvasElement)) return file;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob || blob.size > FILE_RULES[key].maxMb * 1024 * 1024) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.png', { type: 'image/png' });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -1443,7 +1463,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       dirty = true;
       const problem = fileProblem(key, file);
       if (problem) { setFieldError(key, problem); return; }
-      setFile(key, file);
+      if (key === 'logo' || key === 'seal') withoutBackground(key, file).then(clean => setFile(key, clean));
+      else setFile(key, file);
     });
   }
   $('cc-generate').addEventListener('click', openGen);
