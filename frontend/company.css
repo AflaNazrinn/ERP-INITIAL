@@ -135,7 +135,8 @@ kbd {
 /* Phone: the calling code in front of the number (as .fp-phone on the other modules). */
 .cc-phone { display: flex; gap: 6px; min-width: 0; }
 .cc-phone > input { flex: 1; min-width: 0; }
-.cc-select.cc-phone-code { flex: none; width: 92px; font-family: var(--font-mono); font-size: 12.5px; }
+.cc-select.cc-phone-code { flex: none; width: 96px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.cc-phone > input { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
 .cc-menu-item[data-country] { display: flex; gap: 14px; font-family: var(--font-mono); }
 .cc-menu-item[data-country]::after { content: attr(data-country); margin-left: auto; font-family: var(--font-ui); font-weight: 400; color: var(--ink-500); }
 

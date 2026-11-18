@@ -1444,8 +1444,11 @@ th[data-under]:not([hidden]) { display: table-cell; }
 /* Phone fields: calling-code dropdown + number (party form, master Edit pages, contact rows). */
 .fp-phone { display: flex; gap: 6px; min-width: 0; }
 .fp-phone > input { flex: 1; min-width: 0; }
-.fp-select.fp-phone-code { flex: none; width: 96px; padding-left: 12px; padding-right: 30px; background-position: right 8px center; font-family: var(--font-mono); }
-.fp-phone-cell .fp-select.fp-phone-code { width: 84px; }
+/* One look for every phone field (masters, Purchase Book, Trade, the quick-add popups, the contact tables): a 96px
+   calling-code box and the number, both in the mono font at 13px; the height follows the form's other fields. */
+.fp-phone .fp-select.fp-phone-code { flex: none; width: 96px; padding-left: 12px; padding-right: 30px; background-position: right 8px center;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.fp-phone > input { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
 /* The open list shows each code with its country. */
 .fp-phone-code option { display: flex; gap: 10px; font-family: var(--font-mono); }
 .fp-phone-code option::after { content: attr(data-country); margin-left: auto; font-family: var(--font-ui); font-weight: 500; color: var(--ink-500); }
@@ -1544,6 +1547,7 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-table-priced { min-width: 1240px; }
 .pb-table-grn { min-width: 1460px; }
 .pb-table th.pb-col-sno, .pb-table td.pb-col-sno { width: 52px; padding-left: 14px; font-weight: 700; color: var(--ink-700); }
+.pb-table th.pb-col-sno { white-space: nowrap; }   /* SL.NO on one line */
 .pb-col-code { width: 15%; }
 .pb-table-simple .pb-col-name { text-align: center !important; }
 .pb-table-simple .pb-col-brand { width: 22%; }   /* PR / RFQ lines: room for a brand such as ALPHA PLEX or ALPHA GAMA */
@@ -1576,6 +1580,8 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-icon-btn:hover, .pb-icon-btn:focus-visible { background: var(--surface-muted); color: var(--ink-900); outline: none; border-color: var(--input-line); }
 .pb-icon-danger { color: var(--danger); border-color: #fecdd3; }
 .pb-icon-danger:hover, .pb-icon-danger:focus-visible { background: var(--danger-soft); color: var(--danger); border-color: #fda4af; }
+/* The masters' line tables (Item sourcing, contacts, quotations, PO lines, subcategories) use the same actions. */
+.fp-table .fp-col-act { width: 112px; white-space: nowrap; }
 
 /* Remarks and PDF print configuration */
 .pb-textarea { min-height: 84px; }
@@ -2404,7 +2410,7 @@ input::-webkit-contacts-auto-fill-button {
 .pb-table .pb-row-actions { gap: 2px; }
 .pb-table .pb-icon-btn { width: 26px; height: 26px; }
 .pb-table .pb-col-act { width: 92px; }
-.pb-table th.pb-col-sno, .pb-table td.pb-col-sno { width: 42px; padding-left: 8px; }
+.pb-table th.pb-col-sno, .pb-table td.pb-col-sno { width: 54px; padding-left: 8px; padding-right: 4px; }
 /* Purchase Request / Quotation Request */
 .pb-table-simple .pb-col-code { width: 15%; }
 .pb-table-simple .pb-col-brand { width: 20%; }
