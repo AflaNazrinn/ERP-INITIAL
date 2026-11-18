@@ -8429,6 +8429,7 @@ function poSetCurrency(code) {
 const poForm = createPurchaseForm({
   key: 'po', route: 'purchase-book/purchase-order/new', noun: 'Purchase Order', api: 'api/purchase-orders.php',
   kind: 'po', template: 'pb-line-po', lookups: ['purchaseorder'], vatDefault: 'exclude',
+  previewOnCreate: true,           // a new order opens on its preview page (Print / Export PDF), as a new Purchase Request
   firstField: () => byId('po-date'),
   fieldNodes: { poDate: 'po-date', quotationNumber: 'po-quotation-no',
     deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
