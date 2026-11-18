@@ -2812,6 +2812,9 @@ function handleItemPageKeys(event) {
 // A lookup field (Item Code, Item Name, Brand …) holds a picked value with no caret to move: ←/→ leave it at
 // once. A Purchase Book line's Action buttons (move up, move down, remove) are cells too, after its fields.
 const isRowActionButton = node => node.tagName === 'BUTTON' && Boolean(node.closest('.fp-row .pb-col-act'));
+// A number cell (Qty, Price, VAT %, Disc. …) or a date: ←/→ move to the next cell at once, like a spreadsheet,
+// wherever the caret is (a number is retyped or Backspaced, not walked through).
+const isNumberCell = node => node.tagName === 'INPUT' && (['decimal', 'numeric'].includes(node.inputMode) || isDateField(node));
 function handleTableArrows(event) {
   const input = event.target;
   const row = input.closest('.fp-row');
@@ -2836,7 +2839,7 @@ function handleTableArrows(event) {
     event.preventDefault();
     if (index < rows.length - 1) focusField(cellAt(rows[index + 1])); else leave(true);
   } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-    && (input.tagName === 'BUTTON' || isLookupField(input) || caretAtEdge(input, event.key))) {
+    && (input.tagName === 'BUTTON' || isLookupField(input) || isNumberCell(input) || caretAtEdge(input, event.key))) {
     event.preventDefault();
     const forward = event.key === 'ArrowRight';
     const neighbour = cells[cells.indexOf(input) + (forward ? 1 : -1)];
