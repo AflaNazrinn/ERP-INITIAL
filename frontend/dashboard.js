@@ -8565,9 +8565,25 @@ const grnTransfers = row => {
   try { return JSON.parse(pbCell(row, 'transfers')?.value || '[]') || []; } catch { return []; }
 };
 
+// The Rejection Reason box runs from the Item Name to the end of the Rej. Qty box.
+function sizeGrnReason(row) {
+  const reason = pbCell(row, 'rejectReason');
+  if (!reason || reason.hidden) return;
+  // Laid over the row (it never widens the Item Name column), lined up with the item name box.
+  const wrap = reason.parentElement.querySelector('.fp-input-wrap');
+  reason.style.left = `${wrap.offsetLeft}px`;
+  const left = wrap.getBoundingClientRect().left;
+  const right = pbCell(row, 'rejectedQty').getBoundingClientRect().right;
+  reason.style.width = right > left ? `${Math.round(right - left)}px` : '';
+}
+
 function syncGrnRow(row) {
   const reason = pbCell(row, 'rejectReason');
-  if (reason) reason.hidden = !(pbNum(pbCell(row, 'rejectedQty').value) > 0);
+  if (reason) {
+    reason.hidden = !(pbNum(pbCell(row, 'rejectedQty').value) > 0);
+    row.classList.toggle('has-reason', !reason.hidden);
+    sizeGrnReason(row);
+  }
   const badge = row.querySelector('[data-transfer-badge]');
   if (!badge) return;
   const sent = grnTransfers(row).reduce((sum, t) => sum + pbNum(t.quantity), 0);
@@ -8686,6 +8702,10 @@ function initGrnTransfer(form) {
     return true;
   }
 
+  // The reason boxes follow the column widths (window size, the page being shown).
+  const sizeReasons = () => form.page.rowsOf('items').forEach(sizeGrnReason);
+  window.addEventListener('resize', sizeReasons);
+  new ResizeObserver(sizeReasons).observe(byId('grn-items'));
   byId('grn-items').addEventListener('click', event => {
     const button = event.target.closest('[data-action="transfer"]');
     if (button) open(button.closest('tr'));

@@ -1666,6 +1666,10 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 }
 .pb-reject-reason::placeholder { color: #e11d48; opacity: .7; }
 .pb-reject-reason[hidden] { display: none; }
+/* While a line shows its reason, its cells sit at the top so the box can run under Brand and the quantities. */
+.pb-table-grn tr.has-reason > td { vertical-align: top; }
+.pb-table-grn tr.has-reason > td:has(> .pb-reject-reason) { position: relative; padding-bottom: 52px; }
+.pb-table-grn tr.has-reason .pb-reject-reason { position: absolute; bottom: 10px; z-index: 1; margin: 0; }
 /* Transfer: the line's Stock Transfer button; its badge is the quantity sent on. */
 .pb-table-grn .pb-col-transfer { width: 76px; text-align: center !important; }
 .pb-transfer-btn { position: relative; width: 34px; height: 34px; }
