@@ -562,6 +562,10 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
+    if (byId('quick-contact').open && handleQuickContactKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
 
     // The open form's own keys (Esc, Shift+Enter, Enter …) come first, unless the menu is over it.
     const pageKeys = FORM_KEY_HANDLERS[currentPage];
@@ -1720,6 +1724,35 @@ const LOOKUPS = {
   // The Quotation Request's PR ID: its items fill the request's lines.
   purchaserequest: { title: 'Select Purchase Request', letter: 'R', list: 'Purchase Requests', plural: 'purchase requests', api: 'api/purchase-requests.php',
     columns: [['code', 'PR ID'], ['name', 'Type · Items'], ['requestedBy', 'Requested By']], display: row => row.code },
+  // Trade Management: the customer (card style, as the Purchase Order's supplier), and the documents a sales order or delivery note comes from.
+  customer: { title: 'Select Customer', letter: 'C', list: 'Customer List', plural: 'customers', api: 'api/customers.php',
+    columns: [['code', 'Code'], ['name', 'Customer Name'], ['city', 'City']], display: row => row.name,
+    subtitle: 'Choose a customer from the database catalog.', search: 'Search customer by name or code...',
+    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • ') },
+  // The quotation's Buyer Name: the picked customer's contact persons (field data-lookup-customer names its customer id
+  // input); + New Contact adds one to the buyer (Party › Debtors › Contact Persons) and picks it.
+  buyercontact: { title: 'Select Buyer Name', letter: 'B', list: 'Contact Persons', plural: 'contact persons',
+    columns: [['name', 'Name'], ['designation', 'Designation'], ['number', 'Mobile']], plainFirst: true, display: row => row.name,
+    subtitle: 'Choose a contact person of the selected buyer.', search: 'Search or type a buyer name...',
+    cardMeta: row => [row.designation, row.number].filter(Boolean).join(' • '), create: 'New Contact', newContact: true,
+    rows: async field => {
+      const customerId = field && byId(field.dataset.lookupCustomer)?.value;
+      if (!customerId) return [];
+      const customer = await pbCustomer(customerId).catch(() => null);
+      return (customer?.contacts || []).filter(contact => contact.name)
+        .map(contact => ({ id: contact.name, name: contact.name, designation: contact.designation || '', number: contact.number || '' }));
+    } },
+  quotation: { title: 'Select Quotation', letter: 'Q', list: 'Quotations', plural: 'quotations', api: 'api/quotations.php',
+    columns: [['code', 'Quotation ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
+  // The Delivery Note's Ref Num (SO / Quote): the sales orders and quotations as suggestions (id "so:12" / "qt:5").
+  salesref: { plural: 'sales orders and quotations', display: row => row.code, meta: row => row.meta,
+    rows: async () => {
+      const [orders, quotations] = await Promise.all([apiRequest('api/sales-orders.php').catch(() => []), apiRequest('api/quotations.php').catch(() => [])]);
+      return [...orders.map(row => ({ id: `so:${row.id}`, code: row.code, meta: `Sales Order · ${row.name}` })),
+        ...quotations.map(row => ({ id: `qt:${row.id}`, code: row.code, meta: `Quotation · ${row.name}` }))];
+    } },
+  salesorder: { title: 'Select Sales Order', letter: 'S', list: 'Sales Orders', plural: 'sales orders', api: 'api/sales-orders.php',
+    columns: [['code', 'SO ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
     columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
@@ -1754,8 +1787,8 @@ const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'In
 
 // Each list is fetched once per page load; forgetLookups() drops lists after a save changes them.
 const lookupCache = {};
-async function loadLookup(kind) {
-  if (LOOKUPS[kind].rows) return LOOKUPS[kind].rows();
+async function loadLookup(kind, field = null) {
+  if (LOOKUPS[kind].rows) return LOOKUPS[kind].rows(field);
   if (!lookupCache[kind]) {
     try {
       lookupCache[kind] = await apiRequest(LOOKUPS[kind].api);
@@ -1851,7 +1884,7 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   const config = LOOKUPS[kind];
   lookupOpening = true;
   let rows;
-  try { rows = await loadLookup(kind); } finally { lookupOpening = false; }
+  try { rows = await loadLookup(kind, field); } finally { lookupOpening = false; }
   if (dialog.open || !document.contains(field)) return;
   const parent = lookupParentField(field);
   const parentId = parent ? lookupIdInput(parent).value : '';
@@ -1929,7 +1962,7 @@ function renderLookupRows() {
   if (rows.length === 0) {
     const tr = el('tr');
     const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.'
-      : !byId('lookup-new').hidden ? ` Press Enter to create it as a new ${config.plural.replace(/s$/, '')}.` : '';
+      : !byId('lookup-new').hidden ? ` Press Enter to create it as a new ${config.newContact ? 'contact' : config.plural.replace(/s$/, '')}.` : '';
     const td = el('td', 'lk-empty', (query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`) + createHint);
     td.colSpan = config.columns.length + (lookup.multi ? 1 : 0);
     tr.append(td);
@@ -2010,7 +2043,7 @@ function closeLookup({ advance = false } = {}) {
   const dialog = byId('lookup');
   if (!dialog.open) return;
   dialog.close();
-  if (!byId('quick-menu').open && !byId('quick-item').open && !byId('quick-supplier').open) document.documentElement.classList.remove('has-modal');
+  if (!byId('quick-menu').open && !byId('quick-item').open && !byId('quick-supplier').open && !byId('quick-contact').open) document.documentElement.classList.remove('has-modal');
   if (!document.contains(lookup.field)) return;
   if (advance) focusNextField(lookup.field); else focusField(lookup.field);
 }
@@ -2322,7 +2355,7 @@ function renderSuggest() {
     if (meta) item.append(el('span', 'fp-suggest-code', meta));
     return item;
   }));
-  if (suggest.shown.length === 0) list.append(el('li', 'fp-suggest-empty', `No ${config.plural} match “${field.value.trim()}”.`));
+  if (suggest.shown.length === 0) list.append(el('li', 'fp-suggest-empty', query ? `No ${config.plural} match “${field.value.trim()}”.` : `No ${config.plural} yet.`));
   list.hidden = false;
   placeSuggestList(field, list);
   field.setAttribute('aria-expanded', 'true');
@@ -2863,7 +2896,8 @@ function handleTableArrows(event) {
   const rows = [...row.parentElement.rows].filter(other => other.matches('.fp-row'));
   const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select, .pb-col-act button')];
   const col = columnCells(row).indexOf(input);
-  const usable = r => columnCells(r).filter(cell => !cell.disabled);
+  // A cell in a hidden column (the Sales Order's Supplier, VAT or buying columns) is skipped.
+  const usable = r => columnCells(r).filter(cell => !cell.disabled && cell.getClientRects().length > 0);
   const cells = usable(row);
   const cellAt = r => {
     const cell = columnCells(r)[col];
@@ -3221,7 +3255,7 @@ function createFormPage(config) {
 
   const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, setRows, edit, el, isEditing: () => editing !== null };
   FORM_KEY_HANDLERS[config.key] = handleKeys;
-  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing, opened: config.opened };
+  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing, opened: config.opened, onShow: config.onShow };
   return page;
 }
 
@@ -4007,7 +4041,7 @@ function initPartyOrders() {
 const supplierBrands = createLookupChips({ container: 'party-sup-brands', entry: 'party-sup-brand-entry', onChange: () => partyForm.record() });
 
 const partyForm = createFormPage({
-  key: 'party', route: 'masters/party/new', noun: () => (partyVariant() === 'cus' ? 'Customer' : 'Supplier'), lookups: ['supplier'],
+  key: 'party', route: 'masters/party/new', noun: () => (partyVariant() === 'cus' ? 'Customer' : 'Supplier'), lookups: ['supplier', 'customer'],
   listRoute: () => (partyVariant() === 'cus' ? 'masters/customer' : 'masters/supplier'),
   // Creditors are suppliers, debtors are customers: each has its own table and endpoint.
   api: () => (partyVariant() === 'cus' ? 'api/customers.php' : 'api/suppliers.php'),
@@ -6157,7 +6191,9 @@ const QUICK_SUPPLIER_FIELDS = ['name', 'contact', 'phone', 'email', 'country', '
 function createSupplierFromLookup() {
   const { field } = lookup;
   const name = byId('lookup-search').value.trim();
+  const config = LOOKUPS[lookup.kind];
   closeLookup();
+  if (config.newContact) { openQuickContact(field, name); return; }   // the quotation's Buyer Name
   openQuickSupplier(field, name);
 }
 
@@ -6262,6 +6298,119 @@ function initQuickSupplier() {
   byId('quick-supplier-form').addEventListener('input', event => {
     event.target.classList.remove('is-invalid');
     qsEl('error').hidden = true;
+  });
+}
+
+/* ---------- New Contact (the quotation's Buyer Name popup) ---------- */
+
+const quickContact = { field: null, saving: false };
+const qcEl = suffix => byId(`quick-contact-${suffix}`);
+const QUICK_CONTACT_FIELDS = ['name', 'designation', 'phone', 'email'];
+
+function openQuickContact(field, name = '') {
+  const customerId = byId(field.dataset.lookupCustomer)?.value;
+  if (!customerId) {
+    showToast('Select the Buyer first', 'A new contact is added to the buyer’s contact persons.', true);
+    focusField(byId(field.dataset.lookupCustomer.replace(/-id$/, '')));
+    return;
+  }
+  Object.assign(quickContact, { field, customerId });
+  byId('quick-contact-form').reset();
+  clearFormErrors(byId('quick-contact-form'));
+  qcEl('error').hidden = true;
+  qcEl('name').value = name;
+  qcEl('sub').textContent = `Add a contact person to ${byId(field.dataset.lookupCustomer.replace(/-id$/, '')).value || 'the buyer'}.`;
+  document.documentElement.classList.add('has-modal');
+  byId('quick-contact').showModal();
+  qcEl('name').focus();
+}
+
+function closeQuickContact({ picked = false } = {}) {
+  const dialog = byId('quick-contact');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open && !byId('lookup').open) document.documentElement.classList.remove('has-modal');
+  const { field } = quickContact;
+  if (!field || !document.contains(field)) return;
+  if (picked) focusNextField(field); else focusField(field);
+}
+
+function quickContactError(node, message) {
+  qcEl('error').textContent = message;
+  qcEl('error').hidden = false;
+  if (node) { node.classList.add('is-invalid'); node.focus(); }
+}
+
+// Adds the contact to the customer's Contact Persons (PUT with the contacts only; the rest of the customer is kept).
+async function saveQuickContact() {
+  if (quickContact.saving) return;
+  clearFormErrors(byId('quick-contact-form'));
+  qcEl('error').hidden = true;
+  const value = suffix => qcEl(suffix).value.trim();
+  const name = value('name');
+  if (!name) return quickContactError(qcEl('name'), 'Enter the contact name.');
+  const phone = value('phone');
+  const email = value('email');
+  const problem = phoneProblem(phone, '');
+  if (problem) return quickContactError(qcEl('phone'), problem);
+  if (email && !EMAIL.test(email)) return quickContactError(qcEl('email'), 'Enter a valid email address.');
+  const { field, customerId } = quickContact;
+  quickContact.saving = true;
+  qcEl('save').disabled = true;
+  try {
+    const customer = await apiRequest(`api/customers.php?id=${customerId}`);
+    if (customer.contacts.some(contact => sameText(contact.name, name))) return quickContactError(qcEl('name'), `${customer.name} already has a contact named ${name}.`);
+    const contacts = [...customer.contacts, { name, designation: value('designation'), number: phone, email }];
+    const saved = await apiRequest(`api/customers.php?id=${customerId}`, { method: 'PUT', json: { contacts } });
+    pbData.customers.set(customerId, Promise.resolve(saved));       // the popup and Buyer Contact read the new contact
+    closeQuickContact({ picked: true });
+    showToast('Contact added', `${name} · ${saved.name}`);
+    if (field && document.contains(field)) setLookupValue(field, { id: name, name });   // Buyer Name, and its number into Buyer Contact
+  } catch (error) {
+    const key = Object.keys(error.fields || {}).find(entry => entry.startsWith('contacts'));
+    const target = key ? qcEl(/number/.test(key) ? 'phone' : /email/.test(key) ? 'email' : /designation/.test(key) ? 'designation' : 'name') : null;
+    quickContactError(target, key ? error.fields[key] : error.message);
+  } finally {
+    quickContact.saving = false;
+    qcEl('save').disabled = false;
+  }
+}
+
+function handleQuickContactKeys(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (!event.repeat) closeQuickContact();
+    return true;
+  }
+  if (isBrowserSaveKey(event) || isSaveKey(event)) {
+    event.preventDefault();
+    if (!event.repeat) saveQuickContact();
+    return true;
+  }
+  if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    const index = QUICK_CONTACT_FIELDS.findIndex(suffix => qcEl(suffix) === event.target);
+    if (index === -1) return false;
+    event.preventDefault();
+    if (index === QUICK_CONTACT_FIELDS.length - 1) saveQuickContact();
+    else qcEl(QUICK_CONTACT_FIELDS[index + 1]).focus();
+    return true;
+  }
+  return false;
+}
+
+function initQuickContact() {
+  const dialog = byId('quick-contact');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeQuickContact(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeQuickContact(); return; }   // backdrop
+    const action = event.target.closest('[data-qc]')?.dataset.qc;
+    if (action === 'close') closeQuickContact();
+    if (action === 'save') saveQuickContact();
+  });
+  byId('quick-contact-form').addEventListener('submit', event => event.preventDefault());
+  byId('quick-contact-form').addEventListener('input', event => {
+    event.target.classList.remove('is-invalid');
+    qcEl('error').hidden = true;
   });
 }
 
@@ -6830,7 +6979,7 @@ const supplierList = createMasterList({
 
 const customerList = createMasterList({
   key: 'customer', route: 'masters/customer', newRoute: '#/masters/customer/new', noun: 'Customer', nouns: 'Customers',
-  api: 'api/customers.php', lookups: [], formPage: 'party',
+  api: 'api/customers.php', lookups: ['customer'], formPage: 'party',
   edit: id => partyForm.edit(id, () => preparePartyEdit('debtors')),
   related: partyViewSections('customer'), viewOrder: ['Identification', 'Contact', 'Credit & Sales', 'Location'],
   columns: [codeColumn('customer code', 'client code', 'party code'),
@@ -7088,6 +7237,10 @@ function renderRoute() {
     if (currentPage !== formPage.page || formPage.alwaysReset || formPage.isEditing?.()) {
       showPage(formPage.page);
       formPage.reset();
+      formPage.firstField().focus();
+      formPage.onShow?.();                 // e.g. the quotation opens its Buyer popup straight away
+      formPage.opened?.();
+      return;
     }
     formPage.firstField().focus();
     formPage.opened?.();
@@ -7124,7 +7277,7 @@ function renderRoute() {
    Keys: Enter next field, Ctrl+S or Shift+Enter save, Alt+A add an item row, Alt+I create an item, Esc back.
    ===================================================================== */
 
-const pbData = { items: new Map(), suppliers: new Map(), racks: [] };
+const pbData = { items: new Map(), suppliers: new Map(), customers: new Map(), racks: [] };
 const pbNum = value => {
   const number = parseFloat(String(value ?? '').replace(/,/g, ''));
   return Number.isFinite(number) ? number : 0;
@@ -7137,7 +7290,7 @@ const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 // column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
-  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) {
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
     const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
@@ -7153,7 +7306,7 @@ function composePurchaseTemplates() {
       reason.setAttribute('aria-label', 'Rejection reason');
       nameCell.append(reason);
     }
-    if (id === 'pb-line-po') {
+    if (id === 'pb-line-po' || id === 'pb-line-sales' || id === 'pb-line-dn') {          // priced lines keep the brand in the item name cell
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
@@ -7803,6 +7956,7 @@ function createPurchaseForm(spec) {
       : rates.length === 1 ? `${pbQty(rates[0])}%` : `${rates.filter(rate => rate > 0).map(rate => `${pbQty(rate)}%`).join(' / ')}`;
     const vatName = spec.kind === 'po' ? 'VAT' : 'Total VAT Amount';
     el('vat-label').textContent = `${vatName} (${vatNote}${vatMode() === 'include' && vatOn() ? ', included' : ''})`;
+    spec.afterRefresh?.(totals);                      // the sales order's buying cost and profit
   };
 
   function syncVatToggle() {
@@ -7857,6 +8011,7 @@ function createPurchaseForm(spec) {
           discountAmount: value('discountAmount'), foc: value('foc') === 'Yes',
         });
       }
+      for (const extra of spec.lineExtras || []) line[extra] = value(extra);   // the sales lines' Delivery Term
       for (const [field, ok] of Object.entries(line)) {
         if (['quantity', 'receivedQty', 'acceptedQty', 'rejectedQty', 'price', 'unitCost', 'discountAmount'].includes(field)
           && ok !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(ok)) fail(field, 'enter a number with up to 3 decimals.');
@@ -7916,6 +8071,7 @@ function createPurchaseForm(spec) {
     afterCreate: record => printPurchaseDocument(spec, record.id),   // every new purchase document opens on its PDF preview
     firstField: () => spec.firstField(),
     opened: () => spec.opened?.(form),
+    onShow: spec.onShow,
     setCode: () => showNextCode(el('code'), spec.api),
     lists: { items: { body: `${spec.key}-items`, template: spec.template, initial: 1, label: i => String(i + 1),
       // A row added while VAT is disabled starts at 0% (the first row of a new document keeps the template's 5%).
@@ -8045,7 +8201,7 @@ function initPurchaseForm(form) {
     const field = target.dataset.field;
     if (target.value.trim() === '' || !/^[\d.,]+$/.test(target.value.trim())) return;
     const value = pbNum(target.value);
-    if (['price', 'unitCost', 'discountAmount'].includes(field) || target.classList.contains('pb-sum-input')) target.value = pbMoney(value);
+    if (['price', 'unitCost', 'discountAmount', 'buyingCost'].includes(field) || target.classList.contains('pb-sum-input')) target.value = pbMoney(value);
     else if (spec.kind === 'po' && ['vatRate', 'discountPct'].includes(field)) target.value = value.toFixed(2);
     else if (['quantity', 'receivedQty', 'acceptedQty', 'rejectedQty', 'vatRate', 'discountPct'].includes(field)) target.value = pbQty(value);
     else return;
@@ -8253,6 +8409,11 @@ function initSealButtons() {
 const purchaseLineRow = line => ({
   itemId: line.itemId ?? '', itemCode: line.itemCode, itemName: line.itemName, brandId: line.brandId ?? '', brandName: line.brandName,
   uomId: line.uomId ?? '', unit: line.unit, itemNameHtml: line.itemNameHtml || '',
+  deliveryTerm: line.deliveryTerm ?? '',          // sales lines (a quotation's lines copied into a sales order …)
+  // A sales order line's buying side (left as it is on lines that have none).
+  ...(line.buyingCost !== undefined ? { buyingCost: pbMoney(pbNum(line.buyingCost)) } : {}),
+  ...(line.warehouseId !== undefined ? { warehouseId: line.warehouseId ?? '' } : {}),     // a delivery note line's Branch
+  ...(line.supplierId !== undefined ? { supplierId: line.supplierId ?? '', supplierName: line.supplierName || '', supplierCurrency: line.supplierCurrency || '' } : {}),
 });
 
 // A saved line as a row's cell values (edit mode), formatted as the form shows them.
@@ -8589,7 +8750,586 @@ const grnForm = createPurchaseForm({
   },
 });
 
-const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm];
+/* ---------- Trade Management: Quotation, Sales Order, Delivery Note ----------
+   The Purchase Order's form to a customer: Customer (the Select Customer popup) with a contact and currency, priced
+   lines with a Delivery Term each (printed under the item as "DELIVERY: …"), VAT, Special Discount and a delivery
+   charge, remarks, signatory slots and the seal. A sales order can be filled from a quotation, a delivery note from
+   a sales order (Quotation Ref / Sales Order Ref: the customer, terms and lines are copied). */
+function pbCustomer(id) {
+  if (!pbData.customers.has(id)) {
+    pbData.customers.set(id, apiRequest(`api/customers.php?id=${id}`).catch(error => { pbData.customers.delete(id); throw error; }));
+  }
+  return pbData.customers.get(id);
+}
+
+// A customer contact's number as one text: a number without a + code takes the customer's country code.
+function salesCustomerPhone(number, customer) {
+  const text = String(number ?? '').trim();
+  if (!text || text.startsWith('+')) return text;
+  return `${countryNamed(customer?.country)?.dial || '+968'} ${text}`;
+}
+
+/*
+ * One Trade Management form. cfg: key ('qt' | 'so' | 'dn'), route (the list's), noun, api, dateKey (the payload's date),
+ * lookups, fieldNodes / header() / fill(doc) / check(errors) / onReset() / init(form, sales) for the kind's own fields.
+ */
+const SALES_HELPERS = {};                          // each sales form's copyFrom … (the Sales Order's Document Title opens the others)
+function createSalesForm(cfg) {
+  const k = cfg.key;
+  const $ = suffix => byId(`${k}-${suffix}`);
+  const currency = () => $('currency-id').value || 'OMR';
+  const setCurrency = code => {
+    const text = String(code || 'OMR').toUpperCase();
+    fillLookup($('currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
+  };
+  // The sales order has free-text Payment Terms and no Credit Period / Salesman fields.
+  const isCredit = () => Boolean($('credit-field')) && $('payment')?.value === 'Credit';
+  const vatWanted = () => (cfg.vatWanted ? cfg.vatWanted() : currency() === 'OMR');
+  async function showCredit({ fill = false } = {}) {
+    if (!$('credit-field')) return;
+    $('credit-field').hidden = !isCredit();
+    if (!fill || !isCredit() || $('credit-period').value.trim()) return;
+    const customerId = $('customer-id').value;       // just switched to Credit: the customer's credit days, else 30 Days
+    const customer = customerId ? await pbCustomer(customerId).catch(() => null) : null;
+    const days = Number(customer?.creditDays) || 30;
+    $('credit-period').value = cfg.creditDaysOnly ? String(days) : `${days} Days`;   // the quotation asks Credit Days (a number)
+  }
+  // The customer's contacts as suggestions for Contact Person Name; a fresh pick brings its currency and only contact.
+  async function showCustomer({ fresh = false } = {}) {
+    const id = $('customer-id').value;
+    const list = $('contact-list');
+    if (!id) { list.replaceChildren(); return null; }
+    let customer;
+    try { customer = await pbCustomer(id); } catch (error) { showToast('The customer could not be loaded', error.message, true); return null; }
+    if ($('customer-id').value !== id) return null;
+    const contacts = (customer.contacts || []).filter(contact => contact.name);
+    list.replaceChildren(...contacts.map(contact => {
+      const option = new Option(contact.name);
+      if (contact.designation) option.label = contact.designation;
+      return option;
+    }));
+    if (fresh) {
+      const code = String(customer.currency || '').toUpperCase();
+      if (PO_CURRENCIES.some(row => row.code === code)) setCurrency(code);
+      if (contacts.length === 1) {
+        $('contact').value = contacts[0].name;
+        if ($('contact').dataset.lookup) lookupIdInput($('contact')).value = contacts[0].name;
+        $('contact-number').value = salesCustomerPhone(contacts[0].number, customer);
+      } else if (!contacts.length && customer.phone) {
+        $('contact-number').value = salesCustomerPhone(customer.phone, customer);
+      }
+    }
+    return customer;
+  }
+  // Certification Required (the quotation): the ticks are kept in #qt-certifications; N/A clears the others and back.
+  const certBoxes = () => [...$('form').querySelectorAll('[data-cert]')];
+  const setPayment = value => {
+    if (!$('payment')) return;                       // the delivery note has no payment terms
+    // A select (quotation, delivery note) takes only its own modes: a sales order's free-text terms ("30 Days Net") become As usual.
+    if ($('payment').tagName === 'SELECT') {
+      $('payment').value = [...$('payment').options].some(option => option.value === value) ? value : 'As usual';
+    }
+    else $('payment').value = value || '';
+  };
+  const showCerts = () => {
+    if (!$('certifications')) return;
+    const picked = $('certifications').value.split(',').map(value => value.trim()).filter(Boolean);
+    for (const box of certBoxes()) box.checked = picked.includes(box.dataset.cert);
+  };
+
+  // Copies a quotation / sales order into this form: the customer and its terms, then the lines.
+  async function copyFrom(doc, form) {
+    if (doc.customerId) fillLookup($('customer'), { id: doc.customerId, name: doc.customerName });
+    $('contact').value = doc.contactName || '';
+    $('contact-number').value = doc.contactNumber || '';
+    setCurrency(doc.currency);
+    if (doc.deliveryLocation) $('location').value = doc.deliveryLocation;
+    setPayment(doc.paymentMode);
+    if ($('credit-period')) $('credit-period').value = cfg.creditDaysOnly ? String(doc.creditPeriod || '').replace(/\D/g, '') : doc.creditPeriod || '';
+    showCredit();
+    $('vat-mode').value = doc.vatMode || 'exclude';
+    $('discount').value = pbMoney(pbNum(doc.discountAmount));
+    $('shipping').value = pbMoney(pbNum(doc.shipping));
+    if (doc.items.length) await loadPurchaseLines(form, doc.items, line => (cfg.copyLine || (values => values))(purchaseLineValues('po', line)));
+    form.syncVatToggle();
+    form.refresh();
+    showCustomer();
+    form.page.absorb();
+    if (doc.items.length) showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+  }
+  const sales = { $, copyFrom, currency, showCustomer };
+  SALES_HELPERS[k] = sales;
+
+  const form = createPurchaseForm({
+    key: k, route: `${cfg.route}/new`, noun: cfg.noun, api: cfg.api, listRoute: cfg.route,
+    kind: 'po', template: cfg.template || 'pb-line-sales', lineExtras: cfg.lineExtras || ['deliveryTerm'], lookups: cfg.lookups, vatDefault: 'exclude',
+    afterRefresh: cfg.afterRefresh, onShow: cfg.onShow,
+    firstField: () => $('date'),
+    fieldNodes: {
+      [cfg.dateKey]: `${k}-date`, customerId: `${k}-customer`, contactName: `${k}-contact`, contactNumber: `${k}-contact-number`,
+      currency: `${k}-currency`, deliveryLocation: `${k}-location`, paymentMode: `${k}-payment`, creditPeriod: `${k}-credit-period`,
+      salesman: `${k}-salesman`, salesmanContact: `${k}-salesman-contact`, remarks: `${k}-remarks-editor`,
+      discountAmount: `${k}-discount`, shipping: `${k}-shipping`, ...cfg.fieldNodes,
+    },
+    header: () => ({
+      [cfg.dateKey]: $('date').value, customerId: $('customer-id').value || null, contactName: $('contact').value.trim(),
+      contactNumber: $('contact-number').value.trim(), currency: currency(), deliveryLocation: $('location').value.trim(),
+      paymentMode: $('payment')?.value.trim() ?? '', creditPeriod: isCredit() ? $('credit-period').value.trim() : '',
+      ...($('salesman') ? { salesman: $('salesman').value.trim(), salesmanContact: $('salesman-contact').value.trim() } : {}),
+      ...cfg.header(),
+    }),
+    check(form, errors) {
+      if (!$('customer-id').value) errors.push({ node: $('customer'), message: 'Select the customer.' });
+      if ($('salesman') && !$('salesman').value.trim()) errors.push({ node: $('salesman'), message: 'Enter the salesman name.' });
+      if (isCredit() && !$('credit-period').value.trim()) errors.push({ node: $('credit-period'), message: 'Enter the credit period (e.g. 30 Days).' });
+      cfg.check?.(errors);
+    },
+    afterRestore() { showCerts(); showCustomer(); showCredit(); },
+    fill(form, doc) {
+      $('date').value = doc[cfg.dateKey];
+      fillLookup($('customer'), doc.customerId ? { id: doc.customerId, name: doc.customerName } : null);
+      $('contact').value = doc.contactName || '';
+      $('contact-number').value = doc.contactNumber || '';
+      setCurrency(doc.currency);
+      $('location').value = doc.deliveryLocation || '';
+      setPayment(doc.paymentMode);
+      if ($('credit-period')) $('credit-period').value = doc.creditPeriod || '';
+      showCredit();
+      if ($('salesman')) {
+        $('salesman').value = doc.salesman || '';
+        $('salesman-contact').value = doc.salesmanContact || '';
+      }
+      cfg.fill(doc);
+      showCerts();
+    },
+    afterFill: () => showCustomer(),
+    async onReset(form) {
+      $('date').value = todayInputValue();
+      setCurrency('OMR');                            // hidden ids were cleared by the reset
+      form.setVat(vatWanted());                      // a new document is in OMR: VAT Enabled (a sales order: none)
+      if (cfg.defaultLocation !== false && !$('location').value.trim()) $('location').value = 'DDP Muscat Limit';
+      if ($('certifications')) $('certifications').value = 'N/A';
+      showCerts();
+      showCredit();
+      showCustomer();
+      cfg.onReset?.();
+    },
+    init(form) {
+      $('customer').addEventListener('input', async () => {         // a pick in the Select Customer popup
+        $('contact').value = '';
+        if ($('contact').dataset.lookup) lookupIdInput($('contact')).value = '';
+        $('contact-number').value = '';
+        const customer = await showCustomer({ fresh: true });
+        if (customer) form.setVat(vatWanted());
+        form.page.absorb();
+        form.refresh();
+      });
+      // A contact picked from the suggestions brings its number.
+      $('contact').addEventListener($('contact').dataset.lookup ? 'input' : 'change', async () => {
+        const customerId = $('customer-id').value;
+        const customer = customerId ? await pbCustomer(customerId).catch(() => null) : null;
+        const contact = customer?.contacts?.find(entry => sameText(entry.name, $('contact').value));
+        if (contact?.number) { $('contact-number').value = salesCustomerPhone(contact.number, customer); form.page.absorb(); }
+      });
+      // VAT follows the currency: VAT Enabled (5%) in OMR, none in any other currency (the VAT button can still change it).
+      $('form').addEventListener('input', event => {
+        if (event.target.id !== `${k}-currency`) return;
+        form.setVat(vatWanted());
+        form.page.absorb();
+      });
+      if ($('credit-field')) {
+        $('payment').addEventListener('change', async () => {
+          await showCredit({ fill: true });
+          form.page.absorb();
+        });
+      }
+      $('form').addEventListener('change', event => {
+        const box = event.target.closest('[data-cert]');
+        if (!box) return;
+        const boxes = certBoxes();
+        if (box.checked && box.dataset.cert === 'N/A') boxes.forEach(other => { if (other !== box) other.checked = false; });
+        else if (box.checked) boxes.find(other => other.dataset.cert === 'N/A').checked = false;
+        $('certifications').value = boxes.filter(other => other.checked).map(other => other.dataset.cert).join(', ');
+        form.page.record();
+      });
+      cfg.init?.(form, sales);
+    },
+  });
+  return form;
+}
+
+/* Quotation: the quotation screen's fields. Offer Validity is a list with Custom… (a typed validity), Accepted Terms
+   of Payment As usual / Cash / Credit (Credit asks Credit Days), the line shows its Brand, and the summary reads
+   Items Total Amount (before line discounts), Total VAT, Line Discounts Total, Delivery Charge, Special Discount,
+   Round Off and Grand Total (Round Off added). */
+const QT_VALIDITY = ['30 Days', '15 Days', '45 Days', '60 Days', '90 Days', '120 Days'];
+function qtShowValidity({ focus = false } = {}) {
+  const custom = byId('qt-validity-pick').value === 'CUSTOM';
+  byId('qt-validity').hidden = !custom;
+  if (custom && focus) byId('qt-validity').focus();
+}
+const qtOfferValidity = () => (byId('qt-validity-pick').value === 'CUSTOM' ? byId('qt-validity').value.trim() : byId('qt-validity-pick').value);
+const qtRoundOff = () => {
+  const text = byId('qt-round').value.trim();
+  return /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : 0;
+};
+
+const qtForm = createSalesForm({
+  key: 'qt', route: 'trade/quotation', noun: 'Quotation', api: 'api/quotations.php', dateKey: 'quotationDate', lookups: ['quotation'],
+  template: 'pb-line-qt', creditDaysOnly: true,
+  onShow: () => openLookup(byId('qt-customer')),          // a new quotation starts by picking the Buyer
+  fieldNodes: { referenceNo: 'qt-reference', loyaltyMemberId: 'qt-loyalty', offerValidity: 'qt-validity-pick', certifications: 'qt-cert-label', roundOff: 'qt-round' },
+  header: () => {
+    const days = byId('qt-credit-period').value.replace(/\D/g, '');
+    return {
+      referenceNo: byId('qt-reference').value.trim(), loyaltyMemberId: byId('qt-loyalty').value.trim(), offerValidity: qtOfferValidity(),
+      certifications: byId('qt-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
+      creditPeriod: byId('qt-payment').value === 'Credit' && days ? `${days} Days` : '',
+      roundOff: byId('qt-round').value.trim() || '0',
+    };
+  },
+  check(errors) {
+    if (byId('qt-validity-pick').value === 'CUSTOM' && !byId('qt-validity').value.trim()) errors.push({ node: byId('qt-validity'), message: 'Enter the offer validity (e.g. 10 Days).' });
+    if (!/^-?\d{1,11}(\.\d{1,3})?$/.test(byId('qt-round').value.trim() || '0')) errors.push({ node: byId('qt-round'), message: 'Enter an amount with up to 3 decimals (may be negative).' });
+  },
+  afterRefresh(totals) {
+    const lineDiscounts = [...byId('qt-items').rows].reduce((sum, row) => sum + pbNum(pbCell(row, 'discountAmount')?.value), 0);
+    byId('qt-items-total').textContent = pbMoney(totals.subtotal + lineDiscounts);
+    byId('qt-line-discounts').textContent = pbMoney(lineDiscounts);
+    byId('qt-vat-label').textContent = 'Total VAT Amount';               // the quotation screen's wording
+    byId('qt-grand').textContent = pbMoney(totals.grand + qtRoundOff());
+  },
+  fill(doc) {
+    byId('qt-reference').value = doc.referenceNo || '';
+    byId('qt-loyalty').value = doc.loyaltyMemberId || '';
+    const validity = doc.offerValidity || '';
+    byId('qt-validity-pick').value = !validity || QT_VALIDITY.includes(validity) ? (validity || '30 Days') : 'CUSTOM';
+    byId('qt-validity').value = QT_VALIDITY.includes(validity) ? '' : validity;
+    qtShowValidity();
+    byId('qt-credit-period').value = String(doc.creditPeriod || '').replace(/\D/g, '');
+    byId('qt-round').value = pbMoney(pbNum(doc.roundOff));
+    byId('qt-certifications').value = (doc.certifications || []).join(', ');
+  },
+  onReset() {
+    byId('qt-validity-pick').value = '30 Days';
+    byId('qt-validity').value = '';
+    qtShowValidity();
+  },
+  init(form) {
+    byId('qt-validity-pick').addEventListener('change', () => { qtShowValidity({ focus: true }); form.page.absorb(); });
+    byId('qt-round').addEventListener('input', () => form.refresh());
+    byId('qt-round').addEventListener('change', () => {           // a negative amount is not reformatted by the summary's own handler
+      const value = byId('qt-round').value.trim();
+      if (/^-\d+(\.\d+)?$/.test(value)) byId('qt-round').value = pbMoney(Number(value));
+      form.refresh();
+    });
+  },
+});
+
+/* Sales Order: the fields of the sales order screen. Document Title (Sales Order, or Proforma Invoice: VAT, no
+   supplier or buying side), Supplier Mode (one Supplier Name and Supplier Currency for the order, or a Supplier per
+   line), a buying cost per line with the line's Total Buying and Profit %, and the Financial Summary: landing cost,
+   custom duty (when a supplier currency is not the base currency), transportation, business promotion, total buying
+   cost (and in AED), total profit. The same sums as sb_order_costs() on the server, with the same fixed rates. */
+const SO_RATES_TO_OMR = { OMR: 1, AED: 0.1055, USD: 0.385, SAR: 0.1026, INR: 0.0046, EUR: 0.42, GBP: 0.49, QAR: 0.1057, KWD: 1.25, BHD: 1.02 };
+const soRate = (from, to) => (from === to || !SO_RATES_TO_OMR[from] || !SO_RATES_TO_OMR[to] ? 1 : SO_RATES_TO_OMR[from] / SO_RATES_TO_OMR[to]);
+const soIsInvoice = () => byId('so-doc-title').value === 'Proforma Invoice';
+const soIsMulti = () => byId('so-mode').value === 'multi';
+const soBase = () => byId('so-currency-id').value || 'OMR';
+let soSales = null;                                    // createSalesForm's helpers for the sales order
+
+// Shows what the title and the mode allow (the CSS hides the rest) and the currency labels.
+function soShowMode() {
+  const formNode = byId('so-form');
+  formNode.dataset.doc = soIsInvoice() ? 'invoice' : 'order';
+  formNode.dataset.mode = soIsMulti() ? 'multi' : 'single';
+  for (const label of formNode.querySelectorAll('[data-so-base]')) label.textContent = soBase();
+  for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = soIsMulti() ? '' : ` (${byId('so-supplier-currency').value})`;
+  byId('so-save-label').textContent = `Save ${soIsInvoice() ? 'Proforma Invoice' : 'Sales Order'}`;
+}
+
+// Each line's buying side and the summary (after the form's own totals).
+function soRefreshCosts(totals) {
+  const base = soBase();
+  const rows = soForm.page.rowsOf('items');
+  const value = (row, field) => pbNum(pbCell(row, field)?.value);
+  let items = 0;
+  let foreign = false;
+  for (const row of rows) {
+    const supplierCurrency = soIsMulti() ? (pbCell(row, 'supplierCurrency').value || base) : byId('so-supplier-currency').value;
+    const landing = supplierCurrency === 'AED' ? 1.1 : 1;
+    const qty = value(row, 'quantity');
+    const price = value(row, 'price');
+    const buying = value(row, 'buyingCost');
+    const lineBuying = qty * buying * landing;                 // in the supplier's currency
+    const buyingBase = buying * landing * soRate(supplierCurrency, base);
+    items += lineBuying * soRate(supplierCurrency, base);
+    if (supplierCurrency !== base && buying > 0) foreign = true;
+    row.querySelector('[data-buying-total]').textContent = pbMoney(lineBuying);
+    const profit = price > 0 ? (price - buyingBase) / price * 100 : 0;
+    const cell = row.querySelector('[data-profit]');
+    cell.textContent = `${profit.toFixed(2)}%`;
+    cell.classList.toggle('is-loss', profit < 0);
+  }
+  const duty = pbNum(byId('so-duty').value);
+  const shipping = pbNum(byId('so-shipping').value);
+  const promotion = pbNum(byId('so-promotion').value);
+  const totalBuying = items + duty + shipping + promotion;
+  const profit = totals.subtotal - items - duty - shipping - promotion - totals.discount;
+  byId('so-landing').textContent = pbMoney(items);
+  byId('so-total-buying').textContent = pbMoney(totalBuying);
+  byId('so-buying-aed').textContent = pbMoney(base === 'AED' ? totalBuying : totalBuying * soRate(base, 'AED'));
+  byId('so-profit').textContent = pbMoney(profit);
+  byId('so-profit-pct').textContent = `${(totals.subtotal > 0 ? profit / totals.subtotal * 100 : 0).toFixed(2)}%`;
+  for (const id of ['so-profit', 'so-profit-pct']) byId(id).classList.toggle('is-loss', profit < 0);
+  // Custom Duty: only when a supplier is paid in another currency than the base (or a duty is already entered).
+  byId('so-duty-row').hidden = !foreign && !soIsMulti() && byId('so-supplier-currency').value === base && !duty;
+}
+
+// What is entered on the sales order, as a saved document's shape (for copyFrom into a quotation or delivery note).
+function soAsDocument() {
+  const value = id => byId(id).value.trim();
+  // A sales order's lines have no VAT; in the quotation / delivery note they take VAT as usual (5% in OMR).
+  const vat = soIsInvoice() ? null : (value('so-currency-id') || 'OMR') === 'OMR' ? '5.00' : '0.00';
+  const items = soForm.page.rowsOf('items').map(row => {
+    const cell = field => pbCell(row, field)?.value.trim() ?? '';
+    return {
+      itemId: cell('itemId') || null, itemCode: cell('itemCode'), itemName: cell('itemName'), itemNameHtml: cell('itemNameHtml'),
+      brandId: cell('brandId') || null, brandName: cell('brandName'), uomId: cell('uomId') || null, unit: cell('unit'),
+      deliveryTerm: cell('deliveryTerm'), quantity: cell('quantity'), price: cell('price'), vatRate: vat ?? cell('vatRate'),
+      discountPct: '0', discountAmount: '0', foc: false,
+    };
+  }).filter(line => line.itemName || line.itemId);
+  return {
+    code: 'the Sales Order', customerId: value('so-customer-id') || null, customerName: value('so-customer'),
+    contactName: value('so-contact'), contactNumber: value('so-contact-number'), currency: value('so-currency-id') || 'OMR',
+    deliveryLocation: value('so-location'), paymentMode: value('so-payment'), creditPeriod: '',
+    vatMode: 'exclude', discountAmount: value('so-discount'), shipping: value('so-shipping'), items,
+  };
+}
+
+/* Auto-Select Best Supplier (Multi Supplier): for each line, the supplier whose newest known price for the item
+   (supplier quotations, purchase orders, earlier sales orders; api/supplier-rates.php) costs least in the base
+   currency (AED landing 1.10 included). The line takes that supplier and its price as the buying cost. */
+async function soAutoSelectSuppliers(form) {
+  const button = byId('so-auto-supplier');
+  button.disabled = true;
+  try {
+    const rates = await apiRequest('api/supplier-rates.php');
+    const base = soBase();
+    let picked = 0;
+    for (const row of form.page.rowsOf('items')) {
+      const itemId = pbCell(row, 'itemId').value;
+      const name = pbCell(row, 'itemName').value.trim();
+      if (!itemId && !name) continue;
+      const latest = new Map();                               // the newest price of each supplier (rows come newest first)
+      for (const offer of rates) {
+        const same = (itemId && offer.itemId && String(offer.itemId) === itemId) || sameText(offer.itemName, name);
+        if (same && !latest.has(offer.supplierId)) latest.set(offer.supplierId, offer);
+      }
+      let best = null;
+      let bestCost = Infinity;
+      for (const offer of latest.values()) {
+        const currency = offer.currency || base;
+        const cost = pbNum(offer.rate) * (currency === 'AED' ? 1.1 : 1) * soRate(currency, base);
+        if (cost < bestCost) { bestCost = cost; best = offer; }
+      }
+      if (!best) continue;
+      fillLookup(pbCell(row, 'supplierName'), { id: best.supplierId, name: best.supplierName });
+      pbCell(row, 'supplierCurrency').value = best.currency;
+      pbCell(row, 'buyingCost').value = pbMoney(pbNum(best.rate));
+      picked++;
+    }
+    form.refresh();
+    form.page.record();
+    if (picked) showToast('Best suppliers selected', `${picked} line${picked === 1 ? ' now uses' : 's now use'} the lowest known supplier price.`);
+    else showToast('No supplier prices found', 'None of these items has a price from a supplier quotation, purchase order or earlier sales order.', true);
+  } catch (error) {
+    showToast('Supplier prices could not be loaded', error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+const soForm = createSalesForm({
+  key: 'so', route: 'trade/sales-order', noun: 'Sales Order', api: 'api/sales-orders.php', dateKey: 'orderDate', lookups: ['salesorder'],
+  template: 'pb-line-so', lineExtras: ['deliveryTerm', 'buyingCost', 'supplierId'], defaultLocation: false,
+  // A Sales Order has no VAT; a Proforma Invoice has VAT Enabled in OMR.
+  vatWanted: () => soIsInvoice() && soBase() === 'OMR',
+  copyLine: values => ({ ...values, discountPct: '0.00', discountAmount: '0.000', vatRate: soIsInvoice() ? values.vatRate : '0.00' }),
+  afterRefresh: totals => soRefreshCosts(totals),
+  fieldNodes: { documentTitle: 'so-doc-title', supplierMode: 'so-mode', supplierId: 'so-supplier', supplierCurrency: 'so-supplier-currency',
+    quotationId: 'so-quotation', customerPo: 'so-customer-po', purchaseCategory: 'so-category', customDuty: 'so-duty',
+    businessPromotion: 'so-promotion', advancePayment: 'so-advance', paymentMode: 'so-payment' },
+  header: () => ({
+    documentTitle: byId('so-doc-title').value, supplierMode: byId('so-mode').value,
+    supplierId: !soIsInvoice() && !soIsMulti() ? byId('so-supplier-id').value || null : null,
+    supplierCurrency: byId('so-supplier-currency').value, quotationId: byId('so-quotation-id').value || null,
+    customerPo: byId('so-customer-po').value.trim(), purchaseCategory: byId('so-category').value.trim(),
+    customDuty: byId('so-duty').value.trim() || '0', businessPromotion: byId('so-promotion').value.trim() || '0',
+    advancePayment: byId('so-advance').value.trim() || '0', sendForApproval: byId('so-approval').checked,
+    // Multi Supplier: no order-level Payment Terms or Delivery Location (each line's supplier has its own terms).
+    ...(soIsMulti() && !soIsInvoice() ? { paymentMode: '', deliveryLocation: '' } : {}),
+  }),
+  check(errors) {
+    for (const id of ['so-duty', 'so-promotion', 'so-advance']) {
+      const amount = byId(id).value.trim();
+      if (amount !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(amount)) errors.push({ node: byId(id), message: 'Enter an amount with up to 3 decimals.' });
+    }
+    if (!soIsInvoice() && soIsMulti()) {
+      soForm.page.rowsOf('items').forEach((row, index) => {
+        const filled = pbCell(row, 'itemName').value.trim() || pbCell(row, 'itemId').value;
+        if (filled && !pbCell(row, 'supplierId').value) errors.push({ node: pbCell(row, 'supplierName'), message: `Row ${index + 1}: select the supplier (Multi Supplier).` });
+      });
+    }
+  },
+  fill(doc) {
+    setSelectValue(byId('so-doc-title'), doc.documentTitle || 'Sales Order');
+    setSelectValue(byId('so-mode'), doc.supplierMode || 'single');
+    fillLookup(byId('so-supplier'), doc.supplierId ? { id: doc.supplierId, name: doc.supplierName } : null);
+    setSelectValue(byId('so-supplier-currency'), doc.supplierCurrency || 'OMR');
+    fillLookup(byId('so-quotation'), doc.quotationId ? { id: doc.quotationId, code: doc.quotationCode } : null);
+    byId('so-customer-po').value = doc.customerPo || '';
+    byId('so-category').value = doc.purchaseCategory || '';
+    byId('so-duty').value = pbMoney(pbNum(doc.customDuty));
+    byId('so-promotion').value = pbMoney(pbNum(doc.businessPromotion));
+    byId('so-advance').value = pbMoney(pbNum(doc.advancePayment));
+    byId('so-approval').checked = Boolean(doc.sendForApproval);
+    soShowMode();
+  },
+  onReset() {
+    forgetLookups('quotation');
+    byId('so-doc-title').value = 'Sales Order';
+    byId('so-mode').value = 'single';
+    byId('so-supplier-currency').value = 'OMR';
+    byId('so-approval').checked = false;
+    soShowMode();
+  },
+  init(form, sales) {
+    soSales = sales;
+    // A quotation picked in Ref ID: its customer, terms and lines become the order's (buying costs to fill in).
+    byId('so-quotation').addEventListener('input', async () => {
+      const id = byId('so-quotation-id').value;
+      if (!id) return;
+      try {
+        const quotation = await apiRequest(`api/quotations.php?id=${id}`);
+        await sales.copyFrom(quotation, form);
+        if (quotation.referenceNo && !byId('so-customer-po').value.trim()) byId('so-customer-po').value = quotation.referenceNo;
+        form.page.absorb();
+      } catch (error) { showToast('The quotation could not be loaded', error.message, true); }
+    });
+    // Document Title: a Sales Order carries no VAT; a Proforma Invoice has VAT (5% in OMR) and no buying side.
+    // Quotation or Delivery Note opens that document's form with what is entered here (customer, terms, lines).
+    byId('so-doc-title').addEventListener('change', async () => {
+      const target = { Quotation: ['qt', qtForm, 'trade/quotation/new'], 'Delivery Note': ['dn', dnForm, 'trade/delivery-note/new'] }[byId('so-doc-title').value];
+      if (target) {
+        const doc = soAsDocument();
+        byId('so-doc-title').value = 'Sales Order';
+        location.hash = `#/${target[2]}`;
+        await new Promise(resolve => setTimeout(resolve, 150));          // the route opens the new, empty form
+        if (doc.customerId || doc.items.length) await SALES_HELPERS[target[0]].copyFrom(doc, target[1]);
+        return;
+      }
+      soShowMode();
+      form.setVat(soIsInvoice() && soBase() === 'OMR');
+      form.page.absorb();
+    });
+    byId('so-mode').addEventListener('change', () => { soShowMode(); form.refresh(); form.page.absorb(); });
+    byId('so-auto-supplier').addEventListener('click', () => soAutoSelectSuppliers(form));
+    // Supplier Name (single mode): its currency becomes the Supplier Currency.
+    byId('so-supplier').addEventListener('input', async () => {
+      const id = byId('so-supplier-id').value;
+      const supplier = id ? await pbSupplier(id).catch(() => null) : null;
+      const code = String(supplier?.currency || '').toUpperCase();
+      if (SO_RATES_TO_OMR[code]) byId('so-supplier-currency').value = code;
+      soShowMode();
+      form.refresh();
+      form.page.absorb();
+    });
+    byId('so-supplier-currency').addEventListener('change', () => { soShowMode(); form.refresh(); form.page.absorb(); });
+    // A line's supplier (multi mode) brings its currency.
+    byId('so-items').addEventListener('input', async event => {
+      if (event.target.dataset.field !== 'supplierName') return;
+      const row = event.target.closest('tr');
+      const id = pbCell(row, 'supplierId').value;
+      const supplier = id ? await pbSupplier(id).catch(() => null) : null;
+      pbCell(row, 'supplierCurrency').value = String(supplier?.currency || '').toUpperCase();
+      form.refresh();
+      form.page.absorb();
+    });
+    // The costs in the summary are worked into the profit as they are typed.
+    for (const id of ['so-duty', 'so-promotion', 'so-advance']) byId(id).addEventListener('input', () => form.refresh());
+    byId('so-form').addEventListener('input', event => {
+      if (event.target.id === 'so-currency') soShowMode();
+      if (event.target.dataset.field === 'buyingCost') form.refresh();
+    });
+  },
+});
+
+/* Delivery Note: the delivery note screen's fields. Ref Num (SO / Quote) is typed, or picked from the sales orders
+   and quotations (the suggestions); a pick copies that document's customer and lines. Each line has a Branch
+   (a stock point; Auto = the one with the most stock). No payment terms, delivery charge or discount; the summary
+   reads Items Total Amount, Total Quantity, Total VAT, Line Discounts Total and Grand Total. */
+async function dnFillBranches() {
+  let rows = [];
+  try { rows = await loadLookup('warehouse'); } catch { rows = []; }
+  const options = () => [new Option('Auto (Highest Stock)', ''), ...rows.map(row => new Option(row.name, String(row.id)))];
+  byId('pb-line-dn').content.querySelector('[data-field="warehouseId"]').replaceChildren(...options());
+  for (const select of byId('dn-items').querySelectorAll('[data-field="warehouseId"]')) {
+    const keep = select.dataset.value ?? select.value;
+    select.replaceChildren(...options());
+    select.value = keep;
+  }
+}
+
+const dnForm = createSalesForm({
+  key: 'dn', route: 'trade/delivery-note', noun: 'Delivery Note', api: 'api/delivery-notes.php', dateKey: 'deliveryNoteDate', lookups: [],
+  template: 'pb-line-dn', lineExtras: ['deliveryTerm', 'warehouseId'],
+  onShow: () => openLookup(byId('dn-customer')),          // a new delivery note starts by picking the Buyer
+  // A sales order's lines carry no VAT: on the delivery note they take VAT as usual (5% in OMR).
+  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && (byId('dn-currency-id').value || 'OMR') === 'OMR' ? '5.00' : values.vatRate }),
+  fieldNodes: { referenceNo: 'dn-reference', customerPo: 'dn-customer-po', carrier: 'dn-carrier', vehicleNo: 'dn-vehicle' },
+  header: () => {
+    const [kind, id] = byId('dn-reference-id').value.split(':');
+    return {
+      referenceNo: byId('dn-reference').value.trim(), salesOrderId: kind === 'so' ? id : null, quotationId: kind === 'qt' ? id : null,
+      customerPo: byId('dn-customer-po').value.trim(), carrier: byId('dn-carrier').value.trim(), vehicleNo: byId('dn-vehicle').value.trim(),
+    };
+  },
+  afterRefresh() {
+    const rows = [...byId('dn-items').rows];
+    const lineDiscounts = rows.reduce((sum, row) => sum + pbNum(pbCell(row, 'discountAmount')?.value), 0);
+    const subtotal = pbNum(byId('dn-subtotal').textContent);
+    byId('dn-items-total').textContent = pbMoney(subtotal + lineDiscounts);
+    byId('dn-total-qty').textContent = pbQty(rows.reduce((sum, row) => sum + pbNum(pbCell(row, 'quantity')?.value), 0));
+    byId('dn-line-discounts').textContent = pbMoney(lineDiscounts);
+    byId('dn-vat-label').textContent = 'Total VAT Amount';
+  },
+  fill(doc) {
+    byId('dn-reference').value = doc.referenceNo || '';
+    byId('dn-reference-id').value = doc.salesOrderId ? `so:${doc.salesOrderId}` : doc.quotationId ? `qt:${doc.quotationId}` : '';
+    byId('dn-customer-po').value = doc.customerPo || '';
+    byId('dn-carrier').value = doc.carrier || '';
+    byId('dn-vehicle').value = doc.vehicleNo || '';
+  },
+  onReset() { forgetLookups('salesref'); dnFillBranches(); },   // the stock points as they are now
+  init(form, sales) {
+    dnFillBranches();
+    // A sales order or quotation picked from the Ref Num suggestions: its customer, terms and lines become the note's.
+    byId('dn-reference').addEventListener('input', async () => {
+      if (!suggest.picking) return;
+      const [kind, id] = byId('dn-reference-id').value.split(':');
+      if (!id) return;
+      try {
+        const doc = await apiRequest(`api/${kind === 'so' ? 'sales-orders' : 'quotations'}.php?id=${id}`);
+        if (doc.customerPo) byId('dn-customer-po').value = doc.customerPo;
+        await sales.copyFrom(doc, form);
+      } catch (error) { showToast('The document could not be loaded', error.message, true); }
+    });
+  },
+});
+
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm];
 
 /* ---------- GRN line: rejection reason and Stock Transfer ----------
    Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
@@ -9098,7 +9838,89 @@ const grnList = purchaseList({
   },
 });
 
-const PURCHASE_LISTS = [prList, rfqList, poList, grnList];
+/* Trade Management lists (#/trade/quotation, sales-order, delivery-note): the Purchase Book list pages, by customer. */
+function salesList(cfg) {
+  const priced = [
+    ...PB_IMPORT_ITEM,
+    { key: 'deliveryTerm', label: 'Delivery Term', headers: ['delivery', 'delivery time', 'lead time'] },
+    pbImportQty, pbImportUnit,
+    { key: 'price', label: 'Price', headers: ['rate', 'unit price'], read: readSheetNumber('Price') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate', 'vat percent'], read: readSheetNumber('VAT %', 2) },
+    { key: 'discountPct', label: 'Disc %', headers: ['discount', 'discount %'], read: readSheetNumber('Disc %', 2) },
+    pbImportRemarks,
+  ];
+  return purchaseList({
+    key: cfg.key, route: cfg.route, noun: cfg.noun, nouns: cfg.nouns, api: cfg.api, kind: 'po', form: cfg.form, lookups: cfg.lookups,
+    dateOf: record => record.date,
+    columns: [
+      { key: 'code', label: cfg.idLabel, type: 'code', group: 'Document' },
+      { key: 'date', label: 'Date', type: 'mono', group: 'Document' },
+      { key: 'name', label: 'Customer', type: 'name', group: 'Customer' },
+      { key: 'reference', label: cfg.referenceLabel, type: 'mono', group: 'Document' },
+      { key: 'salesman', label: 'Created By', type: 'name', group: 'Document' },
+      { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Document' },
+      { key: 'grandTotal', label: 'Grand Total', type: 'qty-ok', group: 'Document' },
+      detail({ key: 'contactName', label: 'Contact Person', group: 'Customer' }),
+      detail({ key: 'contactNumber', label: 'Contact Number', group: 'Customer' }),
+      detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Customer' }),
+      detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Delivery & Payment' }),
+      detail({ key: 'paymentMode', label: 'Payment Terms', group: 'Delivery & Payment' }),
+      detail({ key: 'creditPeriod', label: 'Credit Period', group: 'Delivery & Payment' }),
+      ...cfg.details,
+    ],
+    fromApi: r => ({ ...r, reference: cfg.reference(r) || '', grandTotal: pbAmount(r.grandTotal), ...cfg.fromApi?.(r) }),
+    importColumns: [
+      { key: 'date', label: 'Date', headers: ['document date', cfg.dateHeader], read: readSheetDate('Date') },
+      { key: 'customer', label: 'Customer', headers: ['customer name', 'buyer', 'client'] },
+      { key: 'salesman', label: 'Salesman', headers: ['created by', 'salesman / created by'] },
+      { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
+      { key: 'vatMode', label: 'VAT', headers: ['vat mode', 'prices'], read: readVatMode },
+      ...priced],
+    importSamples: [
+      { docNo: '1', date: '2026-11-10', customer: 'GULF BUILDERS GROUP', salesman: 'ADMIN', vatMode: 'Exclude', itemName: 'GATE VALVE 2"', deliveryTerm: '2-3 DAYS', quantity: '10', unit: 'Pieces', price: '12.500', vatRate: '5' },
+      { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces', price: '0.350', vatRate: '5' },
+    ],
+    importHeader: async g => ({
+      [cfg.dateKey]: g.date, customerId: await importLookupId('customer', g.customer), salesman: g.salesman,
+      deliveryLocation: g.deliveryLocation, vatMode: g.vatMode || 'exclude',
+    }),
+    importLine: line => ({ deliveryTerm: line.deliveryTerm || '', quantity: line.quantity || '1', price: line.price || '0',
+      vatRate: line.vatRate || '5', discountPct: line.discountPct || '0' }),
+  });
+}
+
+const qtList = salesList({
+  key: 'qt', route: 'trade/quotation', noun: 'Quotation', nouns: 'Quotations', api: 'api/quotations.php', form: qtForm, lookups: ['quotation'],
+  idLabel: 'Quotation ID', referenceLabel: 'Ref Num', reference: r => r.referenceNo, dateKey: 'quotationDate', dateHeader: 'quotation date',
+  details: [detail({ key: 'offerValidity', label: 'Offer Validity', group: 'Document' }),
+    detail({ key: 'certificationText', label: 'Certification Required', group: 'Document' })],
+  fromApi: r => ({ certificationText: (r.certifications || []).join(', ') }),
+});
+
+const soList = salesList({
+  key: 'so', route: 'trade/sales-order', noun: 'Sales Order', nouns: 'Sales Orders', api: 'api/sales-orders.php', form: soForm, lookups: ['salesorder'],
+  idLabel: 'SO ID', referenceLabel: 'Quotation Ref', reference: r => r.quotationCode, dateKey: 'orderDate', dateHeader: 'order date',
+  details: [detail({ key: 'documentTitle', label: 'Document Title', type: 'pill', group: 'Document' }),
+    detail({ key: 'status', label: 'Status', type: 'pill', group: 'Document' }),
+    detail({ key: 'customerPo', label: 'Customer PO No.', group: 'Document' }),
+    detail({ key: 'purchaseCategory', label: 'Purchase Category', group: 'Document' }),
+    detail({ key: 'supplierText', label: 'Supplier', group: 'Supplier & Profit' }),
+    detail({ key: 'totalBuying', label: 'Total Buying Cost', type: 'mono', group: 'Supplier & Profit' }),
+    detail({ key: 'totalProfit', label: 'Total Profit', type: 'mono', group: 'Supplier & Profit' }),
+    detail({ key: 'advancePayment', label: 'Advance Payment', type: 'mono', group: 'Delivery & Payment' })],
+  fromApi: r => ({ advancePayment: pbAmount(r.advancePayment), totalBuying: pbAmount(r.totalBuying), totalProfit: pbAmount(r.totalProfit),
+    supplierText: r.supplierMode === 'multi' ? 'Multi Supplier' : r.supplierName }),
+});
+
+const dnList = salesList({
+  key: 'dn', route: 'trade/delivery-note', noun: 'Delivery Note', nouns: 'Delivery Notes', api: 'api/delivery-notes.php', form: dnForm, lookups: [],
+  idLabel: 'DN ID', referenceLabel: 'Ref Num (SO / Quote)', reference: r => r.referenceNo, dateKey: 'deliveryNoteDate', dateHeader: 'delivery date',
+  details: [detail({ key: 'customerPo', label: 'Customer PO No.', group: 'Document' }),
+    detail({ key: 'carrier', label: 'Carrier', group: 'Delivery & Payment' }),
+    detail({ key: 'vehicleNo', label: 'Vehicle #', group: 'Delivery & Payment' })],
+});
+
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList];
 
 /* ---------- The company letterhead behind every printed page ----------
    The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
@@ -9235,7 +10057,9 @@ function letterheadBands(source, width, height) {
    Laid out as the procurement document design: the title, the Buyer (this company) beside the other party, the
    details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
-const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note' };
+const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note',
+  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note' };
+const SALES_KEYS = ['qt', 'so', 'dn'];             // Trade Management documents (to a customer)
 let companyProfilePromise = null;
 function companyProfile() {
   companyProfilePromise ||= apiRequest('api/company-profile.php').catch(() => null);
@@ -9255,10 +10079,21 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     || (procurement ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
   // GRN Inspection Mode: no Rate / VAT / Amount and no money totals, only the number of items.
   const noPrices = spec.key === 'grn' && hidePrices;
-  const title = PB_TITLES[spec.key];
+  const proforma = spec.key === 'so' && doc.documentTitle === 'Proforma Invoice';
+  const title = proforma ? 'Proforma Invoice' : PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
   const cell = (tag, className, value) => el(tag, className, text(value));
-  // The other party (right of the Buyer) and the details grid, for each kind.
+  // Trade Management documents go to a customer: its details from the Customer master (the name kept on the document otherwise).
+  const isSales = SALES_KEYS.includes(spec.key);
+  const customer = isSales && doc.customerId ? await pbCustomer(String(doc.customerId)).catch(() => null) : null;
+  const buyer = () => ({
+    label: 'Buyer', name: customer?.name || doc.customerName,
+    lines: [customer?.address, ['Country', customer?.country], ['VATIN', customer?.taxRegNo], ['E-mail', customer?.email],
+      ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]],
+  });
+  const terms = [['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Payment Terms', doc.paymentMode],
+    ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : [])];
+  // The other party (right of this company) and the details grid, for each kind.
   const layout = {
     pr: () => ({
       party: { label: 'Requested By', name: doc.requestedBy, lines: [['Purchase Type', doc.purchaseType]] },
@@ -9301,6 +10136,22 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['PO Ref', doc.poNumber || doc.purchaseOrderCode],
         ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')]],
     }),
+    // Sales documents: this company is the Supplier, the customer the Buyer (as the quotation layout).
+    qt: () => ({
+      party: buyer(),
+      meta: [['Quote Ref', doc.code], ['Date', pbDate(doc.quotationDate)], ['Ref Num', doc.referenceNo], ['Offer Validity', doc.offerValidity],
+        ...terms, ['Salesman', doc.salesman], ['Salesman Contact', doc.salesmanContact]],
+    }),
+    so: () => ({
+      party: buyer(),
+      meta: [[proforma ? 'Invoice No' : 'SO No', doc.code], ['Date', pbDate(doc.orderDate)], ['Customer PO No', doc.customerPo],
+        ['Quotation Ref', doc.quotationCode], ['Purchase Category', doc.purchaseCategory], ...terms],
+    }),
+    dn: () => ({
+      party: buyer(),
+      meta: [['DN No', doc.code], ['Date', pbDate(doc.deliveryNoteDate)], ['Customer PO No', doc.customerPo], ['Ref Num', doc.referenceNo],
+        ['Delivery Location', doc.deliveryLocation], ['Carrier', doc.carrier], ['Vehicle #', doc.vehicleNo], ['Salesman', doc.salesman]],
+    }),
   }[spec.key]();
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
@@ -9317,7 +10168,11 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => pbAmount(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => pbAmount(l.lineTotal)]])],
-    }[spec.kind],
+    // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
+    so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
+      [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
+      ...(proforma ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
+    }[spec.key === 'so' ? 'so' : spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
@@ -9352,7 +10207,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     .map(value => String(value ?? '').trim()).filter(Boolean).join(', ');
   const parties = el('div', 'ps-parties');
   parties.append(
-    party(layout.buyerLabel || 'Buyer', companyName, layout.buyerLines
+    party(isSales ? 'Supplier' : (layout.buyerLabel || 'Buyer'), companyName, layout.buyerLines
       ? [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ...layout.buyerLines]
       : [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ['Contact Number', p.phone]]),
     party(layout.party.label, layout.party.name, layout.party.lines),
@@ -9383,7 +10238,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   box.append(metaGrid);
   parts.push(box);
 
-  parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items' }[spec.key]));
+  parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
+    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items' }[spec.key]));
   const table = el('table', `ps-table ps-table-${spec.kind}`);
   const thead = el('thead');
   const headRow = el('tr');
@@ -9398,6 +10254,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     if (line.itemNameHtml) nameCell.replaceChildren(remarksFragment(line.itemNameHtml));
     const brand = String(line.brandName ?? '').trim();
     if (brand) nameCell.append(el('div', 'ps-make', `Make: ${brand}`));
+    const term = String(line.deliveryTerm ?? '').trim();           // sales lines
+    if (term) nameCell.append(el('div', 'ps-make', `Delivery: ${term}`));
     const transfers = (line.transfers || []).filter(t => pbNum(t.quantity) > 0);
     if (spec.key === 'grn' && transfers.length) {
       const list = el('div', 'ps-transfers');
@@ -9425,7 +10283,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     }
     side.append(remarks);
   }
-  if (spec.key === 'po') {
+  if (spec.key === 'po' || spec.key === 'qt') {
     const certification = el('div', 'ps-remarks ps-certification');
     certification.append(el('div', 'ps-label', 'Certification Required'),
       el('div', 'ps-remarks-text', (doc.certifications || []).join(', ') || 'N/A'));
@@ -9444,8 +10302,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const grn = spec.key === 'grn';
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
       [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
-      ['Discount', doc.discountAmount], [grn ? 'Shipping / Freight' : 'Shipping', doc.shipping], ['Grand Total', doc.grandTotal, true]]) {
+      ['Discount', doc.discountAmount],
+      [grn ? 'Shipping / Freight' : ({ qt: 'Delivery Charge', so: 'Transportation Charge', dn: 'Delivery Charge' }[spec.key] || 'Shipping'), doc.shipping],
+      ...(spec.key === 'qt' ? [['Round Off', doc.roundOff]] : []),          // left out when 0
+      ['Grand Total', doc.grandTotal, true],
+      // A sales order's advance (left out when none) and what is still due.
+      ...(spec.key === 'so' && pbNum(doc.advancePayment) ? [['Advance Payment', doc.advancePayment], ['Balance Due', pbNum(doc.grandTotal) - pbNum(doc.advancePayment)]] : [])]) {
       if (!strong && !pbNum(value) && !label.startsWith('Subtotal') && !label.includes('VAT')) continue;   // a zero discount / shipping is left out
+      if (spec.key === 'so' && !proforma && label.includes('VAT')) continue;                             // a sales order carries no VAT
       const discount = label === 'Discount';
       const row = el('div', strong ? 'ps-total-grand' : discount && grn ? 'ps-total-discount' : '');
       row.append(el('dt', '', `${label}:`), el('dd', '', `${discount && grn ? '-' : ''}${pbAmount(value)}${currency}`));
@@ -9711,6 +10575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof initLiveUpdates === 'function') initLiveUpdates();   // sync.js
   initQuickItem();
   initQuickSupplier();
+  initQuickContact();
   initItemDescription();
   for (const list of MASTER_LISTS) list.init();
   loadDashboard();

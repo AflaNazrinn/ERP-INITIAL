@@ -184,11 +184,18 @@ function pb_clean_colour(string $colour): string
 /* ---------- Lines ---------- */
 
 /*
- * The item lines of a payload. $priced adds the PO price columns, $grn the GRN quantities and costs.
+ * The item lines of a payload. 'po' adds the price columns, 'sales' (quotations, sales orders, delivery notes)
+ * the same plus a delivery term per line, 'grn' the GRN quantities and costs.
  * A row with no item name and no item picked is blank and dropped; at least one line is required.
  * A picked item, brand or unit fills its code / name from the master, so the text always matches.
  * Purchase request lines must be Item master items; the other documents also take typed item names.
  */
+/* Sales line kinds: 'sales' (quotation), 'salesorder' (+ buying side), 'deliverynote' (+ branch). */
+function pb_is_sales(string $kind): bool
+{
+    return in_array($kind, ['sales', 'salesorder', 'deliverynote'], true);
+}
+
 function pb_read_lines(Input $in, string $kind): array
 {
     $lines = [];
@@ -232,7 +239,8 @@ function pb_read_lines(Input $in, string $kind): array
                 $r->fail('quantity', 'Quantity must be more than 0.');
             }
         }
-        if ($kind === 'po') {
+        $sales = pb_is_sales($kind);
+        if ($kind === 'po' || $sales) {
             $line += [
                 'price' => $r->decimal('price', 'Price', 14, 3) ?? '0',
                 'vatRate' => $r->decimal('vatRate', 'VAT %', 5, 2, false, '100') ?? '0',
@@ -240,6 +248,18 @@ function pb_read_lines(Input $in, string $kind): array
                 'discountAmount' => $r->decimal('discountAmount', 'Disc. amount', 14, 3),
                 'foc' => !empty($raw['foc']) && $raw['foc'] !== 'No' && $raw['foc'] !== 'false',
             ];
+        }
+        if ($sales) {
+            $line['deliveryTerm'] = $r->text('deliveryTerm', 'Delivery term', 200);   // sales documents: printed under the item
+        }
+        if ($kind === 'deliverynote') {               // a delivery note line's Branch (none: Auto, the most stock)
+            $line['warehouseId'] = $r->id('warehouseId', 'branch', 'warehouses');
+        }
+        if ($kind === 'salesorder') {                 // a sales order's buying side: the cost and (multi-supplier) the line's supplier
+            $line['buyingCost'] = $r->decimal('buyingCost', 'Buying cost', 14, 3) ?? '0';
+            $line['supplierId'] = $r->id('supplierId', 'supplier', 'suppliers');
+            $line['supplierCurrency'] = $line['supplierId'] === null ? ''
+                : strtoupper((string) query('SELECT currency FROM suppliers WHERE id = ?', [$line['supplierId']])->fetchColumn());
         }
         if ($itemId !== null) {
             $item = query('SELECT item_code, item_name FROM items WHERE id = ?', [$itemId])->fetch();
@@ -300,7 +320,7 @@ function pb_totals(array $lines, string $kind, string $vatMode, float $discount,
         $taxable = $nets[$i] - $share;
         $vat += $vatMode === 'include' ? $taxable * $rate / (100 + $rate) : $taxable * $rate / 100;
         $line['lineTotal'] = pb_money($vatMode === 'include' ? $nets[$i] : $nets[$i] * (1 + $rate / 100));
-        if ($kind === 'po' && $line['discountAmount'] === null) {
+        if (($kind === 'po' || pb_is_sales($kind)) && $line['discountAmount'] === null) {
             $gross = $line['foc'] ? 0.0 : (float) $line['quantity'] * (float) $line['price'];
             $line['discountAmount'] = pb_money($gross * (float) $line['discountPct'] / 100);
         }
@@ -352,7 +372,16 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
         } else {
             $columns['quantity'] = $l['quantity'];
         }
-        if ($kind === 'po') {
+        if (pb_is_sales($kind)) {
+            $columns['delivery_term'] = $l['deliveryTerm'] ?? '';
+        }
+        if ($kind === 'deliverynote') {
+            $columns['warehouse_id'] = $l['warehouseId'] ?? null;
+        }
+        if ($kind === 'salesorder') {
+            $columns += ['supplier_id' => $l['supplierId'], 'supplier_currency' => $l['supplierCurrency'], 'buying_cost' => $l['buyingCost']];
+        }
+        if ($kind === 'po' || pb_is_sales($kind)) {
             $columns += ['price' => $l['price'], 'vat_rate' => $l['vatRate'], 'discount_pct' => $l['discountPct'],
                 'discount_amount' => $l['discountAmount'], 'foc' => $l['foc'] ? 1 : 0, 'line_total' => $l['lineTotal']];
         }
@@ -366,8 +395,10 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
 {
     // The item's code and name come from the Item master as it is now, so a renamed item shows its new name on
     // every document; a line whose item is gone keeps the name it was saved with.
-    $rack = $kind === 'grn' ? ', rb.location_code AS rack_code' : '';
-    $rackJoin = $kind === 'grn' ? ' LEFT JOIN rack_bins rb ON rb.id = l.rack_id' : '';
+    $rack = ['grn' => ', rb.location_code AS rack_code', 'salesorder' => ', sp.supplier_name AS line_supplier',
+        'deliverynote' => ', wh.warehouse_name AS line_warehouse'][$kind] ?? '';
+    $rackJoin = ['grn' => ' LEFT JOIN rack_bins rb ON rb.id = l.rack_id', 'salesorder' => ' LEFT JOIN suppliers sp ON sp.id = l.supplier_id',
+        'deliverynote' => ' LEFT JOIN warehouses wh ON wh.id = l.warehouse_id'][$kind] ?? '';
     $sql = "SELECT l.*, it.item_code AS master_code, it.item_name AS master_name$rack FROM `$table` l"
         . " LEFT JOIN items it ON it.id = l.item_id$rackJoin WHERE l.`$owner` = ? ORDER BY l.sort_order, l.id";
     return array_map(static function (array $l) use ($kind): array {
@@ -386,7 +417,17 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
                 'unitCost' => $l['unit_cost'], 'vatRate' => $l['vat_rate'], 'discountPct' => $l['discount_pct'], 'lineTotal' => $l['line_total']];
         }
         $line['quantity'] = $l['quantity'];
-        if ($kind === 'po') {
+        if (pb_is_sales($kind)) {
+            $line['deliveryTerm'] = (string) ($l['delivery_term'] ?? '');
+        }
+        if ($kind === 'deliverynote') {
+            $line += ['warehouseId' => $l['warehouse_id'] === null ? null : (int) $l['warehouse_id'], 'warehouseName' => $l['line_warehouse'] ?? ''];
+        }
+        if ($kind === 'salesorder') {
+            $line += ['buyingCost' => $l['buying_cost'], 'supplierId' => $l['supplier_id'] === null ? null : (int) $l['supplier_id'],
+                'supplierName' => $l['line_supplier'] ?? '', 'supplierCurrency' => $l['supplier_currency']];
+        }
+        if ($kind === 'po' || pb_is_sales($kind)) {
             $line += ['price' => $l['price'], 'vatRate' => $l['vat_rate'], 'discountPct' => $l['discount_pct'],
                 'discountAmount' => $l['discount_amount'], 'foc' => (bool) $l['foc'], 'lineTotal' => $l['line_total']];
         }
