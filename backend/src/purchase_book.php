@@ -358,14 +358,18 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
 
 function pb_find_lines(string $table, string $owner, int $docId, string $kind): array
 {
-    $sql = $kind === 'grn'
-        ? "SELECT l.*, rb.location_code AS rack_code FROM `$table` l LEFT JOIN rack_bins rb ON rb.id = l.rack_id WHERE l.`$owner` = ? ORDER BY l.sort_order, l.id"
-        : "SELECT * FROM `$table` WHERE `$owner` = ? ORDER BY sort_order, id";
+    // The item's code and name come from the Item master as it is now, so a renamed item shows its new name on
+    // every document; a line whose item is gone keeps the name it was saved with.
+    $rack = $kind === 'grn' ? ', rb.location_code AS rack_code' : '';
+    $rackJoin = $kind === 'grn' ? ' LEFT JOIN rack_bins rb ON rb.id = l.rack_id' : '';
+    $sql = "SELECT l.*, it.item_code AS master_code, it.item_name AS master_name$rack FROM `$table` l"
+        . " LEFT JOIN items it ON it.id = l.item_id$rackJoin WHERE l.`$owner` = ? ORDER BY l.sort_order, l.id";
     return array_map(static function (array $l) use ($kind): array {
+        $name = (string) ($l['master_name'] ?? $l['item_name']);
         $line = [
-            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'],
-            // The line's formatting only while its text is still the line's name (a renamed item drops it).
-            'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), (string) $l['item_name']) ?? '',
+            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['master_code'] ?? $l['item_code'], 'itemName' => $name,
+            // The line's formatting only while its text is still the item's name (a renamed item drops it).
+            'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), $name) ?? '',
             'brandId' => $l['brand_id'] === null ? null : (int) $l['brand_id'], 'brandName' => $l['brand_name'],
             'uomId' => $l['uom_id'] === null ? null : (int) $l['uom_id'], 'unit' => $l['unit'],
         ];
