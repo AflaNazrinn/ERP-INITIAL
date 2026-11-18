@@ -1,9 +1,8 @@
--- Purchase Order: credit period and named signatories (November 2026).
+-- Purchase Order: credit period (November 2026).
 -- credit_period: shown and required when the payment mode is Credit (e.g. "30 Days"); empty otherwise.
--- signatories: the signature slots printed when "Include Signatory Slots" is ticked, as JSON
--- [{"name": "...", "title": "..."}, …]; NULL prints the standard Prepared / Checked / Approved By boxes.
--- It only adds columns. Applied by backend/bin/migrate.php (to every company). MySQL 8 / MariaDB 10.6+.
+-- (Signatory slots are kept in extra_signatories, migration 2026_11_17_001. An earlier copy of this file also
+-- added an unused purchase_orders.signatories column; where it ran, that column is simply ignored.)
+-- It only adds a column. Applied by backend/bin/migrate.php (to every company). MySQL 8 / MariaDB 10.6+.
 
 ALTER TABLE purchase_orders
-  ADD COLUMN credit_period VARCHAR(40) NOT NULL DEFAULT '' AFTER payment_mode,
-  ADD COLUMN signatories   TEXT        NULL AFTER include_signatory;
+  ADD COLUMN credit_period VARCHAR(40) NOT NULL DEFAULT '' AFTER payment_mode;

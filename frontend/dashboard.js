@@ -42,41 +42,25 @@ const byId = id => document.getElementById(id);
    once the backend exists. The shape below is the API contract.
    ===================================================================== */
 
+// The figures come from the company's own records (api/dashboard.php); zeros if they could not be loaded.
 async function fetchDashboard({ chartYear, chartMonth }) {
   const weeks = Math.ceil(new Date(chartYear, chartMonth, 0).getDate() / 7);
+  const lastMonth = shiftMonth(today.getFullYear(), today.getMonth() + 1, -1);
+  try {
+    const data = await apiRequest(`api/dashboard.php?year=${chartYear}&month=${chartMonth}`);
+    data.profitLoss.lastMonth = { ...lastMonth, ...data.profitLoss.lastMonth };
+    return data;
+  } catch (error) {
+    console.warn('Dashboard figures not loaded:', error);
+  }
   return {
-    kpis: {
-      totalSales: '0.000',
-      totalPurchase: '0.000',
-      pendingPurchase: '0.000',
-      totalItems: 0,
-      totalEmployees: 0,
-      creditors: '0.000',
-      debtors: '0.000',
-    },
-    // Margin % = (sales - cost) / sales * 100, computed server-side. Negative = loss.
-    profitLoss: {
-      lastMonth: { ...shiftMonth(today.getFullYear(), today.getMonth() + 1, -1), margin: '0.0' },
-      overall: { margin: '0.0' },
-    },
-    chart: {
-      sales: '0.000',
-      purchase: '0.000',
-      weeks: Array.from({ length: weeks }, (_, i) => ({ label: `W${i + 1}`, sales: '0.000', purchase: '0.000' })),
-    },
+    kpis: { totalSales: '0.000', totalPurchase: '0.000', pendingPurchase: '0.000', totalItems: 0, totalEmployees: 0, creditors: '0.000', debtors: '0.000' },
+    profitLoss: { lastMonth: { ...lastMonth, margin: '0.0' }, overall: { margin: '0.0' } },
+    chart: { sales: '0.000', purchase: '0.000',
+      weeks: Array.from({ length: weeks }, (_, i) => ({ label: `W${i + 1}`, sales: '0.000', purchase: '0.000' })) },
     returns: { purchaseReturn: '0.000', salesReturn: '0.000', rmaCount: 0, resolvedCount: 0 },
     quotations: { total: 0, totalValue: '0.000', pending: 0, approved: 0, rejected: 0 },
-    // Sample rows from the design; the real list comes from the audit log table.
-    activities: [
-      { at: '2026-10-27T15:10:42', user: 'Anas', role: 'Sales Executive', title: 'Created a Quotation',
-        detail: 'Quotation generated for customer review:', ref: '#QUO-2026-0041', module: 'Sales Portal', status: 'Completed' },
-      { at: '2026-10-27T14:45:18', user: 'Justin', role: 'Operations Manager', title: 'Edited a Sales Order',
-        detail: 'Modified line items and delivery schedule on', ref: '#SO-2026-0118', module: 'Sales Orders', status: 'Updated' },
-      { at: '2026-10-27T13:20:05', user: 'Anas', role: 'Sales Executive', title: 'Created Delivery Note',
-        detail: 'Dispatched items for warehouse transfer under', ref: '#DN-2026-0089', module: 'Logistics', status: 'Completed' },
-      { at: '2026-10-27T11:05:33', user: 'Justin', role: 'Operations Manager', title: 'Updated Quotation Terms',
-        detail: 'Revised payment terms and discounts on', ref: '#QUO-2026-0039', module: 'Sales Portal', status: 'Updated' },
-    ],
+    activities: [],
   };
 }
 
@@ -537,6 +521,12 @@ function initKeyboardNavigation() {
       return;
     }
 
+    // The document preview page: B goes back, P / Ctrl+P prints; Esc closes it like any popup.
+    if (byId('pb-preview').open) {
+      handlePreviewKeys(event);
+      event.stopPropagation();
+      return;
+    }
     // The company logo popup: its buttons, Tab and Esc work as usual, no page shortcuts.
     if (byId('company-icon').open) {
       event.stopPropagation();
@@ -1662,6 +1652,38 @@ function initFieldChecks() {
   });
 }
 
+/* A card for the popups without one of their own (Supplier, Currency): the name over "code • country", a tick circle. */
+function plainLookupCard(config, row) {
+  const cell = el('td', 'lk-card-cell');
+  cell.colSpan = config.columns.length;
+  const text = el('div', 'lk-card-text');
+  text.append(el('div', 'lk-card-name', config.cardName ? config.cardName(row) : config.display(row)));
+  const meta = config.cardMeta ? config.cardMeta(row) : row.code;
+  if (meta) text.append(el('div', 'lk-card-meta', meta));
+  const tick = el('span', 'lk-card-tick');
+  tick.setAttribute('aria-hidden', 'true');
+  tick.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"></circle><path d="m8 12.2 2.7 2.7L16 9.6"></path></svg>';
+  cell.append(text, tick);
+  return cell;
+}
+
+/* The item popups list each item as a card: the code, the name, the category; on the right the
+   price and "Available Stock: 12 PIECES" (amber at none, green with stock). */
+function itemLookupCard(row) {
+  const stock = pbNum(row.availableStock);
+  const td = el('td', 'lk-item');
+  const main = el('div', 'lk-item-main');
+  const top = el('div', 'lk-item-top');
+  top.append(el('span', 'lk-item-code', row.code));
+  main.append(top, el('div', 'lk-item-name', row.name));
+  if (row.category) main.append(el('span', 'lk-item-cat', row.category));
+  const side = el('div', 'lk-item-side');
+  side.append(el('div', 'lk-item-price', pbMoney(pbNum(row.buyingRate))),
+    el('span', `lk-stock lk-stock-wide${stock > 0 ? ' has-stock' : ''}`, `Available Stock: ${pbQty(stock)}${row.unit ? ` ${row.unit.toUpperCase()}` : ''}`));
+  td.append(main, side);
+  return td;
+}
+
 // title and list name the popup; plural counts its rows; columns are [rowKey, heading], the first shown as the code.
 const codeAndName = row => `${row.code} · ${row.name}`;
 const LOOKUPS = {
@@ -1683,17 +1705,20 @@ const LOOKUPS = {
   rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
-    columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit']], display: row => row.name },
+    columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit'], ['category', 'Category']], display: row => row.name, card: itemLookupCard,
+    subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
   // Purchase Book rows: the Item Code popup lists codes with each item's name.
   itemcode: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
-    columns: [['code', 'Code'], ['name', 'Item Name']], display: row => row.code, meta: row => row.name },
+    columns: [['code', 'Code'], ['name', 'Item Name'], ['category', 'Category']], display: row => row.code, meta: row => row.name, card: itemLookupCard,
+    subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
     columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
   // Purchase Order currency: the hidden id holds the code (OMR), the field shows "OMR – Omani Rial".
   currency: { title: 'Select Currency', letter: '$', list: 'Currency List', plural: 'currencies', rows: () => PO_CURRENCIES,
-    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}` },
+    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}`,
+    subtitle: 'Choose the currency of this order.', search: 'Search currency by code or name...', cardName: row => row.name, cardMeta: row => row.code },
   // Purchase Order type-to-search text (free text kept as typed): the usual values, then those used on saved orders.
   poLocation: { plural: 'locations', rows: () => poTextRows('deliveryLocation', PO_LOCATIONS), display: row => row.name, meta: () => '' },
   poTerms: { plural: 'delivery terms', rows: () => poTextRows('deliveryTerms', PO_TERMS), display: row => row.name, meta: () => '' },
@@ -1825,11 +1850,12 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
   lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
     || (!lookupIdInput(field) && config.display(row) === field.value)));
-  // Card style: a subtitle, the search box with + Create … beside it, rows as name over "code • city", no key hints.
-  lookup.cards = field.dataset.lookupCards !== undefined;
+  // Card style: the item popups everywhere (config.card), and fields marked data-lookup-cards (the Purchase Order's
+  // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
+  lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
   dialog.classList.toggle('lk-cards', lookup.cards);
   byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
-  byId('lookup-sub').hidden = !lookup.cards;
+  byId('lookup-sub').hidden = !lookup.cards || !config.subtitle;
   byId('lookup-new').hidden = !(lookup.cards && config.create);
   byId('lookup-new-label').textContent = config.create || '';
   byId('lookup-letter').textContent = config.letter;
@@ -1840,6 +1866,8 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
   byId('lookup-done-hint').hidden = !multi;
   const canCreate = Boolean(lookupCreateForm(field));
+  dialog.classList.toggle('lk-can-create', canCreate);
+  dialog.classList.remove('lk-navigated');
   byId('lookup-create').hidden = !canCreate;
   byId('lookup-create-hint').hidden = !canCreate;
   const search = byId('lookup-search');
@@ -1877,21 +1905,8 @@ function renderLookupRows() {
       box.append(el('span', 'lk-box'));
       tr.append(box);
     }
-    if (lookup.cards) {
-      const cell = el('td', 'lk-card-cell');
-      cell.colSpan = config.columns.length;
-      const text = el('div', 'lk-card-text');
-      text.append(el('div', 'lk-card-name', config.display(row)));
-      const meta = config.cardMeta ? config.cardMeta(row) : row.code;
-      if (meta) text.append(el('div', 'lk-card-meta', meta));
-      const tick = el('span', 'lk-card-tick');
-      tick.setAttribute('aria-hidden', 'true');
-      tick.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"></circle><path d="m8 12.2 2.7 2.7L16 9.6"></path></svg>';
-      cell.append(text, tick);
-      tr.append(cell);
-      return tr;
-    }
-    config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
+    if (lookup.cards) tr.append(config.card ? config.card(row) : plainLookupCard(config, row));
+    else config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
     return tr;
   });
   if (rows.length === 0) {
@@ -2069,7 +2084,18 @@ function handleLookupDialogKeys(event) {
     return;
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
-  if (steps[key]) { event.preventDefault(); moveLookupActive(steps[key]); return; }
+  if (steps[key]) {
+    event.preventDefault();
+    // Item popups: nothing is highlighted until ↑/↓ is used; the first press highlights the current item.
+    const dialog = byId('lookup');
+    if (dialog.classList.contains('lk-cards') && !dialog.classList.contains('lk-navigated')) {
+      dialog.classList.add('lk-navigated');
+      byId(`lookup-row-${lookup.active}`)?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    moveLookupActive(steps[key]);
+    return;
+  }
   if (key === 'Enter') {
     event.preventDefault();
     if (event.repeat) return;
@@ -3029,6 +3055,7 @@ function createFormPage(config) {
       forgetLookups(...(config.lookups || []));
       if (warning) showToast(`${record.code} saved, but its documents were not uploaded`, warning, true);
       else showToast(`${noun()} ${wasEditing ? 'updated' : 'saved'}`, `${record.code} · ${record.name}`);
+      if (!wasEditing) config.afterCreate?.(record);       // e.g. a new Purchase Request opens on its preview page
       const listRoute = typeof config.listRoute === 'function' ? config.listRoute() : config.listRoute;
       // Pages without a list (the Purchase Book documents) always stay for the next record.
       if (listRoute && showSavedInList(listRoute, record.code, { edited: Boolean(wasEditing) })) return;
@@ -6987,6 +7014,7 @@ function renderRoute() {
   }
   const wasElsewhere = currentPage !== 'dashboard';
   showPage('dashboard');
+  if (wasElsewhere && state.data) loadDashboard();      // back from a form or list: the figures may have changed
   if (route !== '' && route !== 'home') {
     history.replaceState(null, '', '#/home');
     currentRoute = 'home';
@@ -7087,6 +7115,14 @@ const itemBrands = item => {
 };
 
 function setRowBrands(row, item) {
+  // The Brand lookup (PR / RFQ / GRN): locked, "Select an item first", until the row has an item.
+  const brandInput = pbCell(row, 'brandName');
+  if (brandInput?.matches('.fp-lookup')) {
+    const locked = !pbCell(row, 'itemId').value;
+    brandInput.disabled = locked;
+    brandInput.placeholder = locked ? 'Select an item first' : 'Select brand...';
+    brandInput.closest('.fp-input-wrap')?.classList.toggle('is-locked', locked);
+  }
   const select = row.querySelector('select[data-bind="brandId"]');
   if (!select) return;                   // the purchase order has no Brand column
   if (!item) {
@@ -7380,6 +7416,7 @@ function createPurchaseForm(spec) {
   const printBox = () => byId(`${spec.key}-form`).querySelector('.pb-print');
   const flags = () => ({
     includeSignatory: printBox().querySelector('[data-print-field="includeSignatory"]').checked,
+    signatories: readSignatories(printBox()),
     attachSeal: printBox().querySelector('[data-print-field="attachSeal"]').checked,
   });
   const rows = () => form.page.rowsOf('items');
@@ -7486,10 +7523,11 @@ function createPurchaseForm(spec) {
     read: () => ({ flags: flags(), chips: spec.chips ? spec.chips.get() : null }),
     write(state) {
       printBox().querySelector('[data-print-field="includeSignatory"]').checked = state.flags.includeSignatory;
+      writeSignatories(printBox(), state.flags.signatories);
       printBox().querySelector('[data-print-field="attachSeal"]').checked = state.flags.attachSeal;
       if (spec.chips) { spec.chips.set(state.chips); spec.onChips?.(); }
     },
-    reset() { if (spec.chips) { spec.chips.set([]); spec.onChips?.(); } },
+    reset() { writeSignatories(printBox(), PB_DEFAULT_SIGNATORIES); if (spec.chips) { spec.chips.set([]); spec.onChips?.(); } },
   };
 
   // Edit mode (#/purchase-book/<list>/edit/<id>): the saved document back in the form, once the
@@ -7501,6 +7539,7 @@ function createPurchaseForm(spec) {
     spec.fill(form, record);
     el('remarks').value = record.remarks || '';
     formNode.querySelector('[data-print-field="includeSignatory"]').checked = Boolean(record.includeSignatory);
+    writeSignatories(formNode.querySelector('.pb-print'), record.signatories || []);
     formNode.querySelector('[data-print-field="attachSeal"]').checked = Boolean(record.attachSeal);
     remarksEditor(form)?.show();
     if (priced) {
@@ -7521,6 +7560,7 @@ function createPurchaseForm(spec) {
 
   form.page = createFormPage({
     key: spec.key, route: spec.route, noun: spec.noun, api: spec.api, ctrlSave: true, lookups: spec.lookups, listRoute: spec.listRoute,
+    afterCreate: spec.previewOnCreate ? record => printPurchaseDocument(spec, record.id) : undefined,
     firstField: () => spec.firstField(),
     setCode: () => showNextCode(el('code'), spec.api),
     lists: { items: { body: `${spec.key}-items`, template: spec.template, initial: 1, label: i => String(i + 1),
@@ -7532,6 +7572,7 @@ function createPurchaseForm(spec) {
     fieldNodes: {
       items: () => pbCell(rows()[0], 'itemName'),
       remarks: () => el('remarks'),
+      signatories: () => printBox().querySelector('[data-signatories] input') || printBox().querySelector('[data-signatory="add"]'),
       ...Object.fromEntries(Object.entries(spec.fieldNodes || {}).map(([key, id]) => [key, () => byId(id)])),
     },
     refresh: () => form.refresh(),
@@ -7587,6 +7628,26 @@ function initPurchaseForm(form) {
   box.append(byId('pb-print-box').content.cloneNode(true));
   box.querySelector('[data-print-field="includeSignatory"]').id = `${spec.key}-signatory`;
   box.querySelector('[data-print-field="attachSeal"]').id = `${spec.key}-seal`;
+  // Add Signatory: one more named slot (its name field takes focus), and Include Signatory Slots is ticked.
+  box.addEventListener('click', event => {
+    if (event.target.closest('[data-signatory="add"]')) {
+      const list = box.querySelector('[data-signatories]');
+      if (list.children.length >= PB_MAX_SIGNATORIES) { showToast('Signatories', `At most ${PB_MAX_SIGNATORIES} signatories.`, true); return; }
+      list.append(signatoryRow(null));
+      box.querySelector('[data-print-field="includeSignatory"]').checked = true;
+      list.lastElementChild.querySelector('input').focus();
+      formNode.dispatchEvent(new Event('input', { bubbles: true }));     // recorded like any other change
+      return;
+    }
+    const remove = event.target.closest('[data-signatory="remove"]');
+    if (remove) {
+      const row = remove.closest('li');
+      const next = row.nextElementSibling || row.previousElementSibling;
+      row.remove();
+      (next?.querySelector('input') || box.querySelector('[data-signatory="add"]')).focus();
+      formNode.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
   initRemarksEditor(form);
 
   // Before the form's own input handler records the change: keep hidden values and linked cells in step.
@@ -7771,6 +7832,36 @@ function initRemarksEditor(form) {
   bar.querySelector('[data-custom-colour]').addEventListener('input', event => run('foreColor', event.target.value));
 }
 
+/* The signatory slots in a form's PDF print box: a name and a position / title each, with a remove button.
+   A new document starts with one: Prepared By (Procurement Officer); Add Signatory adds more. */
+const PB_DEFAULT_SIGNATORIES = [{ name: 'Prepared By', title: 'Procurement Officer' }];
+const PB_MAX_SIGNATORIES = 6;
+function signatoryRow(slot) {
+  const { name = '', title = '' } = typeof slot === 'string' ? { name: slot } : (slot || {});
+  const li = el('li', 'pb-signatory');
+  const field = (label, key, value, placeholder) => {
+    const wrap = el('label', 'pb-signatory-field');
+    const input = el('input', 'fp-input pb-signatory-input');
+    Object.assign(input, { type: 'text', value, maxLength: 60, placeholder, autocomplete: 'off' });
+    input.dataset.signatoryPart = key;
+    wrap.append(el('span', 'pb-signatory-label', label), input);
+    return wrap;
+  };
+  const remove = el('button', 'pb-icon-btn pb-icon-danger');
+  Object.assign(remove, { type: 'button', title: 'Remove this signatory' });
+  remove.dataset.signatory = 'remove';
+  remove.setAttribute('aria-label', 'Remove this signatory');
+  remove.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg>';
+  li.append(field('Signatory Name', 'name', name, 'e.g. Prepared By'), field('Position / Title', 'title', title, 'e.g. Procurement Officer'), remove);
+  return li;
+}
+const readSignatories = box => [...box.querySelectorAll('[data-signatories] li')]
+  .map(li => ({ name: li.querySelector('[data-signatory-part="name"]').value.trim(), title: li.querySelector('[data-signatory-part="title"]').value.trim() }))
+  .filter(slot => slot.name || slot.title);
+function writeSignatories(box, slots) {
+  box.querySelector('[data-signatories]').replaceChildren(...(slots || []).map(signatoryRow));
+}
+
 // Units for the Unit cells, racks for the GRN; the seal's name beside Replace / Remove.
 async function loadPurchaseMasters() {
   loadLookup('uom').catch(() => {});              // ready before the first Unit cell is typed in
@@ -7778,15 +7869,31 @@ async function loadPurchaseMasters() {
   showSealName();
 }
 
+let sealOnFile = false;
 async function showSealName() {
   let seal = null;
   try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
+  sealOnFile = Boolean(seal);
   for (const label of document.querySelectorAll('[data-seal-name]')) label.textContent = seal ? '(seal on file)' : '(no seal yet)';
   for (const button of document.querySelectorAll('[data-seal="remove"]')) button.disabled = !seal;
+  // The seal under Attach Seal (shown while it is ticked), as the PDF prints it.
+  const src = seal ? `api/company-seal.php?file=1&t=${Date.now()}` : '';
+  for (const preview of document.querySelectorAll('[data-seal-preview]')) {
+    preview.hidden = !seal;
+    const img = preview.querySelector('[data-seal-image]');
+    if (seal) img.src = src; else img.removeAttribute('src');
+  }
 }
 
 function initSealButtons() {
   const picker = byId('pb-seal-file');
+  // Ticking Attach Seal without a seal on file asks for the seal image first.
+  document.addEventListener('change', event => {
+    if (event.target.matches?.('[data-print-field="attachSeal"]') && event.target.checked && !sealOnFile) {
+      showToast('Upload the company seal', 'Choose the seal image (PNG or JPG) to print on the PDF.');
+      picker.click();
+    }
+  });
   document.addEventListener('click', async event => {
     const button = event.target.closest('[data-seal]');
     if (!button) return;
@@ -7850,13 +7957,14 @@ async function purchaseOptions(select, api, label) {
 
 /* ---------- Purchase Request ---------- */
 const prForm = createPurchaseForm({
-  key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php',
+  key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php', previewOnCreate: true,
   kind: 'simple', template: 'pb-line-simple', lookups: [], itemsFromMaster: true,   // every line is an Item master item
   firstField: () => byId('pr-reference'),
-  fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required', deliveryLocation: 'pr-location' },
+  fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required',
+    remarks: 'pr-remarks-editor' },
   header: () => ({
     referenceNo: byId('pr-reference').value.trim(), purchaseType: byId('pr-type').value, requestedDate: byId('pr-date').value,
-    requiredDate: byId('pr-required').value, requestedBy: byId('pr-requested-by').value, deliveryLocation: byId('pr-location').value.trim(),
+    requiredDate: byId('pr-required').value, requestedBy: byId('pr-requested-by').value,
   }),
   check(form, errors) {
     if (!byId('pr-date').value) errors.push({ node: byId('pr-date'), message: 'Enter the requested date.' });
@@ -7872,7 +7980,6 @@ const prForm = createPurchaseForm({
     byId('pr-date').value = pr.requestedDate;
     byId('pr-required').value = pr.requiredDate || '';
     byId('pr-requested-by').value = pr.requestedBy || 'admin';
-    byId('pr-location').value = pr.deliveryLocation;
   },
 });
 
@@ -7973,32 +8080,6 @@ async function poShowCredit({ fill = false } = {}) {
   byId('po-credit-period').value = `${days} Days`;
 }
 
-// Signatory slots (Include Signatory Slots ticked): name + position rows, kept as JSON in #po-signatories.
-function poReadSignatories() {
-  try { const list = JSON.parse(byId('po-signatories').value || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
-}
-function poStoreSignatories() {
-  const list = [...byId('po-sign-rows').querySelectorAll('.pb-sign-row')].map(row => ({
-    name: row.querySelector('[data-sign="name"]').value, title: row.querySelector('[data-sign="title"]').value,
-  }));
-  byId('po-signatories').value = JSON.stringify(list);
-}
-function poAddSignatoryRow(entry = {}) {
-  const row = byId('po-sign-row').content.firstElementChild.cloneNode(true);
-  row.querySelector('[data-sign="name"]').value = entry.name || '';
-  row.querySelector('[data-sign="title"]').value = entry.title || '';
-  byId('po-sign-rows').append(row);
-  return row;
-}
-// Shows the rows the hidden value holds, under the print box while Include Signatory Slots is ticked.
-function poShowSignatories() {
-  const on = byId('po-signatory')?.checked ?? false;
-  byId('po-signs').hidden = !on;
-  byId('po-sign-rows').replaceChildren();
-  for (const entry of poReadSignatories()) poAddSignatoryRow(entry);
-  if (on && !byId('po-sign-rows').childElementCount) poAddSignatoryRow();
-}
-
 // VAT follows the currency: VAT Enabled (5%) on an order in OMR (Omani Rial, Oman), none in any other currency.
 // The VAT button can still change it for one order.
 function poVatFromCurrency(form) {
@@ -8018,7 +8099,7 @@ const poForm = createPurchaseForm({
   firstField: () => byId('po-date'),
   fieldNodes: { poDate: 'po-date', quotationNumber: 'po-quotation-no',
     deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
-    creditPeriod: 'po-credit-period', signatories: 'po-sign-rows', salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
+    creditPeriod: 'po-credit-period', salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
     supplierId: 'po-supplier', contactName: 'po-contact', contactNumber: 'po-contact-number', currency: 'po-currency',
     discountAmount: 'po-discount', shipping: 'po-shipping' },
   header() {
@@ -8026,7 +8107,6 @@ const poForm = createPurchaseForm({
       poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
       creditPeriod: poIsCredit() ? byId('po-credit-period').value.trim() : '',
-      signatories: byId('po-signatory')?.checked ? poReadSignatories().filter(entry => entry.name.trim() || entry.title.trim()) : [],
       salesman: byId('po-salesman').value.trim(), salesmanContact: byId('po-salesman-contact').value.trim(),
       certifications: byId('po-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
       supplierId: byId('po-supplier-id').value || null, contactName: byId('po-contact').value.trim(),
@@ -8041,7 +8121,7 @@ const poForm = createPurchaseForm({
       errors.push({ node: byId('po-delivery-date'), message: 'The delivery date cannot be before the PO date.' });
     }
   },
-  afterRestore() { poShowCertifications(); poShowSupplier(); poShowCredit(); poShowSignatories(); },
+  afterRestore() { poShowCertifications(); poShowSupplier(); poShowCredit(); },
   listRoute: 'purchase-book/purchase-order',
   fill(form, po) {
     byId('po-date').value = po.poDate;
@@ -8052,7 +8132,6 @@ const poForm = createPurchaseForm({
     setSelectValue(byId('po-payment'), po.paymentMode || 'As usual');
     byId('po-credit-period').value = po.creditPeriod || '';
     poShowCredit();
-    byId('po-signatories').value = JSON.stringify(po.signatories || []);
     byId('po-salesman').value = po.salesman || '';
     byId('po-salesman-contact').value = po.salesmanContact || '';
     byId('po-certifications').value = (po.certifications || []).join(', ');
@@ -8062,7 +8141,7 @@ const poForm = createPurchaseForm({
     byId('po-contact-number').value = po.contactNumber || '';
     poSetCurrency(po.currency);
   },
-  afterFill: () => { poShowSignatories(); return poShowSupplier(); },
+  afterFill: () => poShowSupplier(),
   async onReset(form) {
     byId('po-date').value = todayInputValue();
     poSetCurrency('OMR');                        // hidden ids were cleared by the reset
@@ -8070,8 +8149,6 @@ const poForm = createPurchaseForm({
     byId('po-certifications').value = 'N/A';
     poShowCertifications();
     poShowCredit();
-    byId('po-signatories').value = '[]';
-    poShowSignatories();
     poShowSupplier();
   },
   init(form) {
@@ -8101,25 +8178,6 @@ const poForm = createPurchaseForm({
       await poShowCredit({ fill: true });
       form.page.absorb();
     });
-    // Include Signatory Slots: ticked shows the signatory rows (one empty row to start), unticked hides them.
-    byId('po-form').addEventListener('change', event => {
-      if (event.target.id !== 'po-signatory') return;
-      poShowSignatories();
-      if (event.target.checked) byId('po-sign-rows').querySelector('[data-sign="name"]')?.focus();
-    });
-    byId('po-sign-add').addEventListener('click', () => {
-      poAddSignatoryRow().querySelector('[data-sign="name"]').focus();
-      poStoreSignatories();
-      form.page.record();
-    });
-    byId('po-sign-rows').addEventListener('click', event => {
-      const remove = event.target.closest('[data-sign-remove]');
-      if (!remove) return;
-      remove.closest('.pb-sign-row').remove();
-      poStoreSignatories();
-      form.page.record();
-    });
-    byId('po-sign-rows').addEventListener('input', () => { poStoreSignatories(); form.page.record(); });
     byId('po-form').addEventListener('change', event => {
       const box = event.target.closest('[data-cert]');
       if (!box) return;
@@ -8231,7 +8289,7 @@ function purchaseItemsSection(kind) {
       ])));
     }
     general.push(viewCard({ title: 'Remarks & Print' }, viewFields([
-      { label: 'Remarks', value: kind === 'po' && isRemarksHtml(record.remarks) ? remarksPlainText(record.remarks) : record.remarks, column: { type: 'wrap' } },
+      { label: 'Remarks', value: isRemarksHtml(record.remarks) ? remarksPlainText(record.remarks) : record.remarks, column: { type: 'wrap' } },
       { label: 'Signatory Slots', value: !record.includeSignatory ? 'Not included'
         : (record.signatories || []).length ? record.signatories.map(entry => [entry.name, entry.title].filter(Boolean).join(', ')).join(' · ') : 'Included' },
       { label: 'Seal', value: record.attachSeal ? 'Attached' : 'Not attached' },
@@ -8326,20 +8384,18 @@ const prList = purchaseList({
     { key: 'requiredDate', label: 'Required By', type: 'mono', group: 'Schedule' },
     { key: 'itemCount', label: 'Items', type: 'qty', group: 'Request' },
     { key: 'totalQty', label: 'Total Qty', type: 'qty-ok', group: 'Request' },
-    detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Requester & Delivery' }),
   ],
   fromApi: r => ({ ...r, date: r.requestedDate, requiredDate: r.requiredDate || '' }),
   importColumns: [{ key: 'referenceNo', label: 'Reference ID', headers: ['reference', 'ref'] },
-    { key: 'purchaseType', label: 'Purchase Type', headers: ['type'], read: readChoice('purchase type', ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'], aliasesOf({ 'Stock Replenishment': ['stock', 'replenishment', 'restock'], 'Direct Purchase': ['direct'], Urgent: ['emergency', 'rush'] })) },
+    { key: 'purchaseType', label: 'Purchase Type', headers: ['type'], read: readChoice('purchase type', ['Against Order', 'Against Stock'], aliasesOf({ 'Against Order': ['order'], 'Against Stock': ['stock', 'stock replenishment', 'replenishment', 'restock'] })) },
     { key: 'requestedDate', label: 'Requested Date', headers: ['date', 'request date'], read: readSheetDate('Requested date') },
     { key: 'requiredDate', label: 'Required Delivery Date', headers: ['required date', 'required by'], read: readSheetDate('Required date') },
-    { key: 'deliveryLocation', label: 'Delivery Location', headers: ['location'] },
     ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit, pbImportRemarks],
   importSamples: [
-    { docNo: '1', referenceNo: 'SO-2026-014', purchaseType: 'Against Order', requestedDate: '2026-11-10', deliveryLocation: 'Main Store', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces' },
+    { docNo: '1', referenceNo: 'SO-2026-014', purchaseType: 'Against Order', requestedDate: '2026-11-10', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces' },
     { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces' },
   ],
-  importHeader: async g => ({ referenceNo: g.referenceNo, purchaseType: g.purchaseType, requestedDate: g.requestedDate, requiredDate: g.requiredDate, deliveryLocation: g.deliveryLocation }),
+  importHeader: async g => ({ referenceNo: g.referenceNo, purchaseType: g.purchaseType, requestedDate: g.requestedDate, requiredDate: g.requiredDate }),
   importLine: line => ({ quantity: line.quantity || '1' }),
 });
 
@@ -8494,7 +8550,7 @@ function companyLetterhead() {
 }
 
 async function loadLetterhead() {
-  const profile = await apiRequest('api/company-profile.php');
+  const profile = await companyProfile();
   const name = profile?.files?.letterhead;
   if (!name) return null;
   const url = 'api/company-profile.php?file=letterhead';
@@ -8580,75 +8636,114 @@ function letterheadBands(source, width, height) {
   };
 }
 
-/* ---------- PDF: the document laid out on A4 and handed to the browser's print dialog ("Save as PDF") ----------
-   On the company letterhead when there is one (companyLetterhead): the letterhead fills every page and the
-   document sits between its header and footer. Without one, the company name heads the first page. Laid out as
-   in the quotation design: the title centred, Ref and Date under it, the details in a box, a ruled item table,
-   the totals in a box, remarks, signatory slots and the seal.
-   Ticked "Include Signatory Slots" adds Prepared / Checked / Approved boxes; "Attach Seal" prints the company seal. */
-async function printPurchaseDocument(spec, id) {
-  let doc;
-  try { doc = await apiRequest(`${spec.api}?id=${id}`); } catch (error) { showToast('The document could not be opened', error.message, true); return; }
-  const sheet = byId('pb-print-sheet');
-  const title = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Receipt Note' }[spec.key];
-  const cell = (tag, className, text) => el(tag, className, String(text ?? '') || '—');
-  const meta = {                     // functions: only the printed kind's fields are read
-    pr: () => [['PR ID', doc.code], ['Requested Date', pbDate(doc.requestedDate)], ['Required By', pbDate(doc.requiredDate)], ['Reference ID', doc.referenceNo],
-      ['Purchase Type', doc.purchaseType], ['Requested By', doc.requestedBy], ['Delivery Location', doc.deliveryLocation]],
-    rfq: () => [['RFQ ID', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)], ['PR ID', doc.purchaseRequestCode],
-      ['Suppliers', doc.suppliers.map(s => s.name).join(', ')]],
-    po: () => [['PO ID', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
-      ['Supplier', doc.supplierName], ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber], ['Currency', doc.currency],
-      ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode], ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
-      ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact], ['Certification Required', (doc.certifications || []).join(', ')],
-      ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode]],
-    grn: () => [['GRN ID', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['Supplier', doc.supplierName], ['Warehouse', doc.warehouseName], ['PO Number', doc.poNumber]],
+/* ---------- The document preview page and its PDF ----------
+   A Purchase Book document opens on a preview page (#pb-preview): a dark bar with Print / Export PDF and Back
+   (Esc / B), and the A4 page under it, on the company letterhead when there is one. A new Purchase Request opens
+   here as soon as it is saved; the lists' PDF buttons open it too. Print / Export PDF (or Ctrl+P) lays the same
+   page out in #pb-print-sheet and hands it to the browser's print dialog ("Save as PDF").
+   Laid out as the procurement document design: the title, the Buyer (this company) beside the other party, the
+   details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
+   Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
+const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Receipt Note' };
+let companyProfilePromise = null;
+function companyProfile() {
+  companyProfilePromise ||= apiRequest('api/company-profile.php').catch(() => null);
+  return companyProfilePromise;
+}
+
+// Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
+async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
+  const [profile, letterhead] = await Promise.all([companyProfile(), companyLetterhead()]);
+  const title = PB_TITLES[spec.key];
+  const text = value => String(value ?? '').trim() || '—';
+  const cell = (tag, className, value) => el(tag, className, text(value));
+  // The other party (right of the Buyer) and the details grid, for each kind.
+  const layout = {
+    pr: () => ({
+      party: { label: 'Requested By', name: doc.requestedBy, lines: [['Purchase Type', doc.purchaseType]] },
+      meta: [['PR No', doc.code], ['Requested Date', pbDate(doc.requestedDate)], ['Required By', pbDate(doc.requiredDate)], ['Reference ID', doc.referenceNo]],
+    }),
+    rfq: () => ({
+      party: { label: (doc.suppliers || []).length === 1 ? 'Supplier' : 'Suppliers', name: doc.suppliers?.[0]?.name, lines: (doc.suppliers || []).slice(1).map(s => s.name) },
+      meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)], ['PR Ref', doc.purchaseRequestCode]],
+    }),
+    po: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+      meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
+        ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
+        ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
+        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact],
+        ['Certification Required', (doc.certifications || []).join(', ')]],
+    }),
+    grn: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: [] },
+      meta: [['GRN No', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['PO Number', doc.poNumber], ['Warehouse', doc.warehouseName]],
+    }),
   }[spec.key]();
   const heads = {
-    simple: ['#', 'Item Code', 'Item', 'Brand', 'Qty', 'Unit'],
-    po: ['#', 'Item Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc.', 'Total'],
-    grn: ['#', 'Item Code', 'Item', 'Received', 'Accepted', 'Rejected', 'Unit', 'Unit Cost', 'VAT %', 'Total'],
+    simple: ['#', 'Item Code', 'Item Name', 'Brand', 'Qty', 'Unit'],
+    po: ['#', 'Item Code', 'Item Name', 'Qty', 'Unit', `Price${doc.currency ? ` (${doc.currency})` : ''}`, 'VAT (%)', 'Disc.', 'Line Total'],
+    grn: ['#', 'Item Code', 'Item Name', 'Received', 'Accepted', 'Rejected', 'Unit', 'Unit Cost', 'VAT (%)', 'Line Total'],
   }[spec.kind];
   const lineCells = (l, i) => ({
     simple: [i + 1, l.itemCode, l.itemName, l.brandName, pbQty(pbNum(l.quantity)), l.unit],
-    po: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbQty(pbNum(l.vatRate)), pbAmount(l.discountAmount), pbAmount(l.lineTotal)],
-    grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbQty(pbNum(l.vatRate)), pbAmount(l.lineTotal)],
+    po: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbNum(l.vatRate).toFixed(2), pbAmount(l.discountAmount), pbAmount(l.lineTotal)],
+    grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbNum(l.vatRate).toFixed(2), pbAmount(l.lineTotal)],
   }[spec.kind]);
 
-  const letterhead = await companyLetterhead();
+  const companyName = profile?.companyName || byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine';
   const parts = [];
   if (!letterhead) {                                   // no letterhead: the company name heads the page
     const brand = el('div', 'ps-brand');
-    brand.append(el('div', 'ps-company', byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine'));
+    brand.append(el('div', 'ps-company', companyName));
     parts.push(brand);
   }
-  // The title, then Ref (the document's ID) on the left and Date on the right: the first two details.
-  const [[refLabel, refValue], [dateLabel, dateValue], ...details] = meta;
-  const titleBlock = el('div', 'ps-title-block');
-  titleBlock.append(el('h1', 'ps-title', title));
-  const refRow = el('div', 'ps-ref');
-  for (const [label, value] of [[refLabel, refValue], [dateLabel, dateValue]]) {
-    const span = el('span', '');
-    span.append(`${label}: `, el('strong', '', String(value ?? '') || '—'));
-    refRow.append(span);
-  }
-  titleBlock.append(refRow);
-  parts.push(titleBlock);
+  parts.push(el('h1', 'ps-title', title));
 
-  if (details.length) {
-    const metaGrid = el('dl', 'ps-meta');
-    for (const [label, value] of details) {
-      const item = el('div', 'ps-meta-item');
-      item.append(cell('dt', '', label), cell('dd', '', value));
-      metaGrid.append(item);
+  // Buyer (this company, from Create a Company) | the other party.
+  const party = (label, name, lines) => {
+    const box = el('div', 'ps-party');
+    box.append(el('div', 'ps-label', label), cell('div', 'ps-party-name', name));
+    const list = el('div', 'ps-party-lines');
+    for (const line of lines) {
+      if (Array.isArray(line)) {
+        const row = el('div', 'ps-party-line');
+        row.append(el('span', 'ps-party-key', line[0]), el('span', '', `: ${String(line[1] ?? '').trim() || '-'}`));   // label | value columns
+        list.append(row);
+      } else if (String(line ?? '').trim()) {
+        list.append(el('div', 'ps-party-text', line));
+      }
     }
-    parts.push(metaGrid);
+    box.append(list);
+    return box;
+  };
+  const p = profile || {};
+  const address = [p.building, p.street, p.area, p.city, p.poBox && `PO Box: ${p.poBox}`, p.postalCode && `PC: ${p.postalCode}`]
+    .map(value => String(value ?? '').trim()).filter(Boolean).join(', ');
+  const parties = el('div', 'ps-parties');
+  parties.append(
+    party('Buyer', companyName, [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ['Contact Number', p.phone]]),
+    party(layout.party.label, layout.party.name, layout.party.lines),
+  );
+  const box = el('div', 'ps-docbox');
+  box.append(parties);
+  const metaGrid = el('dl', 'ps-meta');
+  const count = layout.meta.length;
+  const cols = count <= 4 ? count : count % 3 === 0 ? 3 : 4;
+  metaGrid.style.setProperty('--ps-cols', String(cols));
+  for (const [i, [label, value]] of layout.meta.entries()) {
+    const item = el('div', (i + 1) % cols ? 'ps-meta-item' : 'ps-meta-item is-row-end');
+    item.append(el('dt', '', label), cell('dd', '', value));
+    metaGrid.append(item);
   }
+  box.append(metaGrid);
+  parts.push(box);
 
-  const table = el('table', 'ps-table');
+  parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received Items' }[spec.key]));
+  const table = el('table', `ps-table ps-table-${spec.kind}`);
   const thead = el('thead');
   const headRow = el('tr');
-  headRow.append(...heads.map(text => el('th', '', text)));
+  headRow.append(...heads.map(label => el('th', '', label)));
   thead.append(headRow);
   const tbody = el('tbody');
   doc.items.forEach((line, i) => {
@@ -8657,45 +8752,44 @@ async function printPurchaseDocument(spec, id) {
     tbody.append(tr);
   });
   table.append(thead, tbody);
-  table.classList.add(`ps-table-${spec.kind}`);
   parts.push(table);
 
-  if (spec.kind !== 'simple') {
-    const totals = el('dl', 'ps-totals');
-    for (const [label, value, strong] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT (Tax)' : 'VAT (included)', doc.vatAmount],
-      ['Discount', doc.discountAmount], ['Shipping', doc.shipping], [`Grand Total${doc.currency ? ` (${doc.currency})` : ''}`, doc.grandTotal, true]]) {
-      if (!strong && !pbNum(value) && label !== 'Subtotal') continue;          // a zero discount / shipping is left out
-      const row = el('div', strong ? 'ps-total-grand' : '');
-      row.append(el('dt', '', label), el('dd', '', pbAmount(value)));
-      totals.append(row);
-    }
-    parts.push(totals);
-  }
+  // Remarks & Notes on the left, the totals on the right.
+  const bottom = el('div', 'ps-bottom');
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');
-    remarks.append(el('div', 'ps-label', 'Remarks'));
-    if (spec.kind === 'po' && isRemarksHtml(doc.remarks)) {
+    remarks.append(el('div', 'ps-label', 'Remarks & Notes'));
+    if (isRemarksHtml(doc.remarks)) {
       const body = el('div', 'ps-remarks-body');
       body.append(remarksFragment(doc.remarks));
       remarks.append(body);
     } else {
       remarks.append(el('div', 'ps-remarks-text', doc.remarks));
     }
-    parts.push(remarks);
+    bottom.append(remarks);
   }
+  if (spec.kind !== 'simple') {
+    const totals = el('dl', 'ps-totals');
+    const currency = doc.currency ? ` ${doc.currency}` : '';
+    for (const [label, value, strong] of [['Subtotal (Net)', doc.subtotal], [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
+      ['Discount', doc.discountAmount], ['Shipping', doc.shipping], ['Grand Total', doc.grandTotal, true]]) {
+      if (!strong && !pbNum(value) && !label.startsWith('Subtotal') && !label.includes('VAT')) continue;   // a zero discount / shipping is left out
+      const row = el('div', strong ? 'ps-total-grand' : '');
+      row.append(el('dt', '', `${label}:`), el('dd', '', `${pbAmount(value)}${currency}`));
+      totals.append(row);
+    }
+    bottom.append(totals);
+  }
+  if (bottom.childElementCount) parts.push(bottom);
+
   const foot = el('footer', 'ps-foot');
   if (doc.includeSignatory) {
     const signs = el('div', 'ps-signs');
-    // A Purchase Order's named signatories (name over the line, position under it), else the standard three boxes.
-    const named = (doc.signatories || []).filter(entry => String(entry.name || '').trim() || String(entry.title || '').trim());
-    if (named.length) {
-      for (const entry of named) {
-        const sign = el('div', 'ps-sign', String(entry.name || '').trim());
-        if (String(entry.title || '').trim()) sign.append(el('div', 'ps-sign-title', String(entry.title).trim()));
-        signs.append(sign);
-      }
-    } else {
-      for (const label of ['Prepared By', 'Checked By', 'Approved By']) signs.append(el('div', 'ps-sign', label));
+    for (const slot of doc.signatories || []) {
+      const sign = el('div', 'ps-sign');
+      sign.append(el('div', 'ps-sign-name', slot.name || ''));
+      if (slot.title) sign.append(el('div', 'ps-sign-title', slot.title));
+      signs.append(sign);
     }
     foot.append(signs);
   }
@@ -8711,8 +8805,8 @@ async function printPurchaseDocument(spec, id) {
   if (foot.childElementCount) parts.push(foot);
 
   // The page frame: a table whose header and footer rows repeat on every printed page, keeping the letterhead's
-  // header and footer clear (or a plain margin without a letterhead); the letterhead image is fixed behind it,
-  // so the browser prints it on every page.
+  // header and footer clear (or a plain margin without a letterhead). Printed, the letterhead image is fixed
+  // behind the frame, so the browser prints it on every page; on screen it is repeated down the page.
   const frame = el('table', 'ps-frame');
   const spacer = className => { const row = el('tr'); const td = el('td'); td.append(el('div', className)); row.append(td); return row; };
   const frameHead = el('thead'); frameHead.append(spacer('ps-space-top'));
@@ -8734,9 +8828,53 @@ async function printPurchaseDocument(spec, id) {
   }
   sheet.replaceChildren(...sheetParts);
   await Promise.all(loading);
+  if (screen) fitPreviewPages(sheet, letterhead);
+}
 
+// On screen: the page is as tall as the whole A4 pages it takes, with the letterhead on each of them.
+function fitPreviewPages(sheet, letterhead) {
+  sheet.style.minHeight = '';
+  for (const extra of sheet.querySelectorAll('.ps-letterhead + .ps-letterhead, .ps-letterhead[data-page]')) extra.remove();
+  const pageHeight = sheet.getBoundingClientRect().width * 297 / 210;
+  const pages = Math.max(1, Math.ceil((sheet.scrollHeight - 2) / pageHeight));
+  sheet.style.minHeight = `${pages * 297}mm`;
+  const first = sheet.querySelector('.ps-letterhead');
+  if (!letterhead || !first) return;
+  for (let page = 1; page < pages; page++) {
+    const copy = first.cloneNode();
+    copy.dataset.page = String(page);
+    copy.style.top = `${page * 297}mm`;
+    first.after(copy);
+  }
+}
+
+let previewDoc = null;           // { spec, doc } on the preview page
+async function printPurchaseDocument(spec, id) {
+  let doc;
+  try { doc = await apiRequest(`${spec.api}?id=${id}`); } catch (error) { showToast('The document could not be opened', error.message, true); return; }
+  const dialog = byId('pb-preview');
+  previewDoc = { spec, doc };
+  byId('pv-title').textContent = `${PB_TITLES[spec.key]} • ${doc.code}`;
+  const sheet = dialog.querySelector('.pv-sheet');
+  sheet.replaceChildren();
+  sheet.style.minHeight = '';
+  if (!dialog.open) dialog.showModal();
+  dialog.scrollTop = 0;
+  dialog.querySelector('[data-pv="print"]').focus();
+  try {
+    await fillPurchaseSheet(sheet, spec, doc, { screen: true });
+  } catch (error) {
+    showToast('The document could not be shown', error.message, true);
+  }
+}
+
+async function printPreviewDocument() {
+  if (!previewDoc) return;
+  const { spec, doc } = previewDoc;
+  const sheet = byId('pb-print-sheet');
+  await fillPurchaseSheet(sheet, spec, doc);
   const pageTitle = document.title;
-  document.title = `${doc.code} ${title}`;              // the browser's suggested PDF file name
+  document.title = `${doc.code} ${PB_TITLES[spec.key]}`;   // the browser's suggested PDF file name
   document.body.classList.add('is-printing');
   const done = () => {
     document.body.classList.remove('is-printing');
@@ -8748,11 +8886,40 @@ async function printPurchaseDocument(spec, id) {
   window.print();
 }
 
+// The preview page's keys: Esc (the usual popup Esc) or B goes back, P or Ctrl+P prints; nothing reaches the page.
+function handlePreviewKeys(event) {
+  const plain = !event.ctrlKey && !event.metaKey && !event.altKey;
+  const key = event.key.toLowerCase();
+  if (plain && key === 'b') {
+    event.preventDefault();
+    if (!event.repeat) byId('pb-preview').close();
+  } else if ((plain && key === 'p') || ((event.ctrlKey || event.metaKey) && !event.altKey && key === 'p')) {
+    event.preventDefault();
+    if (!event.repeat) printPreviewDocument();
+  }
+}
+
+function initPurchasePreview() {
+  const dialog = byId('pb-preview');
+  dialog.addEventListener('click', event => {
+    const action = event.target.closest('[data-pv]')?.dataset.pv;
+    if (action === 'print') printPreviewDocument();
+    if (action === 'back') dialog.close();
+  });
+  dialog.addEventListener('close', () => {
+    previewDoc = null;
+    dialog.querySelector('.pv-sheet').replaceChildren();
+    // Back on the page it was opened from; after a save that form is gone, so the list (or page) takes the keys.
+    setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) focusPageAnchor(); }, 0);
+  });
+}
+
 function initPurchaseBook() {
   composePurchaseTemplates();
   for (const form of PURCHASE_FORMS) form.page.init();
   for (const list of PURCHASE_LISTS) list.init();
   initSealButtons();
+  initPurchasePreview();
   loadPurchaseMasters();
   // Items made in another tab (Create Item) show up in the searches once this tab is back in front.
   window.addEventListener('focus', () => {

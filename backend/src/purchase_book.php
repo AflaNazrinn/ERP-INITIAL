@@ -16,7 +16,7 @@ require_once __DIR__ . '/master_validation.php';
  *   Grand Total  = Subtotal − Discount Amount (+ VAT when excluded) + Shipping
  */
 
-const PB_PURCHASE_TYPES = ['Against Order', 'Stock Replenishment', 'Direct Purchase', 'Urgent'];
+const PB_PURCHASE_TYPES = ['Against Order', 'Against Stock'];
 const PB_PO_STATUSES = ['Draft', 'Sent', 'Confirmed', 'Partially Received', 'Received', 'Cancelled'];
 const PB_PAYMENT_MODES = ['As usual', 'Cash', 'Bank Transfer', 'Cheque', 'Credit', 'Card'];
 const PB_CERTIFICATIONS = ['N/A', 'Pressure Test', 'COC Certificate', 'MTC Certificate', 'TPI Certificate'];
@@ -44,7 +44,53 @@ function pb_flag(array $data, string $key): int
     return !empty($data[$key]) && $data[$key] !== 'false' ? 1 : 0;
 }
 
-/* ---------- Formatted remarks (purchase orders) ----------
+/* The signatory slots printed on the PDF: each a name ("Prepared By") and a position / title ("Procurement
+   Officer"), kept as a JSON list in extra_signatories. A slot with neither is dropped; at most PB_MAX_SIGNATORIES,
+   each part up to 60 characters. A document saved before slots were editable has null there and prints
+   Prepared / Checked / Approved By (pb_signatory_list). */
+const PB_MAX_SIGNATORIES = 6;
+function pb_signatories(Input $in, array $data): string
+{
+    $clean = static fn ($value) => trim(preg_replace('/\s+/u', ' ', is_scalar($value) ? (string) $value : ''));
+    $slots = [];
+    foreach (array_values(is_array($data['signatories'] ?? null) ? $data['signatories'] : []) as $slot) {
+        $name = $clean(is_array($slot) ? ($slot['name'] ?? '') : $slot);
+        $title = $clean(is_array($slot) ? ($slot['title'] ?? '') : '');
+        if ($name === '' && $title === '') {
+            continue;
+        }
+        if (mb_strlen($name) > 60 || mb_strlen($title) > 60) {
+            $in->fail('signatories', 'A signatory name or title can be at most 60 characters.');
+            return '[]';
+        }
+        $slots[] = ['name' => $name, 'title' => $title];
+    }
+    if (count($slots) > PB_MAX_SIGNATORIES) {
+        $in->fail('signatories', 'Add at most ' . PB_MAX_SIGNATORIES . ' signatories.');
+        return '[]';
+    }
+    return json_encode($slots, JSON_UNESCAPED_UNICODE);
+}
+
+/* A document's signatory slots as [{ name, title }]. */
+function pb_signatory_list(?string $json): array
+{
+    if ($json === null) {
+        return array_map(static fn ($name) => ['name' => $name, 'title' => ''], ['Prepared By', 'Checked By', 'Approved By']);
+    }
+    $list = json_decode($json, true);
+    $slots = [];
+    foreach (is_array($list) ? $list : [] as $slot) {
+        if (is_string($slot)) {
+            $slots[] = ['name' => $slot, 'title' => ''];           // saved while slots were only names
+        } elseif (is_array($slot)) {
+            $slots[] = ['name' => (string) ($slot['name'] ?? ''), 'title' => (string) ($slot['title'] ?? '')];
+        }
+    }
+    return $slots;
+}
+
+/* ---------- Formatted remarks (purchase requests and purchase orders) ----------
  * The remarks editor sends HTML. Only these tags are kept, each without attributes except a text colour
  * (style="color: #rrggbb"); scripts, styles and embeds are dropped with their content and any other tag
  * is unwrapped to its text. Remarks without tags (older orders, imports) stay plain text.
@@ -311,12 +357,13 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
 /* What a found document sends back as a save payload (for a PUT that changes only some keys). */
 function pb_as_input(array $doc, array $keys): array
 {
-    return array_intersect_key($doc, array_flip([...$keys, 'items', 'remarks', 'includeSignatory', 'attachSeal']));
+    return array_intersect_key($doc, array_flip([...$keys, 'items', 'remarks', 'includeSignatory', 'signatories', 'attachSeal']));
 }
 
 function pb_common(array $row): array
 {
     return ['id' => (int) $row['id'], 'remarks' => (string) ($row['remarks'] ?? ''), 'includeSignatory' => (bool) $row['include_signatory'],
+        'signatories' => pb_signatory_list($row['extra_signatories'] ?? null),
         'attachSeal' => (bool) $row['attach_seal'], 'createdAt' => date_only($row['created_at'])];
 }
 
@@ -339,10 +386,15 @@ function pb_qty(string $value): string
 function pr_format(array $row): array
 {
     [$count, $qty] = pb_line_totals('purchase_request_items', 'purchase_request_id', (int) $row['id']);
+    // The Stock Point: a warehouse (its name also kept in delivery_location); older requests have typed text only.
+    $warehouseId = isset($row['warehouse_id']) ? (int) $row['warehouse_id'] : null;
+    $warehouse = $warehouseId === null ? null : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$warehouseId])->fetch();
     return pb_common($row) + [
+        'warehouseId' => $warehouse ? $warehouseId : null, 'warehouseCode' => $warehouse ? $warehouse['warehouse_code'] : '',
         'code' => $row['pr_code'], 'name' => $row['purchase_type'] . ' · ' . "$count item" . ($count === 1 ? '' : 's'), 'referenceNo' => $row['reference_no'],
         'purchaseType' => $row['purchase_type'], 'requestedDate' => $row['requested_date'], 'requiredDate' => $row['required_date'] ?? '',
-        'requestedBy' => $row['requested_by'], 'deliveryLocation' => $row['delivery_location'], 'itemCount' => $count, 'totalQty' => $qty,
+        'requestedBy' => $row['requested_by'], 'deliveryLocation' => $warehouse ? $warehouse['warehouse_name'] : (string) ($row['delivery_location'] ?? ''),
+        'itemCount' => $count, 'totalQty' => $qty,
     ];
 }
 
@@ -375,7 +427,7 @@ function purchase_request_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
         $data = array_replace(pb_as_input(purchase_request_find($id),
-            ['referenceNo', 'purchaseType', 'requestedDate', 'requiredDate', 'requestedBy', 'deliveryLocation']), $data);
+            ['referenceNo', 'purchaseType', 'requestedDate', 'requiredDate', 'requestedBy', 'warehouseId', 'deliveryLocation']), $data);
     }
     $in = new Input($data);
     $v = [
@@ -384,12 +436,18 @@ function purchase_request_save(array $data, ?int $id = null): array
         'requested_date' => $in->date('requestedDate', 'Requested date') ?? date('Y-m-d'),
         'required_date' => $in->date('requiredDate', 'Required delivery date'),
         'requested_by' => $in->text('requestedBy', 'Requested by', 100) ?: 'admin',
-        'delivery_location' => $in->text('deliveryLocation', 'Delivery location', 200),
-        'remarks' => $in->text('remarks', 'Remarks', 2000),
+        // Stock Point: a warehouse picked in the popup; its name is kept too. Without one (an import), typed text.
+        'warehouse_id' => $in->id('warehouseId', 'stock point', 'warehouses'),
+        'delivery_location' => $in->text('deliveryLocation', 'Stock point', 200),
+        'remarks' => pb_clean_html($in->text('remarks', 'Remarks', 20000)),   // formatted, as the PO's
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
+        'extra_signatories' => pb_signatories($in, $data),
     ];
     if ($v['required_date'] !== null && $v['required_date'] < $v['requested_date']) {
         $in->fail('requiredDate', 'The required delivery date cannot be before the requested date.');
+    }
+    if ($v['warehouse_id'] !== null) {
+        $v['delivery_location'] = (string) query('SELECT warehouse_name FROM warehouses WHERE id = ?', [$v['warehouse_id']])->fetchColumn();
     }
     $lines = pb_read_lines($in, 'pr');
     $in->done();
@@ -479,6 +537,7 @@ function quotation_request_save(array $data, ?int $id = null): array
         'submission_deadline' => $in->date('submissionDeadline', 'Submission deadline'),
         'remarks' => $in->text('remarks', 'Remarks', 2000),
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
+        'extra_signatories' => pb_signatories($in, $data),
     ];
     if ($v['submission_deadline'] !== null && $v['submission_deadline'] < $v['request_date']) {
         $in->fail('submissionDeadline', 'The submission deadline cannot be before the request date.');
@@ -520,7 +579,7 @@ function po_format(array $row): array
         'quotationRequestId' => $row['quotation_request_id'] === null ? null : (int) $row['quotation_request_id'], 'quotationRequestCode' => $rfq,
         'quotationNumber' => $row['quotation_number'], 'status' => $row['status'], 'deliveryDate' => $row['delivery_date'] ?? '',
         'deliveryLocation' => $row['delivery_location'], 'deliveryTerms' => $row['delivery_terms'], 'paymentMode' => $row['payment_mode'],
-        'creditPeriod' => $row['credit_period'] ?? '', 'signatories' => po_signatories_out($row['signatories'] ?? null),
+        'creditPeriod' => $row['credit_period'] ?? '',
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
         'supplierName' => $supplier ? $supplier['supplier_name'] : '', 'contactName' => $row['contact_name'], 'email' => $row['email'],
         'contactNumber' => $row['contact_number'], 'salesman' => $row['salesman'], 'salesmanContact' => $row['salesman_contact'],
@@ -560,7 +619,7 @@ function purchase_order_save(array $data, ?int $id = null): array
     if ($id !== null) {
         $data = array_replace(pb_as_input(purchase_order_find($id), ['poDate', 'purchaseRequestId', 'quotationRequestId', 'quotationNumber',
             'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'creditPeriod', 'salesman', 'salesmanContact',
-            'certifications', 'signatories', 'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
+            'certifications', 'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
     }
     $in = new Input($data);
     $supplierId = $in->id('supplierId', 'supplier', 'suppliers');
@@ -587,7 +646,7 @@ function purchase_order_save(array $data, ?int $id = null): array
         'vat_mode' => $vatMode,
         'remarks' => pb_clean_html($in->text('remarks', 'Remarks', 20000)),
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
-        'signatories' => po_signatories_in($in, $data['signatories'] ?? null),
+        'extra_signatories' => pb_signatories($in, $data),
     ];
     if ($supplierId === null) {
         $in->fail('supplierId', 'Select the supplier.');
@@ -636,44 +695,6 @@ function po_certifications(Input $in, mixed $raw): string
     }
     usort($picked, static fn ($a, $b) => array_search($a, PB_CERTIFICATIONS, true) <=> array_search($b, PB_CERTIFICATIONS, true));
     return implode(', ', $picked);
-}
-
-/* Signatory slots: a list of { name, title } (blank rows dropped), stored as JSON; none stores NULL. */
-const PO_MAX_SIGNATORIES = 6;
-
-function po_signatories_in(Input $in, mixed $raw): ?string
-{
-    if ($raw === null || $raw === '' || $raw === []) {
-        return null;
-    }
-    if (!is_array($raw) || !array_is_list($raw)) {
-        $in->fail('signatories', 'Signatories must be a list.');
-        return null;
-    }
-    $list = [];
-    foreach ($raw as $entry) {
-        $name = trim((string) (is_array($entry) ? ($entry['name'] ?? '') : ''));
-        $title = trim((string) (is_array($entry) ? ($entry['title'] ?? '') : ''));
-        if ($name === '' && $title === '') {
-            continue;
-        }
-        if (mb_strlen($name) > 100 || mb_strlen($title) > 100) {
-            $in->fail('signatories', 'A signatory name or title can have at most 100 characters.');
-            return null;
-        }
-        $list[] = ['name' => $name, 'title' => $title];
-    }
-    if (count($list) > PO_MAX_SIGNATORIES) {
-        $in->fail('signatories', 'At most ' . PO_MAX_SIGNATORIES . ' signatories.');
-        return null;
-    }
-    return $list ? json_encode($list, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null;
-}
-
-function po_signatories_out(?string $json): array
-{
-    $list = $json === null || $json === '' ? [] : json_decode($json, true);
-    return is_array($list) ? array_values(array_filter($list, 'is_array')) : [];
 }
 
 /* The order's currency: the one picked on the form, else the supplier's, else OMR. */
@@ -753,6 +774,7 @@ function grn_save(array $data, ?int $id = null): array
         'vat_mode' => $vatMode,
         'remarks' => $in->text('remarks', 'Remarks', 2000),
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
+        'extra_signatories' => pb_signatories($in, $data),
     ];
     if ($v['supplier_id'] === null) {
         $in->fail('supplierId', 'Select the supplier.');
