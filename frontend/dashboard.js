@@ -1711,6 +1711,9 @@ const LOOKUPS = {
   itemcode: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
     columns: [['code', 'Code'], ['name', 'Item Name'], ['category', 'Category']], display: row => row.code, meta: row => row.name, card: itemLookupCard,
     subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
+  // The Quotation Request's PR ID: its items fill the request's lines.
+  purchaserequest: { title: 'Select Purchase Request', letter: 'R', list: 'Purchase Requests', plural: 'purchase requests', api: 'api/purchase-requests.php',
+    columns: [['code', 'PR ID'], ['name', 'Type · Items'], ['requestedBy', 'Requested By']], display: row => row.code },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
     columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
@@ -1872,6 +1875,7 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-enter-hint').textContent = multi ? 'Tick / Untick' : 'Select';
   byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
   byId('lookup-done-hint').hidden = !multi;
+  byId('lookup-all').hidden = !multi;
   const canCreate = Boolean(lookupCreateForm(field));
   dialog.classList.toggle('lk-can-create', canCreate);
   dialog.classList.remove('lk-navigated');
@@ -1932,7 +1936,26 @@ function renderLookupRows() {
   // Multi-select: Select applies the ticks (even none, which clears the field).
   byId('lookup-select').disabled = !lookup.multi && lookup.shown.length === 0;
   byId('lookup-select-label').textContent = lookup.multi ? `${config.title} (${lookup.multi.size})` : config.title;
+  if (lookup.multi) {
+    const all = byId('lookup-all');
+    all.disabled = lookup.shown.length === 0;
+    all.textContent = allLookupRowsTicked() ? 'Unselect All' : 'Select All';
+  }
   syncLookupActive();
+}
+
+// Multi-select: every listed row (the search narrows it) ticked?
+const allLookupRowsTicked = () => lookup.shown.length > 0 && lookup.shown.every(row => lookup.multi.has(String(row.id)));
+
+// Select All ticks every listed row; when they are all ticked already it unticks them (Unselect All).
+function toggleAllLookupRows() {
+  if (!lookup.multi || lookup.shown.length === 0) return;
+  const untick = allLookupRowsTicked();
+  for (const row of lookup.shown) {
+    if (untick) lookup.multi.delete(String(row.id)); else lookup.multi.set(String(row.id), row);
+  }
+  lookupChipFields.get(lookup.field).apply([...lookup.multi.values()]);
+  renderLookupRows();
 }
 
 // Multi-select: Enter or a click ticks the highlighted row, and again unticks it. The popup stays open,
@@ -2064,6 +2087,11 @@ function handleLookupDialogKeys(event) {
   if (event.altKey && !ctrl && event.code === 'KeyN' && !byId('lookup-new').hidden) {
     event.preventDefault();
     if (!event.repeat) createSupplierFromLookup();
+    return;
+  }
+  if (event.altKey && !ctrl && event.code === 'KeyA' && lookup.multi) {
+    event.preventDefault();
+    if (!event.repeat) toggleAllLookupRows();
     return;
   }
   if (ctrl || event.altKey) return;
@@ -2230,6 +2258,7 @@ function initLookups() {
     const action = event.target.closest('[data-lookup-action]')?.dataset.lookupAction;
     if (action === 'cancel') closeLookup();
     else if (action === 'select') { if (lookup.multi) applyLookupMulti(); else pickLookupRow(); }
+    else if (action === 'all') toggleAllLookupRows();
     else if (action === 'create') createItemFromLookup();
     else if (action === 'new') createSupplierFromLookup();
   });
@@ -8222,7 +8251,7 @@ async function purchaseOptions(select, api, label) {
 /* ---------- Purchase Request ---------- */
 const prForm = createPurchaseForm({
   key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php',
-  kind: 'simple', template: 'pb-line-simple', lookups: [], itemsFromMaster: true,   // every line is an Item master item
+  kind: 'simple', template: 'pb-line-simple', lookups: ['purchaserequest'], itemsFromMaster: true,   // every line is an Item master item
   firstField: () => byId('pr-reference'),
   fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required',
     remarks: 'pr-remarks-editor' },
@@ -8253,13 +8282,14 @@ function rfqNote() {
   const count = rfqSuppliers.get().length;
   byId('rfq-supplier-note').lastElementChild.textContent = count ? `${count} supplier${count === 1 ? '' : 's'} selected.` : 'No suppliers selected.';
 }
+let rfqPrLoaded = '';                     // the purchase request whose items the lines hold
 const rfqForm = createPurchaseForm({
   key: 'rfq', route: 'purchase-book/quotation-request/new', noun: 'Quotation Request', api: 'api/quotation-requests.php',
   kind: 'simple', template: 'pb-line-simple', lookups: [], chips: rfqSuppliers, onChips: rfqNote,
   firstField: () => byId('rfq-pr'),
   fieldNodes: { purchaseRequestId: 'rfq-pr', requestDate: 'rfq-date', submissionDeadline: 'rfq-deadline', supplierIds: 'rfq-supplier-entry' },
   header: () => ({
-    purchaseRequestId: byId('rfq-pr').value || null, requestDate: byId('rfq-date').value,
+    purchaseRequestId: byId('rfq-pr-id').value || null, requestDate: byId('rfq-date').value,
     submissionDeadline: byId('rfq-deadline').value, supplierIds: rfqSuppliers.ids(),
   }),
   check(form, errors) {
@@ -8270,20 +8300,26 @@ const rfqForm = createPurchaseForm({
   },
   onReset() {
     byId('rfq-date').value = todayInputValue();
-    return purchaseOptions(byId('rfq-pr'), 'api/purchase-requests.php', row => `${row.code} · ${row.purchaseType} · ${row.itemCount} item${row.itemCount === 1 ? '' : 's'}`);
+    byId('rfq-pr').value = '';
+    byId('rfq-pr-id').value = '';
+    rfqPrLoaded = '';
   },
   listRoute: 'purchase-book/quotation-request',
   fill(form, rfq) {
-    setSelectValue(byId('rfq-pr'), rfq.purchaseRequestId, rfq.purchaseRequestCode);
+    byId('rfq-pr').value = rfq.purchaseRequestCode || '';
+    byId('rfq-pr-id').value = rfq.purchaseRequestId ?? '';
+    rfqPrLoaded = String(rfq.purchaseRequestId ?? '');
     byId('rfq-date').value = rfq.requestDate;
     byId('rfq-deadline').value = rfq.submissionDeadline || '';
     rfqSuppliers.set(rfq.suppliers);
     rfqNote();
   },
   init(form) {
-    byId('rfq-pr').addEventListener('change', async () => {
-      const id = byId('rfq-pr').value;
-      if (!id) return;
+    // A purchase request picked in the PR ID popup: its items become the lines (once per pick).
+    byId('rfq-pr').addEventListener('input', async () => {
+      const id = byId('rfq-pr-id').value;
+      if (!id || id === rfqPrLoaded) { rfqPrLoaded = id; return; }
+      rfqPrLoaded = id;
       try {
         const pr = await apiRequest(`api/purchase-requests.php?id=${id}`);
         await loadPurchaseLines(form, pr.items, line => ({ ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)) }));
@@ -8638,7 +8674,7 @@ function purchaseList(spec) {
 
 const prList = purchaseList({
   key: 'pr', route: 'purchase-book/purchase-request', noun: 'Purchase Request', nouns: 'Purchase Requests', api: 'api/purchase-requests.php',
-  kind: 'simple', form: prForm, dateOf: record => record.requestedDate,
+  kind: 'simple', form: prForm, lookups: ['purchaserequest'], dateOf: record => record.requestedDate,
   columns: [
     { key: 'code', label: 'PR ID', type: 'code', group: 'Request' },
     { key: 'date', label: 'Date', type: 'mono', group: 'Request' },
@@ -8916,7 +8952,7 @@ function companyProfile() {
 }
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
-async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
+async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier = null } = {}) {
   const [profile, letterhead] = await Promise.all([companyProfile(), companyLetterhead()]);
   const title = PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
@@ -8928,8 +8964,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
       meta: [['PR No', doc.code], ['Requested Date', pbDate(doc.requestedDate)], ['Required By', pbDate(doc.requiredDate)], ['Reference ID', doc.referenceNo]],
     }),
     rfq: () => ({
-      party: { label: (doc.suppliers || []).length === 1 ? 'Supplier' : 'Suppliers', name: doc.suppliers?.[0]?.name, lines: (doc.suppliers || []).slice(1).map(s => s.name) },
-      meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)], ['PR Ref', doc.purchaseRequestCode]],
+      // One copy per supplier (the preview's Supplier switch): addressed to that supplier, with its details.
+      party: supplier
+        ? { label: 'Supplier', name: supplier.name, lines: [supplier.address, ['Country', supplier.country], ['E-mail', supplier.email],
+          ['Contact Person', supplier.contactPerson], ['Contact Number', supplier.phone || supplier.telephone]] }
+        : (doc.suppliers || []).length === 1 ? { label: 'Supplier', name: doc.suppliers[0].name, lines: [] }
+        // All Suppliers: one copy naming every supplier the request goes to.
+        : { label: 'Suppliers', name: `${(doc.suppliers || []).length} Suppliers`, lines: (doc.suppliers || []).map((s, i) => `${i + 1}. ${s.name}`) },
+      meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)]],   // the PR stays internal
     }),
     po: () => ({
       party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
@@ -8943,14 +8985,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
       meta: [['GRN No', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['PO Number', doc.poNumber], ['Warehouse', doc.warehouseName]],
     }),
   }[spec.key]();
-  // The item table's columns: [heading, kind of cell, value]. Item Code is printed on the Purchase Request only.
+  // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
+  // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
   const qty = value => pbQty(pbNum(value));
   const columns = [
     ['SL.NO', 'sno', (l, i) => i + 1],
     ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
     ['Item Name', 'name', l => l.itemName],
     ...{
-      simple: [['Brand', 'text', l => l.brandName], ['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
+      simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
         [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc.', 'num', l => pbAmount(l.discountAmount)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
@@ -9020,7 +9063,11 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...columns.map(([, kind, value]) => cell('td', cellClass(kind), value(line, i))));
-    if (line.itemNameHtml) tr.querySelector('.ps-c-name').replaceChildren(remarksFragment(line.itemNameHtml));   // the line's bold / colour
+    // The item name (with the line's bold / colour), then "MAKE: brand" under it when the line has a brand.
+    const nameCell = tr.querySelector('.ps-c-name');
+    if (line.itemNameHtml) nameCell.replaceChildren(remarksFragment(line.itemNameHtml));
+    const brand = String(line.brandName ?? '').trim();
+    if (brand) nameCell.append(el('div', 'ps-make', `Make: ${brand}`));
     tbody.append(tr);
   });
   table.append(thead, tbody);
@@ -9133,16 +9180,41 @@ async function printPurchaseDocument(spec, id) {
   let doc;
   try { doc = await apiRequest(`${spec.api}?id=${id}`); } catch (error) { showToast('The document could not be opened', error.message, true); return; }
   const dialog = byId('pb-preview');
-  previewDoc = { spec, doc };
+  // A Quotation Request: the Supplier switch shows All Suppliers (one copy naming them all, the first choice) or
+  // the copy for one supplier, with that supplier's details. With a single supplier it is addressed to it.
+  const suppliers = spec.key === 'rfq' ? doc.suppliers || [] : [];
+  previewDoc = { spec, doc, supplierId: suppliers.length === 1 ? String(suppliers[0].id) : '' };
+  const switcher = byId('pv-supplier');
+  switcher.replaceChildren(new Option('All Suppliers', ''), ...suppliers.map(s => new Option(s.name, String(s.id))));
+  switcher.value = previewDoc.supplierId;
+  switcher.closest('.pv-supplier').hidden = suppliers.length < 2;
   byId('pv-title').textContent = `${PB_TITLES[spec.key]} • ${doc.code}`;
+  if (!dialog.open) dialog.showModal();
+  dialog.querySelector('[data-pv="print"]').focus();
+  await showPreviewSheet();
+}
+
+// The previewed document's supplier (Quotation Request): its details from the Supplier master, else the name kept on the request.
+async function previewSupplier() {
+  const { doc, supplierId } = previewDoc;
+  if (!supplierId) return null;
+  const kept = (doc.suppliers || []).find(s => String(s.id) === supplierId) || {};
+  try { return { ...kept, ...(await pbSupplier(supplierId)) }; } catch { return kept; }
+}
+
+// Draws the preview page for the current document (and supplier).
+async function showPreviewSheet() {
+  const current = previewDoc;
+  if (!current) return;
+  const dialog = byId('pb-preview');
   const sheet = dialog.querySelector('.pv-sheet');
   sheet.replaceChildren();
   sheet.style.minHeight = '';
-  if (!dialog.open) dialog.showModal();
   dialog.scrollTop = 0;
-  dialog.querySelector('[data-pv="print"]').focus();
   try {
-    await fillPurchaseSheet(sheet, spec, doc, { screen: true });
+    const supplier = await previewSupplier();
+    if (previewDoc !== current) return;
+    await fillPurchaseSheet(sheet, current.spec, current.doc, { screen: true, supplier });
   } catch (error) {
     showToast('The document could not be shown', error.message, true);
   }
@@ -9152,9 +9224,11 @@ async function printPreviewDocument() {
   if (!previewDoc) return;
   const { spec, doc } = previewDoc;
   const sheet = byId('pb-print-sheet');
-  await fillPurchaseSheet(sheet, spec, doc);
+  const supplier = await previewSupplier();
+  await fillPurchaseSheet(sheet, spec, doc, { supplier });
   const pageTitle = document.title;
-  document.title = `${doc.code} ${PB_TITLES[spec.key]}`;   // the browser's suggested PDF file name
+  // The browser's suggested PDF file name (a Quotation Request's names the supplier too).
+  document.title = `${doc.code} ${PB_TITLES[spec.key]}${supplier?.name ? ` - ${supplier.name}` : ''}`;
   document.body.classList.add('is-printing');
   const done = () => {
     document.body.classList.remove('is-printing');
@@ -9185,6 +9259,11 @@ function initPurchasePreview() {
     const action = event.target.closest('[data-pv]')?.dataset.pv;
     if (action === 'print') printPreviewDocument();
     if (action === 'back') dialog.close();
+  });
+  byId('pv-supplier').addEventListener('change', event => {
+    if (!previewDoc) return;
+    previewDoc.supplierId = event.target.value;
+    showPreviewSheet();
   });
   dialog.addEventListener('close', () => {
     previewDoc = null;

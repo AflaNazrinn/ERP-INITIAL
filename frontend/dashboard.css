@@ -902,6 +902,8 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .lk-foot .fp-btn { white-space: nowrap; }
 .lk-foot .lk-create { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }   /* left, away from Cancel / Select */
 .lk-foot .lk-create[hidden] { display: none; }
+.lk-foot .lk-all { margin-right: auto; }   /* left, away from Close / Select */
+.lk-foot .lk-all[hidden] { display: none; }
 .lk-foot .fp-btn:disabled { opacity: .5; cursor: default; }
 @media (max-width: 600px) {
   .lk-keys { display: none; }
@@ -1546,6 +1548,7 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-table th.pb-col-sno, .pb-table td.pb-col-sno { width: 52px; padding-left: 14px; font-weight: 700; color: var(--ink-700); }
 .pb-col-code { width: 15%; }
 .pb-table-simple .pb-col-name { text-align: center !important; }
+.pb-table-simple .pb-col-brand { width: 22%; }   /* PR / RFQ lines: room for a brand such as ALPHA PLEX or ALPHA GAMA */
 .pb-col-brand { width: 15%; }
 .pb-col-qty { width: 9%; text-align: right !important; }
 .pb-col-unit { width: 100px; }
@@ -1708,6 +1711,15 @@ dialog.pv::backdrop { background: #eef2f6; }
 .pv-back:hover { border-color: #71717a; background: #27272a; }
 .pv-back kbd { padding: 0; border: 0; background: none; box-shadow: none; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: #a1a1aa; }
 .pv-print:focus-visible, .pv-back:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+.pv-supplier { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 16px; border: 1px solid #3f3f46; border-radius: 999px; background: #18181b; }
+.pv-supplier[hidden] { display: none; }
+.pv-supplier-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a1a1aa; }
+.pv-supplier select {
+  max-width: 260px; height: 34px; padding: 0 28px 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+  background: #27272a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e4e4e7' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  appearance: none; font: inherit; font-size: 14px; font-weight: 700; color: #fff; text-overflow: ellipsis;
+}
+.pv-supplier select:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
 .pv-paper { max-width: 980px; margin: 28px auto 0; overflow-x: auto; }
 .pv-sheet {
   position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; overflow: hidden;
@@ -1718,6 +1730,8 @@ dialog.pv::backdrop { background: #eef2f6; }
   .pv-bar { flex-wrap: wrap; top: 12px; margin-top: 12px; padding: 14px 16px; }
   .pv-actions { width: 100%; }
   .pv-print, .pv-back { flex: 1; justify-content: center; padding: 0 12px; }
+  .pv-supplier { flex: 1 1 100%; }
+  .pv-supplier select { flex: 1; max-width: none; }
   .pv-back kbd { display: none; }
 }
 
@@ -1768,6 +1782,7 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-table td.ps-c-name { font-weight: 800; text-transform: uppercase; color: #0f172a; }
 .ps-table .ps-c-num { text-align: right; }
 .ps-table .ps-c-center { text-align: center; }
+.ps-table .ps-make { margin-top: 3px; font-size: 10px; font-weight: 700; letter-spacing: .01em; text-transform: uppercase; color: #0284c7; }   /* MAKE: brand, under the item name */
 .ps-table td.ps-c-num, .ps-table td.ps-c-center { font-family: var(--ps-mono); white-space: nowrap; }
 .ps-table td.ps-c-total, .ps-table td:last-child { font-weight: 800; }
 .ps-table tr { break-inside: avoid; }
