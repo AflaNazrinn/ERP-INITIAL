@@ -2369,6 +2369,29 @@ input::-webkit-contacts-auto-fill-button {
 .ps-grn .ps-total-discount dt, .ps-grn .ps-total-discount dd { color: #be123c; }
 .ps-grn .ps-totals-count .ps-total-grand { padding-top: 6px !important; }
 .ps-grn .ps-totals-count dt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+/* GRN details: Buyer / Receiver (wide) | GRN ID · GRN Date · Supplier PO stacked; Supplier / Vendor | Stock Point. */
+.ps-grnbox { display: grid; grid-template-columns: minmax(0, 1fr) 40%; }
+.ps-grnbox > .ps-party { padding: 10px 12px; border-left: 0; }
+.ps-grnbox > .ps-party:nth-child(3) { border-top: 1px solid #cbd5e1; }
+.ps-grnbox .ps-idbox { display: flex; flex-direction: column; margin: 0; border-left: 1px solid #cbd5e1; }
+.ps-grnbox .ps-idbox-item { flex: 1; justify-content: flex-start; padding: 8px 12px; }
+.ps-grnbox .ps-grnbox-point { border-top: 1px solid #cbd5e1; }
+.ps-grnbox .ps-idbox-item dd { font-size: 12px; }
+.ps-idbox-item.is-ref dd { color: #0284c7; }
+.ps-grnbox .ps-grnbox-point dd { font-family: var(--font-ui); font-size: 11.5px; text-transform: uppercase; }
+.ps-grn .ps-grn-totals .ps-total-discount dt, .ps-grn .ps-grn-totals .ps-total-discount dd { color: #be123c; }
+.ps-grnbox .ps-label { font-size: 8.5px; color: #64748b; }
+/* GRN totals: Subtotal and VAT (Tax), then the Grand Total in a green box. */
+.ps-grn .ps-grn-totals { padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.ps-grn .ps-grn-totals > div { padding: 3px 0; border: 0; }
+.ps-grn .ps-grn-totals dt { font-size: 10.5px; font-weight: 500; text-transform: none; color: #334155; }
+.ps-grn .ps-grn-totals dd { font-family: var(--ps-mono); font-size: 11px; font-weight: 800; color: #0f172a; }
+.ps-grn .ps-grn-grand {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 10px 14px !important;
+  border: 1px solid #86efac !important; border-radius: 10px; background: #f0fdf4;
+}
+.ps-grn .ps-grn-grand dt { font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #15803d; }
+.ps-grn .ps-grn-grand dd { font-size: 18px; font-weight: 800; color: #15803d; }
 
 /* ---------- Sales Order (#so-form): what Document Title and Supplier Mode show ----------
    data-mode="multi": a Supplier per line instead of the order's Supplier Name / Supplier Currency.

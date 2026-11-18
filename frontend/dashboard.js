@@ -10127,14 +10127,16 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       };
     },
     // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Stock Point.
+    // Goods Received Note: Buyer / Receiver over Supplier / Vendor on the left; GRN ID, GRN Date and the supplier's
+    // PO over the Stock Point on the right.
     grn: () => ({
       buyerLabel: 'Buyer / Receiver',
-      party: { label: 'Supplier / Vendor', name: doc.supplierName,
-        lines: [supplier?.address, ['Country', supplier?.country], ['E-mail', supplier?.email], ['Contact Person', supplier?.contactPerson],
-          ['Contact Number', supplier?.phone || supplier?.telephone]] },
-      cols: 4,
-      meta: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['PO Ref', doc.poNumber || doc.purchaseOrderCode],
-        ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')]],
+      party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [] },
+      grnBox: {
+        ids: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['Supplier PO / Other Reference', doc.poNumber || doc.purchaseOrderCode, 'ref']],
+        point: ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')],
+      },
+      meta: [],
     }),
     // Sales documents: this company is the Supplier, the customer the Buyer (as the quotation layout).
     qt: () => ({
@@ -10156,18 +10158,19 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
   const qty = value => pbQty(pbNum(value));
+  const grnMoney = value => pbNum(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 12,946.500
   const columns = [
     [spec.key === 'grn' ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
     ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
-    [spec.key === 'grn' ? 'Description of Goods' : 'Item Name', 'name', l => l.itemName],
+    ['Item Name', 'name', l => l.itemName],
     ...{
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
         [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc (%)', 'num', l => pbNum(l.discountPct).toFixed(2)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
-        ...(noPrices ? [] : [['Rate', 'num', l => pbAmount(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
-          ['Amount', 'num total', l => pbAmount(l.lineTotal)]])],
+        ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
+          ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
     // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
     so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
       [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
@@ -10213,7 +10216,21 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     party(layout.party.label, layout.party.name, layout.party.lines),
   );
   const box = el('div', 'ps-docbox');
-  if (layout.idBox) {
+  const stackItem = ([label, value, kind]) => {
+    const item = el('div', kind === 'ref' ? 'ps-idbox-item is-ref' : 'ps-idbox-item');
+    item.append(el('dt', '', label), cell('dd', '', value));
+    return item;
+  };
+  if (layout.grnBox) {
+    const grid = el('div', 'ps-grnbox');
+    const ids = el('dl', 'ps-idbox ps-grnbox-ids');
+    ids.append(...layout.grnBox.ids.map(stackItem));
+    const point = el('dl', 'ps-idbox ps-grnbox-point');
+    point.append(stackItem(layout.grnBox.point));
+    const [buyerBox, supplierBox] = [...parties.children];
+    grid.append(buyerBox, ids, supplierBox, point);
+    box.append(grid);
+  } else if (layout.idBox) {
     // Supplier / Vendor on the left, the document number and date stacked on the right.
     const top = el('div', 'ps-docbox-top');
     const ids = el('dl', 'ps-idbox');
@@ -10248,7 +10265,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     item.append(el('dt', '', label), cell('dd', '', value));
     metaGrid.append(item);
   });
-  box.append(metaGrid);
+  if (layout.meta.length) box.append(metaGrid);
   parts.push(box);
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
@@ -10286,7 +10303,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const side = el('div', 'ps-side');
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');
-    remarks.append(el('div', 'ps-label', spec.key === 'grn' ? 'Remarks & Inward Notes' : 'Remarks & Notes'));
+    remarks.append(el('div', 'ps-label', 'Remarks & Notes'));
     if (isRemarksHtml(doc.remarks)) {
       const body = el('div', 'ps-remarks-body');
       body.append(remarksFragment(doc.remarks));
@@ -10308,6 +10325,21 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const row = el('div', 'ps-total-grand');
     row.append(el('dt', '', 'Total Number of Items:'), el('dd', '', String(doc.items.length)));
     totals.append(row);
+    bottom.append(totals);
+  } else if (spec.key === 'grn') {
+    const totals = el('dl', 'ps-totals ps-grn-totals');
+    const currency = doc.currency || profile?.baseCurrency || 'OMR';     // a GRN has no currency of its own: the company's
+    const money = (value, sign = '') => `${currency ? `${currency} ` : ''}${sign}${grnMoney(value)}`;   // OMR -1.000
+    for (const [label, value, sign] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT (Tax)' : 'VAT (included)', doc.vatAmount],
+      ['Discount', doc.discountAmount, '-'], ['Shipping / Freight', doc.shipping]]) {
+      if ((label === 'Discount' || label.startsWith('Shipping')) && !pbNum(value)) continue;   // shown only when there is one
+      const row = el('div', label === 'Discount' ? 'ps-total-discount' : '');
+      row.append(el('dt', '', label), el('dd', '', money(value, sign)));
+      totals.append(row);
+    }
+    const grand = el('div', 'ps-grn-grand');
+    grand.append(el('dt', '', `Grand Total${currency ? ` (${currency})` : ''}`), el('dd', '', grnMoney(doc.grandTotal)));
+    totals.append(grand);
     bottom.append(totals);
   } else if (spec.kind !== 'simple') {
     const totals = el('dl', 'ps-totals');
