@@ -586,7 +586,7 @@ function initKeyboardNavigation() {
       }
       return;
     }
-    if (event.target.closest('.fp-row') && ['INPUT', 'SELECT'].includes(event.target.tagName)) return;  // handleTableArrows
+    if (event.target.closest('.fp-row') && (['INPUT', 'SELECT'].includes(event.target.tagName) || isRowActionButton(event.target))) return;  // handleTableArrows
     if (isTextEntry(event.target) && !arrowLeavesField(event)) return;  // the arrow moves the caret instead
     event.preventDefault();                 // also stops a closed <select> changing value
     moveFocusByArrow(event.key);
@@ -1760,6 +1760,13 @@ async function loadLookup(kind) {
 
 function forgetLookups(...kinds) {
   for (const kind of kinds) delete lookupCache[kind];
+  // An item saved, renamed or deleted anywhere (the Item page, the Items list, an import): the Purchase Book's
+  // item searches and the items it keeps (the Full Item Description, brands, units) are read afresh.
+  if (kinds.includes('item') || kinds.includes('itemcode')) {
+    delete lookupCache.item;
+    delete lookupCache.itemcode;
+    pbData.items.clear();
+  }
 }
 
 // Shows the code the next save will get. Only a preview: the server assigns the code on save.
@@ -2802,12 +2809,16 @@ function handleItemPageKeys(event) {
 // at the edge, and from a row's last cell → goes on to the next row's first (← the reverse). At the table's
 // edges the arrows leave it: ↓ on the last row or → on its last cell go to the first field after the table,
 // ↑ on the first row or ← on its first cell to the last field before it. New rows: Shift+X or Alt+A.
+// A lookup field (Item Code, Item Name, Brand …) holds a picked value with no caret to move: ←/→ leave it at
+// once. A Purchase Book line's Action buttons (move up, move down, remove) are cells too, after its fields.
+const isRowActionButton = node => node.tagName === 'BUTTON' && Boolean(node.closest('.fp-row .pb-col-act'));
 function handleTableArrows(event) {
   const input = event.target;
   const row = input.closest('.fp-row');
-  if (!row || !['INPUT', 'SELECT'].includes(input.tagName) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (!row || !(['INPUT', 'SELECT'].includes(input.tagName) || isRowActionButton(input))
+    || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   const rows = [...row.parentElement.rows].filter(other => other.matches('.fp-row'));
-  const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select')];
+  const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select, .pb-col-act button')];
   const col = columnCells(row).indexOf(input);
   const usable = r => columnCells(r).filter(cell => !cell.disabled);
   const cells = usable(row);
@@ -2824,7 +2835,8 @@ function handleTableArrows(event) {
   } else if (event.key === 'ArrowDown') {
     event.preventDefault();
     if (index < rows.length - 1) focusField(cellAt(rows[index + 1])); else leave(true);
-  } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && caretAtEdge(input, event.key)) {
+  } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    && (input.tagName === 'BUTTON' || isLookupField(input) || caretAtEdge(input, event.key))) {
     event.preventDefault();
     const forward = event.key === 'ArrowRight';
     const neighbour = cells[cells.indexOf(input) + (forward ? 1 : -1)];
@@ -8921,24 +8933,30 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
       meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
         ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
         ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
-        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact],
-        ['Certification Required', (doc.certifications || []).join(', ')]],
+        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact]],
     }),
     grn: () => ({
       party: { label: 'Supplier', name: doc.supplierName, lines: [] },
       meta: [['GRN No', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['PO Number', doc.poNumber], ['Warehouse', doc.warehouseName]],
     }),
   }[spec.key]();
-  const heads = {
-    simple: ['#', 'Item Code', 'Item Name', 'Brand', 'Qty', 'Unit'],
-    po: ['#', 'Item Code', 'Item Name', 'Qty', 'Unit', `Price${doc.currency ? ` (${doc.currency})` : ''}`, 'VAT (%)', 'Disc.', 'Line Total'],
-    grn: ['#', 'Item Code', 'Item Name', 'Received', 'Accepted', 'Rejected', 'Unit', 'Unit Cost', 'VAT (%)', 'Line Total'],
-  }[spec.kind];
-  const lineCells = (l, i) => ({
-    simple: [i + 1, l.itemCode, l.itemName, l.brandName, pbQty(pbNum(l.quantity)), l.unit],
-    po: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbNum(l.vatRate).toFixed(2), pbAmount(l.discountAmount), pbAmount(l.lineTotal)],
-    grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbNum(l.vatRate).toFixed(2), pbAmount(l.lineTotal)],
-  }[spec.kind]);
+  // The item table's columns: [heading, kind of cell, value]. Item Code is printed on the Purchase Request only.
+  const qty = value => pbQty(pbNum(value));
+  const columns = [
+    ['SL.NO', 'sno', (l, i) => i + 1],
+    ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
+    ['Item Name', 'name', l => l.itemName],
+    ...{
+      simple: [['Brand', 'text', l => l.brandName], ['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
+      po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
+        [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
+        ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc.', 'num', l => pbAmount(l.discountAmount)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+      grn: [['Received', 'num', l => qty(l.receivedQty)], ['Accepted', 'num', l => qty(l.acceptedQty)], ['Rejected', 'num', l => qty(l.rejectedQty)],
+        ['Unit', 'num', l => l.unit], ['Unit Cost', 'num', l => pbAmount(l.unitCost)], ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)],
+        ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+    }[spec.kind],
+  ];
+  const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
   const companyName = profile?.companyName || byId('app')?.querySelector('.brand-name')?.textContent || 'Growth Engine';
   const parts = [];
@@ -8982,6 +9000,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   metaGrid.style.setProperty('--ps-cols', String(cols));
   for (const [i, [label, value]] of layout.meta.entries()) {
     const item = el('div', (i + 1) % cols ? 'ps-meta-item' : 'ps-meta-item is-row-end');
+    if (/\bRef\b|Reference|PO Number/.test(label)) item.classList.add('is-ref');   // the source document, in blue
     item.append(el('dt', '', label), cell('dd', '', value));
     metaGrid.append(item);
   }
@@ -8992,20 +9011,21 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   const table = el('table', `ps-table ps-table-${spec.kind}`);
   const thead = el('thead');
   const headRow = el('tr');
-  headRow.append(...heads.map(label => el('th', '', label)));
+  headRow.append(...columns.map(([label, kind]) => el('th', cellClass(kind), label)));
   thead.append(headRow);
   const tbody = el('tbody');
   doc.items.forEach((line, i) => {
     const tr = el('tr');
-    tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
-    if (line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // the line's bold / colour
+    tr.append(...columns.map(([, kind, value]) => cell('td', cellClass(kind), value(line, i))));
+    if (line.itemNameHtml) tr.querySelector('.ps-c-name').replaceChildren(remarksFragment(line.itemNameHtml));   // the line's bold / colour
     tbody.append(tr);
   });
   table.append(thead, tbody);
   parts.push(table);
 
-  // Remarks & Notes on the left, the totals on the right.
+  // Remarks & Notes and the PO's Certification Required on the left, the totals on the right.
   const bottom = el('div', 'ps-bottom');
+  const side = el('div', 'ps-side');
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');
     remarks.append(el('div', 'ps-label', 'Remarks & Notes'));
@@ -9016,8 +9036,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
     } else {
       remarks.append(el('div', 'ps-remarks-text', doc.remarks));
     }
-    bottom.append(remarks);
+    side.append(remarks);
   }
+  if (spec.key === 'po') {
+    const certification = el('div', 'ps-remarks ps-certification');
+    certification.append(el('div', 'ps-label', 'Certification Required'),
+      el('div', 'ps-remarks-text', (doc.certifications || []).join(', ') || 'N/A'));
+    side.append(certification);
+  }
+  if (side.childElementCount) bottom.append(side);
   if (spec.kind !== 'simple') {
     const totals = el('dl', 'ps-totals');
     const currency = doc.currency ? ` ${doc.currency}` : '';
