@@ -8586,6 +8586,8 @@ const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm];
    Purchase Book opens these; Purchase Book › Create still opens the empty forms. */
 
 const pbDate = value => (value ? shortDate(String(value).slice(0, 10)) : '');
+// A Purchase Order's PDF dates: 18/11/2026.
+const poSlashDate = value => { const [y, m, d] = String(value || '').slice(0, 10).split('-'); return y && m && d ? `${d}/${m}/${y}` : ''; };
 // Formatted remarks as text (list rows and table cells), one line per paragraph or list item.
 const remarksPlainText = html => {
   const box = document.createElement('div');
@@ -9010,10 +9012,10 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
         // The buyer's contact on this order: the salesman who created it.
         buyerLines: [['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone]],
         cols: 3,
-        meta: [['PO ID', doc.code], ['PO Date', pbDate(doc.poDate)], ['RFQ Ref', doc.quotationNumber || doc.quotationRequestCode],
+        meta: [['PO ID', doc.code], ['PO Date', poSlashDate(doc.poDate)], ['RFQ Ref', doc.quotationNumber || doc.quotationRequestCode],
           ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', `${doc.paymentMode || ''}${doc.creditPeriod ? ` (${doc.creditPeriod})` : ''}`], ['Currency', doc.currency],
           // Shown only when filled in, so the usual order keeps the design's three rows.
-          ...(doc.deliveryDate ? [['Delivery Date', pbDate(doc.deliveryDate)]] : []),
+          ...(doc.deliveryDate ? [['Delivery Date', poSlashDate(doc.deliveryDate)]] : []),
           ...(certifications ? [['Certification Required', certifications]] : []),
           ...(doc.purchaseRequestCode ? [['PR Ref', doc.purchaseRequestCode]] : []),
           ['Delivery To', doc.deliveryLocation, 'full']],
@@ -9181,6 +9183,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   frame.append(frameHead, frameBody, frameFoot);
   const sheetParts = [frame];
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
+  sheet.classList.toggle('ps-po', spec.key === 'po');   // the Purchase Order's own look (dates, values, totals box)
   sheet.style.setProperty('--ps-top', `${((letterhead?.top ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-bottom', `${((letterhead?.bottom ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-side', `${((letterhead?.side ?? 0.06) * 210).toFixed(1)}mm`);
@@ -9219,6 +9222,7 @@ async function printPurchaseDocument(spec, id) {
   try { doc = await apiRequest(`${spec.api}?id=${id}`); } catch (error) { showToast('The document could not be opened', error.message, true); return; }
   const dialog = byId('pb-preview');
   previewDoc = { spec, doc };
+  dialog.classList.toggle('pv-po', spec.key === 'po');   // a Purchase Order: the dark bar scrolls away with the page
   byId('pv-title').textContent = `${PB_TITLES[spec.key]} • ${doc.code}`;
   const sheet = dialog.querySelector('.pv-sheet');
   sheet.replaceChildren();

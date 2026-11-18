@@ -2151,3 +2151,17 @@ input::-webkit-contacts-auto-fill-button {
 .ps-table-po th:nth-child(3), .ps-table-po td:nth-child(3), .ps-table-po th:nth-child(4), .ps-table-po td:nth-child(4) { text-align: center; }
 .ps-table-po td:nth-child(4) { font-family: inherit; font-size: 10px; text-transform: uppercase; }
 .ps-table-po th:nth-child(n+5), .ps-table-po td:nth-child(n+5) { text-align: right; }
+
+/* ---------- Purchase Order PDF / preview (.ps-po), as the procurement document design ----------
+   Detail values in bold capitals (PO ID in the code font), the totals in a grey rounded box with lines between rows;
+   on the preview the dark bar scrolls away with the page (.pv-po). */
+.pv.pv-po .pv-bar { position: relative; top: auto; }
+.ps-po .ps-meta-item dd { font-family: var(--font-ui); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .01em; }
+.ps-po .ps-meta-item:first-child dd { font-family: var(--font-mono); font-weight: 700; text-transform: none; }
+.ps-po .ps-totals { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: rgba(241, 245, 249, .92); }
+.ps-po .ps-totals > div { padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
+.ps-po .ps-totals > div:last-child { border-bottom: 0; }
+.ps-po .ps-totals dt { font-size: 9.5px; color: #475569; }
+.ps-po .ps-total-grand { margin-top: 2px; padding-top: 8px !important; border-top: 0; }
+.ps-po .ps-total-grand dt { font-size: 11px; font-weight: 800; text-transform: none; color: #0f172a; }
+.ps-po .ps-total-grand dd { font-size: 14px; font-weight: 800; }
