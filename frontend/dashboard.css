@@ -1965,3 +1965,6 @@ input::-webkit-contacts-auto-fill-button {
 .qs .sf-head { padding: 20px 24px 16px; background: var(--surface-muted); }
 .qs .lk-close { border: 0; background: none; }
 .qs-body { padding: 20px 24px; }
+/* Keyboard focus on + Create Supplier / Cancel in the card-style popup (→ from the search box). */
+.lk-new:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
+.lk-cards .lk-foot .fp-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }

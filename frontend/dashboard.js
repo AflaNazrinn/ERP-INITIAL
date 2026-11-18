@@ -1167,7 +1167,7 @@ function enterField(node) {
   focusField(node);
   if (isLookupField(node)) openLookup(node, { byKeyboard: true });
   else if (node instanceof HTMLSelectElement) { if (hasDropdownChoices(node)) openSelectMenu(node); }
-  else if (isSuggestField(node)) openSuggest(node, { browse: true });
+  else if (isSuggestField(node) && node.dataset.suggestTyped === undefined) openSuggest(node, { browse: true });   // data-suggest-typed: only once typing
   else if (node instanceof HTMLInputElement && node.list) showDropdown(node);
 }
 
@@ -2050,6 +2050,12 @@ function handleLookupDialogKeys(event) {
   if (target !== search) {
     if (!key.startsWith('Arrow')) return;
     event.preventDefault();
+    // Card style (+ Create Supplier beside the search box): ← / ↑ back to the search, ↓ to Cancel; Cancel ← or ↑ to Create.
+    const create = byId('lookup-new');
+    if (!create.hidden) {
+      if (target === create) { if (key === 'ArrowDown') cancel.focus(); else if (key === 'ArrowLeft' || key === 'ArrowUp') search.focus(); return; }
+      if (target === cancel && (key === 'ArrowLeft' || key === 'ArrowUp')) { create.focus(); return; }
+    }
     if (key === 'ArrowRight' && target === cancel && !select.disabled) select.focus();
     else if (key === 'ArrowLeft' && target === select) cancel.focus();
     else if ((key === 'ArrowLeft' && target === cancel) || key === 'ArrowUp') search.focus();
@@ -2059,7 +2065,7 @@ function handleLookupDialogKeys(event) {
   // → leaves the list for the Close button, once the caret is at the end of the search text.
   if (key === 'ArrowRight' && search.selectionStart === search.value.length && search.selectionEnd === search.value.length) {
     event.preventDefault();
-    cancel.focus();
+    if (!byId('lookup-new').hidden) byId('lookup-new').focus(); else cancel.focus();   // card style: + Create Supplier first
     return;
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
