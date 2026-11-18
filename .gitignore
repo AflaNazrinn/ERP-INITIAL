@@ -6,3 +6,7 @@ dist/
 backend/companyconfig.php
 backend/companyconfig.lock
 backend/companyconfig.php.*.tmp
+
+# OS and editor files
+.DS_Store
+.vscode/
