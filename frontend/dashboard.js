@@ -9485,14 +9485,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameHead = el('thead'); frameHead.append(spacer('ps-space-top'));
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
-  bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);
-  if (procurement && profile?.files?.logo) {
-    const mark = el('img', 'ps-watermark');
-    mark.alt = '';
-    loading.push(imageLoaded(mark));
-    mark.src = 'api/company-profile.php?file=logo';
-    table.before(mark);
-  }
+  bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
   frame.append(frameHead, frameBody, frameFoot);
   const sheetParts = [frame];
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
