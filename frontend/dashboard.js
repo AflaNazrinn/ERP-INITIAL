@@ -8987,7 +8987,8 @@ function companyProfile() {
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
-  const [profile, letterhead] = await Promise.all([companyProfile(), companyLetterhead()]);
+  const [profile, letterhead, supplier] = await Promise.all([companyProfile(), companyLetterhead(),
+    spec.key === 'po' && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
   const title = PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
   const cell = (tag, className, value) => el(tag, className, text(value));
@@ -9001,14 +9002,23 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
       party: { label: (doc.suppliers || []).length === 1 ? 'Supplier' : 'Suppliers', name: doc.suppliers?.[0]?.name, lines: (doc.suppliers || []).slice(1).map(s => s.name) },
       meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)], ['PR Ref', doc.purchaseRequestCode]],
     }),
-    po: () => ({
-      party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
-      meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
-        ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
-        ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
-        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact],
-        ['Certification Required', (doc.certifications || []).join(', ')]],
-    }),
+    po: () => {
+      const certifications = (doc.certifications || []).filter(value => value !== 'N/A').join(', ');
+      return {
+        party: { label: 'Supplier', name: doc.supplierName,
+          lines: [['Country', supplier?.country], ['E-mail', supplier?.email], ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+        // The buyer's contact on this order: the salesman who created it.
+        buyerLines: [['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone]],
+        cols: 3,
+        meta: [['PO ID', doc.code], ['PO Date', pbDate(doc.poDate)], ['RFQ Ref', doc.quotationNumber || doc.quotationRequestCode],
+          ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', `${doc.paymentMode || ''}${doc.creditPeriod ? ` (${doc.creditPeriod})` : ''}`], ['Currency', doc.currency],
+          // Shown only when filled in, so the usual order keeps the design's three rows.
+          ...(doc.deliveryDate ? [['Delivery Date', pbDate(doc.deliveryDate)]] : []),
+          ...(certifications ? [['Certification Required', certifications]] : []),
+          ...(doc.purchaseRequestCode ? [['PR Ref', doc.purchaseRequestCode]] : []),
+          ['Delivery To', doc.deliveryLocation, 'full']],
+      };
+    },
     grn: () => ({
       party: { label: 'Supplier', name: doc.supplierName, lines: [] },
       meta: [['GRN No', doc.code], ['GRN Date', pbDate(doc.grnDate)], ['PO Number', doc.poNumber], ['Warehouse', doc.warehouseName]],
@@ -9016,12 +9026,12 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   }[spec.key]();
   const heads = {
     simple: ['#', 'Item Code', 'Item Name', 'Brand', 'Qty', 'Unit'],
-    po: ['#', 'Item Code', 'Item Name', 'Qty', 'Unit', `Price${doc.currency ? ` (${doc.currency})` : ''}`, 'VAT (%)', 'Disc.', 'Line Total'],
+    po: ['#', 'Item Name', 'Qty', 'Unit', `Price${doc.currency ? ` (${doc.currency})` : ''}`, 'VAT (%)', 'Disc (%)', 'Line Total'],
     grn: ['#', 'Item Code', 'Item Name', 'Received', 'Accepted', 'Rejected', 'Unit', 'Unit Cost', 'VAT (%)', 'Line Total'],
   }[spec.kind];
   const lineCells = (l, i) => ({
     simple: [i + 1, l.itemCode, l.itemName, l.brandName, pbQty(pbNum(l.quantity)), l.unit],
-    po: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbNum(l.vatRate).toFixed(2), pbAmount(l.discountAmount), pbAmount(l.lineTotal)],
+    po: [i + 1, l.itemName, pbQty(pbNum(l.quantity)), l.unit, l.foc ? 'FOC' : pbAmount(l.price), pbNum(l.vatRate).toFixed(2), pbNum(l.discountPct).toFixed(2), pbAmount(l.lineTotal)],
     grn: [i + 1, l.itemCode, l.itemName, pbQty(pbNum(l.receivedQty)), pbQty(pbNum(l.acceptedQty)), pbQty(pbNum(l.rejectedQty)), l.unit, pbAmount(l.unitCost), pbNum(l.vatRate).toFixed(2), pbAmount(l.lineTotal)],
   }[spec.kind]);
 
@@ -9056,20 +9066,33 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
     .map(value => String(value ?? '').trim()).filter(Boolean).join(', ');
   const parties = el('div', 'ps-parties');
   parties.append(
-    party('Buyer', companyName, [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ['Contact Number', p.phone]]),
+    party('Buyer', companyName, layout.buyerLines
+      ? [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ...layout.buyerLines]
+      : [address, ['Country', p.country], ['VATIN', p.vatRegNumber], ['E-mail', p.email], ['Contact Number', p.phone]]),
     party(layout.party.label, layout.party.name, layout.party.lines),
   );
   const box = el('div', 'ps-docbox');
   box.append(parties);
   const metaGrid = el('dl', 'ps-meta');
   const count = layout.meta.length;
-  const cols = count <= 4 ? count : count % 3 === 0 ? 3 : 4;
+  const cols = layout.cols || (count <= 4 ? count : count % 3 === 0 ? 3 : 4);
   metaGrid.style.setProperty('--ps-cols', String(cols));
-  for (const [i, [label, value]] of layout.meta.entries()) {
-    const item = el('div', (i + 1) % cols ? 'ps-meta-item' : 'ps-meta-item is-row-end');
+  let column = 0;
+  layout.meta.forEach(([label, value, span], i) => {
+    const next = layout.meta[i + 1];
+    const full = span === 'full';
+    if (full) column = 0;
+    column += full ? cols : 1;
+    // The last item before a full-width one stretches to the row's end, so no row is left open.
+    const fill = !full && next?.[2] === 'full' && column % cols ? cols - (column % cols) + 1 : 1;
+    if (fill > 1) column += fill - 1;
+    const rowEnd = column % cols === 0;
+    const item = el('div', rowEnd ? 'ps-meta-item is-row-end' : 'ps-meta-item');
+    if (full) item.style.gridColumn = '1 / -1';
+    else if (fill > 1) item.style.gridColumn = `span ${fill}`;
     item.append(el('dt', '', label), cell('dd', '', value));
     metaGrid.append(item);
-  }
+  });
   box.append(metaGrid);
   parts.push(box);
 
@@ -9083,7 +9106,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
-    if (spec.kind === 'po' && line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // bold / colour
+    if (spec.kind === 'po' && line.itemNameHtml) tr.children[1].replaceChildren(remarksFragment(line.itemNameHtml));   // bold / colour
     tbody.append(tr);
   });
   table.append(thead, tbody);
@@ -9148,6 +9171,13 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);
+  if (spec.key === 'po' && profile?.files?.logo) {
+    const mark = el('img', 'ps-watermark');
+    mark.alt = '';
+    loading.push(imageLoaded(mark));
+    mark.src = 'api/company-profile.php?file=logo';
+    table.before(mark);
+  }
   frame.append(frameHead, frameBody, frameFoot);
   const sheetParts = [frame];
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
