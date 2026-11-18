@@ -3080,7 +3080,7 @@ function createFormPage(config) {
       forgetLookups(...(config.lookups || []));
       if (warning) showToast(`${record.code} saved, but its documents were not uploaded`, warning, true);
       else showToast(`${noun()} ${wasEditing ? 'updated' : 'saved'}`, `${record.code} · ${record.name}`);
-      if (!wasEditing) config.afterCreate?.(record);       // e.g. a new Purchase Request opens on its preview page
+      if (!wasEditing) config.afterCreate?.(record);       // e.g. a new purchase document opens on its preview page
       const listRoute = typeof config.listRoute === 'function' ? config.listRoute() : config.listRoute;
       // Pages without a list (the Purchase Book documents) always stay for the next record.
       if (listRoute && showSavedInList(listRoute, record.code, { edited: Boolean(wasEditing) })) return;
@@ -7833,7 +7833,7 @@ function createPurchaseForm(spec) {
 
   form.page = createFormPage({
     key: spec.key, route: spec.route, noun: spec.noun, api: spec.api, ctrlSave: true, lookups: spec.lookups, listRoute: spec.listRoute,
-    afterCreate: spec.previewOnCreate ? record => printPurchaseDocument(spec, record.id) : undefined,
+    afterCreate: record => printPurchaseDocument(spec, record.id),   // every new purchase document opens on its PDF preview
     firstField: () => spec.firstField(),
     setCode: () => showNextCode(el('code'), spec.api),
     lists: { items: { body: `${spec.key}-items`, template: spec.template, initial: 1, label: i => String(i + 1),
@@ -8206,7 +8206,7 @@ async function purchaseOptions(select, api, label) {
 
 /* ---------- Purchase Request ---------- */
 const prForm = createPurchaseForm({
-  key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php', previewOnCreate: true,
+  key: 'pr', route: 'purchase-book/purchase-request/new', noun: 'Purchase Request', api: 'api/purchase-requests.php',
   kind: 'simple', template: 'pb-line-simple', lookups: [], itemsFromMaster: true,   // every line is an Item master item
   firstField: () => byId('pr-reference'),
   fieldNodes: { referenceNo: 'pr-reference', purchaseType: 'pr-type', requestedDate: 'pr-date', requiredDate: 'pr-required',
