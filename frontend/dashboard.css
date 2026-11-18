@@ -162,9 +162,7 @@ button, select { font-family: inherit; }
   min-width: 0; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--ink-900);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* With a logo the logo is the brand: the name is hidden (it stays in the page, read for the PDFs) and the logo a
-   little larger. Without a logo the name stays beside the letter. */
-.company-avatar.has-logo + .brand-name { display: none; }
+/* The company name sits beside the logo (or the letter); an uploaded logo is shown a little larger. */
 .app-header .company-avatar.has-logo { height: 54px; max-width: 280px; }
 .app-header .company-avatar.has-logo img { max-width: 280px; }
 
