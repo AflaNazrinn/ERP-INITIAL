@@ -251,10 +251,10 @@ button, select { font-family: inherit; }
 .swatch-sales { background: var(--sales-bar); }
 .swatch-purchase { background: var(--purchase-bar); }
 .chart-bars {
-  height: 124px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 4px;
   padding: 8px 0 4px; border-bottom: 1px solid var(--line);
 }
-.chart-week { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
+.chart-week { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .chart-week-values {
   max-width: 100%; display: flex; flex-direction: column; align-items: center; line-height: 1.25;
   font-size: 11px; font-family: var(--font-mono); color: var(--ink-500);
@@ -262,7 +262,7 @@ button, select { font-family: inherit; }
 .chart-week-values > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chart-week-value-sales { color: var(--sales-ink); font-weight: 600; }
 .chart-week-value-purchase { color: var(--purchase-ink); }
-.chart-week-bars { width: 100%; height: 80px; display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
+.chart-week-bars { width: 100%; height: 80px; flex-shrink: 0; display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
 .chart-bar { width: 14px; height: 4px; border-radius: 3px 3px 0 0; transition: height .3s ease; }
 .chart-bar-sales { background: var(--sales-bar); }
 .chart-bar-purchase { background: var(--purchase-bar); }
