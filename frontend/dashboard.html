@@ -2038,7 +2038,7 @@
   <form id="po-form" class="fp-form" novalidate>
     <section class="fp-card">
       <h2 class="fp-section-title">1. Document Details</h2>
-      <div class="pb-grid pb-grid-4">
+      <div class="pb-grid pb-grid-5 pb-grid-po-doc">
         <div class="fp-field">
           <label class="fp-label" for="po-code">PO ID</label>
           <input id="po-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the order is saved">
@@ -2050,6 +2050,14 @@
         <div class="fp-field">
           <label class="fp-label" for="po-quotation-no">Quotation Number</label>
           <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001 (optional)">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-salesman">Salesman / Created By <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="po-salesman" class="fp-input pb-input-strong" type="text" maxlength="100" autocomplete="off" data-upper value="ADMIN" placeholder="Enter salesman name" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
+          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-delivery-date">Delivery Date</label>
@@ -2073,25 +2081,6 @@
           <label class="fp-label" for="po-credit-period">Credit Period <span class="fp-req" aria-hidden="true">*</span></label>
           <div class="fp-input-wrap fp-suggest-wrap"><input id="po-credit-period" class="fp-input" type="text" maxlength="40" data-suggest="poCredit" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="e.g. 30 Days"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Credit periods" hidden></ul></div>
         </div>
-        <div class="fp-field">
-          <label class="fp-label" for="po-salesman">Salesman / Created By <span class="fp-req" aria-hidden="true">*</span></label>
-          <input id="po-salesman" class="fp-input pb-input-strong" type="text" maxlength="100" autocomplete="off" data-upper value="ADMIN" placeholder="Enter salesman name" required>
-        </div>
-        <div class="fp-field">
-          <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
-          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
-        </div>
-      </div>
-      <div class="fp-field pb-cert">
-        <span class="fp-label" id="po-cert-label">Certification Required</span>
-        <input id="po-certifications" type="hidden" value="N/A">
-        <div class="pb-cert-box" role="group" aria-labelledby="po-cert-label">
-          <label class="pb-check"><input type="checkbox" data-cert="N/A" data-transient="true" data-enter-skip checked><span>N/A</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="Pressure Test" data-transient="true" data-enter-skip><span>Pressure test</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="COC Certificate" data-transient="true" data-enter-skip><span>COC certificate</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="MTC Certificate" data-transient="true" data-enter-skip><span>MTC Certificate</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="TPI Certificate" data-transient="true" data-enter-skip><span>TPI Certificate</span></label>
-        </div>
       </div>
     </section>
 
@@ -2114,6 +2103,17 @@
         <div class="fp-field">
           <label class="fp-label" for="po-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+      </div>
+      <div class="fp-field pb-cert">
+        <span class="fp-label" id="po-cert-label">Certification Required</span>
+        <input id="po-certifications" type="hidden" value="N/A">
+        <div class="pb-cert-box" role="group" aria-labelledby="po-cert-label">
+          <label class="pb-check"><input type="checkbox" data-cert="N/A" data-transient="true" data-enter-skip checked><span>N/A</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="Pressure Test" data-transient="true" data-enter-skip><span>Pressure test</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="COC Certificate" data-transient="true" data-enter-skip><span>COC certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="MTC Certificate" data-transient="true" data-enter-skip><span>MTC Certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="TPI Certificate" data-transient="true" data-enter-skip><span>TPI Certificate</span></label>
         </div>
       </div>
     </section>

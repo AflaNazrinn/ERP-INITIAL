@@ -2065,9 +2065,10 @@ function handleLookupDialogKeys(event) {
   if (target !== search) {
     if (!key.startsWith('Arrow')) return;
     event.preventDefault();
-    // Card style (+ Create Supplier beside the search box): ← / ↑ back to the search, ↓ to Cancel; Cancel ← or ↑ to Create.
-    const create = byId('lookup-new');
-    if (!create.hidden) {
+    // Card style (+ Create Item / + Create Supplier beside the search box): ← / ↑ back to the search, ↓ to Cancel;
+    // Cancel ← or ↑ to Create.
+    const create = lookupTopCreate();
+    if (create) {
       if (target === create) { if (key === 'ArrowDown') cancel.focus(); else if (key === 'ArrowLeft' || key === 'ArrowUp') search.focus(); return; }
       if (target === cancel && (key === 'ArrowLeft' || key === 'ArrowUp')) { create.focus(); return; }
     }
@@ -2080,7 +2081,7 @@ function handleLookupDialogKeys(event) {
   // → leaves the list for the Close button, once the caret is at the end of the search text.
   if (key === 'ArrowRight' && search.selectionStart === search.value.length && search.selectionEnd === search.value.length) {
     event.preventDefault();
-    if (!byId('lookup-new').hidden) byId('lookup-new').focus(); else cancel.focus();   // card style: + Create Supplier first
+    (lookupTopCreate() || cancel).focus();   // card style: the + Create button beside the search first
     return;
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
@@ -2103,6 +2104,15 @@ function handleLookupDialogKeys(event) {
     else if (lookup.shown.length === 0 && !byId('lookup-new').hidden) createSupplierFromLookup();
     else pickLookupRow({ advance: true });
   }
+}
+
+// The + Create button beside the search box in the card-style popup, if it shows one: Create Supplier, or the
+// item popups' Create Item.
+function lookupTopCreate() {
+  const dialog = byId('lookup');
+  if (!byId('lookup-new').hidden) return byId('lookup-new');
+  if (dialog.classList.contains('lk-cards') && dialog.classList.contains('lk-can-create')) return dialog.querySelector('.lk-create-inline');
+  return null;
 }
 
 // The Purchase Book form whose item row holds this Item Code / Item Name popup field, if any:

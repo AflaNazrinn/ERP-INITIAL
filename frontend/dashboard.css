@@ -2062,3 +2062,5 @@ input::-webkit-contacts-auto-fill-button {
 .qs .sf-head { padding: 22px 26px 18px; background: var(--surface-muted); }
 .qs .lk-close { border: 0; background: none; }
 .qs-body { padding: 20px 26px; }
+/* Keyboard focus on the item popups' + Create Item (→ from the search box), as + Create Supplier. */
+.lk-create-inline:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
