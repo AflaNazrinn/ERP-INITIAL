@@ -232,6 +232,13 @@
             <button type="button" class="cc-mini-btn" data-pick="vatCertificate" aria-describedby="cc-vat-title">Upload</button>
             <input type="file" id="cc-vatCertificate" class="cc-file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" tabindex="-1" aria-hidden="true">
           </div>
+          <!-- The seal printed on Purchase Book PDFs when Attach Seal is ticked. -->
+          <div class="cc-doc" data-file="seal" data-hint="PNG or JPG">
+            <span class="cc-doc-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="6"></circle><circle cx="12" cy="10" r="3"></circle><path d="m8.5 15-1.5 6 5-2.5 5 2.5-1.5-6"></path></svg></span>
+            <span class="cc-doc-text"><span class="cc-doc-title" id="cc-seal-title">Company Seal</span><span class="cc-doc-sub" data-sub>PNG or JPG</span></span>
+            <button type="button" class="cc-mini-btn" data-pick="seal" aria-describedby="cc-seal-title">Upload</button>
+            <input type="file" id="cc-seal" class="cc-file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" tabindex="-1" aria-hidden="true">
+          </div>
         </div>
 
         <p class="cc-sub-head">Letterhead Preview</p>

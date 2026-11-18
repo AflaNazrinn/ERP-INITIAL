@@ -7033,7 +7033,7 @@ function openItemDescription(field) {
   Object.assign(itemDesc, { field, row, itemId, item: null, editing: false, saving: false });
   idpEl('sub').textContent = `Line Item #${lineNo}`;
   idpEl('code').textContent = `Code: ${pbCell(row, 'itemCode').value || '—'}`;
-  idpEl('name').value = field.value;
+  showItemDescName(field.value, null);
   idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
   showItemDescPrice(null);
   setItemDescEditing(false);
@@ -7043,11 +7043,22 @@ function openItemDescription(field) {
   pbItem(itemId).then(item => {
     if (!dialog.open || itemDesc.itemId !== itemId) return;
     itemDesc.item = item;
-    if (!itemDesc.editing) idpEl('name').value = item.name;
+    if (!itemDesc.editing) showItemDescName(item.name, item.nameHtml);
     idpEl('code').textContent = `Code: ${item.code}`;
     if (!pbCell(row, 'unit')?.value) idpEl('unit').textContent = item.unit || '—';
     showItemDescPrice(item);
   }).catch(() => {});
+}
+
+// The name as saved: with its bold / colours when it has them.
+function showItemDescName(name, html) {
+  const box = idpEl('name');
+  if (html) box.replaceChildren(remarksFragment(html)); else box.textContent = name || '';
+}
+const itemDescText = () => idpEl('input').innerText.replace(/\s+/g, ' ').trim();
+function countItemDescChars() {
+  const count = itemDescText().length;
+  idpEl('count').textContent = `${count} char${count === 1 ? '' : 's'}`;
 }
 
 // Unit Price: the line's price (PO) or unit cost (GRN); lines without a price show the item's buying rate.
@@ -7058,19 +7069,33 @@ function showItemDescPrice(item) {
   else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
 }
 
-// While editing, the name is typed in and the primary button turns into Save.
+/* Editing Mode: the name in an editor with Bold / Bold All / Red / Blue / Black / Plain, the line's unit
+   editable, and Cancel (Esc) / Save & Apply (Ctrl+Enter). The name and its formatting go to the Item master. */
 function setItemDescEditing(editing) {
+  const wasEditing = itemDesc.editing;
   itemDesc.editing = editing;
-  idpEl('name').readOnly = !editing;
+  byId('item-desc').classList.toggle('is-editing', editing);
   for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
-  idpEl('primary-label').textContent = editing ? (itemDesc.saving ? 'Saving…' : 'Save') : 'Close';
+  idpEl('primary-label').textContent = editing ? (itemDesc.saving ? 'Saving…' : 'Save & Apply (Ctrl+Enter)') : 'Close';
   idpEl('primary').disabled = itemDesc.saving;
   idpEl('error').hidden = true;
-  if (editing) focusField(idpEl('name'));
+  if (editing && !wasEditing) {
+    const input = idpEl('input');
+    const html = itemDesc.item?.nameHtml;
+    if (html) input.replaceChildren(remarksFragment(html)); else input.textContent = itemDesc.item?.name ?? itemDesc.field.value;
+    idpEl('unit-input').value = pbCell(itemDesc.row, 'unit')?.value || itemDesc.item?.unit || '';
+    countItemDescChars();
+    input.focus();
+    const range = document.createRange();               // caret at the end of the name
+    range.selectNodeContents(input);
+    range.collapse(false);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 }
 
 function cancelItemDescEdit() {
-  idpEl('name').value = itemDesc.item ? itemDesc.item.name : itemDesc.field.value;
   setItemDescEditing(false);
   idpEl('primary').focus();
 }
@@ -7084,29 +7109,83 @@ function closeItemDescription() {
 }
 
 async function copyItemDescName() {
-  const name = idpEl('name').value;
+  const name = idpEl('name').innerText.replace(/\s+/g, ' ').trim();
   try {
     await navigator.clipboard.writeText(name);
   } catch {
-    const input = idpEl('name');
-    input.select();
+    const range = document.createRange();
+    range.selectNodeContents(idpEl('name'));
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
     if (!document.execCommand('copy')) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
   }
   showToast('Item name copied', name);
 }
 
-// Saves the new name to the Item master, then shows it on every line holding the item.
+/* Formatting in the editor. A highlighted part gets it; with nothing highlighted, the whole name does.
+   Bold toggles; Plain removes bold and colour. */
+function formatItemDescName(action, colour) {
+  const input = idpEl('input');
+  const selection = getSelection();
+  const inside = selection.rangeCount && input.contains(selection.getRangeAt(0).commonAncestorContainer) && !selection.isCollapsed;
+  input.focus();
+  if (action === 'bold-all' || !inside) {
+    const range = document.createRange();
+    range.selectNodeContents(input);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  document.execCommand('styleWithCSS', false, false);
+  if (action === 'bold' || action === 'bold-all') {
+    if (action === 'bold-all' && document.queryCommandState('bold')) { /* already bold everywhere */ } else document.execCommand('bold');
+  } else if (action === 'color') {
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('foreColor', false, colour);
+  } else if (action === 'plain') {
+    document.execCommand('removeFormat');
+    for (const node of input.querySelectorAll('b, strong, font, span')) node.replaceWith(...node.childNodes);
+  }
+  if (action === 'bold-all' || !inside) selection.collapseToEnd();
+  countItemDescChars();
+}
+
+// Saves the name (and its formatting) to the Item master and the unit to this line, then shows them on every line.
 async function saveItemDescName() {
-  const { itemId } = itemDesc;
+  const { itemId, row } = itemDesc;
   if (!itemDesc.editing || itemDesc.saving) return;
-  const name = idpEl('name').value.trim();
+  const name = itemDescText().toUpperCase();
   if (name === '') { showItemDescError('Enter the item name.'); return; }
-  if (name === (itemDesc.item?.name ?? itemDesc.field.value)) { setItemDescEditing(false); idpEl('primary').focus(); return; }
+  if (name.length > 200) { showItemDescError(`The item name can be at most 200 characters (now ${name.length}).`); return; }
+  const html = cleanRemarksHtml(idpEl('input').innerHTML).replace(/<br\s*\/?>/gi, ' ');
+  const formatted = /<(b|strong|span)\b/i.test(html);
+
+  // The unit: this line's Unit cell (a unit from the UOM list keeps its id).
+  const unitCell = pbCell(row, 'unit');
+  const unit = idpEl('unit-input').value.trim().toUpperCase();
+  const unitChanged = unitCell && unit !== unitCell.value.trim().toUpperCase();
+  if (unitChanged) {
+    const uoms = await loadLookup('uom');
+    const match = uoms.find(uom => [uom.name, uom.code].some(text => String(text ?? '').toUpperCase() === unit));
+    unitCell.value = match ? match.name : unit;
+    if (pbCell(row, 'uomId')) pbCell(row, 'uomId').value = match ? String(match.id) : '';
+    idpEl('unit').textContent = unitCell.value || '—';
+    PURCHASE_FORMS.find(form => byId(`${form.spec.key}-form`).contains(row))?.page.record();
+  }
+
+  const before = itemDesc.item;
+  const sameName = name === (before?.name ?? itemDesc.field.value);
+  const sameFormat = (formatted ? html : null) === (before?.nameHtml ?? null);
+  if (sameName && (sameFormat || !before)) {
+    setItemDescEditing(false);
+    idpEl('primary').focus();
+    if (unitChanged) showToast('Unit applied', `Line Item ${idpEl('sub').textContent.replace(/\D/g, '')}: ${unitCell.value}`);
+    return;
+  }
   itemDesc.saving = true;
   setItemDescEditing(true);
   let saved;
   try {
-    saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name } });
+    saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name, itemNameHtml: formatted ? html : '' } });
   } catch (error) {
     itemDesc.saving = false;
     setItemDescEditing(true);
@@ -7119,20 +7198,20 @@ async function saveItemDescName() {
   for (const form of PURCHASE_FORMS) {
     if (!form.page) continue;
     let changed = false;
-    for (const row of form.page.rowsOf('items')) {
-      if (pbCell(row, 'itemId').value !== itemId) continue;
-      pbCell(row, 'itemName').value = saved.name;
-      pbCell(row, 'itemCode').value = saved.code;
+    for (const line of form.page.rowsOf('items')) {
+      if (pbCell(line, 'itemId').value !== itemId) continue;
+      pbCell(line, 'itemName').value = saved.name;
+      pbCell(line, 'itemCode').value = saved.code;
       changed = true;
     }
     if (changed) form.page.absorb();      // the master changed, not the document: nothing to undo
   }
   if (!byId('item-desc').open || itemDesc.itemId !== itemId) return;
   itemDesc.item = saved;
-  idpEl('name').value = saved.name;
+  showItemDescName(saved.name, saved.nameHtml);
   setItemDescEditing(false);
   idpEl('primary').focus();
-  showToast('Item renamed', `${saved.code} · ${saved.name} (Item master)`);
+  showToast(sameName ? 'Item name formatting saved' : 'Item renamed', `${saved.code} · ${saved.name} (Item master)`);
 }
 
 function showItemDescError(message) {
@@ -7144,6 +7223,7 @@ function itemDescAction(action) {
   if (itemDesc.saving) return;
   if (action === 'close') closeItemDescription();
   else if (action === 'copy') copyItemDescName();
+  else if (action === 'cancel') cancelItemDescEdit();
   else if (action === 'primary') { if (itemDesc.editing) saveItemDescName(); else closeItemDescription(); }
   else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else setItemDescEditing(true); }
 }
@@ -7152,41 +7232,125 @@ function itemDescAction(action) {
 function handleItemDescKeys(event) {
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
-  const editingHere = itemDesc.editing && target === idpEl('name');
+  const inEditor = itemDesc.editing && (target === idpEl('input') || idpEl('input').contains(target));
+  const typing = inEditor || target === idpEl('unit-input');
   if (key === 'Escape') {
     event.preventDefault();
     if (event.repeat) return;
     if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription();
     return;
   }
+  if (itemDesc.editing && key === 'Enter' && ctrl && !event.altKey) {          // Ctrl+Enter: Save & Apply
+    event.preventDefault();
+    if (!event.repeat) saveItemDescName();
+    return;
+  }
+  if (inEditor && ctrl && !event.altKey && key.toLowerCase() === 'b') {        // Ctrl+B: bold
+    event.preventDefault();
+    if (!event.repeat) formatItemDescName('bold');
+    return;
+  }
   if (key === 'Enter' && !event.altKey && !event.shiftKey && !ctrl) {
     if (target.tagName === 'BUTTON' && target !== idpEl('primary')) return;   // the focused button presses itself
-    event.preventDefault();
+    event.preventDefault();                                                    // the name stays one line
     if (!event.repeat) itemDescAction('primary');
     return;
   }
-  if (ctrl && key.toLowerCase() === 'c' && !editingHere) {
-    if (target.matches?.('input') && target.selectionStart !== target.selectionEnd) return;   // a selected part: the browser copies it
+  if (inEditor && key === 'Enter') { event.preventDefault(); return; }
+  if (ctrl && key.toLowerCase() === 'c' && !typing) {
+    if (getSelection().toString()) return;                                     // a selected part: the browser copies it
     event.preventDefault();
     if (!event.repeat) copyItemDescName();
     return;
   }
-  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase()) && !editingHere) { event.preventDefault(); return; }   // the form's shortcuts wait
-  if ((key === 'ArrowLeft' || key === 'ArrowRight') && target.tagName === 'BUTTON' && !ctrl && !event.altKey) {
-    const buttons = [...byId('item-desc').querySelectorAll('.idp-foot button')];
-    const next = buttons[buttons.indexOf(target) + (key === 'ArrowRight' ? 1 : -1)];
+  if (ctrl && ['s', 'd'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // the form's shortcuts wait
+  if (ctrl && key.toLowerCase() === 'z' && !typing) { event.preventDefault(); return; }
+  // Tab / Shift+Tab go round the popup's controls (it never lets focus out to the page or the browser).
+  if (key === 'Tab' && !ctrl && !event.altKey) {
     event.preventDefault();
-    next?.focus();
+    focusItemDescStep(target, event.shiftKey ? -1 : 1);
+    return;
   }
+  if (ctrl || event.altKey || event.shiftKey || !key.startsWith('Arrow')) return;
+  const dialog = byId('item-desc');
+  const onButton = target.tagName === 'BUTTON' && dialog.contains(target);
+  const inFoot = Boolean(target.closest?.('.idp-foot'));
+  const inTools = Boolean(target.closest?.('.idp-tools'));
+  // ← / → between buttons (round the popup).
+  if (onButton && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+    event.preventDefault();
+    focusItemDescStep(target, key === 'ArrowRight' ? 1 : -1);
+    return;
+  }
+  // ↑ / ↓ between the rows: toolbar ↔ name ↔ unit ↔ buttons at the bottom (view: Edit ↔ buttons).
+  const up = key === 'ArrowUp';
+  if (!up && key !== 'ArrowDown') return;
+  const footFirst = () => idpFocusables().find(node => node.closest('.idp-foot'));
+  let next = null;
+  if (!inEditor && !idpFocusables().includes(target)) next = idpEl('primary');   // nothing focused in the popup: back to its main button
+  else if (inFoot) next = up ? (itemDesc.editing ? idpEl('unit-input') : dialog.querySelector('.idp-label-row [data-idp="edit-name"]')) : idpFocusables()[0];
+  else if (inTools) next = up ? footFirst() : idpEl('input');
+  else if (target === idpEl('unit-input')) next = up ? idpEl('input') : footFirst();
+  else if (onButton) next = up ? footFirst() : footFirst();                     // view: Edit beside the name
+  else if (inEditor && itemDescCaretAtEdge(up)) next = up ? dialog.querySelector('.idp-tools button') : idpEl('unit-input');
+  if (!next) return;
+  event.preventDefault();
+  focusItemDescNode(next);
+}
+
+// The popup's controls a key can reach, in order (only those shown in this mode).
+function idpFocusables() {
+  return [...byId('item-desc').querySelectorAll('button, input:not([type="hidden"]), [contenteditable="true"]')]
+    .filter(node => node.tabIndex !== -1 && !node.disabled && node.getClientRects().length > 0);
+}
+function focusItemDescStep(from, step) {
+  const nodes = idpFocusables();
+  if (!nodes.length) return;
+  const index = nodes.indexOf(from);
+  const next = index === -1 ? nodes[step > 0 ? 0 : nodes.length - 1] : nodes[(index + step + nodes.length) % nodes.length];
+  focusItemDescNode(next);
+}
+// Focus a control; the name editor gets the caret at its end, the unit has its text selected.
+function focusItemDescNode(node) {
+  node.focus();
+  if (node === idpEl('input')) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  } else if (node === idpEl('unit-input')) {
+    node.select();
+  }
+}
+// The caret is at the very start (↑) or end (↓) of the name: the arrow leaves the editor.
+function itemDescCaretAtEdge(atStart) {
+  const selection = getSelection();
+  if (!selection.rangeCount || !selection.isCollapsed) return false;
+  const caret = selection.getRangeAt(0);
+  const rest = document.createRange();
+  rest.selectNodeContents(idpEl('input'));
+  if (atStart) rest.setEnd(caret.startContainer, caret.startOffset); else rest.setStart(caret.endContainer, caret.endOffset);
+  return rest.toString().trim() === '';
 }
 
 function initItemDescription() {
   const dialog = byId('item-desc');
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription(); });
+  // The formatting buttons keep the highlighted text highlighted (no focus change on press).
+  dialog.addEventListener('mousedown', event => { if (event.target.closest('[data-idp-format]')) event.preventDefault(); });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeItemDescription(); return; }   // backdrop
+    const format = event.target.closest('[data-idp-format]');
+    if (format) { formatItemDescName(format.dataset.idpFormat, format.dataset.colour); return; }
     const action = event.target.closest('[data-idp]')?.dataset.idp;
     if (action) itemDescAction(action);
+  });
+  idpEl('input').addEventListener('input', countItemDescChars);
+  // Pasted text comes in plain (no outside styles or links).
+  idpEl('input').addEventListener('paste', event => {
+    event.preventDefault();
+    document.execCommand('insertText', false, (event.clipboardData?.getData('text/plain') || '').replace(/\s+/g, ' '));
   });
 }
 
@@ -7693,8 +7857,6 @@ async function showSealName() {
   let seal = null;
   try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
   sealOnFile = Boolean(seal);
-  for (const label of document.querySelectorAll('[data-seal-name]')) label.textContent = seal ? '(seal on file)' : '(no seal yet)';
-  for (const button of document.querySelectorAll('[data-seal="remove"]')) button.disabled = !seal;
   // The seal under Attach Seal (shown while it is ticked), as the PDF prints it.
   const src = seal ? `api/company-seal.php?file=1&t=${Date.now()}` : '';
   for (const preview of document.querySelectorAll('[data-seal-preview]')) {
@@ -7704,36 +7866,13 @@ async function showSealName() {
   }
 }
 
+/* Attach Seal is a checkbox only: the seal itself is added on Create a Company. Ticked without a seal on file,
+   it says so (the PDF prints without one). */
 function initSealButtons() {
-  const picker = byId('pb-seal-file');
-  // Ticking Attach Seal without a seal on file asks for the seal image first.
   document.addEventListener('change', event => {
     if (event.target.matches?.('[data-print-field="attachSeal"]') && event.target.checked && !sealOnFile) {
-      showToast('Upload the company seal', 'Choose the seal image (PNG or JPG) to print on the PDF.');
-      picker.click();
+      showToast('No company seal on file', 'The seal is added on Create a Company; this PDF will print without one.', true);
     }
-  });
-  document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-seal]');
-    if (!button) return;
-    if (button.dataset.seal === 'replace') { picker.click(); return; }
-    try {
-      await apiRequest('api/company-seal.php', { method: 'DELETE' });
-      showToast('Seal removed', 'Purchase Book PDFs will print without a seal.');
-    } catch (error) { showToast('The seal could not be removed', error.message, true); }
-    showSealName();
-  });
-  picker.addEventListener('change', async () => {
-    const file = picker.files[0];
-    picker.value = '';
-    if (!file) return;
-    const body = new FormData();
-    body.append('seal', file);
-    try {
-      await apiRequest('api/company-seal.php', { method: 'POST', body });
-      showToast('Seal saved', `${file.name} will be printed when Attach Seal is ticked.`);
-    } catch (error) { showToast('The seal could not be saved', error.message, true); }
-    showSealName();
   });
 }
 
@@ -8540,6 +8679,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
+    if (line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // the item name's bold / colours
     tbody.append(tr);
   });
   table.append(thead, tbody);

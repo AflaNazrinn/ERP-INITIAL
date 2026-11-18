@@ -2359,15 +2359,11 @@
     <ul class="pb-signatories" data-signatories></ul>
     <div class="pb-check-row">
       <label class="pb-check"><input type="checkbox" data-print-field="attachSeal"><span>Attach Seal</span></label>
-      <button type="button" class="pb-link" data-seal="replace">Replace</button>
-      <button type="button" class="pb-link" data-seal="remove">Remove</button>
-      <span class="pb-seal-name" data-seal-name></span>
     </div>
     <!-- Shown while Attach Seal is ticked: the seal the PDF prints. -->
     <div class="pb-seal-preview" data-seal-preview hidden><img alt="Company seal" data-seal-image></div>
   </div>
 </template>
-<input id="pb-seal-file" type="file" accept="image/png,image/jpeg" hidden>
 </div>
 
 <!-- LOOKUP POPUP ("Select UOM", "Select Stock Point" …): one dialog serves every lookup field. Layout: design/masters/popup_reference.png -->
@@ -2708,21 +2704,48 @@
   </div>
   <div class="idp-body">
     <section class="idp-card">
-      <div class="idp-card-head">
-        <h3 class="idp-card-title">Item Name</h3>
-        <span id="item-desc-code" class="idp-code"></span>
-      </div>
       <div class="idp-card-body">
+        <!-- Complete Item Name with Edit beside it on the left (Editing Mode while editing), the item code on the right. -->
         <div class="idp-label-row">
-          <label class="idp-label" for="item-desc-name">Complete Item Name</label>
-          <button type="button" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-            <span>Edit</span>
-          </button>
+          <span class="idp-label-group">
+            <label class="idp-label" for="item-desc-input">Complete Item Name</label>
+            <button type="button" class="idp-mini idp-view-only" data-idp="edit-name" title="Rename the item in the Item master">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+              <span>Edit</span>
+            </button>
+            <span class="idp-mode idp-edit-only"><span class="idp-mode-dot" aria-hidden="true"></span>Editing Mode</span>
+          </span>
+          <span id="item-desc-code" class="idp-code"></span>
         </div>
-        <input id="item-desc-name" class="idp-name" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper readonly>
+        <!-- The name as saved, with its bold / colours. -->
+        <div id="item-desc-name" class="idp-name idp-view-only"></div>
+        <!-- Editing: the formatting toolbar over the name. -->
+        <div class="idp-editor idp-edit-only">
+          <div class="idp-toolbar">
+            <div class="idp-tools" role="toolbar" aria-label="Item name formatting">
+              <button type="button" class="idp-tool" data-idp-format="bold" title="Bold the highlighted text (Ctrl+B)"><b aria-hidden="true">B</b> Bold</button>
+              <button type="button" class="idp-tool idp-tool-plain" data-idp-format="bold-all" title="Bold the whole name">Bold All</button>
+              <span class="idp-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="idp-tool idp-tool-red" data-idp-format="color" data-colour="#dc2626"><span class="idp-swatch" aria-hidden="true"></span>Red</button>
+              <button type="button" class="idp-tool idp-tool-blue" data-idp-format="color" data-colour="#2563eb"><span class="idp-swatch" aria-hidden="true"></span>Blue</button>
+              <button type="button" class="idp-tool idp-tool-black" data-idp-format="color" data-colour="#0f172a"><span class="idp-swatch" aria-hidden="true"></span>Black</button>
+              <span class="idp-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="idp-tool idp-tool-plain" data-idp-format="plain" title="Remove bold and colour"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 3l18 18"></path></svg>Plain</button>
+            </div>
+            <p class="idp-tool-hint">Highlight text for partial style</p>
+          </div>
+          <div id="item-desc-input" class="idp-input" contenteditable="true" tabindex="0" role="textbox" aria-multiline="false" spellcheck="false" aria-labelledby="item-desc-title"></div>
+        </div>
+        <div class="idp-tip idp-edit-only">
+          <span>Tip: <kbd>Ctrl+Enter</kbd> to save, <kbd>Ctrl+B</kbd> for bold, <kbd>Tab</kbd> to unit</span>
+          <span id="item-desc-count" class="idp-count">0 chars</span>
+        </div>
         <div class="idp-facts">
-          <div class="idp-fact"><span class="idp-fact-label">Unit</span><span id="item-desc-unit" class="idp-fact-value"></span></div>
+          <div class="idp-fact idp-view-only"><span class="idp-fact-label">Unit</span><span id="item-desc-unit" class="idp-fact-value"></span></div>
+          <div class="idp-unit-edit idp-edit-only">
+            <div class="idp-unit-head"><label class="idp-fact-label" for="item-desc-unit-input">Unit (Editable)</label><span class="idp-unit-hint">Enter to save</span></div>
+            <input id="item-desc-unit-input" class="idp-unit-input" type="text" maxlength="80" autocomplete="off" spellcheck="false" data-upper>
+          </div>
           <div class="idp-fact"><span id="item-desc-price-label" class="idp-fact-label">Unit Price</span><span id="item-desc-price" class="idp-fact-value"></span></div>
         </div>
         <p id="item-desc-error" class="qi-error idp-error" role="alert" hidden></p>
@@ -2730,11 +2753,12 @@
     </section>
   </div>
   <div class="sf-foot idp-foot">
-    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="copy">
+    <button type="button" class="ml-btn idp-cancel idp-edit-only" data-idp="cancel">Cancel (Esc)</button>
+    <button type="button" class="ml-btn ml-btn-plain idp-btn idp-view-only" data-idp="copy">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
       <span>Copy Name</span>
     </button>
-    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="edit-name" title="Rename the item in the Item master">
+    <button type="button" class="ml-btn ml-btn-plain idp-btn idp-view-only" data-idp="edit-name" title="Rename the item in the Item master">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="m18 14 3 3-5 5h-3v-3z"></path></svg>
       <span>Edit Name</span>
     </button>

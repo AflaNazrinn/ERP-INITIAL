@@ -20,7 +20,7 @@ const SECTIONS = {
   financial:    ['financialYearStart', 'vatApplicable', 'vatPercentage'],
   address:      ['building', 'street', 'area', 'city', 'country', 'baseCurrency', 'poBox', 'postalCode', 'phone', 'email', 'website'],
   bank:         ['bankName', 'accountHolder', 'accountNumber', 'iban', 'swiftCode'],
-  documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate'],
+  documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate', 'seal'],
   login:        ['username', 'password', 'confirmPassword'],
 };
 const FILE_KEYS = SECTIONS.documents;
@@ -98,6 +98,7 @@ const FILE_RULES = {
   letterhead:     { label: 'Letterhead', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
   crCertificate:  { label: 'CR certificate', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
   vatCertificate: { label: 'VAT certificate', types: ['pdf', 'png', 'jpg', 'jpeg'], maxMb: 10 },
+  seal:           { label: 'Company seal', types: ['png', 'jpg', 'jpeg'], maxMb: 2 },
 };
 
 const files = Object.fromEntries(FILE_KEYS.map(key => [key, null]));

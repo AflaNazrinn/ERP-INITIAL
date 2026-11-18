@@ -334,9 +334,20 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
     $sql = $kind === 'grn'
         ? "SELECT l.*, rb.location_code AS rack_code FROM `$table` l LEFT JOIN rack_bins rb ON rb.id = l.rack_id WHERE l.`$owner` = ? ORDER BY l.sort_order, l.id"
         : "SELECT * FROM `$table` WHERE `$owner` = ? ORDER BY sort_order, id";
-    return array_map(static function (array $l) use ($kind): array {
+    // The items' formatted names (bold / colours from the Full Item Description popup), used while a line's name matches.
+    $formatted = [];
+    try {
+        foreach (query("SELECT i.id, i.item_name, i.item_name_html FROM items i JOIN `$table` l ON l.item_id = i.id WHERE l.`$owner` = ? AND i.item_name_html IS NOT NULL", [$docId])->fetchAll() as $item) {
+            $formatted[(int) $item['id']] = $item;
+        }
+    } catch (PDOException) {
+        // item_name_html not migrated yet: plain names
+    }
+    return array_map(static function (array $l) use ($kind, $formatted): array {
+        $item = $l['item_id'] === null ? null : ($formatted[(int) $l['item_id']] ?? null);
+        $html = $item !== null && $item['item_name'] === $l['item_name'] ? $item['item_name_html'] : null;
         $line = [
-            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'],
+            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'], 'itemNameHtml' => $html,
             'brandId' => $l['brand_id'] === null ? null : (int) $l['brand_id'], 'brandName' => $l['brand_name'],
             'uomId' => $l['uom_id'] === null ? null : (int) $l['uom_id'], 'unit' => $l['unit'],
         ];
