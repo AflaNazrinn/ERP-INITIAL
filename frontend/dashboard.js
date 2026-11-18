@@ -10114,15 +10114,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       return {
         // Supplier / Vendor: the name, Country and E-mail only (a compact box).
         party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [['Country', supplier?.country], ['E-mail', supplier?.email]] },
-        // The buyer's contact on this order: the salesman who created it.
-        buyerLines: [['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone]],
+        // No Buyer box: the Supplier / Vendor box with PO ID and PO Date stacked beside it, then the rows below.
+        noBuyer: true,
+        idBox: [['PO ID', doc.code], ['PO Date', poSlashDate(doc.poDate)]],
         cols: 3,
-        meta: [['PO ID', doc.code], ['PO Date', poSlashDate(doc.poDate)], ['RFQ Ref', doc.quotationNumber || doc.quotationRequestCode],
+        meta: [['Quotation / Other Reference', [doc.quotationNumber || doc.quotationRequestCode, doc.purchaseRequestCode].filter(Boolean).join(' · '), 'full'],
           ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', `${doc.paymentMode || ''}${doc.creditPeriod ? ` (${doc.creditPeriod})` : ''}`], ['Currency', doc.currency],
-          // Shown only when filled in, so the usual order keeps the design's three rows.
+          // The buyer's contact on this order: the salesman who created it.
+          ['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone],
           ...(doc.deliveryDate ? [['Delivery Date', poSlashDate(doc.deliveryDate)]] : []),
-          ...(certifications ? [['Certification Required', certifications]] : []),
-          ...(doc.purchaseRequestCode ? [['PR Ref', doc.purchaseRequestCode]] : []),
           ['Delivery To', doc.deliveryLocation, 'full']],
       };
     },
@@ -10213,7 +10213,20 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     party(layout.party.label, layout.party.name, layout.party.lines),
   );
   const box = el('div', 'ps-docbox');
-  box.append(parties);
+  if (layout.idBox) {
+    // Supplier / Vendor on the left, the document number and date stacked on the right.
+    const top = el('div', 'ps-docbox-top');
+    const ids = el('dl', 'ps-idbox');
+    for (const [label, value] of layout.idBox) {
+      const item = el('div', 'ps-idbox-item');
+      item.append(el('dt', '', label), cell('dd', '', value));
+      ids.append(item);
+    }
+    top.append(layout.noBuyer ? parties.lastElementChild : parties, ids);
+    box.append(top);
+  } else {
+    box.append(parties);
+  }
   const metaGrid = el('dl', 'ps-meta');
   const count = layout.meta.length;
   const cols = layout.cols || (count <= 4 ? count : count % 3 === 0 ? 3 : 4);
