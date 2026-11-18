@@ -543,6 +543,12 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
+    // The GRN Stock Transfer popup: its own keys (Shift+X, Enter, arrows); Tab and Esc work as usual.
+    if (byId('grn-transfer')?.open) {
+      grnTransferKeys?.(event);
+      event.stopPropagation();
+      return;
+    }
     if (handleSuggestKeys(event) || handleLookupFieldKeys(event)) {
       event.stopPropagation();
       return;
@@ -3186,7 +3192,7 @@ function createFormPage(config) {
 
   const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, setRows, edit, el, isEditing: () => editing !== null };
   FORM_KEY_HANDLERS[config.key] = handleKeys;
-  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing };
+  FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing, opened: config.opened };
   return page;
 }
 
@@ -7055,6 +7061,7 @@ function renderRoute() {
       formPage.reset();
     }
     formPage.firstField().focus();
+    formPage.opened?.();
     return;
   }
   const wasElsewhere = currentPage !== 'dashboard';
@@ -7108,6 +7115,15 @@ function composePurchaseTemplates() {
     const nameCell = row.querySelector('[data-field="itemName"]').closest('td');
     const nameHtml = hidden(); nameHtml.dataset.field = 'itemNameHtml';     // the Full Item Description's formatting (every line)
     nameCell.append(nameHtml);
+    if (id === 'pb-line-grn') {
+      const reason = Object.assign(document.createElement('input'), {
+        type: 'text', className: 'fp-cell pb-reject-reason', maxLength: 300, autocomplete: 'off', hidden: true,
+        placeholder: 'Rejection reason...', title: 'Why the rejected quantity was rejected, e.g. damaged goods, wrong grade, missing parts',
+      });
+      reason.dataset.field = 'rejectReason';
+      reason.setAttribute('aria-label', 'Rejection reason');
+      nameCell.append(reason);
+    }
     if (id === 'pb-line-po') {
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
@@ -7740,6 +7756,7 @@ function createPurchaseForm(spec) {
 
   form.refresh = function refresh() {
     syncVatToggle();
+    if (spec.kind === 'grn') rows().forEach(syncGrnRow);
     if (!priced) return;
     const totals = purchaseTotals(rows(), spec.kind, vatMode(), pbNum(el('discount').value), pbNum(el('shipping').value));
     rows().forEach((row, i) => {
@@ -7789,9 +7806,14 @@ function createPurchaseForm(spec) {
       if (spec.kind === 'grn') {
         Object.assign(line, {
           receivedQty: value('receivedQty'), acceptedQty: value('acceptedQty'), rejectedQty: value('rejectedQty'),
-          expiryDate: value('expiryDate'), rackId: value('rackId') || null, unitCost: value('unitCost'),
-          vatRate: value('vatRate'), discountPct: value('discountPct'),
+          rejectReason: pbNum(value('rejectedQty')) > 0 ? value('rejectReason') : '',
+          expiryDate: value('expiryDate'), unitCost: value('unitCost'),
+          vatRate: value('vatRate'), discountPct: value('discountPct'), transfers: grnTransfers(row),
         });
+        const sent = line.transfers.reduce((sum, t) => sum + pbNum(t.quantity), 0);
+        if (sent > pbNum(line.acceptedQty) + 0.0005) {
+          fail('acceptedQty', `the stock transferred (${pbQty(sent)}) is more than the accepted quantity; open Transfer to change it.`);
+        }
         if (!(pbNum(line.receivedQty) > 0)) fail('receivedQty', 'enter the received quantity.');
         else if (pbNum(line.acceptedQty) + pbNum(line.rejectedQty) > pbNum(line.receivedQty) + 0.0005) {
           fail('acceptedQty', 'accepted and rejected together cannot be more than received.');
@@ -7864,6 +7886,7 @@ function createPurchaseForm(spec) {
     key: spec.key, route: spec.route, noun: spec.noun, api: spec.api, ctrlSave: true, lookups: spec.lookups, listRoute: spec.listRoute,
     afterCreate: record => printPurchaseDocument(spec, record.id),   // every new purchase document opens on its PDF preview
     firstField: () => spec.firstField(),
+    opened: () => spec.opened?.(form),
     setCode: () => showNextCode(el('code'), spec.api),
     lists: { items: { body: `${spec.key}-items`, template: spec.template, initial: 1, label: i => String(i + 1),
       // A row added while VAT is disabled starts at 0% (the first row of a new document keeps the template's 5%).
@@ -8032,10 +8055,12 @@ function initPurchaseForm(form) {
 
   function linkRowNumbers(row, field) {
     const cell = name => pbCell(row, name);
-    if (spec.kind === 'grn') {
+    if (spec.kind === 'grn' && (field === 'receivedQty' || field === 'acceptedQty')) {
       const received = pbNum(cell('receivedQty').value);
-      if (field === 'receivedQty' || field === 'rejectedQty') cell('acceptedQty').value = pbQty(Math.max(0, received - pbNum(cell('rejectedQty').value)));
-      if (field === 'acceptedQty') cell('rejectedQty').value = pbQty(Math.max(0, received - pbNum(cell('acceptedQty').value)));
+      if (field === 'receivedQty') cell('acceptedQty').value = cell('receivedQty').value.trim();
+      else if (pbNum(cell('acceptedQty').value) > received) cell('acceptedQty').value = pbQty(received);
+      cell('rejectedQty').value = pbQty(Math.max(0, received - pbNum(cell('acceptedQty').value)));
+      syncGrnRow(row);
     }
     if (spec.kind === 'po') {
       const gross = cell('foc').value === 'Yes' ? 0 : pbNum(cell('quantity').value) * pbNum(cell('price').value);
@@ -8206,8 +8231,9 @@ function purchaseLineValues(kind, line) {
   const values = purchaseLineRow(line);
   if (kind === 'grn') {
     return { ...values, receivedQty: pbQty(pbNum(line.receivedQty)), acceptedQty: pbQty(pbNum(line.acceptedQty)), rejectedQty: pbQty(pbNum(line.rejectedQty)),
-      expiryDate: line.expiryDate || '', rackId: line.rackId ?? '', unitCost: pbMoney(pbNum(line.unitCost)),
-      vatRate: pbQty(pbNum(line.vatRate)), discountPct: pbQty(pbNum(line.discountPct)) };
+      rejectReason: line.rejectReason || '', expiryDate: line.expiryDate || '', unitCost: pbMoney(pbNum(line.unitCost)),
+      vatRate: pbQty(pbNum(line.vatRate)), discountPct: pbQty(pbNum(line.discountPct)),
+      transfers: line.transfers?.length ? JSON.stringify(line.transfers.map(t => ({ warehouseId: t.warehouseId, quantity: pbQty(pbNum(t.quantity)) }))) : '' };
   }
   values.quantity = pbQty(pbNum(line.quantity));
   if (kind === 'po') {
@@ -8473,9 +8499,16 @@ const poForm = createPurchaseForm({
 const grnForm = createPurchaseForm({
   key: 'grn', route: 'purchase-book/grn/new', noun: 'GRN', api: 'api/grns.php',
   kind: 'grn', template: 'pb-line-grn', lookups: [], vatDefault: 'exclude',
-  firstField: () => byId('grn-date'),
+  firstField: () => byId('grn-supplier'),
+  // A new GRN starts on the Select Supplier popup.
+  opened(form) {
+    setTimeout(() => {
+      if (currentRoute !== 'purchase-book/grn/new' || form.page.isEditing() || byId('grn-supplier-id').value || byId('lookup').open) return;
+      if (document.activeElement === byId('grn-supplier')) openLookup(byId('grn-supplier'), { byKeyboard: true });
+    }, 150);
+  },
   fieldNodes: { grnDate: 'grn-date', supplierId: 'grn-supplier', warehouseId: 'grn-warehouse', poNumber: 'grn-po', purchaseOrderId: 'grn-po',
-    discountAmount: 'grn-discount', shipping: 'grn-shipping' },
+    discountAmount: 'grn-discount', shipping: 'grn-shipping', remarks: 'grn-remarks-editor' },
   header: () => ({
     grnDate: byId('grn-date').value, supplierId: byId('grn-supplier-id').value || null, warehouseId: byId('grn-warehouse-id').value || null,
     purchaseOrderId: byId('grn-po-id').value || null, poNumber: byId('grn-po').value.trim(),
@@ -8499,10 +8532,7 @@ const grnForm = createPurchaseForm({
   },
   init(form) {
     form.warehouseId = () => byId('grn-warehouse-id').value;
-    byId('grn-warehouse').addEventListener('input', () => {       // a pick in the Select Stock Point popup
-      for (const row of form.page.rowsOf('items')) setRowRacks(row, form.warehouseId());
-      form.page.absorb();
-    });
+    initGrnTransfer(form);
     // Picking a purchase order fills the supplier and its lines (received = ordered, all accepted).
     byId('grn-form').addEventListener('input', async event => {
       if (event.target.id !== 'grn-po' || !suggest.picking) return;
@@ -8524,6 +8554,202 @@ const grnForm = createPurchaseForm({
 });
 
 const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm];
+
+/* ---------- GRN line: rejection reason and Stock Transfer ----------
+   Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
+   Transfer (the line's button) opens the Stock Transfer popup: rows of destination stock point and quantity, sent on
+   from the accepted stock; never the stock point the goods are received into, each stock point once, at most the
+   accepted quantity in all. The rows are kept as JSON in the line's hidden transfers cell, so undo and save see them. */
+let grnTransferKeys = null;            // the open Stock Transfer popup's keys (handleWindowKeys calls it first)
+const grnTransfers = row => {
+  try { return JSON.parse(pbCell(row, 'transfers')?.value || '[]') || []; } catch { return []; }
+};
+
+function syncGrnRow(row) {
+  const reason = pbCell(row, 'rejectReason');
+  if (reason) reason.hidden = !(pbNum(pbCell(row, 'rejectedQty').value) > 0);
+  const badge = row.querySelector('[data-transfer-badge]');
+  if (!badge) return;
+  const sent = grnTransfers(row).reduce((sum, t) => sum + pbNum(t.quantity), 0);
+  badge.hidden = !(sent > 0);
+  badge.textContent = pbQty(sent);
+  const button = badge.closest('button');
+  button.classList.toggle('is-set', sent > 0);
+  button.classList.toggle('is-over', sent > pbNum(pbCell(row, 'acceptedQty').value) + 0.0005);
+  button.title = sent > 0 ? `Stock Transfer: ${pbQty(sent)} sent to other stock points` : 'Stock Transfer: send accepted stock to other stock points';
+}
+
+function initGrnTransfer(form) {
+  const dialog = byId('grn-transfer');
+  const list = byId('grn-transfer-rows');
+  let row = null;                       // the GRN line being allocated
+  let points = [];                      // the stock points it may go to
+
+  const accepted = () => pbNum(pbCell(row, 'acceptedQty').value);
+  const unit = () => pbCell(row, 'unit')?.value.trim() || '';
+  const withUnit = quantity => `${pbQty(quantity)}${unit() ? ` ${unit()}` : ''}`;
+  const lines = () => [...list.querySelectorAll('li')];
+  const showError = message => { byId('grn-transfer-error').textContent = message; byId('grn-transfer-error').hidden = !message; };
+
+  function totals() {
+    const sent = lines().reduce((sum, li) => sum + pbNum(li.querySelector('[data-gt-qty]').value), 0);
+    byId('grn-transfer-allocated').textContent = withUnit(sent);
+    byId('grn-transfer-allocated').classList.toggle('is-over', sent > accepted() + 0.0005);
+    byId('grn-transfer-empty').hidden = lines().length > 0;
+    showError(sent > accepted() + 0.0005 ? `Total transfer quantity (${pbQty(sent)}) exceeds the accepted quantity (${pbQty(accepted())}).` : '');
+  }
+
+  function addLine(transfer = {}, focus = true) {
+    const li = el('li', 'gt-row');
+    const place = el('label', 'gt-field gt-field-point');
+    const select = el('select', 'fp-input gt-select');
+    select.dataset.gtPoint = '';
+    select.append(Object.assign(document.createElement('option'), { value: '', textContent: 'Select destination stock point...' }));
+    for (const point of points) {
+      select.append(Object.assign(document.createElement('option'), { value: String(point.id), textContent: point.type ? `${point.code} · ${point.name} (${point.type})` : `${point.code} · ${point.name}` }));
+    }
+    select.value = transfer.warehouseId ? String(transfer.warehouseId) : '';
+    if (transfer.warehouseId && select.value !== String(transfer.warehouseId)) {     // a stock point no longer listed
+      select.append(Object.assign(document.createElement('option'), { value: String(transfer.warehouseId), textContent: transfer.warehouseCode || `Stock point ${transfer.warehouseId}` }));
+      select.value = String(transfer.warehouseId);
+    }
+    place.append(el('span', 'gt-label', 'Destination Stock Point *'), select);
+    const amount = el('label', 'gt-field gt-field-qty');
+    const qty = el('input', 'fp-input gt-qty');
+    Object.assign(qty, { type: 'text', inputMode: 'decimal', autocomplete: 'off', placeholder: 'Qty', value: transfer.quantity ? pbQty(pbNum(transfer.quantity)) : '' });
+    qty.dataset.gtQty = '';
+    amount.append(el('span', 'gt-label', 'Transfer Qty *'), qty);
+    const remove = el('button', 'pb-icon-btn pb-icon-danger gt-remove');
+    Object.assign(remove, { type: 'button', title: 'Remove this stock transfer' });
+    remove.dataset.gt = 'remove';
+    remove.setAttribute('aria-label', 'Remove this stock transfer');
+    remove.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg>';
+    li.append(place, amount, remove);
+    list.append(li);
+    if (focus) select.focus();
+    totals();
+  }
+
+  async function open(line) {
+    if (pbNum(pbCell(line, 'acceptedQty').value) <= 0) {
+      showToast('Nothing accepted on this line', 'Enter the accepted quantity first; only accepted stock can be transferred.', true);
+      return;
+    }
+    row = line;
+    const receiving = byId('grn-warehouse-id').value;
+    points = (await loadLookup('warehouse')).filter(point => String(point.id) !== String(receiving));
+    const code = pbCell(row, 'itemCode').value.trim();
+    byId('grn-transfer-item').textContent = `${pbCell(row, 'itemName').value.trim() || 'Selected item'}${code ? ` (${code})` : ''}`;
+    byId('grn-transfer-accepted').textContent = withUnit(accepted());
+    list.replaceChildren();
+    showError('');
+    const saved = grnTransfers(row);
+    if (saved.length) saved.forEach(transfer => addLine(transfer, false)); else addLine({}, false);
+    totals();
+    dialog.showModal();
+    (list.querySelector('select') || dialog.querySelector('[data-gt="add"]')).focus();
+  }
+
+  function close() {
+    dialog.close();
+    row?.querySelector('[data-action="transfer"]')?.focus();
+  }
+
+  function save() {
+    const receiving = byId('grn-warehouse-id').value;
+    const seen = new Set();
+    const transfers = [];
+    let sent = 0;
+    for (const li of lines()) {
+      const select = li.querySelector('[data-gt-point]');
+      const qty = li.querySelector('[data-gt-qty]');
+      const point = select.value;
+      const amount = qty.value.trim();
+      if (!point && !amount) continue;                       // a blank row is left out
+      const fail = (node, message) => { showError(message); node.focus(); return false; };
+      if (!point) return fail(select, 'Select the destination stock point for every transfer row.');
+      if (point === String(receiving)) return fail(select, 'The destination cannot be the stock point the goods are received into.');
+      if (seen.has(point)) return fail(select, 'This stock point is chosen more than once. Put its quantity on one row.');
+      if (!/^\d{1,11}(\.\d{1,3})?$/.test(amount) || !(pbNum(amount) > 0)) return fail(qty, 'Enter a transfer quantity more than 0 (up to 3 decimals).');
+      seen.add(point);
+      sent += pbNum(amount);
+      transfers.push({ warehouseId: Number(point), quantity: pbQty(pbNum(amount)) });
+    }
+    if (sent > accepted() + 0.0005) {
+      showError(`Total transfer quantity (${pbQty(sent)}) exceeds the accepted quantity (${pbQty(accepted())}).`);
+      return false;
+    }
+    pbCell(row, 'transfers').value = transfers.length ? JSON.stringify(transfers) : '';
+    syncGrnRow(row);
+    form.page.record();
+    close();
+    return true;
+  }
+
+  byId('grn-items').addEventListener('click', event => {
+    const button = event.target.closest('[data-action="transfer"]');
+    if (button) open(button.closest('tr'));
+  });
+  dialog.addEventListener('click', event => {
+    const action = event.target.closest('[data-gt]')?.dataset.gt;
+    if (action === 'add') addLine();
+    else if (action === 'save') save();
+    else if (action === 'cancel') close();
+    else if (action === 'remove') {
+      const li = event.target.closest('li');
+      const next = li.nextElementSibling || li.previousElementSibling;
+      li.remove();
+      totals();
+      (next?.querySelector('select') || dialog.querySelector('[data-gt="add"]')).focus();
+    }
+  });
+  dialog.addEventListener('input', totals);
+  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });   // Esc
+  // Keys: Shift+X adds a row; Enter goes stock point → quantity → the next row (Save after the last);
+  // ↑ / ↓ move between the rows' same field; Ctrl+Enter saves.
+  grnTransferKeys = event => {
+    const target = event.target;
+    if (!dialog.contains(target)) return;
+    const li = target.closest('li.gt-row');
+    if (event.shiftKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'x') {
+      event.preventDefault();
+      event.stopPropagation();
+      addLine();
+      return;
+    }
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      save();
+      return;
+    }
+    if (event.key === 'Enter' && li && !target.closest('button')) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (target.matches('[data-gt-point]')) { li.querySelector('[data-gt-qty]').focus(); li.querySelector('[data-gt-qty]').select(); return; }
+      const next = li.nextElementSibling;
+      (next ? next.querySelector('[data-gt-point]') : dialog.querySelector('[data-gt="save"]')).focus();
+      return;
+    }
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && li && target.matches('[data-gt-qty]')) {
+      const other = event.key === 'ArrowDown' ? li.nextElementSibling : li.previousElementSibling;
+      event.preventDefault();
+      event.stopPropagation();
+      if (other) other.querySelector('[data-gt-qty]').focus();
+      else if (event.key === 'ArrowDown') dialog.querySelector('[data-gt="add"]').focus();
+      return;
+    }
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && target.closest('.gt-foot, .gt-add')) {
+      const buttons = [dialog.querySelector('[data-gt="add"]'), ...dialog.querySelectorAll('.gt-foot button')];
+      const at = buttons.indexOf(target.closest('button'));
+      const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+      event.preventDefault();
+      event.stopPropagation();
+      if (at + step < 0) (lines().at(-1)?.querySelector('[data-gt-qty]') || buttons[0]).focus();
+      else buttons[Math.min(buttons.length - 1, at + step)].focus();
+    }
+  };
+}
 
 /* ---------- Purchase Book list pages  (#/purchase-book/purchase-request, quotation-request, purchase-order, grn) ----------
    The master list page (createMasterList) for each document: search, Filter (by document and date), View with the
@@ -8550,9 +8776,10 @@ function purchaseItemsSection(kind) {
     const item = line => [line.itemCode, lineItemNameCell(line), line.brandName];
     const mono = value => viewMono(value);
     const table = kind === 'grn'
-      ? viewTable(['Code', 'Item', 'Brand', 'Received', 'Accepted', 'Rejected', 'Unit', 'Expiry', 'Rack', 'Unit Cost', 'VAT %', 'Disc %', 'Total'],
-        record.items.map(l => [...item(l), mono(pbQty(pbNum(l.receivedQty))), mono(pbQty(pbNum(l.acceptedQty))), mono(pbQty(pbNum(l.rejectedQty))), l.unit,
-          pbDate(l.expiryDate), l.rackCode, mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.lineTotal))]), 'No items.')
+      ? viewTable(['Code', 'Item', 'Brand', 'Rec. Qty', 'Acc. Qty', 'Rej. Qty', 'Rejection Reason', 'Unit', 'Expiry', 'Unit Cost', 'VAT %', 'Disc %', 'Transfers', 'Total'],
+        record.items.map(l => [...item(l), mono(pbQty(pbNum(l.receivedQty))), mono(pbQty(pbNum(l.acceptedQty))), mono(pbQty(pbNum(l.rejectedQty))), l.rejectReason || '',
+          l.unit, pbDate(l.expiryDate), mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))),
+          (l.transfers || []).map(t => `${t.warehouseCode || t.warehouseName}: ${pbQty(pbNum(t.quantity))}`).join(', '), mono(pbAmount(l.lineTotal))]), 'No items.')
       : kind === 'po'
         ? viewTable(['Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'Line Total'],
           record.items.map(l => [l.itemCode, lineItemNameCell(l), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),

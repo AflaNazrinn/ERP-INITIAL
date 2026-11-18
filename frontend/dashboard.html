@@ -2262,7 +2262,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-grn">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-num">Received Qty</th><th class="pb-col-num">Accepted Qty</th><th class="pb-col-num">Rejected Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-date">Expiry</th><th class="pb-col-rack">Rack</th><th class="pb-col-num">Unit Cost</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-total">Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty pb-col-rec" title="Received quantity">Rec. Qty</th><th class="pb-col-qty pb-col-acc" title="Accepted quantity">Acc. Qty</th><th class="pb-col-qty pb-col-rej" title="Rejected quantity: Received - Accepted">Rej. Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-date">Expiry</th><th class="pb-col-num">Unit Cost</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-transfer" title="Send accepted stock on to other stock points">Transfer</th><th class="pb-col-total">Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="grn-items"></tbody>
         </table>
       </div>
@@ -2272,8 +2272,34 @@
       <section class="fp-card">
         <h2 class="fp-section-title">3. Remarks &amp; PDF Print Configuration</h2>
         <div class="fp-field">
-          <label class="fp-label" for="grn-remarks">Remarks</label>
-          <textarea id="grn-remarks" class="fp-input fp-textarea pb-textarea" rows="3" data-enter-newline="true" placeholder="Enter transaction remarks or additional internal notes..."></textarea>
+          <div class="pb-label-row">
+            <label class="fp-label" id="grn-remarks-label" for="grn-remarks-editor">Remarks &amp; Inward Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="grn-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks formatting" aria-controls="grn-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="grn-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="grn-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Delivery vehicle number, shipment condition, inward notes"></div>
+          </div>
         </div>
         <div class="pb-print" data-print="grn"></div>
       </section>
@@ -2335,17 +2361,45 @@
 
 <!-- GRN line -->
 <template id="pb-line-grn"><tr class="fp-row" data-pb-row="grn">
-  <td><input class="fp-cell fp-cell-num" data-field="receivedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Received quantity"></td>
-  <td><input class="fp-cell fp-cell-num pb-cell-accept" data-field="acceptedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Accepted quantity"></td>
-  <td><input class="fp-cell fp-cell-num" data-field="rejectedQty" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Rejected quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-rec" data-field="receivedQty" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Received quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-acc" data-field="acceptedQty" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Accepted quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-rej" data-field="rejectedQty" type="text" readonly tabindex="-1" value="0" aria-label="Rejected quantity (Received - Accepted)" title="Received - Accepted"></td>
   <td data-unit-cell></td>
   <td><input class="fp-cell fp-cell-date" data-field="expiryDate" type="date" aria-label="Expiry date"></td>
-  <td><select class="fp-cell fp-select pb-cell-select" data-bind="rackId" data-options="rack" aria-label="Rack"><option value="">—</option></select><input type="hidden" data-field="rackId"></td>
   <td><input class="fp-cell fp-cell-num" data-field="unitCost" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Unit cost"></td>
   <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
   <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Discount %"></td>
+  <td class="pb-col-transfer"><button type="button" class="pb-icon-btn pb-transfer-btn" data-action="transfer" title="Stock Transfer: send accepted stock to other stock points" aria-label="Stock transfer" aria-haspopup="dialog"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"></path></svg><span class="pb-transfer-badge" data-transfer-badge hidden></span></button><input type="hidden" data-field="transfers" value=""></td>
   <td><output class="pb-line-total pb-line-total-plain" data-total>0.000</output></td>
 </tr></template>
+
+<!-- GRN STOCK TRANSFER: a line's accepted stock sent on to other stock points. Shift+X adds a row, Esc closes. -->
+<dialog id="grn-transfer" class="lookup gt" aria-labelledby="grn-transfer-title">
+  <form method="dialog" class="gt-box" novalidate>
+    <header class="gt-head">
+      <div class="gt-heading">
+        <h2 id="grn-transfer-title" class="gt-title">Stock Transfer</h2>
+        <p class="gt-item" id="grn-transfer-item"></p>
+      </div>
+      <div class="gt-counts" aria-live="polite">
+        <span>Accepted:</span><strong id="grn-transfer-accepted">0</strong>
+        <span class="gt-sep" aria-hidden="true">|</span>
+        <span>Allocated:</span><strong id="grn-transfer-allocated" class="gt-allocated">0</strong>
+      </div>
+      <button type="button" class="gt-close" data-gt="cancel" aria-label="Close" title="Close (Esc)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+    </header>
+    <div class="gt-body">
+      <ul id="grn-transfer-rows" class="gt-rows"></ul>
+      <p id="grn-transfer-empty" class="gt-empty" hidden>No destination stock points added yet. Click below to add.</p>
+      <button type="button" class="gt-add" data-gt="add" title="Add another destination stock point (Shift+X)"><kbd>Shift + X</kbd><span>+ Add Stock Point</span></button>
+      <p id="grn-transfer-error" class="gt-error" role="alert" hidden></p>
+    </div>
+    <footer class="gt-foot">
+      <button type="button" class="fp-btn fp-btn-secondary" data-gt="cancel">Cancel</button>
+      <button type="button" class="fp-btn fp-btn-primary" data-gt="save"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"></path></svg>Save</button>
+    </footer>
+  </form>
+</dialog>
 
 <!-- PDF print configuration, copied into each .pb-print -->
 <template id="pb-print-box">
