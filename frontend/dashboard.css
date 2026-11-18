@@ -162,8 +162,11 @@ button, select { font-family: inherit; }
   min-width: 0; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--ink-900);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* A logo and the name: a hairline between them, so the two read as one brand, not a crowd. */
-.company-avatar.has-logo + .brand-name { padding-left: 16px; border-left: 1px solid var(--line); line-height: 36px; }
+/* With a logo the logo is the brand: the name is hidden (it stays in the page, read for the PDFs) and the logo a
+   little larger. Without a logo the name stays beside the letter. */
+.company-avatar.has-logo + .brand-name { display: none; }
+.app-header .company-avatar.has-logo { height: 54px; max-width: 280px; }
+.app-header .company-avatar.has-logo img { max-width: 280px; }
 
 .range-btn {
   display: flex; align-items: center; gap: 8px; min-height: var(--control-h); padding: 6px 14px;
@@ -645,8 +648,6 @@ kbd {
 }
 @media (max-width: 900px) {
   .fp-pair { grid-template-columns: minmax(0, 1fr); }
-  .fp-table { min-width: 760px; }
-  .fp-table-wrap { overflow-x: auto; }
 }
 @media (max-width: 767px) {
   .fp-span-3, .fp-span-4, .fp-span-9 { grid-column: span 12; }
@@ -759,7 +760,6 @@ th[data-under]:not([hidden]) { display: table-cell; }
 @media (max-width: 767px) {
   .fp-span-6 { grid-column: span 12; }
   .fp-grid-2, .fp-quote-input { grid-template-columns: minmax(0, 1fr); }
-  .fp-table-wrap-auto { overflow-x: auto; }
   .fp-under-select { width: 100%; }
 }
 
@@ -1640,7 +1640,6 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 @media (max-width: 900px) {
   .pb-grid-4, .pb-grid-5, .pb-grid-pr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pb-pair-summary { grid-template-columns: minmax(0, 1fr); }
-  .pb-table-simple { min-width: 760px; }
 }
 @media (max-width: 600px) {
   .pb-grid-2, .pb-grid-4, .pb-grid-5, .pb-grid-pr, .pb-grid-rfq { grid-template-columns: minmax(0, 1fr); }
@@ -1896,6 +1895,37 @@ dialog.pv::backdrop { background: #eef2f6; }
 .pb-sum-po .pb-sum-grand { margin-top: 8px; padding-top: 18px; }
 .pb-sum-po .pb-sum-grand dt { font-size: 15px; font-weight: 800; color: var(--ink-900); }
 .pb-sum-po .pb-sum-grand dd { font-family: var(--font-mono); font-size: 22px; font-weight: 800; color: #15803d; }
+
+/* ---------- Trade Management pages (Quotation, Sales Order, Delivery Note; forms and lists) ----------
+   The Purchase Book layout (the pages carry fp-theme-purchase too) in the Trade Management blue. */
+.fp-theme-sales,
+body:is([data-page="qt"], [data-page="so"], [data-page="dn"], [data-page="qt-list"], [data-page="so-list"], [data-page="dn-list"]) {
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-bar: #2563eb;
+  --accent-soft: #eff6ff;
+  --accent-soft-2: #dbeafe;
+  --accent-line: #bfdbfe;
+  --accent-ink: #1e40af;
+  --accent-ink-deep: #1e3a8a;
+  --entry-bg: #93c5fd;
+  --entry-line: #1d4ed8;
+  --entry-ring: 0 0 0 3px rgba(37, 99, 235, .3);
+  --lk-search-glow: rgba(37, 99, 235, .15);
+}
+.fp-theme-sales .fp-req { color: #2563eb; }
+.fp-theme-sales .pb-cell-name { background: #eff6ff; border-color: #bfdbfe; }
+.fp-theme-sales .pb-vat-switch[aria-pressed="true"] { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
+.fp-theme-sales .pb-sum-po .pb-sum-grand dd { color: #1d4ed8; }
+.fp-theme-sales .ml-btn-outline-green { border-color: #1d4ed8; color: #1d4ed8; }
+.fp-theme-sales .ml-btn-outline-green:hover { background: #eff6ff; }
+.fp-theme-sales .ml-table .ml-qty-ok { color: #1d4ed8; }
+.fp-theme-sales .pb-list-table .ml-act[data-action="view"] { color: #1d4ed8; border-color: #bfdbfe; }
+.fp-theme-sales .pb-list-table .ml-act[data-action="view"]:hover { background: #eff6ff; }
+/* The sales line's Delivery Term (printed under the item name as "DELIVERY: …"). */
+.pb-table-sales { min-width: 1160px; }
+.pb-table-sales .pb-col-term { width: 150px; }
+.pb-cell-term { text-transform: uppercase; }
 
 .ps-remarks-body { white-space: normal; }
 
@@ -2190,3 +2220,107 @@ input::-webkit-contacts-auto-fill-button {
 .idp .idp-btn[hidden], .idp .idp-mini[hidden] { display: none; }
 .idp-cancel { border: 0 !important; background: none !important; box-shadow: none !important; padding: 0 6px !important; text-transform: none !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0 !important; color: var(--ink-700) !important; }
 .idp-cancel:focus { outline: 3px solid #fde047; outline-offset: 2px; }
+
+/* ---------- Sales Order (#so-form): what Document Title and Supplier Mode show ----------
+   data-mode="multi": a Supplier per line instead of the order's Supplier Name / Supplier Currency.
+   data-doc="invoice" (Proforma Invoice): VAT % and the VAT / Grand Total rows; no supplier, buying cost or profit. */
+#so-form:not([data-mode="multi"]) .so-col-supplier,
+#so-form[data-doc="invoice"] .so-col-supplier,
+#so-form[data-mode="multi"] [data-so-single],
+#so-form[data-doc="invoice"] [data-so-single],
+#so-form[data-doc="invoice"] [data-so-supplier],
+#so-form:not([data-doc="invoice"]) .so-col-vat,
+#so-form:not([data-doc="invoice"]) .so-vat-row,
+#so-form:not([data-doc="invoice"]) .so-grand-row,
+#so-form:not([data-doc="invoice"]) [data-vat-switch],
+#so-form[data-doc="invoice"] .so-col-buy,
+#so-form[data-doc="invoice"] .so-buy-row,
+#so-form .so-buy-row[hidden],
+#so-form:not([data-mode="multi"]) [data-so-multi],
+#so-form[data-doc="invoice"] [data-so-multi] { display: none; }
+.pb-btn-auto { background: #d97706; border: 1px solid #d97706; color: #fff; }
+.pb-btn-auto:hover { background: #b45309; border-color: #b45309; }
+.pb-btn-auto[disabled] { opacity: .6; cursor: progress; }
+.pb-table-so { min-width: 1500px; }
+.pb-table-so .pb-col-supplier { width: 170px; }
+.pb-table-so .pb-col-brand { width: 130px; }
+.pb-table-so .pb-col-code { width: 140px; }
+.so-profit { color: #15803d; }
+.so-profit.is-loss { color: #dc2626; }
+.so-sum-strong dt { font-weight: 800; color: var(--ink-900); }
+.so-sum-strong dd { font-weight: 800; }
+.so-approval { margin: 14px 0 4px; }
+
+/* ---------- Item lines fit the card in every module (Purchase Request, Quotation Request, Purchase Order, GRN,
+   Quotation, Sales Order, Delivery Note) ----------
+   No sideways scrolling: a fixed layout over the card's width, the columns in shares of it and Item Name taking
+   what is left; compact cells, and headings that wrap. Columns hidden by the Sales Order's mode give their share
+   to Item Name. */
+.pb-table.pb-table { width: 100%; min-width: 0; table-layout: fixed; }
+.pb-table-wrap { overflow-x: visible; }
+.pb-table thead th { padding: 8px 4px; font-size: 10px; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+.pb-table td { padding: 6px 3px; }
+.pb-table .fp-cell { height: 32px; padding: 4px 6px; font-size: 12.5px; min-width: 0; }
+.pb-table .fp-lookup-wrap .fp-cell { padding-right: 22px; }
+.pb-table .fp-lookup-icon { right: 6px; }
+.pb-table .pb-line-total { padding: 6px 4px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-table .pb-row-actions { gap: 2px; }
+.pb-table .pb-icon-btn { width: 26px; height: 26px; }
+.pb-table .pb-col-act { width: 92px; }
+.pb-table th.pb-col-sno, .pb-table td.pb-col-sno { width: 42px; padding-left: 8px; }
+/* Purchase Request / Quotation Request */
+.pb-table-simple .pb-col-code { width: 15%; }
+.pb-table-simple .pb-col-brand { width: 20%; }
+.pb-table-simple .pb-col-qty { width: 9%; }
+.pb-table-simple .pb-col-unit { width: 11%; }
+/* GRN: fifteen columns */
+.pb-table-grn .pb-col-code { width: 8%; }
+.pb-table-grn .pb-col-brand { width: 7%; }
+.pb-table-grn .pb-col-num { width: 6%; }
+.pb-table-grn .pb-col-unit { width: 6%; }
+.pb-table-grn .pb-col-date { width: 9%; }
+.pb-table-grn .pb-col-rack { width: 6%; }
+.pb-table-grn .pb-col-pct { width: 5%; }
+.pb-table-grn .pb-col-total { width: 7%; }
+.pb-table-grn .fp-cell-date { padding: 4px 2px; font-size: 11.5px; }
+/* Purchase Order */
+.pb-table-po .pb-col-code { width: 10%; }
+.pb-table-po .pb-col-num { width: 8%; }
+.pb-table-po .pb-col-unit { width: 8%; }
+.pb-table-po .pb-col-pct { width: 6%; }
+.pb-table-po .pb-col-total { width: 9%; }
+/* Quotation / Delivery Note: the Delivery Term */
+.pb-table-sales .pb-col-term { width: 9%; }
+/* Sales Order */
+.pb-table-so .pb-col-code { width: 8%; }
+.pb-table-so .pb-col-brand { width: 7%; }
+.pb-table-so .pb-col-term { width: 7%; }
+.pb-table-so .pb-col-supplier { width: 9%; }
+.pb-table-so .pb-col-unit { width: 6%; }
+.pb-table-so .pb-col-num { width: 7%; }
+.pb-table-so .pb-col-pct { width: 6%; }
+.pb-table-so .pb-col-total { width: 7%; }
+
+/* ---------- Quotation: the quotation screen's layout ----------
+   Accepted Terms of Payment (with Credit Days) beside Certification Required, under the document details. */
+.qt-terms-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 20px; align-items: start; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.qt-terms-pay { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.qt-terms-pay .fp-field:only-child, .qt-terms-pay .fp-field:first-child:has(+ [hidden]) { grid-column: 1 / -1; }
+.qt-cert { margin-top: 0; }
+.qt-validity-custom { margin-top: 6px; }
+@media (max-width: 900px) { .qt-terms-row { grid-template-columns: minmax(0, 1fr); } }
+.pb-table-qt .pb-col-code { width: 8%; }
+.pb-table-qt .pb-col-brand { width: 7%; }
+.pb-table-qt .pb-col-term { width: 8%; }
+.pb-table-qt .pb-col-num { width: 7%; }
+.pb-table-qt .pb-col-unit { width: 7%; }
+.pb-table-qt .pb-col-pct { width: 6%; }
+.pb-table-qt .pb-col-total { width: 8%; }
+/* Delivery Note: the Branch (stock point) per line */
+.pb-table-dn .pb-col-code { width: 8%; }
+.pb-table-dn .pb-col-branch { width: 11%; }
+.pb-table-dn .pb-col-term { width: 8%; }
+.pb-table-dn .pb-col-num { width: 7%; }
+.pb-table-dn .pb-col-unit { width: 7%; }
+.pb-table-dn .pb-col-pct { width: 6%; }
+.pb-table-dn .pb-col-total { width: 8%; }

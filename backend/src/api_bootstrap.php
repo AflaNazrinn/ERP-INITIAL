@@ -171,6 +171,9 @@ const MASTER_UNIQUE = [
     'quotation-requests' => ['quotation_requests', 'rfq_code', null, null, 'quotation request'],
     'purchase-orders'    => ['purchase_orders', 'po_code', null, null, 'purchase order'],
     'grns'               => ['grns', 'grn_code', null, null, 'GRN'],
+    'quotations'         => ['quotations', 'qt_code', null, null, 'quotation'],
+    'sales-orders'       => ['sales_orders', 'so_code', null, null, 'sales order'],
+    'delivery-notes'     => ['delivery_notes', 'dn_code', null, null, 'delivery note'],
 ];
 
 /* The saved record (other than $exceptId) with this code or name, as [id, code]; null when there is none. */
