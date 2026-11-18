@@ -8618,7 +8618,7 @@ function initGrnTransfer(form) {
   function addLine(transfer = {}, focus = true) {
     const li = el('li', 'gt-row');
     const place = el('label', 'gt-field gt-field-point');
-    const select = el('select', 'fp-input gt-select');
+    const select = el('select', 'fp-input fp-select fp-select-list gt-select');   // the green list, not the browser's blue
     select.dataset.gtPoint = '';
     select.append(Object.assign(document.createElement('option'), { value: '', textContent: 'Select destination stock point...' }));
     for (const point of points) {
