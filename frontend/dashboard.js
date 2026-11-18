@@ -7073,7 +7073,8 @@ function composePurchaseTemplates() {
       const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
-      row.querySelector('[data-field="itemName"]').closest('td').append(brandId, brandName);
+      const nameHtml = hidden(); nameHtml.dataset.field = 'itemNameHtml';   // the Full Item Description's formatting
+      row.querySelector('[data-field="itemName"]').closest('td').append(brandId, brandName, nameHtml);
       brandCell.remove();
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
@@ -7205,36 +7206,72 @@ async function applyPurchaseItem(form, row, itemId) {
    Enter or Space on a line's Item Name that already holds an item (you arrive there by arrow, Tab or click:
    Enter skips filled names) shows the item instead of the Select Item list. Typing, F4 or Alt+↓ there
    still opens Select Item to change the item.
-   Keys: Enter close, Esc close, Ctrl+C copy the name, ←/→ between the buttons.
-   Edit / Edit Name rename the item in the Item master: Enter saves, Esc cancels the edit.
-   Every line holding that item shows the new name. */
-const itemDesc = { field: null, row: null, itemId: '', item: null, editing: false, saving: false };
+
+   A Purchase Order line (.idp-po) has two pages of one fixed size:
+   - View: the name with its formatting, Unit and Unit Price; Copy Name, Edit Name, Close (Enter).
+   - Editing mode (Edit / Edit Name): Bold, Bold All, Red, Blue, Black and Plain over the name, and the line's Unit
+     editable. Save & Apply (Ctrl+Enter, or Enter) renames the item in the Item master when the text changed, keeps
+     the formatting on this line (printed on the PDF) and sets the line's unit. Cancel (Esc) leaves all as it was.
+   Other Purchase Book lines keep the plain popup: Edit renames the item in the Item master.
+
+   Keys (itemDescMove): ←/→ along a row of buttons, ↑/↓ between the rows (close ✕ · Edit · name · Unit · buttons);
+   in the name or Unit box ←/→ move the caret, and ↑/↓ leave it at its start / end. Enter presses the focused
+   button, else Close / Save; Esc cancels editing, then closes; Ctrl+C copies the name; Ctrl+B bolds. */
+const itemDesc = { field: null, row: null, form: null, itemId: '', item: null, editing: false, saving: false, rich: false, range: null };
 const idpEl = suffix => byId(`item-desc-${suffix}`);
+const idpText = text => String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 // A Purchase Book line's Item Name cell with an Item master item in it.
 const isItemDescField = field => field.dataset.field === 'itemName' && field.dataset.lookup === 'item'
   && Boolean(lookupCreateForm(field)) && Boolean(lookupIdInput(field)?.value);
+
+// The line's formatted name (Purchase Order), only while its text is still the item's name.
+function itemDescHtml(row, name) {
+  const html = pbCell(row, 'itemNameHtml')?.value || '';
+  if (!html) return '';
+  const box = document.createElement('div');
+  box.append(remarksFragment(html));
+  return idpText(box.textContent) === idpText(name) ? html : '';
+}
+
+const itemDescName = () => itemDesc.item?.name ?? itemDesc.field.value;
+
+// The name in the view: the plain box, or (Purchase Order) the box showing the line's formatting.
+function showItemDescName() {
+  const name = itemDescName();
+  idpEl('name').value = name;
+  if (!itemDesc.rich) return;
+  const html = itemDescHtml(itemDesc.row, name);
+  idpEl('view').replaceChildren(html ? remarksFragment(html) : document.createTextNode(name));
+}
 
 function openItemDescription(field) {
   const dialog = byId('item-desc');
   if (dialog.open) return;
   const row = field.closest('.fp-row');
   const itemId = lookupIdInput(field).value;
+  const form = lookupCreateForm(field);
+  const rich = form?.spec.kind === 'po' && Boolean(pbCell(row, 'itemNameHtml'));
   const lineNo = [...row.parentElement.rows].filter(other => other.matches('.fp-row')).indexOf(row) + 1;
-  Object.assign(itemDesc, { field, row, itemId, item: null, editing: false, saving: false });
+  Object.assign(itemDesc, { field, row, form, itemId, item: null, editing: false, saving: false, rich, range: null });
+  dialog.classList.toggle('idp-po', rich);
+  idpEl('name').hidden = rich;
+  idpEl('view').hidden = !rich;
+  const editTitle = rich ? 'Edit the name, its formatting and the unit of this line' : 'Rename the item in the Item master';
+  for (const button of dialog.querySelectorAll('[data-idp="edit-name"]')) button.title = editTitle;
   idpEl('sub').textContent = `Line Item #${lineNo}`;
   idpEl('code').textContent = `Code: ${pbCell(row, 'itemCode').value || '—'}`;
-  idpEl('name').value = field.value;
   idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
   showItemDescPrice(null);
   setItemDescEditing(false);
+  showItemDescName();
   document.documentElement.classList.add('has-modal');
   dialog.showModal();
   idpEl('primary').focus();
   pbItem(itemId).then(item => {
     if (!dialog.open || itemDesc.itemId !== itemId) return;
     itemDesc.item = item;
-    if (!itemDesc.editing) idpEl('name').value = item.name;
+    if (!itemDesc.editing) showItemDescName();
     idpEl('code').textContent = `Code: ${item.code}`;
     if (!pbCell(row, 'unit')?.value) idpEl('unit').textContent = item.unit || '—';
     showItemDescPrice(item);
@@ -7249,20 +7286,74 @@ function showItemDescPrice(item) {
   else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
 }
 
-// While editing, the name is typed in and the primary button turns into Save.
+// View ↔ editing mode. Plain popup: the name box turns editable and Close turns into Save.
+// Purchase Order: the toolbar, the editor, the tip and the Unit box show; Copy / Edit Name give way to Cancel.
 function setItemDescEditing(editing) {
   itemDesc.editing = editing;
-  idpEl('name').readOnly = !editing;
-  for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
-  idpEl('primary-label').textContent = editing ? (itemDesc.saving ? 'Saving…' : 'Save') : 'Close';
+  const { rich } = itemDesc;
+  idpEl('primary-label').textContent = itemDesc.saving ? 'Saving…' : editing ? (rich ? 'Save & Apply' : 'Save') : 'Close';
+  idpEl('primary-key').textContent = editing && rich ? 'Ctrl+Enter' : 'Enter';
   idpEl('primary').disabled = itemDesc.saving;
   idpEl('error').hidden = true;
-  if (editing) focusField(idpEl('name'));
+  for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
+  byId('item-desc').classList.toggle('is-editing', editing && rich);
+  const show = (suffix, on) => { idpEl(suffix).hidden = !on; };
+  show('mode', editing && rich);
+  show('editor', editing && rich);
+  show('tip', editing && rich);
+  show('unit-hint', editing && rich);
+  show('unit-input', editing && rich);
+  show('unit', !(editing && rich));
+  show('edit', !(editing && rich));
+  show('copy', !(editing && rich));
+  show('edit-name', !(editing && rich));
+  show('cancel', editing && rich);
+  if (rich) show('view', !editing);
+  idpEl('unit-label').textContent = editing && rich ? 'Unit (editable)' : 'Unit';
+  if (!rich) {
+    idpEl('name').readOnly = !editing;
+    if (editing) focusField(idpEl('name'));
+  }
+}
+
+// Edit / Edit Name. Purchase Order: the editor starts with the line's name and formatting, the Unit box with its unit.
+function startItemDescEdit() {
+  if (!itemDesc.rich) { setItemDescEditing(true); return; }
+  const name = itemDescName();
+  const html = itemDescHtml(itemDesc.row, name);
+  const editor = idpEl('rich');
+  editor.replaceChildren(html ? remarksFragment(html) : document.createTextNode(name));
+  idpEl('unit-input').value = pbCell(itemDesc.row, 'unit')?.value || '';
+  itemDesc.range = null;
+  setItemDescEditing(true);
+  updateItemDescCount();
+  editor.focus();
+  placeCaret(editor, false);
+}
+
+// The caret at the start (atStart) or the end of a box.
+function placeCaret(box, atStart) {
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  range.collapse(atStart);
+  const selection = getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function updateItemDescCount() {
+  const count = idpText(idpEl('rich').textContent).length;
+  idpEl('count').textContent = `${count} char${count === 1 ? '' : 's'}`;
 }
 
 function cancelItemDescEdit() {
-  idpEl('name').value = itemDesc.item ? itemDesc.item.name : itemDesc.field.value;
-  setItemDescEditing(false);
+  if (itemDesc.rich) {
+    setItemDescEditing(false);
+    showItemDescName();
+  } else {
+    idpEl('name').value = itemDescName();
+    setItemDescEditing(false);
+  }
   idpEl('primary').focus();
 }
 
@@ -7275,36 +7366,23 @@ function closeItemDescription() {
 }
 
 async function copyItemDescName() {
-  const name = idpEl('name').value;
+  const name = itemDescName();
   try {
     await navigator.clipboard.writeText(name);
   } catch {
     const input = idpEl('name');
+    input.hidden = false;
     input.select();
-    if (!document.execCommand('copy')) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
+    const copied = document.execCommand('copy');
+    input.hidden = itemDesc.rich;
+    if (!copied) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
   }
   showToast('Item name copied', name);
 }
 
-// Saves the new name to the Item master, then shows it on every line holding the item.
-async function saveItemDescName() {
-  const { itemId } = itemDesc;
-  if (!itemDesc.editing || itemDesc.saving) return;
-  const name = idpEl('name').value.trim();
-  if (name === '') { showItemDescError('Enter the item name.'); return; }
-  if (name === (itemDesc.item?.name ?? itemDesc.field.value)) { setItemDescEditing(false); idpEl('primary').focus(); return; }
-  itemDesc.saving = true;
-  setItemDescEditing(true);
-  let saved;
-  try {
-    saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name } });
-  } catch (error) {
-    itemDesc.saving = false;
-    setItemDescEditing(true);
-    showItemDescError(Object.values(error.fields || {})[0] || error.message);
-    return;
-  }
-  itemDesc.saving = false;
+// Renames the item in the Item master, then shows the new name on every line holding it. Returns the saved item.
+async function renameItemInMaster(itemId, name) {
+  const saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name } });
   pbData.items.set(itemId, Promise.resolve(saved));
   forgetLookups('item', 'itemcode');
   for (const form of PURCHASE_FORMS) {
@@ -7318,6 +7396,28 @@ async function saveItemDescName() {
     }
     if (changed) form.page.absorb();      // the master changed, not the document: nothing to undo
   }
+  return saved;
+}
+
+// Plain popup: saves the new name to the Item master.
+async function saveItemDescName() {
+  const { itemId } = itemDesc;
+  if (!itemDesc.editing || itemDesc.saving) return;
+  const name = idpEl('name').value.trim();
+  if (name === '') { showItemDescError('Enter the item name.'); return; }
+  if (name === itemDescName()) { setItemDescEditing(false); idpEl('primary').focus(); return; }
+  itemDesc.saving = true;
+  setItemDescEditing(true);
+  let saved;
+  try {
+    saved = await renameItemInMaster(itemId, name);
+  } catch (error) {
+    itemDesc.saving = false;
+    setItemDescEditing(true);
+    showItemDescError(Object.values(error.fields || {})[0] || error.message);
+    return;
+  }
+  itemDesc.saving = false;
   if (!byId('item-desc').open || itemDesc.itemId !== itemId) return;
   itemDesc.item = saved;
   idpEl('name').value = saved.name;
@@ -7326,28 +7426,207 @@ async function saveItemDescName() {
   showToast('Item renamed', `${saved.code} · ${saved.name} (Item master)`);
 }
 
+// The editor's name, cleaned as the remarks and kept on one line: { text, html } (html '' without formatting).
+function itemDescEdited() {
+  const box = document.createElement('div');
+  box.append(remarksFragment(idpEl('rich').innerHTML));
+  for (const br of box.querySelectorAll('br')) br.replaceWith(' ');
+  for (const node of [...box.querySelectorAll('div, p, ul, ol, li, i, em, u')].reverse()) node.replaceWith(...node.childNodes, ' ');
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) node.nodeValue = node.nodeValue.replace(/\s+/g, ' ').toUpperCase();
+  const text = idpText(box.textContent);
+  const formatted = Boolean(box.querySelector('b, strong, span[style]'));
+  return { text, html: formatted ? box.innerHTML.trim() : '' };
+}
+
+// The Unit box's text as a Unit of Measure row: undefined (unchanged), null (cleared) or the row; false when unknown.
+async function itemDescUnit() {
+  const text = idpEl('unit-input').value.trim();
+  const cell = pbCell(itemDesc.row, 'unit');
+  if (!cell || sameText(text, cell.value)) return undefined;
+  if (!text) return null;
+  const units = await loadLookup('uom');
+  const exact = units.find(unit => sameText(unit.name, text) || sameText(String(unit.code ?? ''), text));
+  if (exact) return exact;
+  const close = suggestMatches(LOOKUPS.uom, units, text.toLowerCase());
+  return close.length === 1 ? close[0] : false;
+}
+
+// Purchase Order: Save & Apply.
+async function saveItemDescRich() {
+  if (!itemDesc.editing || itemDesc.saving) return;
+  const { row, form, itemId } = itemDesc;
+  const { text, html } = itemDescEdited();
+  if (!text) { showItemDescError('Enter the item name.'); idpEl('rich').focus(); return; }
+  if (text.length > 200) { showItemDescError('The item name can have at most 200 characters.'); idpEl('rich').focus(); return; }
+  const unit = await itemDescUnit();
+  if (unit === false) {
+    showItemDescError(`"${idpEl('unit-input').value.trim()}" is not in the Unit of Measure list. Type a unit such as PCS or KG.`);
+    idpEl('unit-input').focus();
+    return;
+  }
+  const renamed = idpText(text) !== idpText(itemDescName());
+  if (renamed) {
+    itemDesc.saving = true;
+    setItemDescEditing(true);
+    try {
+      itemDesc.item = await renameItemInMaster(itemId, text);
+    } catch (error) {
+      itemDesc.saving = false;
+      setItemDescEditing(true);
+      showItemDescError(Object.values(error.fields || {})[0] || error.message);
+      return;
+    }
+    itemDesc.saving = false;
+  }
+  if (!byId('item-desc').open || itemDesc.itemId !== itemId || !document.contains(row)) return;
+  pbCell(row, 'itemNameHtml').value = html;
+  if (unit !== undefined) {
+    fillLookup(pbCell(row, 'unit'), unit);
+    idpEl('unit').textContent = unit ? LOOKUPS.uom.display(unit) : '—';
+  }
+  form.page.record();
+  setItemDescEditing(false);
+  showItemDescName();
+  idpEl('primary').focus();
+  const changes = [renamed && 'renamed in the Item master', html ? 'formatting kept on this line' : '', unit !== undefined && 'unit changed'].filter(Boolean);
+  showToast('Line item updated', `${itemDescName()}${changes.length ? ` · ${changes.join(', ')}` : ''}`);
+}
+
+// A Purchase Order line's item name for the View popup: bold, with the line's formatting when it has some.
+function poItemNameCell(line) {
+  const name = el('strong', '', line.itemNameHtml ? '' : line.itemName || '—');
+  if (line.itemNameHtml) name.append(remarksFragment(line.itemNameHtml));
+  return name;
+}
+
 function showItemDescError(message) {
   idpEl('error').textContent = message;
   idpEl('error').hidden = false;
 }
 
-function itemDescAction(action) {
+// The toolbar: Bold and the colours work on the highlighted text (with nothing highlighted, on the whole name);
+// Bold All bolds the whole name; Plain removes all formatting.
+function itemDescTool(tool, colour) {
+  const editor = idpEl('rich');
+  const selection = getSelection();
+  // The highlighted text: the live selection in the editor (a click), else the one kept when a tool took the focus (keys).
+  const live = selection.rangeCount && editor.contains(selection.anchorNode) ? selection.getRangeAt(0).cloneRange() : null;
+  const kept = live || (itemDesc.range && editor.contains(itemDesc.range.commonAncestorContainer) ? itemDesc.range : null);
+  editor.focus();
+  if (kept) {
+    selection.removeAllRanges();
+    selection.addRange(kept);
+  }
+  const whole = tool === 'bold-all' || tool === 'plain' || selection.isCollapsed || !editor.contains(selection.anchorNode);
+  if (whole) {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  if (tool === 'plain') {
+    editor.textContent = editor.textContent;
+    placeCaret(editor, false);
+  } else {
+    document.execCommand('styleWithCSS', false, tool === 'colour');   // bold as <b>, colours as <span style="color">
+    if (tool === 'colour') document.execCommand('foreColor', false, colour);
+    else if (tool === 'bold-all') { if (!document.queryCommandState('bold')) document.execCommand('bold'); }
+    else document.execCommand('bold');
+  }
+  itemDesc.range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  updateItemDescCount();
+}
+
+function itemDescAction(action, button) {
   if (itemDesc.saving) return;
   if (action === 'close') closeItemDescription();
   else if (action === 'copy') copyItemDescName();
-  else if (action === 'primary') { if (itemDesc.editing) saveItemDescName(); else closeItemDescription(); }
-  else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else setItemDescEditing(true); }
+  else if (action === 'primary') { if (!itemDesc.editing) closeItemDescription(); else if (itemDesc.rich) saveItemDescRich(); else saveItemDescName(); }
+  else if (action === 'cancel-edit') cancelItemDescEdit();
+  else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else startItemDescEdit(); }
+  else if (action === 'tool') itemDescTool(button.dataset.idpTool, button.dataset.colour);
+}
+
+// The popup's places for the arrow keys, as rows top to bottom (only the ones showing).
+function itemDescRows() {
+  const dialog = byId('item-desc');
+  const shown = node => node && !node.hidden && node.getClientRects().length > 0;
+  const rows = [
+    [dialog.querySelector('.lk-close')],
+    [idpEl('edit')],
+    [...dialog.querySelectorAll('.idp-tools .idp-tool')],
+    [itemDesc.rich ? idpEl('rich') : idpEl('name')],
+    [idpEl('unit-input')],
+    [...dialog.querySelectorAll('.idp-foot button')],
+  ];
+  return rows.map(row => row.filter(shown)).filter(row => row.length)
+    // The name box takes part only while it can be typed in.
+    .filter(row => !(row[0] === idpEl('name') && idpEl('name').readOnly));
+}
+
+// Whether the caret in a text box / the editor is at its start or end (so ↑ / ↓ may leave it).
+function caretAtEdge(box, end) {
+  if (box instanceof HTMLInputElement) {
+    const at = end ? box.value.length : 0;
+    return box.selectionStart === at && box.selectionEnd === at;
+  }
+  const selection = getSelection();
+  if (!selection.rangeCount || !selection.isCollapsed) return false;
+  const range = selection.getRangeAt(0);
+  const probe = document.createRange();
+  probe.selectNodeContents(box);
+  if (end) probe.setStart(range.endContainer, range.endOffset); else probe.setEnd(range.startContainer, range.startOffset);
+  return probe.toString().trim() === '';
+}
+
+// Arrow keys between the popup's buttons and boxes. Returns true when the key moved the focus.
+function itemDescMove(event) {
+  const { key, target } = event;
+  const rows = itemDescRows();
+  const r = rows.findIndex(row => row.includes(target));
+  if (r === -1) {                                   // nothing of ours focused: start on the main button
+    if (!key.startsWith('Arrow')) return false;
+    idpEl('primary').focus();
+    return true;
+  }
+  const row = rows[r];
+  const c = row.indexOf(target);
+  const isBox = target === idpEl('rich') || target instanceof HTMLInputElement;
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    if (isBox) return false;                        // the caret moves
+    const next = row[c + (key === 'ArrowRight' ? 1 : -1)];
+    if (next) next.focus();
+    return true;
+  }
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return false;
+  const down = key === 'ArrowDown';
+  if (isBox && !caretAtEdge(target, down)) return false;   // still inside the text: the caret moves
+  const to = rows[r + (down ? 1 : -1)];
+  if (!to) return true;
+  // The nearest place on the next row: the main button going down to the buttons, else the same column.
+  const pick = down && to.includes(idpEl('primary')) ? idpEl('primary') : to[Math.min(c, to.length - 1)];
+  pick.focus();
+  if (pick === idpEl('rich')) placeCaret(pick, down);
+  else if (pick instanceof HTMLInputElement) pick.setSelectionRange(down ? 0 : pick.value.length, down ? 0 : pick.value.length);
+  return true;
 }
 
 // Keys while the popup is open; it takes every key, so nothing reaches the form behind it.
 function handleItemDescKeys(event) {
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
-  const editingHere = itemDesc.editing && target === idpEl('name');
+  const typing = itemDesc.editing && (target === idpEl('name') || target === idpEl('rich') || target === idpEl('unit-input'));
   if (key === 'Escape') {
     event.preventDefault();
     if (event.repeat) return;
     if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription();
+    return;
+  }
+  // Ctrl+Enter saves while editing (Enter too, but on a button Enter presses that button).
+  if (key === 'Enter' && ctrl && itemDesc.editing) {
+    event.preventDefault();
+    if (!event.repeat) itemDescAction('primary');
     return;
   }
   if (key === 'Enter' && !event.altKey && !event.shiftKey && !ctrl) {
@@ -7356,19 +7635,20 @@ function handleItemDescKeys(event) {
     if (!event.repeat) itemDescAction('primary');
     return;
   }
-  if (ctrl && key.toLowerCase() === 'c' && !editingHere) {
-    if (target.matches?.('input') && target.selectionStart !== target.selectionEnd) return;   // a selected part: the browser copies it
+  if (key === 'Enter') { event.preventDefault(); return; }   // no new lines in the name
+  if (ctrl && key.toLowerCase() === 'b' && itemDesc.rich && itemDesc.editing) {
+    event.preventDefault();
+    if (!event.repeat) itemDescTool('bold');
+    return;
+  }
+  if (ctrl && ['i', 'u'].includes(key.toLowerCase()) && target === idpEl('rich')) { event.preventDefault(); return; }   // bold and colours only
+  if (ctrl && key.toLowerCase() === 'c' && !typing) {
     event.preventDefault();
     if (!event.repeat) copyItemDescName();
     return;
   }
-  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase()) && !editingHere) { event.preventDefault(); return; }   // the form's shortcuts wait
-  if ((key === 'ArrowLeft' || key === 'ArrowRight') && target.tagName === 'BUTTON' && !ctrl && !event.altKey) {
-    const buttons = [...byId('item-desc').querySelectorAll('.idp-foot button')];
-    const next = buttons[buttons.indexOf(target) + (key === 'ArrowRight' ? 1 : -1)];
-    event.preventDefault();
-    next?.focus();
-  }
+  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase()) && !typing) { event.preventDefault(); return; }   // the form's shortcuts wait
+  if (key.startsWith('Arrow') && !ctrl && !event.altKey && !event.shiftKey && itemDescMove(event)) event.preventDefault();
 }
 
 function initItemDescription() {
@@ -7376,9 +7656,26 @@ function initItemDescription() {
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription(); });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeItemDescription(); return; }   // backdrop
+    const tool = event.target.closest('[data-idp-tool]');
+    if (tool) { itemDescAction('tool', tool); return; }
     const action = event.target.closest('[data-idp]')?.dataset.idp;
     if (action) itemDescAction(action);
   });
+  // The toolbar keeps the highlighted text: a click on a tool does not take the focus from the editor.
+  dialog.querySelector('.idp-tools').addEventListener('mousedown', event => { if (event.target.closest('[data-idp-tool]')) event.preventDefault(); });
+  const editor = idpEl('rich');
+  document.addEventListener('selectionchange', () => {
+    const selection = getSelection();
+    if (selection.rangeCount && editor.contains(selection.anchorNode)) itemDesc.range = selection.getRangeAt(0).cloneRange();
+  });
+  editor.addEventListener('input', () => { idpEl('error').hidden = true; updateItemDescCount(); });
+  // Pasted text comes in plain and on one line.
+  editor.addEventListener('paste', event => {
+    event.preventDefault();
+    const text = (event.clipboardData?.getData('text/plain') || '').replace(/\s+/g, ' ');
+    document.execCommand('insertText', false, text);
+  });
+  idpEl('unit-input').addEventListener('input', () => { idpEl('error').hidden = true; });
 }
 
 // A document's lines (from a purchase request, quotation request or purchase order) into the item table.
@@ -7511,7 +7808,7 @@ function createPurchaseForm(spec) {
       if (spec.kind === 'po') {
         Object.assign(line, {
           price: value('price'), vatRate: value('vatRate'), discountPct: value('discountPct'),
-          discountAmount: value('discountAmount'), foc: value('foc') === 'Yes',
+          discountAmount: value('discountAmount'), foc: value('foc') === 'Yes', itemNameHtml: value('itemNameHtml'),
         });
       }
       for (const [field, ok] of Object.entries(line)) {
@@ -7674,6 +7971,7 @@ function initPurchaseForm(form) {
     // Item popups: a pick fills the whole row; clearing either cell (Backspace) clears the item.
     if (isLookupField(target) && (field === 'itemName' || field === 'itemCode')) {
       const id = lookupIdInput(target).value;
+      if (pbCell(row, 'itemNameHtml') && id !== pbCell(row, 'itemId').value) pbCell(row, 'itemNameHtml').value = '';
       if (id) {
         // Fill the other cell at once from the popup's list (the full item loads after), so Enter can pass it by.
         const other = field === 'itemName' ? pbCell(row, 'itemCode') : pbCell(row, 'itemName');
@@ -7944,7 +8242,7 @@ function purchaseLineValues(kind, line) {
   values.quantity = pbQty(pbNum(line.quantity));
   if (kind === 'po') {
     Object.assign(values, { price: pbMoney(pbNum(line.price)), vatRate: pbNum(line.vatRate).toFixed(2), discountPct: pbNum(line.discountPct).toFixed(2),
-      discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No' });
+      discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No', itemNameHtml: line.itemNameHtml || '' });
   }
   return values;
 }
@@ -8284,7 +8582,7 @@ function purchaseItemsSection(kind) {
           pbDate(l.expiryDate), l.rackCode, mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.lineTotal))]), 'No items.')
       : kind === 'po'
         ? viewTable(['Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'Line Total'],
-          record.items.map(l => [l.itemCode, el('strong', '', l.itemName || '—'), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
+          record.items.map(l => [l.itemCode, poItemNameCell(l), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
             mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.discountAmount)), mono(pbAmount(l.lineTotal))]), 'No items.')
         : viewTable(['Code', 'Item', 'Brand', 'Quantity', 'Unit'],
           record.items.map(l => [...item(l), mono(pbQty(pbNum(l.quantity))), l.unit]), 'No items.');
@@ -8759,6 +9057,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
+    if (spec.kind === 'po' && line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // bold / colour
     tbody.append(tr);
   });
   table.append(thead, tbody);

@@ -2064,3 +2064,64 @@ input::-webkit-contacts-auto-fill-button {
 .qs-body { padding: 20px 26px; }
 /* Keyboard focus on the item popups' + Create Item (→ from the search box), as + Create Supplier. */
 .lk-create-inline:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
+
+/* ---------- Full Item Description on a Purchase Order line (.idp.idp-po): two pages, one size ----------
+   View and editing mode keep the same 600 × 520 box (smaller windows: it shrinks and the body scrolls). */
+.idp.idp-po { width: min(600px, calc(100vw - 32px)); height: min(520px, calc(100vh - 32px)); }
+.idp.idp-po .idp-body { display: flex; flex-direction: column; padding: 14px 16px; }
+.idp.idp-po .idp-card { flex: 1 1 auto; display: flex; flex-direction: column; }
+.idp.idp-po .idp-card-body { flex: 1 1 auto; display: flex; flex-direction: column; }
+.idp-label-group { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.idp-mode {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 5px;
+  border: 1px solid var(--tone-green-line); background: var(--tone-green-bg);
+  font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--tone-green-ink);
+}
+.idp-mode > span { font-size: 8px; color: #16a34a; }
+.idp-mode[hidden] { display: none; }
+/* The view box: the name with its formatting (grows with a long name). */
+.idp-view { height: auto; min-height: 46px; padding: 10px 12px; font-weight: 400; line-height: 1.4; overflow-wrap: anywhere; cursor: default; }
+.idp-view b, .idp-view strong { font-weight: 900; }
+.idp-view[hidden] { display: none; }
+/* Editing mode: toolbar, hint and the editor in one green-bordered box. */
+.idp-editor { border: 1.5px solid #16a34a; border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 3px rgba(22, 163, 74, .12); overflow: hidden; }
+.idp-editor[hidden] { display: none; }
+.idp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 8px 2px; background: var(--surface-muted); }
+.idp-tool {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; cursor: pointer;
+  border: 1px solid var(--input-line); border-radius: 7px; background: var(--surface);
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-800);
+}
+.idp-tool:hover { border-color: #16a34a; background: #f0fdf4; }
+.idp-tool:focus { outline: 3px solid #fde047; outline-offset: 1px; border-color: #16a34a; }
+.idp-tool b { font-weight: 900; }
+.idp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); }
+.idp-tool[data-colour="#dc2626"] { color: #dc2626; }
+.idp-tool[data-colour="#2563eb"] { color: #2563eb; }
+.idp-tool-sep { width: 1px; height: 20px; margin: 0 2px; background: var(--line); }
+.idp-tools-hint { margin: 0; padding: 2px 10px 7px; background: var(--surface-muted); border-bottom: 1px solid var(--line-soft); font-size: 10.5px; font-style: italic; color: var(--ink-500); }
+.idp-rich {
+  min-height: 64px; max-height: 120px; overflow-y: auto; padding: 10px 12px; outline: none;
+  font-size: 15px; font-weight: 400; line-height: 1.45; text-transform: uppercase; color: var(--ink-900); overflow-wrap: anywhere;
+}
+.idp-rich b, .idp-rich strong { font-weight: 900; }
+.idp-tip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; font-size: 10.5px; color: var(--ink-500); }
+.idp-tip[hidden] { display: none; }
+.idp-tip kbd { font-size: 9.5px; padding: 0 4px; }
+.idp-count { flex: none; font-family: var(--font-mono); }
+/* Unit: an input box in editing mode. */
+.idp-fact-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.idp-fact-hint { font-size: 8.5px; font-weight: 700; letter-spacing: .06em; color: var(--ink-400); }
+.idp-fact-hint[hidden], .idp-fact-value[hidden] { display: none; }
+.idp-unit-input {
+  width: 100%; box-sizing: border-box; height: 34px; padding: 0 10px; border: 1px solid var(--input-line); border-radius: 7px;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--ink-900); background: var(--surface); outline: none;
+}
+.idp-unit-input[hidden] { display: none; }
+.idp-unit-input:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .2); background: #f0fdf4; }
+.idp-rich:focus { background: #fbfffc; }
+/* Footer buttons and the Edit chip: a clear yellow ring when the arrow keys are on them. */
+.idp .idp-btn:focus, .idp .idp-mini:focus, .idp .lk-close:focus { outline: 3px solid #fde047; outline-offset: 2px; }
+.idp .idp-btn[hidden], .idp .idp-mini[hidden] { display: none; }
+.idp-cancel { border: 0 !important; background: none !important; box-shadow: none !important; padding: 0 6px !important; text-transform: none !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0 !important; color: var(--ink-700) !important; }
+.idp-cancel:focus { outline: 3px solid #fde047; outline-offset: 2px; }

@@ -2760,15 +2760,41 @@
       </div>
       <div class="idp-card-body">
         <div class="idp-label-row">
-          <label class="idp-label" for="item-desc-name">Complete Item Name</label>
-          <button type="button" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
+          <span class="idp-label-group">
+            <label class="idp-label" for="item-desc-name">Complete Item Name</label>
+            <span id="item-desc-mode" class="idp-mode" hidden><span aria-hidden="true">●</span> Editing Mode</span>
+          </span>
+          <button type="button" id="item-desc-edit" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
             <span>Edit</span>
           </button>
         </div>
         <input id="item-desc-name" class="idp-name" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper readonly>
+        <div id="item-desc-view" class="idp-name idp-view" tabindex="-1" hidden></div>
+        <div id="item-desc-editor" class="idp-editor" hidden>
+          <div class="idp-tools" role="toolbar" aria-label="Item name formatting" aria-controls="item-desc-rich">
+            <button type="button" class="idp-tool" data-idp-tool="bold" title="Bold the highlighted text (Ctrl+B)"><b>B</b> Bold</button>
+            <button type="button" class="idp-tool" data-idp-tool="bold-all" title="Bold the whole name">Bold All</button>
+            <span class="idp-tool-sep" aria-hidden="true"></span>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#dc2626" title="Red text"><span class="idp-dot" style="--dot: #dc2626" aria-hidden="true"></span>Red</button>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#2563eb" title="Blue text"><span class="idp-dot" style="--dot: #2563eb" aria-hidden="true"></span>Blue</button>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#0f172a" title="Black text"><span class="idp-dot" style="--dot: #0f172a" aria-hidden="true"></span>Black</button>
+            <span class="idp-tool-sep" aria-hidden="true"></span>
+            <button type="button" class="idp-tool" data-idp-tool="plain" title="Remove all formatting"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Plain</button>
+          </div>
+          <p class="idp-tools-hint">Highlight text for partial style</p>
+          <div id="item-desc-rich" class="idp-rich" contenteditable="true" role="textbox" aria-label="Complete item name" aria-multiline="false" spellcheck="false"></div>
+        </div>
+        <div id="item-desc-tip" class="idp-tip" hidden>
+          <span>Tip: <kbd>Ctrl+Enter</kbd> to save, <kbd>Ctrl+B</kbd> for bold, <kbd>Tab</kbd> to unit</span>
+          <span id="item-desc-count" class="idp-count">0 chars</span>
+        </div>
         <div class="idp-facts">
-          <div class="idp-fact"><span class="idp-fact-label">Unit</span><span id="item-desc-unit" class="idp-fact-value"></span></div>
+          <div class="idp-fact idp-fact-unit">
+            <span class="idp-fact-label idp-fact-label-row"><span id="item-desc-unit-label">Unit</span><span id="item-desc-unit-hint" class="idp-fact-hint" hidden>Enter to save</span></span>
+            <span id="item-desc-unit" class="idp-fact-value"></span>
+            <input id="item-desc-unit-input" class="idp-unit-input" type="text" maxlength="80" autocomplete="off" spellcheck="false" aria-label="Unit" hidden>
+          </div>
           <div class="idp-fact"><span id="item-desc-price-label" class="idp-fact-label">Unit Price</span><span id="item-desc-price" class="idp-fact-value"></span></div>
         </div>
         <p id="item-desc-error" class="qi-error idp-error" role="alert" hidden></p>
@@ -2776,14 +2802,15 @@
     </section>
   </div>
   <div class="sf-foot idp-foot">
-    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="copy">
+    <button type="button" id="item-desc-copy" class="ml-btn ml-btn-plain idp-btn" data-idp="copy">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
       <span>Copy Name</span>
     </button>
-    <button type="button" class="ml-btn ml-btn-plain idp-btn" data-idp="edit-name" title="Rename the item in the Item master">
+    <button type="button" id="item-desc-edit-name" class="ml-btn ml-btn-plain idp-btn" data-idp="edit-name" title="Rename the item in the Item master">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="m18 14 3 3-5 5h-3v-3z"></path></svg>
       <span>Edit Name</span>
     </button>
+    <button type="button" id="item-desc-cancel" class="ml-btn ml-btn-plain idp-btn idp-cancel" data-idp="cancel-edit" hidden>Cancel (Esc)</button>
     <button type="button" id="item-desc-primary" class="ml-btn ml-btn-green idp-btn idp-primary" data-idp="primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m8 12 3 3 5-6"></path></svg>
       <span id="item-desc-primary-label">Close</span>

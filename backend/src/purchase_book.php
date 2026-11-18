@@ -233,6 +233,7 @@ function pb_read_lines(Input $in, string $kind): array
                 'discountPct' => $r->decimal('discountPct', 'Disc %', 5, 2, false, '100') ?? '0',
                 'discountAmount' => $r->decimal('discountAmount', 'Disc. amount', 14, 3),
                 'foc' => !empty($raw['foc']) && $raw['foc'] !== 'No' && $raw['foc'] !== 'false',
+                'itemNameHtml' => $r->text('itemNameHtml', 'Formatted item name', 4000),
             ];
         }
         if ($itemId !== null) {
@@ -250,6 +251,9 @@ function pb_read_lines(Input $in, string $kind): array
         }
         if ($line['uomId'] !== null) {
             $line['unit'] = (string) query('SELECT uom_name FROM uoms WHERE id = ?', [$line['uomId']])->fetchColumn();
+        }
+        if ($kind === 'po') {
+            $line['itemNameHtml'] = pb_item_name_html($line['itemNameHtml'], $line['itemName']);
         }
         try {
             $r->done();
@@ -306,6 +310,29 @@ function pb_totals(array $lines, string $kind, string $vatMode, float $discount,
 }
 
 /* Replaces a document's lines inside the caller's transaction. */
+/*
+ * A Purchase Order line's formatted item name (the Full Item Description's editing mode): cleaned as the remarks,
+ * then only <b>, <strong> and coloured <span>s are kept (no lines or lists). Kept only when its text is the line's
+ * item name (spaces and case aside); otherwise, or without any formatting, null.
+ */
+function pb_item_name_html(string $html, string $name): ?string
+{
+    $html = trim($html);
+    if ($html === '' || !pb_is_html($html)) {
+        return null;
+    }
+    $clean = pb_clean_html($html);
+    $clean = (string) preg_replace('~<br\s*/?>~i', ' ', $clean);
+    $clean = (string) preg_replace('~</?(?!(?:b|strong|span)\b)[a-z][a-z0-9]*\b[^>]*>~i', '', $clean);
+    $clean = trim($clean);
+    $text = static fn (string $value) => mb_strtoupper(trim((string) preg_replace('/\s+/u', ' ', $value)));
+    $plain = html_entity_decode(strip_tags($clean), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($clean === '' || $text($plain) !== $text($name) || !preg_match('~<(b|strong|span)\b~i', $clean)) {
+        return null;
+    }
+    return $clean;
+}
+
 function pb_save_lines(string $table, string $owner, int $docId, string $kind, array $lines): void
 {
     query("DELETE FROM `$table` WHERE `$owner` = ?", [$docId]);
@@ -321,7 +348,8 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
         }
         if ($kind === 'po') {
             $columns += ['price' => $l['price'], 'vat_rate' => $l['vatRate'], 'discount_pct' => $l['discountPct'],
-                'discount_amount' => $l['discountAmount'], 'foc' => $l['foc'] ? 1 : 0, 'line_total' => $l['lineTotal']];
+                'discount_amount' => $l['discountAmount'], 'foc' => $l['foc'] ? 1 : 0, 'line_total' => $l['lineTotal'],
+                'item_name_html' => $l['itemNameHtml'] ?? null];
         }
         $names = implode(', ', array_map(static fn ($c) => "`$c`", array_keys($columns)));
         $marks = implode(', ', array_fill(0, count($columns), '?'));
@@ -348,7 +376,9 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
         $line['quantity'] = $l['quantity'];
         if ($kind === 'po') {
             $line += ['price' => $l['price'], 'vatRate' => $l['vat_rate'], 'discountPct' => $l['discount_pct'],
-                'discountAmount' => $l['discount_amount'], 'foc' => (bool) $l['foc'], 'lineTotal' => $l['line_total']];
+                'discountAmount' => $l['discount_amount'], 'foc' => (bool) $l['foc'], 'lineTotal' => $l['line_total'],
+                // The formatting only while its text is still the line's name (a renamed item drops it).
+                'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), (string) $l['item_name']) ?? ''];
         }
         return $line;
     }, query($sql, [$docId])->fetchAll());
