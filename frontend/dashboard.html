@@ -1866,7 +1866,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-simple">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act"><span class="visually-hidden">Remove</span></th></tr></thead>
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="pr-items"></tbody>
         </table>
       </div>
@@ -1991,7 +1991,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-simple">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act"><span class="visually-hidden">Remove</span></th></tr></thead>
+          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="rfq-items"></tbody>
         </table>
       </div>
@@ -2309,10 +2309,14 @@
   <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><span class="pb-unit-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
 </template>
 <template id="pb-cell-remove">
-  <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
+  <td class="pb-col-act"><div class="pb-row-actions">
+    <button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+    <button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
+    <button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button>
+  </div></td>
 </template>
 
-<!-- PR / RFQ line: item cells, quantity, unit, remove -->
+<!-- PR / RFQ line: item cells, quantity, unit, actions -->
 <template id="pb-line-simple"><tr class="fp-row" data-pb-row="simple">
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
 </tr></template>
@@ -2326,11 +2330,6 @@
   <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-label="Discount %"></td>
   <td><input class="fp-cell fp-cell-num" data-field="discountAmount" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Discount amount"></td>
   <td><output class="pb-line-total" data-total>—</output><input type="hidden" data-field="foc" value="No"></td>
-  <td class="pb-col-act"><div class="pb-row-actions">
-    <button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
-    <button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
-    <button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button>
-  </div></td>
 </tr></template>
 
 <!-- GRN line -->
@@ -2345,7 +2344,6 @@
   <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
   <td><input class="fp-cell fp-cell-num" data-field="discountPct" type="text" inputmode="decimal" autocomplete="off" value="0" aria-label="Discount %"></td>
   <td><output class="pb-line-total pb-line-total-plain" data-total>0.000</output></td>
-  <td class="pb-col-act"><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></td>
 </tr></template>
 
 <!-- PDF print configuration, copied into each .pb-print -->

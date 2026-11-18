@@ -391,22 +391,30 @@ const LETTERHEADS = [
         ctx.fillText(lines[1], nameX, top + 96);
       }
 
-      // Under the header: a blue bar, a thin slash, a navy bar.
-      const y1 = 196, y2 = 205, cut = 9;
-      const split = Math.round(M + (R - M) * 0.44);
+      // Under the header: a blue bar, a navy slash, then a navy line half as thick on the blue bar's bottom edge.
+      const y1 = 196, y2 = 206, yLine = 201, cut = 8;
+      const split = Math.round(M + (R - M) * 0.435);
       lhPolygon(ctx, BLUE, [[M, y1], [split, y1], [split - cut, y2], [M, y2]]);
-      lhPolygon(ctx, NAVY, [[split + 8, y1], [split + 12, y1], [split + 3, y2], [split - 1, y2]]);
-      lhPolygon(ctx, NAVY, [[split + 24, y1], [R, y1], [R, y2], [split + 24 - cut, y2]]);
+      lhPolygon(ctx, NAVY, [[split + 8, y1], [split + 15, y1], [split + 7, y2], [split, y2]]);
+      lhPolygon(ctx, NAVY, [[split + 17, yLine], [R, yLine], [R, y2], [split + 14, y2]]);
 
-      // The foot: a blue bar, a navy notch, a taller blue bar holding the website.
-      const f1 = H - 54, f2 = H - 40, tall = H - 62, mid = Math.round(M + (R - M) * 0.5);
-      lhPolygon(ctx, BLUE, [[M, f1], [mid - 18, f1], [mid - 6, f2], [M, f2]]);
-      lhPolygon(ctx, NAVY, [[mid - 2, f1], [mid + 22, f1], [mid + 34, f2], [mid + 10, f2]]);
-      lhPolygon(ctx, BLUE, [[mid + 56, tall], [R, tall], [R, f2], [mid + 40, f2]]);
+      // The foot: two tall blue bars with slanted inner ends; between them, sunk to the bottom edge, a thin blue
+      // piece and a thin navy piece, slanted the same way.
+      const tall = H - 72, low = H - 54, f2 = H - 42, slant = 0.9;
+      const at = fraction => Math.round(M + (R - M) * fraction);
+      const piece = (color, x1, x2, top) => {
+        const dx = Math.round((f2 - top) * slant);
+        lhPolygon(ctx, color, [[x1, top], [x2, top], [x2 + dx, f2], [x1 + dx, f2]]);
+      };
+      const leftEnd = at(0.374), rightStart = at(0.536);
+      lhPolygon(ctx, BLUE, [[M, tall], [leftEnd, tall], [leftEnd + Math.round((f2 - tall) * slant), f2], [M, f2]]);
+      piece(BLUE, at(0.3986), at(0.471), low);
+      piece(NAVY, at(0.481), at(0.543), low);
+      lhPolygon(ctx, BLUE, [[rightStart, tall], [R, tall], [R, f2], [rightStart + Math.round((f2 - tall) * slant), f2]]);
       if (d.website) {
         const textR = R - 22, cy = (tall + f2) / 2;
         ctx.fillStyle = ON;
-        const size = lhFit(ctx, d.website, R - mid - 140, 600, 17, 11, '"Roboto Mono", ui-monospace, monospace');
+        const size = lhFit(ctx, d.website, R - rightStart - 90, 600, 17, 11, '"Roboto Mono", ui-monospace, monospace');
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
         ctx.fillText(d.website, textR, cy + 1);

@@ -1529,8 +1529,7 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-col-date { width: 140px; text-align: center !important; }
 .pb-col-rack { width: 96px; }
 .pb-col-total { width: 112px; text-align: right !important; }
-.pb-col-act { width: 60px; text-align: center !important; }
-.pb-table-priced .pb-col-act { width: 108px; }
+.pb-col-act { width: 108px; text-align: center !important; }
 .pb-table-priced .pb-col-code, .pb-table-grn .pb-col-code { width: 130px; }
 .pb-table-priced .pb-col-brand, .pb-table-grn .pb-col-brand { width: 120px; }
 .pb-cell-name, .pb-cell-accept { background: #f0fdf4; border-color: #bbf7d0; }
@@ -1626,7 +1625,6 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-table-grn .pb-col-rack { width: 80px; }
 .pb-table-grn .pb-col-unit { width: 88px; }
 .pb-table-grn .pb-col-total { width: 96px; }
-.pb-table-grn .pb-col-act { width: 48px; }
 .pb-table-grn .pb-col-code, .pb-table-grn .pb-col-brand { width: 112px; }
 
 /* ---------- Purchase Book list pages (#/purchase-book/<document>) ---------- */

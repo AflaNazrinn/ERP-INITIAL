@@ -7077,7 +7077,8 @@ const pbMoney = number => (Number.isFinite(number) ? number : 0).toFixed(3);
 const pbQty = number => String(Math.round(number * 1000) / 1000);
 const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 
-// The row templates share their item, unit and remove cells (index.html keeps them once).
+// The row templates share their item, unit and action cells (index.html keeps them once): every line's Action
+// column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
   for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) {
@@ -7096,7 +7097,8 @@ function composePurchaseTemplates() {
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
     if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
-    else row.append(...cells('pb-cell-unit'), ...cells('pb-cell-remove'));
+    else row.append(...cells('pb-cell-unit'));
+    row.append(...cells('pb-cell-remove'));
   }
 }
 
