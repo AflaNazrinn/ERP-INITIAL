@@ -210,8 +210,9 @@ function pb_read_lines(Input $in, string $kind): array
                 'receivedQty' => $r->decimal('receivedQty', 'Received quantity', 14, 3) ?? '0',
                 'acceptedQty' => $r->decimal('acceptedQty', 'Accepted quantity', 14, 3) ?? '0',
                 'rejectedQty' => $r->decimal('rejectedQty', 'Rejected quantity', 14, 3) ?? '0',
+                'rejectReason' => $r->text('rejectReason', 'Rejection reason', 300),
                 'expiryDate' => $r->date('expiryDate', 'Expiry date'),
-                'rackId' => $r->id('rackId', 'rack / bin', 'rack_bins'),
+                'rackId' => null,
                 'unitCost' => $r->decimal('unitCost', 'Unit cost', 14, 3) ?? '0',
                 'vatRate' => $r->decimal('vatRate', 'VAT %', 5, 2, false, '100') ?? '0',
                 'discountPct' => $r->decimal('discountPct', 'Disc %', 5, 2, false, '100') ?? '0',
@@ -221,6 +222,10 @@ function pb_read_lines(Input $in, string $kind): array
             } elseif ((float) $line['acceptedQty'] + (float) $line['rejectedQty'] > (float) $line['receivedQty'] + 0.0005) {
                 $r->fail('acceptedQty', 'accepted and rejected together cannot be more than received.');
             }
+            if ((float) $line['rejectedQty'] <= 0) {
+                $line['rejectReason'] = '';            // a reason only while something is rejected
+            }
+            $line['transfers'] = grn_read_transfers($r, $raw['transfers'] ?? null, (float) $line['acceptedQty']);
         } else {
             $line['quantity'] = $r->decimal('quantity', 'Quantity', 14, 3, true);
             if ($line['quantity'] !== null && (float) $line['quantity'] <= 0) {
@@ -341,8 +346,9 @@ function pb_save_lines(string $table, string $owner, int $docId, string $kind, a
             'item_name_html' => $l['itemNameHtml'] ?? null];
         if ($kind === 'grn') {
             $columns += ['received_qty' => $l['receivedQty'], 'accepted_qty' => $l['acceptedQty'], 'rejected_qty' => $l['rejectedQty'],
-                'expiry_date' => $l['expiryDate'], 'rack_id' => $l['rackId'], 'unit_cost' => $l['unitCost'], 'vat_rate' => $l['vatRate'],
-                'discount_pct' => $l['discountPct'], 'line_total' => $l['lineTotal']];
+                'reject_reason' => $l['rejectReason'] ?? '', 'expiry_date' => $l['expiryDate'], 'rack_id' => $l['rackId'],
+                'unit_cost' => $l['unitCost'], 'vat_rate' => $l['vatRate'], 'discount_pct' => $l['discountPct'], 'line_total' => $l['lineTotal'],
+                'transfers' => ($l['transfers'] ?? []) ? json_encode($l['transfers']) : null];
         } else {
             $columns['quantity'] = $l['quantity'];
         }
@@ -375,6 +381,7 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
         ];
         if ($kind === 'grn') {
             return $line + ['receivedQty' => $l['received_qty'], 'acceptedQty' => $l['accepted_qty'], 'rejectedQty' => $l['rejected_qty'],
+                'rejectReason' => (string) ($l['reject_reason'] ?? ''), 'transfers' => grn_find_transfers($l['transfers'] ?? null),
                 'expiryDate' => $l['expiry_date'] ?? '', 'rackId' => $l['rack_id'] === null ? null : (int) $l['rack_id'], 'rackCode' => $l['rack_code'] ?? '',
                 'unitCost' => $l['unit_cost'], 'vatRate' => $l['vat_rate'], 'discountPct' => $l['discount_pct'], 'lineTotal' => $l['line_total']];
         }
@@ -790,6 +797,74 @@ function grn_next_code(): string
     return pb_next_code('grns', 'grn_code', 'GRN', 6);
 }
 
+/*
+ * A GRN line's stock transfers: [{ warehouseId, quantity }], each to a different stock point, more than 0 each and
+ * at most the accepted quantity in all. Blank rows are dropped. Sent as a list or as its JSON text.
+ */
+function grn_read_transfers(Input $r, mixed $raw, float $accepted): array
+{
+    if (is_string($raw)) {
+        $raw = trim($raw) === '' ? [] : json_decode($raw, true);
+    }
+    if ($raw === null) {
+        return [];
+    }
+    if (!is_array($raw)) {
+        $r->fail('transfers', 'the stock transfers are not valid.');
+        return [];
+    }
+    $transfers = [];
+    $total = 0.0;
+    foreach (array_values($raw) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $t = new Input($row);
+        $warehouseId = $t->id('warehouseId', 'stock point', 'warehouses');
+        $quantity = $t->decimal('quantity', 'Transfer quantity', 14, 3);
+        if ($warehouseId === null && $quantity === null) {
+            continue;                                  // blank row
+        }
+        try {
+            $t->done();
+        } catch (ValidationError $e) {
+            $r->fail('transfers', 'stock transfer: ' . reset($e->fields));
+            continue;
+        }
+        if ($warehouseId === null) {
+            $r->fail('transfers', 'select the stock point for every stock transfer.');
+        } elseif ($quantity === null || (float) $quantity <= 0) {
+            $r->fail('transfers', 'a stock transfer quantity must be more than 0.');
+        } elseif (isset($transfers[$warehouseId])) {
+            $r->fail('transfers', 'a stock point is chosen twice in the stock transfers; put its quantity on one row.');
+        } else {
+            $transfers[$warehouseId] = ['warehouseId' => $warehouseId, 'quantity' => $quantity];
+            $total += (float) $quantity;
+        }
+    }
+    if ($total > $accepted + 0.0005) {
+        $r->fail('transfers', 'the stock transferred (' . pb_qty((string) $total) . ') is more than the accepted quantity (' . pb_qty((string) $accepted) . ').');
+    }
+    return array_values($transfers);
+}
+
+/* A saved line's stock transfers with each stock point's code and name. */
+function grn_find_transfers(?string $json): array
+{
+    $rows = $json ? json_decode($json, true) : [];
+    if (!is_array($rows) || !$rows) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        $id = (int) ($row['warehouseId'] ?? 0);
+        $w = $id ? query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$id])->fetch() : false;
+        $out[] = ['warehouseId' => $id, 'warehouseCode' => $w ? $w['warehouse_code'] : '', 'warehouseName' => $w ? $w['warehouse_name'] : '',
+            'quantity' => (string) ($row['quantity'] ?? '0')];
+    }
+    return $out;
+}
+
 function grn_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
@@ -805,7 +880,7 @@ function grn_save(array $data, ?int $id = null): array
         'purchase_order_id' => $in->id('purchaseOrderId', 'purchase order', 'purchase_orders'),
         'po_number' => $in->text('poNumber', 'PO number', 60),
         'vat_mode' => $vatMode,
-        'remarks' => $in->text('remarks', 'Remarks', 2000),
+        'remarks' => pb_clean_html($in->text('remarks', 'Remarks', 20000)),   // formatted, as the PO's
         'include_signatory' => pb_flag($data, 'includeSignatory'), 'attach_seal' => pb_flag($data, 'attachSeal'),
         'extra_signatories' => pb_signatories($in, $data),
     ];
@@ -818,6 +893,13 @@ function grn_save(array $data, ?int $id = null): array
     $discount = (float) ($in->decimal('discountAmount', 'Discount amount', 14, 3) ?? '0');
     $shipping = (float) ($in->decimal('shipping', 'Shipping price', 14, 3) ?? '0');
     $lines = pb_read_lines($in, 'grn');
+    foreach ($lines as $index => $line) {
+        foreach ($line['transfers'] as $transfer) {
+            if ($v['warehouse_id'] !== null && $transfer['warehouseId'] === $v['warehouse_id']) {
+                $in->fail('items', 'Item row ' . ($index + 1) . ': a stock transfer cannot go to the stock point the goods are received into.');
+            }
+        }
+    }
     $in->done();
     [$lines, $totals] = pb_totals($lines, 'grn', $vatMode, $discount, $shipping);
     $v += ['subtotal' => $totals['subtotal'], 'vat_amount' => $totals['vatAmount'], 'discount_amount' => $totals['discountAmount'],
