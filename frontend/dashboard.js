@@ -2011,6 +2011,16 @@ function handleLookupFieldKeys(event) {
   const { key } = event;
   const chips = lookupChipFields.get(field);
   const open = query => { event.preventDefault(); if (!event.repeat) openLookup(field, { query, byKeyboard: true }); return true; };
+  // A Purchase Order line's filled Item Name opens only the Full Item Description (the Item Code changes the item).
+  if (isPoItemNameField(field)) {
+    const opens = key === 'F4' || (event.altKey && key === 'ArrowDown') || ((key === 'Enter' || key === ' ') && !event.shiftKey)
+      || (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.shiftKey && key.toLowerCase() === 'x'));
+    if (opens) {
+      event.preventDefault();
+      if (!event.repeat) openItemDescription(field);
+      return true;
+    }
+  }
   if (key === 'F4' || (event.altKey && key === 'ArrowDown')) return open('');
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   if (key === 'Backspace' || key === 'Delete') {
@@ -2186,7 +2196,12 @@ function initLookups() {
     event.preventDefault();
     openLookup(event.target, { query: event.clipboardData.getData('text').trim(), byKeyboard: true });
   });
-  document.addEventListener('click', event => { if (isLookupField(event.target)) openLookup(event.target); });
+  document.addEventListener('click', event => {
+    const field = event.target;
+    if (!isLookupField(field)) return;
+    if (isPoItemNameField(field)) openItemDescription(field);   // a Purchase Order line's filled Item Name: its own popup
+    else openLookup(field);
+  });
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeLookup(); });
   byId('lookup-search').addEventListener('input', () => { lookup.active = 0; renderLookupRows(); });
   // Rows are not focusable: keep focus (and typing) in the search box while clicking them.
@@ -7225,6 +7240,10 @@ const idpText = text => String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCa
 const isItemDescField = field => field.dataset.field === 'itemName' && field.dataset.lookup === 'item'
   && Boolean(lookupCreateForm(field)) && Boolean(lookupIdInput(field)?.value);
 
+// A Purchase Order line's Item Name holding an item: click, Enter, Space, F4 or typing open the Full Item
+// Description, never Select Item (an empty Item Name still opens Select Item to pick one).
+const isPoItemNameField = field => isItemDescField(field) && lookupCreateForm(field)?.spec.kind === 'po';
+
 // The line's formatted name (Purchase Order), only while its text is still the item's name.
 function itemDescHtml(row, name) {
   const html = pbCell(row, 'itemNameHtml')?.value || '';
@@ -7260,7 +7279,7 @@ function openItemDescription(field) {
   const editTitle = rich ? 'Edit the name, its formatting and the unit of this line' : 'Rename the item in the Item master';
   for (const button of dialog.querySelectorAll('[data-idp="edit-name"]')) button.title = editTitle;
   idpEl('sub').textContent = `Line Item #${lineNo}`;
-  idpEl('code').textContent = `Code: ${pbCell(row, 'itemCode').value || '—'}`;
+  showItemDescCode(pbCell(row, 'itemCode').value || '—');
   idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
   showItemDescPrice(null);
   setItemDescEditing(false);
@@ -7272,10 +7291,16 @@ function openItemDescription(field) {
     if (!dialog.open || itemDesc.itemId !== itemId) return;
     itemDesc.item = item;
     if (!itemDesc.editing) showItemDescName();
-    idpEl('code').textContent = `Code: ${item.code}`;
+    showItemDescCode(item.code);
     if (!pbCell(row, 'unit')?.value) idpEl('unit').textContent = item.unit || '—';
     showItemDescPrice(item);
   }).catch(() => {});
+}
+
+// The item code: in the card's head, and (Purchase Order) at the right of the Complete Item Name row.
+function showItemDescCode(code) {
+  idpEl('code').textContent = `Code: ${code}`;
+  idpEl('code-inline').textContent = `Code: ${code}`;
 }
 
 // Unit Price: the line's price (PO) or unit cost (GRN); lines without a price show the item's buying rate.

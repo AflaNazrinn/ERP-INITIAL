@@ -2763,11 +2763,12 @@
           <span class="idp-label-group">
             <label class="idp-label" for="item-desc-name">Complete Item Name</label>
             <span id="item-desc-mode" class="idp-mode" hidden><span aria-hidden="true">●</span> Editing Mode</span>
+            <button type="button" id="item-desc-edit" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+              <span>Edit</span>
+            </button>
           </span>
-          <button type="button" id="item-desc-edit" class="idp-mini" data-idp="edit-name" title="Rename the item in the Item master">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-            <span>Edit</span>
-          </button>
+          <span id="item-desc-code-inline" class="idp-code idp-code-inline"></span>
         </div>
         <input id="item-desc-name" class="idp-name" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper readonly>
         <div id="item-desc-view" class="idp-name idp-view" tabindex="-1" hidden></div>

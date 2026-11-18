@@ -2065,12 +2065,25 @@ input::-webkit-contacts-auto-fill-button {
 /* Keyboard focus on the item popups' + Create Item (→ from the search box), as + Create Supplier. */
 .lk-create-inline:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
 
-/* ---------- Full Item Description on a Purchase Order line (.idp.idp-po): two pages, one size ----------
-   View and editing mode keep the same 600 × 520 box (smaller windows: it shrinks and the body scrolls). */
-.idp.idp-po { width: min(600px, calc(100vw - 32px)); height: min(520px, calc(100vh - 32px)); }
-.idp.idp-po .idp-body { display: flex; flex-direction: column; padding: 14px 16px; }
+/* ---------- Full Item Description on a Purchase Order line (.idp.idp-po) ----------
+   Two fixed sizes: the view 600 × 315, editing mode 600 × 464 (a smaller window: it shrinks and the body scrolls).
+   No separate "Item Name" bar and no key hints in the title bar: the code sits at the right of Complete Item Name. */
+.idp.idp-po { width: min(600px, calc(100vw - 32px)); height: min(315px, calc(100vh - 32px)); }
+.idp.idp-po.is-editing { height: min(464px, calc(100vh - 32px)); }
+.idp.idp-po .idp-keys, .idp.idp-po .idp-card-head { display: none; }
+.idp.idp-po .idp-head { padding: 12px 14px; }
+.idp.idp-po .idp-body { display: flex; flex-direction: column; padding: 12px 14px; }
 .idp.idp-po .idp-card { flex: 1 1 auto; display: flex; flex-direction: column; }
-.idp.idp-po .idp-card-body { flex: 1 1 auto; display: flex; flex-direction: column; }
+.idp.idp-po .idp-card-body { flex: 1 1 auto; display: flex; flex-direction: column; padding: 12px 12px 12px; }
+.idp.idp-po .idp-label-row { margin-bottom: 8px; }
+.idp.idp-po .idp-facts { margin-top: 10px; }
+.idp.idp-po .idp-foot { padding: 10px 14px; }
+.idp.idp-po .idp-editor { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.idp.idp-po .idp-rich { flex: 1 1 auto; max-height: none; }
+.idp-code-inline { margin-left: auto; }
+.idp:not(.idp-po) .idp-code-inline { display: none; }
+/* Other Purchase Book lines: the label on the left, Edit on the right, as before. */
+.idp:not(.idp-po) .idp-label-group { flex: 1; justify-content: space-between; }
 .idp-label-group { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .idp-mode {
   display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 5px;
@@ -2080,7 +2093,7 @@ input::-webkit-contacts-auto-fill-button {
 .idp-mode > span { font-size: 8px; color: #16a34a; }
 .idp-mode[hidden] { display: none; }
 /* The view box: the name with its formatting (grows with a long name). */
-.idp-view { height: auto; min-height: 46px; padding: 10px 12px; font-weight: 400; line-height: 1.4; overflow-wrap: anywhere; cursor: default; }
+.idp-view { height: auto; min-height: 46px; padding: 10px 12px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; cursor: default; }
 .idp-view b, .idp-view strong { font-weight: 900; }
 .idp-view[hidden] { display: none; }
 /* Editing mode: toolbar, hint and the editor in one green-bordered box. */
