@@ -363,18 +363,6 @@ const GEN_PER_VIEW = 2;
 const GEN_SUB = 'Made from your company details. Click a template to choose it.';
 const genDialog = () => $('cc-gen');
 
-// What the letterheads leave out because it is not filled in yet.
-function letterheadMissing() {
-  const missing = [];
-  if (!field('companyName').value.trim() && !files.logo) missing.push('company name');   // with a logo, the name is not printed
-  if (!files.logo) missing.push('logo');
-  if (!field('crNumber').value.trim()) missing.push('CR number');
-  if (!field('vatNumber').value.trim()) missing.push('VAT number');
-  if (!field('phone').value.trim()) missing.push('phone');
-  if (!field('email').value.trim()) missing.push('email');
-  return missing;
-}
-
 function shuffledDesigns(avoidFirst = -1) {
   const order = LETTERHEADS.map((_, index) => index);
   for (let i = order.length - 1; i > 0; i--) {
@@ -491,10 +479,6 @@ function openGen() {
   setFieldError('letterhead', '');
   for (const item of gen.made) URL.revokeObjectURL(item.url);
   Object.assign(gen, { made: [], order: shuffledDesigns(), start: 0, picked: -1 });
-  const missing = letterheadMissing();
-  $('cc-gen-missing').textContent = missing.length
-    ? `Not on the letterhead yet: ${missing.join(', ')}. Fill them in and press Generate.` : '';
-  $('cc-gen-missing').hidden = !missing.length;
   renderGen();
   document.documentElement.classList.add('has-modal');
   genDialog().showModal();

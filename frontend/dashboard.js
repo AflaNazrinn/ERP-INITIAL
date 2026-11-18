@@ -552,6 +552,10 @@ function initKeyboardNavigation() {
       event.stopPropagation();
       return;
     }
+    if (byId('quick-supplier').open && handleQuickSupplierKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
 
     // The open form's own keys (Esc, Shift+Enter, Enter …) come first, unless the menu is over it.
     const pageKeys = FORM_KEY_HANDLERS[currentPage];
@@ -1153,7 +1157,7 @@ function enterField(node) {
   focusField(node);
   if (isLookupField(node)) openLookup(node, { byKeyboard: true });
   else if (node instanceof HTMLSelectElement) { if (hasDropdownChoices(node)) openSelectMenu(node); }
-  else if (isSuggestField(node)) openSuggest(node, { browse: true });
+  else if (isSuggestField(node) && node.dataset.suggestTyped === undefined) openSuggest(node, { browse: true });   // data-suggest-typed: only once typing
   else if (node instanceof HTMLInputElement && node.list) showDropdown(node);
 }
 
@@ -1648,6 +1652,21 @@ function initFieldChecks() {
   });
 }
 
+/* A card for the popups without one of their own (Supplier, Currency): the name over "code • country", a tick circle. */
+function plainLookupCard(config, row) {
+  const cell = el('td', 'lk-card-cell');
+  cell.colSpan = config.columns.length;
+  const text = el('div', 'lk-card-text');
+  text.append(el('div', 'lk-card-name', config.cardName ? config.cardName(row) : config.display(row)));
+  const meta = config.cardMeta ? config.cardMeta(row) : row.code;
+  if (meta) text.append(el('div', 'lk-card-meta', meta));
+  const tick = el('span', 'lk-card-tick');
+  tick.setAttribute('aria-hidden', 'true');
+  tick.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"></circle><path d="m8 12.2 2.7 2.7L16 9.6"></path></svg>';
+  cell.append(text, tick);
+  return cell;
+}
+
 /* The item popups list each item as a card: the code, the name, the category; on the right the
    price and "Available Stock: 12 PIECES" (amber at none, green with stock). */
 function itemLookupCard(row) {
@@ -1677,24 +1696,46 @@ const LOOKUPS = {
   brand: { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands', api: 'api/brands.php',
     columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
   supplier: { title: 'Select Supplier', letter: 'S', list: 'Supplier List', plural: 'suppliers', api: 'api/suppliers.php',
-    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name },
+    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name,
+    // The card style (a field with data-lookup-cards: the Purchase Order's Supplier Name).
+    subtitle: 'Choose a supplier from the database catalog.', search: 'Search supplier by name or code...',
+    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Supplier' },
   warehouse: { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points', api: 'api/warehouses.php',
     columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: codeAndName },
   rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
-    columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit'], ['category', 'Category']], display: row => row.name, card: itemLookupCard },
+    columns: [['code', 'Code'], ['name', 'Item Name'], ['unit', 'Unit'], ['category', 'Category']], display: row => row.name, card: itemLookupCard,
+    subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
   // Purchase Book rows: the Item Code popup lists codes with each item's name.
   itemcode: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
-    columns: [['code', 'Code'], ['name', 'Item Name'], ['category', 'Category']], display: row => row.code, meta: row => row.name, card: itemLookupCard },
+    columns: [['code', 'Code'], ['name', 'Item Name'], ['category', 'Category']], display: row => row.code, meta: row => row.name, card: itemLookupCard,
+    subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
     columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
   // Purchase Order currency: the hidden id holds the code (OMR), the field shows "OMR – Omani Rial".
   currency: { title: 'Select Currency', letter: '$', list: 'Currency List', plural: 'currencies', rows: () => PO_CURRENCIES,
-    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}` },
+    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}`,
+    subtitle: 'Choose the currency of this order.', search: 'Search currency by code or name...', cardName: row => row.name, cardMeta: row => row.code },
+  // Purchase Order type-to-search text (free text kept as typed): the usual values, then those used on saved orders.
+  poLocation: { plural: 'locations', rows: () => poTextRows('deliveryLocation', PO_LOCATIONS), display: row => row.name, meta: () => '' },
+  poTerms: { plural: 'delivery terms', rows: () => poTextRows('deliveryTerms', PO_TERMS), display: row => row.name, meta: () => '' },
+  poCredit: { plural: 'credit periods', rows: () => poTextRows('creditPeriod', PO_CREDIT_PERIODS), display: row => row.name, meta: () => '' },
 };
+
+const PO_LOCATIONS = ['DDP MUSCAT LIMIT', 'DAP MUSCAT', 'EX-WORKS', 'MUSCAT MAIN WAREHOUSE', 'SOHAR SITE STORE'];
+const PO_TERMS = ['2-3 days from PO date', '2-3 weeks from PO date, DAF', '1 week from PO date', '4-6 weeks from PO date', 'Immediate delivery', 'Ex-stock'];
+const PO_CREDIT_PERIODS = ['7 Days', '15 Days', '30 Days', '45 Days', '60 Days', '90 Days'];
+// The suggestions for a Purchase Order text field: the presets, then other values saved orders used (once each).
+async function poTextRows(key, presets) {
+  let used = [];
+  try { used = (await loadLookup('purchaseorder')).map(po => String(po[key] ?? '').trim()).filter(Boolean); } catch { /* presets only */ }
+  const seen = new Set();
+  return [...presets, ...used].filter(text => !seen.has(text.toLowerCase()) && seen.add(text.toLowerCase()))
+    .map(text => ({ id: text, code: '', name: text }));
+}
 
 // The currencies a purchase order can be in (the server's PB_CURRENCIES). OMR, AED and INR first.
 const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'Indian Rupee'], ['SAR', 'Saudi Riyal'], ['QAR', 'Qatari Riyal'], ['KWD', 'Kuwaiti Dinar'],
@@ -1809,10 +1850,17 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
   lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
     || (!lookupIdInput(field) && config.display(row) === field.value)));
+  // Card style: the item popups everywhere (config.card), and fields marked data-lookup-cards (the Purchase Order's
+  // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
+  lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
+  dialog.classList.toggle('lk-cards', lookup.cards);
+  byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
+  byId('lookup-sub').hidden = !lookup.cards || !config.subtitle;
+  byId('lookup-new').hidden = !(lookup.cards && config.create);
+  byId('lookup-new-label').textContent = config.create || '';
   byId('lookup-letter').textContent = config.letter;
   byId('lookup-title').textContent = config.title;
   byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
-  byId('lookup').classList.toggle('lk-cards', Boolean(config.card) && !multi);
   byId('lookup-head').replaceChildren(...(multi ? [el('th', 'lk-check', '')] : []), ...config.columns.map(([, heading]) => el('th', '', heading)));
   byId('lookup-enter-hint').textContent = multi ? 'Tick / Untick' : 'Select';
   byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
@@ -1824,7 +1872,7 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-create-hint').hidden = !canCreate;
   const search = byId('lookup-search');
   search.value = query;
-  search.placeholder = config.card && !multi ? 'Search items by code, name, category...'
+  search.placeholder = lookup.cards && config.search ? config.search
     : `Search ${config.columns.map(([, heading]) => heading.toLowerCase()).slice(0, 2).join(' or ')}...`;
   renderLookupRows();
   document.documentElement.classList.add('has-modal');
@@ -1857,13 +1905,14 @@ function renderLookupRows() {
       box.append(el('span', 'lk-box'));
       tr.append(box);
     }
-    if (config.card && !lookup.multi) tr.append(config.card(row));
+    if (lookup.cards) tr.append(config.card ? config.card(row) : plainLookupCard(config, row));
     else config.columns.forEach(([key], column) => tr.append(el('td', column === 0 && !config.plainFirst ? 'lk-code' : '', String(row[key] ?? ''))));
     return tr;
   });
   if (rows.length === 0) {
     const tr = el('tr');
-    const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.' : '';
+    const createHint = !byId('lookup-create').hidden ? ' Press Enter to create it as a new item.'
+      : !byId('lookup-new').hidden ? ` Press Enter to create it as a new ${config.plural.replace(/s$/, '')}.` : '';
     const td = el('td', 'lk-empty', (query ? `No ${config.plural} match “${query}”.` : `No ${config.plural} to choose from.`) + createHint);
     td.colSpan = config.columns.length + (lookup.multi ? 1 : 0);
     tr.append(td);
@@ -1925,7 +1974,7 @@ function closeLookup({ advance = false } = {}) {
   const dialog = byId('lookup');
   if (!dialog.open) return;
   dialog.close();
-  if (!byId('quick-menu').open && !byId('quick-item').open) document.documentElement.classList.remove('has-modal');
+  if (!byId('quick-menu').open && !byId('quick-item').open && !byId('quick-supplier').open) document.documentElement.classList.remove('has-modal');
   if (!document.contains(lookup.field)) return;
   if (advance) focusNextField(lookup.field); else focusField(lookup.field);
 }
@@ -1962,6 +2011,16 @@ function handleLookupFieldKeys(event) {
   const { key } = event;
   const chips = lookupChipFields.get(field);
   const open = query => { event.preventDefault(); if (!event.repeat) openLookup(field, { query, byKeyboard: true }); return true; };
+  // A Purchase Book line's filled Item Name opens only the Full Item Description (the Item Code changes the item).
+  if (isItemDescField(field)) {
+    const opens = key === 'F4' || (event.altKey && key === 'ArrowDown') || ((key === 'Enter' || key === ' ') && !event.shiftKey)
+      || (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.shiftKey && key.toLowerCase() === 'x'));
+    if (opens) {
+      event.preventDefault();
+      if (!event.repeat) openItemDescription(field);
+      return true;
+    }
+  }
   if (key === 'F4' || (event.altKey && key === 'ArrowDown')) return open('');
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   if (key === 'Backspace' || key === 'Delete') {
@@ -1995,6 +2054,11 @@ function handleLookupDialogKeys(event) {
     if (!event.repeat) createItemFromLookup();
     return;
   }
+  if (event.altKey && !ctrl && event.code === 'KeyN' && !byId('lookup-new').hidden) {
+    event.preventDefault();
+    if (!event.repeat) createSupplierFromLookup();
+    return;
+  }
   if (ctrl || event.altKey) return;
   const search = byId('lookup-search');
   const [cancel, select] = [byId('lookup-cancel'), byId('lookup-select')];
@@ -2011,6 +2075,13 @@ function handleLookupDialogKeys(event) {
   if (target !== search) {
     if (!key.startsWith('Arrow')) return;
     event.preventDefault();
+    // Card style (+ Create Item / + Create Supplier beside the search box): ← / ↑ back to the search, ↓ to Cancel;
+    // Cancel ← or ↑ to Create.
+    const create = lookupTopCreate();
+    if (create) {
+      if (target === create) { if (key === 'ArrowDown') cancel.focus(); else if (key === 'ArrowLeft' || key === 'ArrowUp') search.focus(); return; }
+      if (target === cancel && (key === 'ArrowLeft' || key === 'ArrowUp')) { create.focus(); return; }
+    }
     if (key === 'ArrowRight' && target === cancel && !select.disabled) select.focus();
     else if (key === 'ArrowLeft' && target === select) cancel.focus();
     else if ((key === 'ArrowLeft' && target === cancel) || key === 'ArrowUp') search.focus();
@@ -2020,7 +2091,7 @@ function handleLookupDialogKeys(event) {
   // → leaves the list for the Close button, once the caret is at the end of the search text.
   if (key === 'ArrowRight' && search.selectionStart === search.value.length && search.selectionEnd === search.value.length) {
     event.preventDefault();
-    cancel.focus();
+    (lookupTopCreate() || cancel).focus();   // card style: the + Create button beside the search first
     return;
   }
   const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 };
@@ -2040,8 +2111,18 @@ function handleLookupDialogKeys(event) {
     event.preventDefault();
     if (event.repeat) return;
     if (lookup.shown.length === 0 && !lookup.multi && !byId('lookup-create').hidden) createItemFromLookup();
+    else if (lookup.shown.length === 0 && !byId('lookup-new').hidden) createSupplierFromLookup();
     else pickLookupRow({ advance: true });
   }
+}
+
+// The + Create button beside the search box in the card-style popup, if it shows one: Create Supplier, or the
+// item popups' Create Item.
+function lookupTopCreate() {
+  const dialog = byId('lookup');
+  if (!byId('lookup-new').hidden) return byId('lookup-new');
+  if (dialog.classList.contains('lk-cards') && dialog.classList.contains('lk-can-create')) return dialog.querySelector('.lk-create-inline');
+  return null;
 }
 
 // The Purchase Book form whose item row holds this Item Code / Item Name popup field, if any:
@@ -2115,7 +2196,12 @@ function initLookups() {
     event.preventDefault();
     openLookup(event.target, { query: event.clipboardData.getData('text').trim(), byKeyboard: true });
   });
-  document.addEventListener('click', event => { if (isLookupField(event.target)) openLookup(event.target); });
+  document.addEventListener('click', event => {
+    const field = event.target;
+    if (!isLookupField(field)) return;
+    if (isItemDescField(field)) openItemDescription(field);   // a Purchase Book line's filled Item Name: its own popup
+    else openLookup(field);
+  });
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeLookup(); });
   byId('lookup-search').addEventListener('input', () => { lookup.active = 0; renderLookupRows(); });
   // Rows are not focusable: keep focus (and typing) in the search box while clicking them.
@@ -2126,7 +2212,7 @@ function initLookups() {
     lookup.active = Number(tr.dataset.index);
     syncLookupActive();
     if (lookup.multi) toggleLookupRow();        // multi-select: each click ticks or unticks
-    else if (event.detail >= 2) pickLookupRow();   // double-click picks
+    else if (lookup.cards || event.detail >= 2) pickLookupRow();   // card style: a click picks; else a double-click
   });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) {           // the backdrop, outside the panel
@@ -2138,6 +2224,7 @@ function initLookups() {
     if (action === 'cancel') closeLookup();
     else if (action === 'select') { if (lookup.multi) applyLookupMulti(); else pickLookupRow(); }
     else if (action === 'create') createItemFromLookup();
+    else if (action === 'new') createSupplierFromLookup();
   });
 }
 
@@ -6004,6 +6091,125 @@ function initQuickItem() {
   });
 }
 
+/* ---------- Quick Add Supplier (Purchase Order › Select Supplier › + Create Supplier) ----------
+   Saved to the Supplier master with its contact, then picked into the field the popup was opened from. */
+
+const quickSupplier = { field: null, saving: false };
+const qsEl = suffix => byId(`quick-supplier-${suffix}`);
+const QUICK_SUPPLIER_FIELDS = ['name', 'contact', 'phone', 'email', 'country', 'currency'];
+
+// The Select Supplier popup's + Create Supplier: its searched text becomes the new supplier's name.
+function createSupplierFromLookup() {
+  const { field } = lookup;
+  const name = byId('lookup-search').value.trim();
+  closeLookup();
+  openQuickSupplier(field, name);
+}
+
+function openQuickSupplier(field, name = '') {
+  quickSupplier.field = field;
+  byId('quick-supplier-form').reset();
+  clearFormErrors(byId('quick-supplier-form'));
+  qsEl('error').hidden = true;
+  qsEl('name').value = name.toUpperCase();
+  qsEl('country').value = 'Oman';
+  qsEl('currency').value = 'OMR';
+  document.documentElement.classList.add('has-modal');
+  byId('quick-supplier').showModal();
+  qsEl('name').focus();
+}
+
+function closeQuickSupplier({ picked = false } = {}) {
+  const dialog = byId('quick-supplier');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open && !byId('quick-item').open) document.documentElement.classList.remove('has-modal');
+  const { field } = quickSupplier;
+  if (!field || !document.contains(field)) return;
+  if (picked) focusNextField(field); else focusField(field);
+}
+
+function quickSupplierError(node, message) {
+  qsEl('error').textContent = message;
+  qsEl('error').hidden = false;
+  if (node) { node.classList.add('is-invalid'); node.focus(); }
+}
+
+async function saveQuickSupplier() {
+  if (quickSupplier.saving) return;
+  clearFormErrors(byId('quick-supplier-form'));
+  qsEl('error').hidden = true;
+  const value = suffix => qsEl(suffix).value.trim();
+  if (!value('name')) return quickSupplierError(qsEl('name'), 'Enter the supplier name.');
+  const phone = value('phone');
+  const email = value('email');
+  const problem = phoneProblem(phone, '');
+  if (problem) return quickSupplierError(qsEl('phone'), problem);
+  if (email && !EMAIL.test(email)) return quickSupplierError(qsEl('email'), 'Enter a valid email address.');
+  const payload = {
+    supplierName: value('name'), country: value('country'), currency: qsEl('currency').value || 'OMR', phone, email,
+    contacts: value('contact') || phone || email ? [{ name: value('contact'), designation: '', number: phone, email }] : [],
+  };
+  quickSupplier.saving = true;
+  qsEl('save').disabled = true;
+  try {
+    const supplier = await apiRequest('api/suppliers.php', { method: 'POST', json: payload });
+    forgetLookups('supplier');
+    const { field } = quickSupplier;
+    closeQuickSupplier({ picked: true });
+    showToast('Supplier created', `${supplier.code} · ${supplier.name}`);
+    if (field && document.contains(field)) setLookupValue(field, supplier);   // the order takes it (contact, currency, VAT)
+  } catch (error) {
+    const fields = { supplierName: 'name', phone: 'phone', email: 'email', country: 'country', currency: 'currency' };
+    const key = Object.keys(error.fields || {}).find(field => fields[field] || field.startsWith('contacts'));
+    const target = key ? qsEl(fields[key] || 'contact') : null;
+    quickSupplierError(target, key ? error.fields[key] : error.message);
+  } finally {
+    quickSupplier.saving = false;
+    qsEl('save').disabled = false;
+  }
+}
+
+function handleQuickSupplierKeys(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (!event.repeat) closeQuickSupplier();
+    return true;
+  }
+  if (isBrowserSaveKey(event) || isSaveKey(event)) {
+    event.preventDefault();
+    if (!event.repeat) saveQuickSupplier();
+    return true;
+  }
+  if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    const index = QUICK_SUPPLIER_FIELDS.findIndex(suffix => qsEl(suffix) === event.target);
+    if (index === -1) return false;                       // buttons: their own click
+    event.preventDefault();
+    if (index === QUICK_SUPPLIER_FIELDS.length - 1) saveQuickSupplier();
+    else qsEl(QUICK_SUPPLIER_FIELDS[index + 1]).focus();
+    return true;
+  }
+  return false;
+}
+
+function initQuickSupplier() {
+  const dialog = byId('quick-supplier');
+  qsEl('currency').replaceChildren(...PO_CURRENCIES.map(row => new Option(`${row.code} - ${row.name}`, row.code)));
+  qsEl('countries').replaceChildren(...COUNTRIES.map(country => new Option(country.name)));
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeQuickSupplier(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeQuickSupplier(); return; }   // backdrop
+    const action = event.target.closest('[data-qs]')?.dataset.qs;
+    if (action === 'close') closeQuickSupplier();
+    if (action === 'save') saveQuickSupplier();
+  });
+  byId('quick-supplier-form').addEventListener('submit', event => event.preventDefault());
+  byId('quick-supplier-form').addEventListener('input', event => {
+    event.target.classList.remove('is-invalid');
+    qsEl('error').hidden = true;
+  });
+}
+
 /* ---------- Delete ---------- */
 
 async function deleteMasterRow(list, row) {
@@ -6877,12 +7083,15 @@ function composePurchaseTemplates() {
   for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
+    const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
+    const nameCell = row.querySelector('[data-field="itemName"]').closest('td');
+    const nameHtml = hidden(); nameHtml.dataset.field = 'itemNameHtml';     // the Full Item Description's formatting (every line)
+    nameCell.append(nameHtml);
     if (id === 'pb-line-po') {
       const brandCell = row.querySelector('[data-brand-cell]');
-      const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
-      row.querySelector('[data-field="itemName"]').closest('td').append(brandId, brandName);
+      nameCell.append(brandId, brandName);
       brandCell.remove();
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
@@ -7011,54 +7220,75 @@ async function applyPurchaseItem(form, row, itemId) {
 }
 
 /* ---------- Full Item Description popup (#item-desc; design/masters/item_description.png) ----------
-   Enter or Space on a line's Item Name that already holds an item (you arrive there by arrow, Tab or click:
-   Enter skips filled names) shows the item instead of the Select Item list. Typing, F4 or Alt+↓ there
-   still opens Select Item to change the item.
-   Keys: Enter close, Esc close, Ctrl+C copy the name, ←/→ between the buttons.
-   Edit / Edit Name rename the item in the Item master: Enter saves, Esc cancels the edit.
-   Every line holding that item shows the new name. */
-const itemDesc = { field: null, row: null, itemId: '', item: null, editing: false, saving: false };
+   Every Purchase Book line (Purchase Request, Quotation Request, Purchase Order, GRN): a click, Enter, Space, F4,
+   Alt+↓ or typing on an Item Name that holds an item opens this popup, never Select Item (the Item Code changes the
+   item; an empty Item Name still opens Select Item). It has two pages of one fixed size:
+   - View: the name with its formatting, Unit and Unit Price; Copy Name, Edit Name, Close (Enter).
+   - Editing mode (Edit / Edit Name): Bold, Bold All, Red, Blue, Black and Plain over the name, and the line's Unit
+     editable. Save & Apply (Ctrl+Enter, or Enter) renames the item in the Item master when the text changed, keeps
+     the formatting on this document's line (printed on its PDF) and sets the line's unit. Cancel (Esc) leaves all as it was.
+
+   Keys (itemDescMove): ←/→ along a row of buttons, ↑/↓ between the rows (close ✕ · Edit · name · Unit · buttons);
+   in the name or Unit box ←/→ move the caret, and ↑/↓ leave it at its start / end. Enter presses the focused
+   button, else Close / Save; Esc cancels editing, then closes; Ctrl+C copies the name; Ctrl+B bolds. */
+const itemDesc = { field: null, row: null, form: null, itemId: '', item: null, editing: false, saving: false, range: null };
 const idpEl = suffix => byId(`item-desc-${suffix}`);
+const idpText = text => String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 // A Purchase Book line's Item Name cell with an Item master item in it.
 const isItemDescField = field => field.dataset.field === 'itemName' && field.dataset.lookup === 'item'
   && Boolean(lookupCreateForm(field)) && Boolean(lookupIdInput(field)?.value);
+
+// The line's formatted name, only while its text is still the item's name.
+function itemDescHtml(row, name) {
+  const html = pbCell(row, 'itemNameHtml')?.value || '';
+  if (!html) return '';
+  const box = document.createElement('div');
+  box.append(remarksFragment(html));
+  return idpText(box.textContent) === idpText(name) ? html : '';
+}
+
+const itemDescName = () => itemDesc.item?.name ?? itemDesc.field.value;
+
+// The name in the view, with the line's formatting (the hidden plain box keeps the text for Copy's fallback).
+function showItemDescName() {
+  const name = itemDescName();
+  idpEl('name').value = name;
+  const html = itemDescHtml(itemDesc.row, name);
+  idpEl('view').replaceChildren(html ? remarksFragment(html) : document.createTextNode(name));
+}
 
 function openItemDescription(field) {
   const dialog = byId('item-desc');
   if (dialog.open) return;
   const row = field.closest('.fp-row');
   const itemId = lookupIdInput(field).value;
+  const form = lookupCreateForm(field);
   const lineNo = [...row.parentElement.rows].filter(other => other.matches('.fp-row')).indexOf(row) + 1;
-  Object.assign(itemDesc, { field, row, itemId, item: null, editing: false, saving: false });
+  Object.assign(itemDesc, { field, row, form, itemId, item: null, editing: false, saving: false, range: null });
   idpEl('sub').textContent = `Line Item #${lineNo}`;
-  idpEl('code').textContent = `Code: ${pbCell(row, 'itemCode').value || '—'}`;
-  showItemDescName(field.value, null);
+  showItemDescCode(pbCell(row, 'itemCode').value || '—');
   idpEl('unit').textContent = pbCell(row, 'unit')?.value || '—';
   showItemDescPrice(null);
   setItemDescEditing(false);
+  showItemDescName();
   document.documentElement.classList.add('has-modal');
   dialog.showModal();
   idpEl('primary').focus();
   pbItem(itemId).then(item => {
     if (!dialog.open || itemDesc.itemId !== itemId) return;
     itemDesc.item = item;
-    if (!itemDesc.editing) showItemDescName(item.name, item.nameHtml);
-    idpEl('code').textContent = `Code: ${item.code}`;
+    if (!itemDesc.editing) showItemDescName();
+    showItemDescCode(item.code);
     if (!pbCell(row, 'unit')?.value) idpEl('unit').textContent = item.unit || '—';
     showItemDescPrice(item);
   }).catch(() => {});
 }
 
-// The name as saved: with its bold / colours when it has them.
-function showItemDescName(name, html) {
-  const box = idpEl('name');
-  if (html) box.replaceChildren(remarksFragment(html)); else box.textContent = name || '';
-}
-const itemDescText = () => idpEl('input').innerText.replace(/\s+/g, ' ').trim();
-function countItemDescChars() {
-  const count = itemDescText().length;
-  idpEl('count').textContent = `${count} char${count === 1 ? '' : 's'}`;
+// The item code, at the right of the Complete Item Name row (the card's head is hidden).
+function showItemDescCode(code) {
+  idpEl('code').textContent = `Code: ${code}`;
+  idpEl('code-inline').textContent = `Code: ${code}`;
 }
 
 // Unit Price: the line's price (PO) or unit cost (GRN); lines without a price show the item's buying rate.
@@ -7069,34 +7299,53 @@ function showItemDescPrice(item) {
   else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
 }
 
-/* Editing Mode: the name in an editor with Bold / Bold All / Red / Blue / Black / Plain, the line's unit
-   editable, and Cancel (Esc) / Save & Apply (Ctrl+Enter). The name and its formatting go to the Item master. */
+// View ↔ editing mode: the toolbar, the editor, the tip and the Unit box show; Copy / Edit Name give way to Cancel.
 function setItemDescEditing(editing) {
-  const wasEditing = itemDesc.editing;
   itemDesc.editing = editing;
-  byId('item-desc').classList.toggle('is-editing', editing);
-  for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
-  idpEl('primary-label').textContent = editing ? (itemDesc.saving ? 'Saving…' : 'Save & Apply (Ctrl+Enter)') : 'Close';
+  idpEl('primary-label').textContent = itemDesc.saving ? 'Saving…' : editing ? 'Save & Apply' : 'Close';
+  idpEl('primary-key').textContent = editing ? 'Ctrl+Enter' : 'Enter';
   idpEl('primary').disabled = itemDesc.saving;
   idpEl('error').hidden = true;
-  if (editing && !wasEditing) {
-    const input = idpEl('input');
-    const html = itemDesc.item?.nameHtml;
-    if (html) input.replaceChildren(remarksFragment(html)); else input.textContent = itemDesc.item?.name ?? itemDesc.field.value;
-    idpEl('unit-input').value = pbCell(itemDesc.row, 'unit')?.value || itemDesc.item?.unit || '';
-    countItemDescChars();
-    input.focus();
-    const range = document.createRange();               // caret at the end of the name
-    range.selectNodeContents(input);
-    range.collapse(false);
-    const selection = getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
+  for (const button of byId('item-desc').querySelectorAll('[data-idp="edit-name"]')) button.setAttribute('aria-pressed', String(editing));
+  byId('item-desc').classList.toggle('is-editing', editing);
+  const show = (suffix, on) => { idpEl(suffix).hidden = !on; };
+  for (const suffix of ['mode', 'editor', 'tip', 'unit-hint', 'unit-input', 'cancel']) show(suffix, editing);
+  for (const suffix of ['view', 'unit', 'edit', 'copy', 'edit-name']) show(suffix, !editing);
+  idpEl('unit-label').textContent = editing ? 'Unit (editable)' : 'Unit';
+}
+
+// Edit / Edit Name: the editor starts with the line's name and formatting, the Unit box with its unit.
+function startItemDescEdit() {
+  const name = itemDescName();
+  const html = itemDescHtml(itemDesc.row, name);
+  const editor = idpEl('rich');
+  editor.replaceChildren(html ? remarksFragment(html) : document.createTextNode(name));
+  idpEl('unit-input').value = pbCell(itemDesc.row, 'unit')?.value || '';
+  itemDesc.range = null;
+  setItemDescEditing(true);
+  updateItemDescCount();
+  editor.focus();
+  placeCaret(editor, false);
+}
+
+// The caret at the start (atStart) or the end of a box.
+function placeCaret(box, atStart) {
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  range.collapse(atStart);
+  const selection = getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function updateItemDescCount() {
+  const count = idpText(idpEl('rich').textContent).length;
+  idpEl('count').textContent = `${count} char${count === 1 ? '' : 's'}`;
 }
 
 function cancelItemDescEdit() {
   setItemDescEditing(false);
+  showItemDescName();
   idpEl('primary').focus();
 }
 
@@ -7109,90 +7358,23 @@ function closeItemDescription() {
 }
 
 async function copyItemDescName() {
-  const name = idpEl('name').innerText.replace(/\s+/g, ' ').trim();
+  const name = itemDescName();
   try {
     await navigator.clipboard.writeText(name);
   } catch {
-    const range = document.createRange();
-    range.selectNodeContents(idpEl('name'));
-    getSelection().removeAllRanges();
-    getSelection().addRange(range);
-    if (!document.execCommand('copy')) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
+    const input = idpEl('name');
+    input.hidden = false;
+    input.select();
+    const copied = document.execCommand('copy');
+    input.hidden = true;
+    if (!copied) { showToast('Could not copy', 'Select the name and copy it yourself.', true); return; }
   }
   showToast('Item name copied', name);
 }
 
-/* Formatting in the editor. A highlighted part gets it; with nothing highlighted, the whole name does.
-   Bold toggles; Plain removes bold and colour. */
-function formatItemDescName(action, colour) {
-  const input = idpEl('input');
-  const selection = getSelection();
-  const inside = selection.rangeCount && input.contains(selection.getRangeAt(0).commonAncestorContainer) && !selection.isCollapsed;
-  input.focus();
-  if (action === 'bold-all' || !inside) {
-    const range = document.createRange();
-    range.selectNodeContents(input);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-  document.execCommand('styleWithCSS', false, false);
-  if (action === 'bold' || action === 'bold-all') {
-    if (action === 'bold-all' && document.queryCommandState('bold')) { /* already bold everywhere */ } else document.execCommand('bold');
-  } else if (action === 'color') {
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand('foreColor', false, colour);
-  } else if (action === 'plain') {
-    document.execCommand('removeFormat');
-    for (const node of input.querySelectorAll('b, strong, font, span')) node.replaceWith(...node.childNodes);
-  }
-  if (action === 'bold-all' || !inside) selection.collapseToEnd();
-  countItemDescChars();
-}
-
-// Saves the name (and its formatting) to the Item master and the unit to this line, then shows them on every line.
-async function saveItemDescName() {
-  const { itemId, row } = itemDesc;
-  if (!itemDesc.editing || itemDesc.saving) return;
-  const name = itemDescText().toUpperCase();
-  if (name === '') { showItemDescError('Enter the item name.'); return; }
-  if (name.length > 200) { showItemDescError(`The item name can be at most 200 characters (now ${name.length}).`); return; }
-  const html = cleanRemarksHtml(idpEl('input').innerHTML).replace(/<br\s*\/?>/gi, ' ');
-  const formatted = /<(b|strong|span)\b/i.test(html);
-
-  // The unit: this line's Unit cell (a unit from the UOM list keeps its id).
-  const unitCell = pbCell(row, 'unit');
-  const unit = idpEl('unit-input').value.trim().toUpperCase();
-  const unitChanged = unitCell && unit !== unitCell.value.trim().toUpperCase();
-  if (unitChanged) {
-    const uoms = await loadLookup('uom');
-    const match = uoms.find(uom => [uom.name, uom.code].some(text => String(text ?? '').toUpperCase() === unit));
-    unitCell.value = match ? match.name : unit;
-    if (pbCell(row, 'uomId')) pbCell(row, 'uomId').value = match ? String(match.id) : '';
-    idpEl('unit').textContent = unitCell.value || '—';
-    PURCHASE_FORMS.find(form => byId(`${form.spec.key}-form`).contains(row))?.page.record();
-  }
-
-  const before = itemDesc.item;
-  const sameName = name === (before?.name ?? itemDesc.field.value);
-  const sameFormat = (formatted ? html : null) === (before?.nameHtml ?? null);
-  if (sameName && (sameFormat || !before)) {
-    setItemDescEditing(false);
-    idpEl('primary').focus();
-    if (unitChanged) showToast('Unit applied', `Line Item ${idpEl('sub').textContent.replace(/\D/g, '')}: ${unitCell.value}`);
-    return;
-  }
-  itemDesc.saving = true;
-  setItemDescEditing(true);
-  let saved;
-  try {
-    saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name, itemNameHtml: formatted ? html : '' } });
-  } catch (error) {
-    itemDesc.saving = false;
-    setItemDescEditing(true);
-    showItemDescError(Object.values(error.fields || {})[0] || error.message);
-    return;
-  }
-  itemDesc.saving = false;
+// Renames the item in the Item master, then shows the new name on every line holding it. Returns the saved item.
+async function renameItemInMaster(itemId, name) {
+  const saved = await apiRequest(`api/items.php?id=${itemId}`, { method: 'PUT', json: { itemName: name } });
   pbData.items.set(itemId, Promise.resolve(saved));
   forgetLookups('item', 'itemcode');
   for (const form of PURCHASE_FORMS) {
@@ -7206,12 +7388,81 @@ async function saveItemDescName() {
     }
     if (changed) form.page.absorb();      // the master changed, not the document: nothing to undo
   }
-  if (!byId('item-desc').open || itemDesc.itemId !== itemId) return;
-  itemDesc.item = saved;
-  showItemDescName(saved.name, saved.nameHtml);
+  return saved;
+}
+
+// The editor's name, cleaned as the remarks and kept on one line: { text, html } (html '' without formatting).
+function itemDescEdited() {
+  const box = document.createElement('div');
+  box.append(remarksFragment(idpEl('rich').innerHTML));
+  for (const br of box.querySelectorAll('br')) br.replaceWith(' ');
+  for (const node of [...box.querySelectorAll('div, p, ul, ol, li, i, em, u')].reverse()) node.replaceWith(...node.childNodes, ' ');
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) node.nodeValue = node.nodeValue.replace(/\s+/g, ' ').toUpperCase();
+  const text = idpText(box.textContent);
+  const formatted = Boolean(box.querySelector('b, strong, span[style]'));
+  return { text, html: formatted ? box.innerHTML.trim() : '' };
+}
+
+// The Unit box's text as a Unit of Measure row: undefined (unchanged), null (cleared) or the row; false when unknown.
+async function itemDescUnit() {
+  const text = idpEl('unit-input').value.trim();
+  const cell = pbCell(itemDesc.row, 'unit');
+  if (!cell || sameText(text, cell.value)) return undefined;
+  if (!text) return null;
+  const units = await loadLookup('uom');
+  const exact = units.find(unit => sameText(unit.name, text) || sameText(String(unit.code ?? ''), text));
+  if (exact) return exact;
+  const close = suggestMatches(LOOKUPS.uom, units, text.toLowerCase());
+  return close.length === 1 ? close[0] : false;
+}
+
+// Save & Apply: the formatting (and unit) on this document's line; a changed text renames the item in the Item master.
+async function saveItemDescRich() {
+  if (!itemDesc.editing || itemDesc.saving) return;
+  const { row, form, itemId } = itemDesc;
+  const { text, html } = itemDescEdited();
+  if (!text) { showItemDescError('Enter the item name.'); idpEl('rich').focus(); return; }
+  if (text.length > 200) { showItemDescError('The item name can have at most 200 characters.'); idpEl('rich').focus(); return; }
+  const unit = await itemDescUnit();
+  if (unit === false) {
+    showItemDescError(`"${idpEl('unit-input').value.trim()}" is not in the Unit of Measure list. Type a unit such as PCS or KG.`);
+    idpEl('unit-input').focus();
+    return;
+  }
+  const renamed = idpText(text) !== idpText(itemDescName());
+  if (renamed) {
+    itemDesc.saving = true;
+    setItemDescEditing(true);
+    try {
+      itemDesc.item = await renameItemInMaster(itemId, text);
+    } catch (error) {
+      itemDesc.saving = false;
+      setItemDescEditing(true);
+      showItemDescError(Object.values(error.fields || {})[0] || error.message);
+      return;
+    }
+    itemDesc.saving = false;
+  }
+  if (!byId('item-desc').open || itemDesc.itemId !== itemId || !document.contains(row)) return;
+  pbCell(row, 'itemNameHtml').value = html;
+  if (unit !== undefined) {
+    fillLookup(pbCell(row, 'unit'), unit);
+    idpEl('unit').textContent = unit ? LOOKUPS.uom.display(unit) : '—';
+  }
+  form.page.record();
   setItemDescEditing(false);
+  showItemDescName();
   idpEl('primary').focus();
-  showToast(sameName ? 'Item name formatting saved' : 'Item renamed', `${saved.code} · ${saved.name} (Item master)`);
+  const changes = [renamed && 'renamed in the Item master', html ? 'formatting kept on this line' : '', unit !== undefined && 'unit changed'].filter(Boolean);
+  showToast('Line item updated', `${itemDescName()}${changes.length ? ` · ${changes.join(', ')}` : ''}`);
+}
+
+// A line's item name for the View popup: bold, with the line's formatting when it has some.
+function lineItemNameCell(line) {
+  const name = el('strong', '', line.itemNameHtml ? '' : line.itemName || '—');
+  if (line.itemNameHtml) name.append(remarksFragment(line.itemNameHtml));
+  return name;
 }
 
 function showItemDescError(message) {
@@ -7219,139 +7470,175 @@ function showItemDescError(message) {
   idpEl('error').hidden = false;
 }
 
-function itemDescAction(action) {
+// The toolbar: Bold and the colours work on the highlighted text (with nothing highlighted, on the whole name);
+// Bold All bolds the whole name; Plain removes all formatting.
+function itemDescTool(tool, colour) {
+  const editor = idpEl('rich');
+  const selection = getSelection();
+  // The highlighted text: the live selection in the editor (a click), else the one kept when a tool took the focus (keys).
+  const live = selection.rangeCount && editor.contains(selection.anchorNode) ? selection.getRangeAt(0).cloneRange() : null;
+  const kept = live || (itemDesc.range && editor.contains(itemDesc.range.commonAncestorContainer) ? itemDesc.range : null);
+  editor.focus();
+  if (kept) {
+    selection.removeAllRanges();
+    selection.addRange(kept);
+  }
+  const whole = tool === 'bold-all' || tool === 'plain' || selection.isCollapsed || !editor.contains(selection.anchorNode);
+  if (whole) {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  if (tool === 'plain') {
+    editor.textContent = editor.textContent;
+    placeCaret(editor, false);
+  } else {
+    document.execCommand('styleWithCSS', false, tool === 'colour');   // bold as <b>, colours as <span style="color">
+    if (tool === 'colour') document.execCommand('foreColor', false, colour);
+    else if (tool === 'bold-all') { if (!document.queryCommandState('bold')) document.execCommand('bold'); }
+    else document.execCommand('bold');
+  }
+  itemDesc.range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  updateItemDescCount();
+}
+
+function itemDescAction(action, button) {
   if (itemDesc.saving) return;
   if (action === 'close') closeItemDescription();
   else if (action === 'copy') copyItemDescName();
-  else if (action === 'cancel') cancelItemDescEdit();
-  else if (action === 'primary') { if (itemDesc.editing) saveItemDescName(); else closeItemDescription(); }
-  else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else setItemDescEditing(true); }
+  else if (action === 'primary') { if (!itemDesc.editing) closeItemDescription(); else saveItemDescRich(); }
+  else if (action === 'cancel-edit') cancelItemDescEdit();
+  else if (action === 'edit-name') { if (itemDesc.editing) cancelItemDescEdit(); else startItemDescEdit(); }
+  else if (action === 'tool') itemDescTool(button.dataset.idpTool, button.dataset.colour);
+}
+
+// The popup's places for the arrow keys, as rows top to bottom (only the ones showing).
+function itemDescRows() {
+  const dialog = byId('item-desc');
+  const shown = node => node && !node.hidden && node.getClientRects().length > 0;
+  const rows = [
+    [dialog.querySelector('.lk-close')],
+    [idpEl('edit')],
+    [...dialog.querySelectorAll('.idp-tools .idp-tool')],
+    [idpEl('rich')],
+    [idpEl('unit-input')],
+    [...dialog.querySelectorAll('.idp-foot button')],
+  ];
+  return rows.map(row => row.filter(shown)).filter(row => row.length);
+}
+
+// Whether the caret in a text box / the editor is at its start or end (so ↑ / ↓ may leave it).
+function caretAtEdge(box, end) {
+  if (box instanceof HTMLInputElement) {
+    const at = end ? box.value.length : 0;
+    return box.selectionStart === at && box.selectionEnd === at;
+  }
+  const selection = getSelection();
+  if (!selection.rangeCount || !selection.isCollapsed) return false;
+  const range = selection.getRangeAt(0);
+  const probe = document.createRange();
+  probe.selectNodeContents(box);
+  if (end) probe.setStart(range.endContainer, range.endOffset); else probe.setEnd(range.startContainer, range.startOffset);
+  return probe.toString().trim() === '';
+}
+
+// Arrow keys between the popup's buttons and boxes. Returns true when the key moved the focus.
+function itemDescMove(event) {
+  const { key, target } = event;
+  const rows = itemDescRows();
+  const r = rows.findIndex(row => row.includes(target));
+  if (r === -1) {                                   // nothing of ours focused: start on the main button
+    if (!key.startsWith('Arrow')) return false;
+    idpEl('primary').focus();
+    return true;
+  }
+  const row = rows[r];
+  const c = row.indexOf(target);
+  const isBox = target === idpEl('rich') || target instanceof HTMLInputElement;
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    if (isBox) return false;                        // the caret moves
+    const next = row[c + (key === 'ArrowRight' ? 1 : -1)];
+    if (next) next.focus();
+    return true;
+  }
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return false;
+  const down = key === 'ArrowDown';
+  if (isBox && !caretAtEdge(target, down)) return false;   // still inside the text: the caret moves
+  const to = rows[r + (down ? 1 : -1)];
+  if (!to) return true;
+  // The nearest place on the next row: the main button going down to the buttons, else the same column.
+  const pick = down && to.includes(idpEl('primary')) ? idpEl('primary') : to[Math.min(c, to.length - 1)];
+  pick.focus();
+  if (pick === idpEl('rich')) placeCaret(pick, down);
+  else if (pick instanceof HTMLInputElement) pick.setSelectionRange(down ? 0 : pick.value.length, down ? 0 : pick.value.length);
+  return true;
 }
 
 // Keys while the popup is open; it takes every key, so nothing reaches the form behind it.
 function handleItemDescKeys(event) {
   const { key, target } = event;
   const ctrl = event.ctrlKey || event.metaKey;
-  const inEditor = itemDesc.editing && (target === idpEl('input') || idpEl('input').contains(target));
-  const typing = inEditor || target === idpEl('unit-input');
+  const typing = itemDesc.editing && (target === idpEl('rich') || target === idpEl('unit-input'));
   if (key === 'Escape') {
     event.preventDefault();
     if (event.repeat) return;
     if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription();
     return;
   }
-  if (itemDesc.editing && key === 'Enter' && ctrl && !event.altKey) {          // Ctrl+Enter: Save & Apply
+  // Ctrl+Enter saves while editing (Enter too, but on a button Enter presses that button).
+  if (key === 'Enter' && ctrl && itemDesc.editing) {
     event.preventDefault();
-    if (!event.repeat) saveItemDescName();
-    return;
-  }
-  if (inEditor && ctrl && !event.altKey && key.toLowerCase() === 'b') {        // Ctrl+B: bold
-    event.preventDefault();
-    if (!event.repeat) formatItemDescName('bold');
+    if (!event.repeat) itemDescAction('primary');
     return;
   }
   if (key === 'Enter' && !event.altKey && !event.shiftKey && !ctrl) {
     if (target.tagName === 'BUTTON' && target !== idpEl('primary')) return;   // the focused button presses itself
-    event.preventDefault();                                                    // the name stays one line
+    event.preventDefault();
     if (!event.repeat) itemDescAction('primary');
     return;
   }
-  if (inEditor && key === 'Enter') { event.preventDefault(); return; }
+  if (key === 'Enter') { event.preventDefault(); return; }   // no new lines in the name
+  if (ctrl && key.toLowerCase() === 'b' && itemDesc.editing) {
+    event.preventDefault();
+    if (!event.repeat) itemDescTool('bold');
+    return;
+  }
+  if (ctrl && ['i', 'u'].includes(key.toLowerCase()) && target === idpEl('rich')) { event.preventDefault(); return; }   // bold and colours only
   if (ctrl && key.toLowerCase() === 'c' && !typing) {
-    if (getSelection().toString()) return;                                     // a selected part: the browser copies it
     event.preventDefault();
     if (!event.repeat) copyItemDescName();
     return;
   }
-  if (ctrl && ['s', 'd'].includes(key.toLowerCase())) { event.preventDefault(); return; }   // the form's shortcuts wait
-  if (ctrl && key.toLowerCase() === 'z' && !typing) { event.preventDefault(); return; }
-  // Tab / Shift+Tab go round the popup's controls (it never lets focus out to the page or the browser).
-  if (key === 'Tab' && !ctrl && !event.altKey) {
-    event.preventDefault();
-    focusItemDescStep(target, event.shiftKey ? -1 : 1);
-    return;
-  }
-  if (ctrl || event.altKey || event.shiftKey || !key.startsWith('Arrow')) return;
-  const dialog = byId('item-desc');
-  const onButton = target.tagName === 'BUTTON' && dialog.contains(target);
-  const inFoot = Boolean(target.closest?.('.idp-foot'));
-  const inTools = Boolean(target.closest?.('.idp-tools'));
-  // ← / → between buttons (round the popup).
-  if (onButton && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-    event.preventDefault();
-    focusItemDescStep(target, key === 'ArrowRight' ? 1 : -1);
-    return;
-  }
-  // ↑ / ↓ between the rows: toolbar ↔ name ↔ unit ↔ buttons at the bottom (view: Edit ↔ buttons).
-  const up = key === 'ArrowUp';
-  if (!up && key !== 'ArrowDown') return;
-  const footFirst = () => idpFocusables().find(node => node.closest('.idp-foot'));
-  let next = null;
-  if (!inEditor && !idpFocusables().includes(target)) next = idpEl('primary');   // nothing focused in the popup: back to its main button
-  else if (inFoot) next = up ? (itemDesc.editing ? idpEl('unit-input') : dialog.querySelector('.idp-label-row [data-idp="edit-name"]')) : idpFocusables()[0];
-  else if (inTools) next = up ? footFirst() : idpEl('input');
-  else if (target === idpEl('unit-input')) next = up ? idpEl('input') : footFirst();
-  else if (onButton) next = up ? footFirst() : footFirst();                     // view: Edit beside the name
-  else if (inEditor && itemDescCaretAtEdge(up)) next = up ? dialog.querySelector('.idp-tools button') : idpEl('unit-input');
-  if (!next) return;
-  event.preventDefault();
-  focusItemDescNode(next);
-}
-
-// The popup's controls a key can reach, in order (only those shown in this mode).
-function idpFocusables() {
-  return [...byId('item-desc').querySelectorAll('button, input:not([type="hidden"]), [contenteditable="true"]')]
-    .filter(node => node.tabIndex !== -1 && !node.disabled && node.getClientRects().length > 0);
-}
-function focusItemDescStep(from, step) {
-  const nodes = idpFocusables();
-  if (!nodes.length) return;
-  const index = nodes.indexOf(from);
-  const next = index === -1 ? nodes[step > 0 ? 0 : nodes.length - 1] : nodes[(index + step + nodes.length) % nodes.length];
-  focusItemDescNode(next);
-}
-// Focus a control; the name editor gets the caret at its end, the unit has its text selected.
-function focusItemDescNode(node) {
-  node.focus();
-  if (node === idpEl('input')) {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    range.collapse(false);
-    getSelection().removeAllRanges();
-    getSelection().addRange(range);
-  } else if (node === idpEl('unit-input')) {
-    node.select();
-  }
-}
-// The caret is at the very start (↑) or end (↓) of the name: the arrow leaves the editor.
-function itemDescCaretAtEdge(atStart) {
-  const selection = getSelection();
-  if (!selection.rangeCount || !selection.isCollapsed) return false;
-  const caret = selection.getRangeAt(0);
-  const rest = document.createRange();
-  rest.selectNodeContents(idpEl('input'));
-  if (atStart) rest.setEnd(caret.startContainer, caret.startOffset); else rest.setStart(caret.endContainer, caret.endOffset);
-  return rest.toString().trim() === '';
+  if (ctrl && ['s', 'd', 'z'].includes(key.toLowerCase()) && !typing) { event.preventDefault(); return; }   // the form's shortcuts wait
+  if (key.startsWith('Arrow') && !ctrl && !event.altKey && !event.shiftKey && itemDescMove(event)) event.preventDefault();
 }
 
 function initItemDescription() {
   const dialog = byId('item-desc');
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (itemDesc.editing) cancelItemDescEdit(); else closeItemDescription(); });
-  // The formatting buttons keep the highlighted text highlighted (no focus change on press).
-  dialog.addEventListener('mousedown', event => { if (event.target.closest('[data-idp-format]')) event.preventDefault(); });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeItemDescription(); return; }   // backdrop
-    const format = event.target.closest('[data-idp-format]');
-    if (format) { formatItemDescName(format.dataset.idpFormat, format.dataset.colour); return; }
+    const tool = event.target.closest('[data-idp-tool]');
+    if (tool) { itemDescAction('tool', tool); return; }
     const action = event.target.closest('[data-idp]')?.dataset.idp;
     if (action) itemDescAction(action);
   });
-  idpEl('input').addEventListener('input', countItemDescChars);
-  // Pasted text comes in plain (no outside styles or links).
-  idpEl('input').addEventListener('paste', event => {
-    event.preventDefault();
-    document.execCommand('insertText', false, (event.clipboardData?.getData('text/plain') || '').replace(/\s+/g, ' '));
+  // The toolbar keeps the highlighted text: a click on a tool does not take the focus from the editor.
+  dialog.querySelector('.idp-tools').addEventListener('mousedown', event => { if (event.target.closest('[data-idp-tool]')) event.preventDefault(); });
+  const editor = idpEl('rich');
+  document.addEventListener('selectionchange', () => {
+    const selection = getSelection();
+    if (selection.rangeCount && editor.contains(selection.anchorNode)) itemDesc.range = selection.getRangeAt(0).cloneRange();
   });
+  editor.addEventListener('input', () => { idpEl('error').hidden = true; updateItemDescCount(); });
+  // Pasted text comes in plain and on one line.
+  editor.addEventListener('paste', event => {
+    event.preventDefault();
+    const text = (event.clipboardData?.getData('text/plain') || '').replace(/\s+/g, ' ');
+    document.execCommand('insertText', false, text);
+  });
+  idpEl('unit-input').addEventListener('input', () => { idpEl('error').hidden = true; });
 }
 
 // A document's lines (from a purchase request, quotation request or purchase order) into the item table.
@@ -7463,6 +7750,7 @@ function createPurchaseForm(spec) {
       const line = {
         itemId: value('itemId') || null, itemCode: value('itemCode'), itemName: value('itemName'),
         brandId: value('brandId') || null, brandName: value('brandName'), uomId: value('uomId') || null, unit: value('unit'),
+        itemNameHtml: value('itemNameHtml'),
       };
       const fail = (field, message) => errors.push({ node: pbCell(row, field), message: `Row ${index + 1}: ${message}` });
       if (spec.itemsFromMaster && !line.itemId) fail('itemName', 'pick an item from the Item master, or create one (Alt+N in the popup).');
@@ -7647,6 +7935,7 @@ function initPurchaseForm(form) {
     // Item popups: a pick fills the whole row; clearing either cell (Backspace) clears the item.
     if (isLookupField(target) && (field === 'itemName' || field === 'itemCode')) {
       const id = lookupIdInput(target).value;
+      if (pbCell(row, 'itemNameHtml') && id !== pbCell(row, 'itemId').value) pbCell(row, 'itemNameHtml').value = '';
       if (id) {
         // Fill the other cell at once from the popup's list (the full item loads after), so Enter can pass it by.
         const other = field === 'itemName' ? pbCell(row, 'itemCode') : pbCell(row, 'itemName');
@@ -7878,7 +8167,7 @@ function initSealButtons() {
 
 const purchaseLineRow = line => ({
   itemId: line.itemId ?? '', itemCode: line.itemCode, itemName: line.itemName, brandId: line.brandId ?? '', brandName: line.brandName,
-  uomId: line.uomId ?? '', unit: line.unit,
+  uomId: line.uomId ?? '', unit: line.unit, itemNameHtml: line.itemNameHtml || '',
 });
 
 // A saved line as a row's cell values (edit mode), formatted as the form shows them.
@@ -8011,23 +8300,37 @@ async function poShowSupplier({ fresh = false } = {}) {
   }));
   if (fresh) {
     if (supplier.currency) poSetCurrency(supplier.currency);
-    const dial = poSupplierDial(supplier);
-    byId('po-contact-number-code').value = dial;            // the contact's calling code follows the supplier's country
     if (contacts.length === 1) {
       byId('po-contact').value = contacts[0].name;
-      setPhoneField(byId('po-contact-number'), contacts[0].number, dial);
+      byId('po-contact-number').value = poSupplierPhone(contacts[0].number, supplier);
     }
   }
   return supplier;
 }
 
-// The supplier's calling code: its country's, else the code already shown.
-const poSupplierDial = supplier => countryNamed(supplier?.country)?.dial || byId('po-contact-number-code').value || '+968';
+// A supplier contact's number as one text ("+968 9123 4567"): a number without a + code takes the supplier's country code.
+function poSupplierPhone(number, supplier) {
+  const text = String(number ?? '').trim();
+  if (!text || text.startsWith('+')) return text;
+  return `${countryNamed(supplier?.country)?.dial || '+968'} ${text}`;
+}
 
-// VAT follows the currency: none on an order in OMR (Omani Rial), VAT Enabled in any other currency.
+// Credit Period: shown (and required) only while Payment Mode is Credit, in the place after Payment Mode.
+const poIsCredit = () => byId('po-payment').value === 'Credit';
+async function poShowCredit({ fill = false } = {}) {
+  byId('po-credit-field').hidden = !poIsCredit();
+  if (!fill || !poIsCredit() || byId('po-credit-period').value.trim()) return;
+  // Just switched to Credit: the supplier's credit days, else 30 Days.
+  const supplierId = byId('po-supplier-id').value;
+  const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
+  const days = Number(supplier?.debitDays) || 30;
+  byId('po-credit-period').value = `${days} Days`;
+}
+
+// VAT follows the currency: VAT Enabled (5%) on an order in OMR (Omani Rial, Oman), none in any other currency.
 // The VAT button can still change it for one order.
 function poVatFromCurrency(form) {
-  form.setVat(poCurrency() !== 'OMR');
+  form.setVat(poCurrency() === 'OMR');
 }
 
 // The order's currency code, and setting it (a code not in the list is shown as it is).
@@ -8043,26 +8346,29 @@ const poForm = createPurchaseForm({
   firstField: () => byId('po-date'),
   fieldNodes: { poDate: 'po-date', quotationNumber: 'po-quotation-no',
     deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
-    salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
+    creditPeriod: 'po-credit-period', salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
     supplierId: 'po-supplier', contactName: 'po-contact', contactNumber: 'po-contact-number', currency: 'po-currency',
     discountAmount: 'po-discount', shipping: 'po-shipping' },
   header() {
     return {
       poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
-      salesman: byId('po-salesman').value.trim(), salesmanContact: readPhoneField(byId('po-salesman-contact')),
+      creditPeriod: poIsCredit() ? byId('po-credit-period').value.trim() : '',
+      salesman: byId('po-salesman').value.trim(), salesmanContact: byId('po-salesman-contact').value.trim(),
       certifications: byId('po-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
       supplierId: byId('po-supplier-id').value || null, contactName: byId('po-contact').value.trim(),
-      contactNumber: readPhoneField(byId('po-contact-number')), currency: poCurrency(),
+      contactNumber: byId('po-contact-number').value.trim(), currency: poCurrency(),
     };
   },
   check(form, errors) {
+    if (poIsCredit() && !byId('po-credit-period').value.trim()) errors.push({ node: byId('po-credit-period'), message: 'Enter the credit period (e.g. 30 Days).' });
+    if (!byId('po-salesman').value.trim()) errors.push({ node: byId('po-salesman'), message: 'Enter the salesman name.' });
     if (!byId('po-supplier-id').value) errors.push({ node: byId('po-supplier'), message: 'Select the supplier.' });
     if (byId('po-delivery-date').value && byId('po-delivery-date').value < byId('po-date').value) {
       errors.push({ node: byId('po-delivery-date'), message: 'The delivery date cannot be before the PO date.' });
     }
   },
-  afterRestore() { poShowCertifications(); poShowSupplier(); },
+  afterRestore() { poShowCertifications(); poShowSupplier(); poShowCredit(); },
   listRoute: 'purchase-book/purchase-order',
   fill(form, po) {
     byId('po-date').value = po.poDate;
@@ -8071,22 +8377,25 @@ const poForm = createPurchaseForm({
     byId('po-location').value = po.deliveryLocation;
     byId('po-terms').value = po.deliveryTerms;
     setSelectValue(byId('po-payment'), po.paymentMode || 'As usual');
+    byId('po-credit-period').value = po.creditPeriod || '';
+    poShowCredit();
     byId('po-salesman').value = po.salesman || '';
-    setPhoneField(byId('po-salesman-contact'), po.salesmanContact, '+968');
+    byId('po-salesman-contact').value = po.salesmanContact || '';
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
     fillLookup(byId('po-supplier'), po.supplierId ? { id: po.supplierId, name: po.supplierName } : null);   // the Select Supplier popup field
     byId('po-contact').value = po.contactName;
-    setPhoneField(byId('po-contact-number'), po.contactNumber, '+968');
+    byId('po-contact-number').value = po.contactNumber || '';
     poSetCurrency(po.currency);
   },
   afterFill: () => poShowSupplier(),
   async onReset(form) {
     byId('po-date').value = todayInputValue();
     poSetCurrency('OMR');                        // hidden ids were cleared by the reset
-    poVatFromCurrency(form);                     // a new order is in OMR: VAT Disabled
+    poVatFromCurrency(form);                     // a new order is in OMR: VAT Enabled
     byId('po-certifications').value = 'N/A';
     poShowCertifications();
+    poShowCredit();
     poShowSupplier();
   },
   init(form) {
@@ -8103,12 +8412,17 @@ const poForm = createPurchaseForm({
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
       const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
-      if (contact?.number) { setPhoneField(byId('po-contact-number'), contact.number, poSupplierDial(supplier)); form.page.absorb(); }
+      if (contact?.number) { byId('po-contact-number').value = poSupplierPhone(contact.number, supplier); form.page.absorb(); }
     });
     // A pick in the Select Currency popup: the form records it first (its listener is older), then VAT follows in the same step.
     byId('po-form').addEventListener('input', event => {
       if (event.target.id !== 'po-currency') return;
       poVatFromCurrency(form);
+      form.page.absorb();
+    });
+    // Payment Mode: Credit shows Credit Period (filled with the supplier's days); any other mode hides it.
+    byId('po-payment').addEventListener('change', async () => {
+      await poShowCredit({ fill: true });
       form.page.absorb();
     });
     byId('po-form').addEventListener('change', event => {
@@ -8199,7 +8513,7 @@ const pbAmount = value => (value === null || value === undefined || value === ''
 function purchaseItemsSection(kind) {
   return (record, note) => {
     if (!record) return { general: [], tabs: [{ label: 'Items', sections: [viewCard({ title: 'Items', wide: true }, viewNote(note))] }] };
-    const item = line => [line.itemCode, el('strong', '', line.itemName || '—'), line.brandName];
+    const item = line => [line.itemCode, lineItemNameCell(line), line.brandName];
     const mono = value => viewMono(value);
     const table = kind === 'grn'
       ? viewTable(['Code', 'Item', 'Brand', 'Received', 'Accepted', 'Rejected', 'Unit', 'Expiry', 'Rack', 'Unit Cost', 'VAT %', 'Disc %', 'Total'],
@@ -8207,7 +8521,7 @@ function purchaseItemsSection(kind) {
           pbDate(l.expiryDate), l.rackCode, mono(pbAmount(l.unitCost)), mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.lineTotal))]), 'No items.')
       : kind === 'po'
         ? viewTable(['Code', 'Item', 'Qty', 'Unit', 'Price', 'VAT %', 'Disc %', 'Disc. Amt', 'Line Total'],
-          record.items.map(l => [l.itemCode, el('strong', '', l.itemName || '—'), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
+          record.items.map(l => [l.itemCode, lineItemNameCell(l), mono(pbQty(pbNum(l.quantity))), l.unit, l.foc ? 'FOC' : mono(pbAmount(l.price)),
             mono(pbQty(pbNum(l.vatRate))), mono(pbQty(pbNum(l.discountPct))), mono(pbAmount(l.discountAmount)), mono(pbAmount(l.lineTotal))]), 'No items.')
         : viewTable(['Code', 'Item', 'Brand', 'Quantity', 'Unit'],
           record.items.map(l => [...item(l), mono(pbQty(pbNum(l.quantity))), l.unit]), 'No items.');
@@ -8223,7 +8537,8 @@ function purchaseItemsSection(kind) {
     }
     general.push(viewCard({ title: 'Remarks & Print' }, viewFields([
       { label: 'Remarks', value: isRemarksHtml(record.remarks) ? remarksPlainText(record.remarks) : record.remarks, column: { type: 'wrap' } },
-      { label: 'Signatory Slots', value: record.includeSignatory ? 'Included' : 'Not included' },
+      { label: 'Signatory Slots', value: !record.includeSignatory ? 'Not included'
+        : (record.signatories || []).length ? record.signatories.map(entry => [entry.name, entry.title].filter(Boolean).join(', ')).join(' · ') : 'Included' },
       { label: 'Seal', value: record.attachSeal ? 'Attached' : 'Not attached' },
     ])));
     return { general, tabs: [{ label: 'Items', count: record.items.length,
@@ -8383,6 +8698,7 @@ const poList = purchaseList({
     detail({ key: 'deliveryLocation', label: 'Delivery Location', group: 'Delivery & Payment' }),
     detail({ key: 'deliveryTerms', label: 'Delivery Terms', group: 'Delivery & Payment' }),
     detail({ key: 'paymentMode', label: 'Payment Mode', group: 'Delivery & Payment' }),
+    detail({ key: 'creditPeriod', label: 'Credit Period', group: 'Delivery & Payment' }),
     detail({ key: 'contactName', label: 'Contact Person', group: 'Supplier' }),
     detail({ key: 'contactNumber', label: 'Contact Number', group: 'Supplier' }),
     detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
@@ -8602,6 +8918,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
       party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
       meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
         ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
+        ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
         ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact],
         ['Certification Required', (doc.certifications || []).join(', ')]],
     }),
@@ -8679,7 +8996,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false } = {}) {
   doc.items.forEach((line, i) => {
     const tr = el('tr');
     tr.append(...lineCells(line, i).map(value => cell('td', '', value)));
-    if (line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // the item name's bold / colours
+    if (line.itemNameHtml) tr.children[2].replaceChildren(remarksFragment(line.itemNameHtml));   // the line's bold / colour
     tbody.append(tr);
   });
   table.append(thead, tbody);
@@ -8914,6 +9231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMasterConfirm();
   if (typeof initLiveUpdates === 'function') initLiveUpdates();   // sync.js
   initQuickItem();
+  initQuickSupplier();
   initItemDescription();
   for (const list of MASTER_LISTS) list.init();
   loadDashboard();

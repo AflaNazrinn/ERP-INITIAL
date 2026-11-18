@@ -116,7 +116,7 @@ try {
         $po = purchase_order_save([
             'poDate' => $day($ago - 2), 'quotationRequestId' => $rfq['id'], 'quotationNumber' => 'QT-2026-' . str_pad((string) (101 + $i), 3, '0', STR_PAD_LEFT),
             'deliveryDate' => $day($ago - 2 - $within), 'deliveryLocation' => $location, 'deliveryTerms' => ['2–3 weeks from PO date, DAP Muscat', '1 week, ex-works', 'Immediate, delivered to site'][$i],
-            'paymentMode' => ['As usual', 'Credit', 'Bank Transfer'][$i], 'salesman' => 'ADMIN', 'salesmanContact' => '+968 9123 456' . $i,
+            'paymentMode' => ['As usual', 'Credit', 'Bank Transfer'][$i], 'creditPeriod' => $i === 1 ? '30 Days' : '', 'salesman' => 'ADMIN', 'salesmanContact' => '+968 9123 456' . $i,
             'certifications' => [['N/A'], ['MTC Certificate', 'COC Certificate'], ['Pressure Test', 'TPI Certificate']][$i],
             'supplierId' => $supplier($i), 'contactName' => '', 'contactNumber' => '', 'vatMode' => 'exclude',
             'discountAmount' => $i === 2 ? '2.000' : '0', 'shipping' => ['0', '5.000', '12.500'][$i],

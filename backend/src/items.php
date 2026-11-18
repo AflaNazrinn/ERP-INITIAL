@@ -13,88 +13,6 @@ require_once __DIR__ . '/document_storage.php';
 
 const ITEM_STATUSES = ['ACTIVE / RELEASED', 'QUALITY HOLD', 'OBSOLETE', 'DRAFT'];
 
-/*
- * The item name's formatting (Full Item Description popup): the name as HTML with only <b> and
- * <span style="color: #rrggbb"> kept; every other tag is unwrapped to its text and scripts / styles are dropped.
- * The text is put in capitals like the name itself. Returns [html, plain text]; html is null when nothing is
- * formatted (or the DOM extension is missing), so the plain name is used.
- */
-function item_name_html(string $html): array
-{
-    $html = trim($html);
-    if ($html === '' || !class_exists(DOMDocument::class)) {
-        return [null, trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'))];
-    }
-    $doc = new DOMDocument();
-    $previous = libxml_use_internal_errors(true);
-    $doc->loadHTML('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' . $html . '</body></html>', LIBXML_NONET);
-    libxml_clear_errors();
-    libxml_use_internal_errors($previous);
-    $body = $doc->getElementsByTagName('body')->item(0);
-    if (!$body) {
-        return [null, ''];
-    }
-    $formatted = false;
-    $clean = static function (DOMNode $node) use (&$clean, &$formatted): void {
-        foreach (iterator_to_array($node->childNodes) as $child) {
-            if ($child instanceof DOMText) {
-                $child->nodeValue = mb_strtoupper(str_replace("\u{a0}", ' ', (string) $child->nodeValue));
-                continue;
-            }
-            if (!$child instanceof DOMElement) {
-                $node->removeChild($child);
-                continue;
-            }
-            $tag = strtolower($child->tagName);
-            if (in_array($tag, ['script', 'style', 'iframe', 'object', 'embed', 'template', 'svg', 'math', 'head', 'title'], true)) {
-                $node->removeChild($child);
-                continue;
-            }
-            $clean($child);
-            $colour = '';
-            if (preg_match('~(?:^|;)\s*color\s*:\s*([^;]+)~i', $child->getAttribute('style'), $m)) {
-                $colour = strtolower(trim($m[1]));
-            } elseif ($tag === 'font') {
-                $colour = strtolower(trim($child->getAttribute('color')));
-            }
-            if (preg_match('~^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})~', $colour, $m)) {
-                $colour = sprintf('#%02x%02x%02x', min(255, (int) $m[1]), min(255, (int) $m[2]), min(255, (int) $m[3]));
-            }
-            $colour = preg_match('~^#([0-9a-f]{3}|[0-9a-f]{6})$~', $colour) ? $colour : '';
-            $bold = in_array($tag, ['b', 'strong'], true) || preg_match('~font-weight\s*:\s*(bold|[6-9]00)~i', $child->getAttribute('style'));
-            if (!$bold && $colour === '') {
-                while ($child->firstChild) {
-                    $node->insertBefore($child->firstChild, $child);
-                }
-                $node->removeChild($child);
-                continue;
-            }
-            $formatted = true;
-            $keep = $node->ownerDocument->createElement($bold ? 'b' : 'span');
-            if ($colour !== '') {
-                $keep->setAttribute('style', "color: $colour");
-            }
-            while ($child->firstChild) {
-                $keep->appendChild($child->firstChild);
-            }
-            $node->replaceChild($keep, $child);
-        }
-    };
-    $clean($body);
-    $out = '';
-    foreach (iterator_to_array($body->childNodes) as $child) {
-        $out .= $doc->saveHTML($child);
-    }
-    $text = trim((string) preg_replace('/\s+/u', ' ', $body->textContent));
-    return [$formatted ? trim($out) : null, $text];
-}
-
-/* The plain text of a formatted name, spaces collapsed: a formatted name is used only while it still matches. */
-function item_name_text(?string $html): string
-{
-    return trim((string) preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags((string) $html), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
-}
-
 // line_stock_points: the stock points picked on the item's sourcing lines (item_brands), for the Item list.
 const ITEM_SELECT = 'SELECT i.*, u.uom_name, w.warehouse_code, w.warehouse_name, r.location_code,
       (SELECT GROUP_CONCAT(DISTINCT lw.warehouse_name ORDER BY lw.warehouse_name SEPARATOR \', \')
@@ -111,9 +29,6 @@ function item_format(array $row): array
         'id'            => (int) $row['id'],
         'code'          => $row['item_code'],
         'name'          => $row['item_name'],
-        // The name with its bold / colours (Full Item Description), or null; dropped once the name was changed elsewhere.
-        'nameHtml'      => ($row['item_name_html'] ?? null) !== null && item_name_text($row['item_name_html']) === trim(preg_replace('/\s+/u', ' ', (string) $row['item_name']))
-            ? $row['item_name_html'] : null,
         'unit'          => $row['uom_name'] ?? '',
         'uomId'         => $id($row['uom_id']),
         'categoryId'    => $id($row['category_id']),
@@ -200,7 +115,7 @@ function item_input(array $item): array
         }
     }
     return [
-        'itemName' => $item['name'], 'itemNameHtml' => $item['nameHtml'], 'uomId' => $item['uomId'], 'categoryId' => $item['categoryId'], 'subCategoryId' => $item['subCategoryId'],
+        'itemName' => $item['name'], 'uomId' => $item['uomId'], 'categoryId' => $item['categoryId'], 'subCategoryId' => $item['subCategoryId'],
         'brandId' => $item['brandId'], 'comments' => $item['description'], 'warehouseId' => $item['warehouseId'], 'rackId' => $item['rackId'],
         'status' => $item['status'], 'imageLink' => $item['imagePath'], 'supplierUrl' => $item['webLink'], 'sourcing' => $sourcing,
     ];
@@ -220,14 +135,6 @@ function item_save(array $data, ?int $id = null): array
     }
     $in = new Input($data);
     $name = $in->name('itemName', 'Item designation', 200);
-    // The formatted name, when sent: its text is the name (an older formatting no longer matching is dropped).
-    $nameHtml = null;
-    if (is_string($data['itemNameHtml'] ?? null) && trim($data['itemNameHtml']) !== '') {
-        [$nameHtml, $htmlText] = item_name_html(mb_substr($data['itemNameHtml'], 0, 20000));
-        if ($nameHtml !== null && $htmlText !== trim((string) preg_replace('/\s+/u', ' ', $name))) {
-            $nameHtml = null;
-        }
-    }
     $uomId = $in->id('uomId', 'unit of measure', 'uoms');
     $categoryId = $in->id('categoryId', 'category', 'categories');
     $subCategoryId = $in->id('subCategoryId', 'subcategory', 'sub_categories');
@@ -286,7 +193,6 @@ function item_save(array $data, ?int $id = null): array
     $first = $sourcing[0] ?? null;
     $row = [
         'item_name'       => $name,
-        'item_name_html'  => $nameHtml,
         'uom_id'          => $uomId,
         'category_id'     => $categoryId,
         'category'        => mb_substr(name_of('categories', 'category_name', $categoryId), 0, 100),

@@ -203,6 +203,7 @@ function pb_read_lines(Input $in, string $kind): array
             'itemId' => $itemId, 'itemCode' => $r->text('itemCode', 'Item code', 30), 'itemName' => $name,
             'brandId' => $r->id('brandId', 'brand', 'brands'), 'brandName' => $r->text('brandName', 'Brand', 150),
             'uomId' => $r->id('uomId', 'unit', 'uoms'), 'unit' => $r->text('unit', 'Unit', 80),
+            'itemNameHtml' => $r->text('itemNameHtml', 'Formatted item name', 4000),
         ];
         if ($kind === 'grn') {
             $line += [
@@ -251,6 +252,8 @@ function pb_read_lines(Input $in, string $kind): array
         if ($line['uomId'] !== null) {
             $line['unit'] = (string) query('SELECT uom_name FROM uoms WHERE id = ?', [$line['uomId']])->fetchColumn();
         }
+        // The line's formatting (Full Item Description), kept only while its text is the line's item name.
+        $line['itemNameHtml'] = pb_item_name_html($line['itemNameHtml'], $line['itemName']);
         try {
             $r->done();
         } catch (ValidationError $e) {
@@ -306,12 +309,36 @@ function pb_totals(array $lines, string $kind, string $vatMode, float $discount,
 }
 
 /* Replaces a document's lines inside the caller's transaction. */
+/*
+ * A document line's formatted item name (the Full Item Description's editing mode; every Purchase Book document): cleaned as the remarks,
+ * then only <b>, <strong> and coloured <span>s are kept (no lines or lists). Kept only when its text is the line's
+ * item name (spaces and case aside); otherwise, or without any formatting, null.
+ */
+function pb_item_name_html(string $html, string $name): ?string
+{
+    $html = trim($html);
+    if ($html === '' || !pb_is_html($html)) {
+        return null;
+    }
+    $clean = pb_clean_html($html);
+    $clean = (string) preg_replace('~<br\s*/?>~i', ' ', $clean);
+    $clean = (string) preg_replace('~</?(?!(?:b|strong|span)\b)[a-z][a-z0-9]*\b[^>]*>~i', '', $clean);
+    $clean = trim($clean);
+    $text = static fn (string $value) => mb_strtoupper(trim((string) preg_replace('/\s+/u', ' ', $value)));
+    $plain = html_entity_decode(strip_tags($clean), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($clean === '' || $text($plain) !== $text($name) || !preg_match('~<(b|strong|span)\b~i', $clean)) {
+        return null;
+    }
+    return $clean;
+}
+
 function pb_save_lines(string $table, string $owner, int $docId, string $kind, array $lines): void
 {
     query("DELETE FROM `$table` WHERE `$owner` = ?", [$docId]);
     foreach ($lines as $order => $l) {
         $columns = ['sort_order' => $order + 1, 'item_id' => $l['itemId'], 'item_code' => $l['itemCode'], 'item_name' => $l['itemName'],
-            'brand_id' => $l['brandId'], 'brand_name' => $l['brandName'], 'uom_id' => $l['uomId'], 'unit' => $l['unit']];
+            'brand_id' => $l['brandId'], 'brand_name' => $l['brandName'], 'uom_id' => $l['uomId'], 'unit' => $l['unit'],
+            'item_name_html' => $l['itemNameHtml'] ?? null];
         if ($kind === 'grn') {
             $columns += ['received_qty' => $l['receivedQty'], 'accepted_qty' => $l['acceptedQty'], 'rejected_qty' => $l['rejectedQty'],
                 'expiry_date' => $l['expiryDate'], 'rack_id' => $l['rackId'], 'unit_cost' => $l['unitCost'], 'vat_rate' => $l['vatRate'],
@@ -334,20 +361,11 @@ function pb_find_lines(string $table, string $owner, int $docId, string $kind): 
     $sql = $kind === 'grn'
         ? "SELECT l.*, rb.location_code AS rack_code FROM `$table` l LEFT JOIN rack_bins rb ON rb.id = l.rack_id WHERE l.`$owner` = ? ORDER BY l.sort_order, l.id"
         : "SELECT * FROM `$table` WHERE `$owner` = ? ORDER BY sort_order, id";
-    // The items' formatted names (bold / colours from the Full Item Description popup), used while a line's name matches.
-    $formatted = [];
-    try {
-        foreach (query("SELECT i.id, i.item_name, i.item_name_html FROM items i JOIN `$table` l ON l.item_id = i.id WHERE l.`$owner` = ? AND i.item_name_html IS NOT NULL", [$docId])->fetchAll() as $item) {
-            $formatted[(int) $item['id']] = $item;
-        }
-    } catch (PDOException) {
-        // item_name_html not migrated yet: plain names
-    }
-    return array_map(static function (array $l) use ($kind, $formatted): array {
-        $item = $l['item_id'] === null ? null : ($formatted[(int) $l['item_id']] ?? null);
-        $html = $item !== null && $item['item_name'] === $l['item_name'] ? $item['item_name_html'] : null;
+    return array_map(static function (array $l) use ($kind): array {
         $line = [
-            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'], 'itemNameHtml' => $html,
+            'itemId' => $l['item_id'] === null ? null : (int) $l['item_id'], 'itemCode' => $l['item_code'], 'itemName' => $l['item_name'],
+            // The line's formatting only while its text is still the line's name (a renamed item drops it).
+            'itemNameHtml' => pb_item_name_html((string) ($l['item_name_html'] ?? ''), (string) $l['item_name']) ?? '',
             'brandId' => $l['brand_id'] === null ? null : (int) $l['brand_id'], 'brandName' => $l['brand_name'],
             'uomId' => $l['uom_id'] === null ? null : (int) $l['uom_id'], 'unit' => $l['unit'],
         ];
@@ -590,6 +608,7 @@ function po_format(array $row): array
         'quotationRequestId' => $row['quotation_request_id'] === null ? null : (int) $row['quotation_request_id'], 'quotationRequestCode' => $rfq,
         'quotationNumber' => $row['quotation_number'], 'status' => $row['status'], 'deliveryDate' => $row['delivery_date'] ?? '',
         'deliveryLocation' => $row['delivery_location'], 'deliveryTerms' => $row['delivery_terms'], 'paymentMode' => $row['payment_mode'],
+        'creditPeriod' => $row['credit_period'] ?? '',
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
         'supplierName' => $supplier ? $supplier['supplier_name'] : '', 'contactName' => $row['contact_name'], 'email' => $row['email'],
         'contactNumber' => $row['contact_number'], 'salesman' => $row['salesman'], 'salesmanContact' => $row['salesman_contact'],
@@ -628,8 +647,8 @@ function purchase_order_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
         $data = array_replace(pb_as_input(purchase_order_find($id), ['poDate', 'purchaseRequestId', 'quotationRequestId', 'quotationNumber',
-            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'salesman', 'salesmanContact', 'certifications',
-            'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
+            'status', 'deliveryDate', 'deliveryLocation', 'deliveryTerms', 'paymentMode', 'creditPeriod', 'salesman', 'salesmanContact',
+            'certifications', 'supplierId', 'contactName', 'contactNumber', 'email', 'currency', 'vatMode', 'discountAmount', 'shipping']), $data);
     }
     $in = new Input($data);
     $supplierId = $in->id('supplierId', 'supplier', 'suppliers');
@@ -644,6 +663,7 @@ function purchase_order_save(array $data, ?int $id = null): array
         'delivery_location' => $in->text('deliveryLocation', 'Delivery location', 200),
         'delivery_terms' => $in->text('deliveryTerms', 'Delivery terms', 200),
         'payment_mode' => $in->text('paymentMode', 'Payment mode', 40),
+        'credit_period' => $in->text('creditPeriod', 'Credit period', 40),
         'salesman' => $in->text('salesman', 'Salesman / created by', 100),
         'salesman_contact' => $in->text('salesmanContact', 'Salesman contact', 40),
         'certifications' => po_certifications($in, $data['certifications'] ?? []),
@@ -659,6 +679,10 @@ function purchase_order_save(array $data, ?int $id = null): array
     ];
     if ($supplierId === null) {
         $in->fail('supplierId', 'Select the supplier.');
+    }
+    // Credit Period goes with the Credit payment mode only (the page requires it there); any other mode drops it.
+    if ($v['payment_mode'] !== 'Credit') {
+        $v['credit_period'] = '';
     }
     if ($v['payment_mode'] !== '' && !in_array($v['payment_mode'], PB_PAYMENT_MODES, true)) {
         $in->fail('paymentMode', 'Payment mode must be one of: ' . implode(', ', PB_PAYMENT_MODES) . '.');

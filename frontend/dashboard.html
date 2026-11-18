@@ -2038,16 +2038,13 @@
   <form id="po-form" class="fp-form" novalidate>
     <section class="fp-card">
       <h2 class="fp-section-title">1. Document Details</h2>
-      <div class="pb-grid pb-grid-4">
+      <div class="pb-grid pb-grid-5 pb-grid-po-doc">
         <div class="fp-field">
-          <label class="fp-label pb-label-row" for="po-code"><span>PO ID <span class="fp-req">*</span></span><span class="pb-auto">Auto</span></label>
-          <div class="fp-input-wrap">
-            <input id="po-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the order is saved">
-            <span class="fp-input-icon-right" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-          </div>
+          <label class="fp-label" for="po-code">PO ID</label>
+          <input id="po-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the order is saved">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-date">PO Date</label>
+          <label class="fp-label" for="po-date">PO Date <span class="fp-req" aria-hidden="true">*</span></label>
           <input id="po-date" class="fp-input" type="date" required>
         </div>
         <div class="fp-field">
@@ -2055,41 +2052,34 @@
           <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001 (optional)">
         </div>
         <div class="fp-field">
+          <label class="fp-label" for="po-salesman">Salesman / Created By <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="po-salesman" class="fp-input pb-input-strong" type="text" maxlength="100" autocomplete="off" data-upper value="ADMIN" placeholder="Enter salesman name" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
+          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
+        </div>
+        <div class="fp-field">
           <label class="fp-label" for="po-delivery-date">Delivery Date</label>
           <input id="po-delivery-date" class="fp-input" type="date">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-location">Delivery Location</label>
-          <input id="po-location" class="fp-input" type="text" maxlength="200" autocomplete="off" value="Muscat Main Warehouse" placeholder="Enter delivery location">
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="po-location" class="fp-input" type="text" maxlength="200" data-suggest="poLocation" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="Type to search, e.g. DDP"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery locations" hidden></ul></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-terms">Delivery Terms</label>
-          <input id="po-terms" class="fp-input" type="text" maxlength="200" autocomplete="off" placeholder="e.g. 2–3 weeks from PO date, DAF">
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="po-terms" class="fp-input" type="text" maxlength="200" data-suggest="poTerms" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="Type to search, e.g. 2-3"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms" hidden></ul></div>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-payment">Payment Mode</label>
+          <label class="fp-label" for="po-payment">Payment Mode <span class="fp-req" aria-hidden="true">*</span></label>
           <select id="po-payment" class="fp-input fp-select">
             <option selected>As usual</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Credit</option><option>Card</option>
           </select>
         </div>
-        <div class="fp-field">
-          <label class="fp-label" for="po-salesman">Salesman / Created By</label>
-          <input id="po-salesman" class="fp-input pb-input-strong" type="text" maxlength="100" autocomplete="off" data-upper value="ADMIN" placeholder="Salesman name">
-        </div>
-        <div class="fp-field">
-          <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
-          <div class="fp-phone"><select id="po-salesman-contact-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Salesman contact country code" title="To change it: Enter or Space opens the list"></select><input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
-        </div>
-      </div>
-      <div class="fp-field pb-cert">
-        <span class="fp-label" id="po-cert-label">Certification Required</span>
-        <input id="po-certifications" type="hidden" value="N/A">
-        <div class="pb-cert-box" role="group" aria-labelledby="po-cert-label">
-          <label class="pb-check"><input type="checkbox" data-cert="N/A" data-transient="true" checked><span>N/A</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="Pressure Test" data-transient="true"><span>Pressure Test</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="COC Certificate" data-transient="true"><span>COC Certificate</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="MTC Certificate" data-transient="true"><span>MTC Certificate</span></label>
-          <label class="pb-check"><input type="checkbox" data-cert="TPI Certificate" data-transient="true"><span>TPI Certificate</span></label>
+        <div class="fp-field" id="po-credit-field" hidden>
+          <label class="fp-label" for="po-credit-period">Credit Period <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="po-credit-period" class="fp-input" type="text" maxlength="40" data-suggest="poCredit" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="e.g. 30 Days"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Credit periods" hidden></ul></div>
         </div>
       </div>
     </section>
@@ -2098,35 +2088,46 @@
       <h2 class="fp-section-title">2. Supplier Details</h2>
       <div class="pb-grid pb-grid-4">
         <div class="fp-field">
-          <label class="fp-label" for="po-supplier">Supplier Name</label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-supplier" class="fp-input fp-lookup" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select supplier..."><input id="po-supplier-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <label class="fp-label" for="po-supplier">Supplier Name <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-supplier" class="fp-input fp-lookup" type="text" data-lookup="supplier" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select supplier..."><input id="po-supplier-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-contact">Contact Person Name</label>
-          <input id="po-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="po-contact-list" placeholder="e.g. Contact person name">
+          <input id="po-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="po-contact-list" placeholder="e.g. Contact Person Name">
           <datalist id="po-contact-list"></datalist>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-contact-number">Contact Person Number</label>
-          <div class="fp-phone"><select id="po-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Contact person number country code" title="Set from the supplier's country. To change it: Enter or Space opens the list"></select><input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
+          <input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="e.g. +968 91234567">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-currency">Currency</label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <label class="fp-label" for="po-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+      </div>
+      <div class="fp-field pb-cert">
+        <span class="fp-label" id="po-cert-label">Certification Required</span>
+        <input id="po-certifications" type="hidden" value="N/A">
+        <div class="pb-cert-box" role="group" aria-labelledby="po-cert-label">
+          <label class="pb-check"><input type="checkbox" data-cert="N/A" data-transient="true" data-enter-skip checked><span>N/A</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="Pressure Test" data-transient="true" data-enter-skip><span>Pressure test</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="COC Certificate" data-transient="true" data-enter-skip><span>COC certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="MTC Certificate" data-transient="true" data-enter-skip><span>MTC Certificate</span></label>
+          <label class="pb-check"><input type="checkbox" data-cert="TPI Certificate" data-transient="true" data-enter-skip><span>TPI Certificate</span></label>
         </div>
       </div>
     </section>
 
     <section class="fp-card pb-card-items">
       <div class="fp-section-head">
-        <h2 class="fp-section-title">3. Purchase Order Line Items</h2>
+        <h2 class="fp-section-title">3. Ordered Items</h2>
         <div class="pb-head-actions">
           <input id="po-vat-mode" type="hidden" value="exclude">
           <button type="button" class="pb-vat-switch" data-vat-switch aria-pressed="true" title="VAT Enabled: VAT % is added on top of the prices. Click for prices that already include VAT.">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
             <span data-vat-label>VAT Enabled</span>
           </button>
-          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Master Item</button>
           <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
         </div>
       </div>
@@ -2138,13 +2139,13 @@
       </div>
     </section>
 
-    <div class="pb-pair-summary">
+    <div class="pb-pair-summary pb-pair-po">
       <section class="fp-card">
-        <h2 class="fp-section-title">4. Remarks &amp; Notes</h2>
+        <h2 class="fp-section-title">4. Remarks &amp; PDF Print Configuration</h2>
         <div class="fp-field">
           <div class="pb-label-row">
-            <label class="fp-label" id="po-remarks-label" for="po-remarks-editor">Remarks</label>
-            <span class="pb-editor-hint"><span aria-hidden="true">◆</span> Select text to make it bold or change its colour</span>
+            <label class="fp-label" id="po-remarks-label" for="po-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
           </div>
           <input id="po-remarks" type="hidden">
           <div class="pb-editor">
@@ -2153,7 +2154,7 @@
               <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
               <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
               <span class="pb-tool-sep" aria-hidden="true"></span>
-              <span class="pb-tool-label">Colour</span>
+              <span class="pb-tool-label">Color:</span>
               <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
               <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
               <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
@@ -2174,14 +2175,14 @@
         <div class="pb-print" data-print="po"></div>
       </section>
       <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
-        <h2 class="fp-section-title">5. Financial Summary</h2>
-        <dl class="pb-sum pb-sum-box">
+        <h2 class="fp-section-title">5. Summary</h2>
+        <dl class="pb-sum pb-sum-po">
           <div><dt>Subtotal</dt><dd id="po-subtotal">0.000</dd></div>
           <div><dt id="po-vat-label">VAT</dt><dd id="po-vat">0.000</dd></div>
           <div><dt><label for="po-discount">Discount Amount</label></dt><dd><input id="po-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
           <div><dt><label for="po-shipping">Shipping Price</label></dt><dd><input id="po-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total (<span id="po-grand-currency">OMR</span>)</dt><dd id="po-grand">0.000</dd></div>
         </dl>
-        <div class="pb-grand-box"><span>Grand Total (<span id="po-grand-currency">OMR</span>)</span><strong id="po-grand">0.000</strong></div>
       </section>
     </div>
 
@@ -2372,7 +2373,7 @@
     <span id="lookup-letter" class="lk-letter" aria-hidden="true"></span>
     <div class="lk-heading">
       <h2 id="lookup-title" class="lk-title"></h2>
-      <p class="lk-sub">Choose an item from the catalog.</p>
+      <p id="lookup-sub" class="lk-sub" hidden></p>
     </div>
     <div class="lk-keys" aria-hidden="true">
       <span class="lk-key"><kbd>↑↓</kbd> Navigate</span>
@@ -2388,13 +2389,14 @@
       <h3 id="lookup-list-title" class="fp-section-title lk-list-title"></h3>
       <label class="lk-label" for="lookup-search">Search</label>
       <div class="lk-search-row">
-      <div class="lk-search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-        <input id="lookup-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-controls="lookup-rows" aria-expanded="true" aria-autocomplete="list">
-        <span id="lookup-count" class="lk-count" aria-live="polite"></span>
-      </div>
-      <!-- The item popups' Create Item, beside the search (the footer one serves the other popups). -->
-      <button type="button" class="fp-btn fp-btn-primary lk-create-inline" data-lookup-action="create" tabindex="-1" title="Create a new item in the Item master and pick it (Alt+N)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
+        <div class="lk-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="lookup-search" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-controls="lookup-rows" aria-expanded="true" aria-autocomplete="list">
+          <span id="lookup-count" class="lk-count" aria-live="polite"></span>
+        </div>
+        <button type="button" id="lookup-new" class="lk-new" data-lookup-action="new" hidden title="Create a new supplier and pick it (Alt+N)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span id="lookup-new-label">Create Supplier</span></button>
+        <!-- The item popups' Create Item, beside the search (the footer one serves the other popups). -->
+        <button type="button" class="fp-btn fp-btn-primary lk-create-inline" data-lookup-action="create" tabindex="-1" title="Create a new item in the Item master and pick it (Alt+N)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Item</button>
       </div>
       <div class="lk-table-wrap">
         <table class="lk-table">
@@ -2690,9 +2692,53 @@
   </div>
 </dialog>
 
+<!-- QUICK ADD SUPPLIER: + Create Supplier in the Purchase Order's Select Supplier popup. Saved to the
+     Supplier master (Party › Creditors) and picked into the order. -->
+<dialog id="quick-supplier" class="lookup sf qi qs" aria-labelledby="quick-supplier-title" aria-describedby="quick-supplier-sub">
+  <div class="sf-head">
+    <div class="sf-heading">
+      <h2 id="quick-supplier-title" class="sf-title">Quick Add Supplier</h2>
+      <p id="quick-supplier-sub" class="sf-sub">Create a new supplier master record instantly.</p>
+    </div>
+    <button type="button" class="lk-close" data-qs="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <form id="quick-supplier-form" class="qi-body qs-body" novalidate>
+    <div class="fp-field qi-wide">
+      <label class="fp-label" for="quick-supplier-name">Supplier Name <span class="fp-req">*</span></label>
+      <input id="quick-supplier-name" class="fp-input" type="text" maxlength="150" autocomplete="off" spellcheck="false" data-upper placeholder="E.G. GLOBAL SUPPLIES LLC">
+    </div>
+    <div class="fp-field qi-wide">
+      <label class="fp-label" for="quick-supplier-contact">Contact Person</label>
+      <input id="quick-supplier-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" placeholder="E.g. Ahmed Ali">
+    </div>
+    <div class="fp-field qi-wide">
+      <label class="fp-label" for="quick-supplier-phone">Mobile / Phone</label>
+      <input id="quick-supplier-phone" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" placeholder="E.g. +968 91234567">
+    </div>
+    <div class="fp-field qi-wide">
+      <label class="fp-label" for="quick-supplier-email">Email</label>
+      <input id="quick-supplier-email" class="fp-input" type="email" maxlength="150" autocomplete="off" placeholder="E.g. sales@globalsupplies.com">
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-supplier-country">Country</label>
+      <input id="quick-supplier-country" class="fp-input" type="text" maxlength="80" autocomplete="off" list="quick-supplier-countries" value="Oman">
+      <datalist id="quick-supplier-countries"></datalist>
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-supplier-currency">Currency</label>
+      <select id="quick-supplier-currency" class="fp-input fp-select pb-input-strong"></select>
+    </div>
+    <p id="quick-supplier-error" class="qi-error" role="alert" hidden></p>
+  </form>
+  <div class="sf-foot qi-foot">
+    <button type="button" class="ml-btn ml-btn-plain" data-qs="close">Cancel</button>
+    <button type="button" id="quick-supplier-save" class="ml-btn ml-btn-green" data-qs="save">Save Supplier</button>
+  </div>
+</dialog>
+
 <!-- FULL ITEM DESCRIPTION (design/masters/item_description.png): Enter or Space on a filled Item Name in a
      Purchase Book line. Typing, F4 or Alt+↓ on that cell still opens Select Item to change the item. -->
-<dialog id="item-desc" class="lookup sf idp" aria-labelledby="item-desc-title" aria-describedby="item-desc-sub">
+<dialog id="item-desc" class="lookup sf idp idp-line" aria-labelledby="item-desc-title" aria-describedby="item-desc-sub">
   <div class="sf-head idp-head">
     <span class="idp-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path></svg></span>
     <div class="sf-heading">
@@ -2704,47 +2750,47 @@
   </div>
   <div class="idp-body">
     <section class="idp-card">
+      <div class="idp-card-head">
+        <h3 class="idp-card-title">Item Name</h3>
+        <span id="item-desc-code" class="idp-code"></span>
+      </div>
       <div class="idp-card-body">
-        <!-- Complete Item Name with Edit beside it on the left (Editing Mode while editing), the item code on the right. -->
         <div class="idp-label-row">
           <span class="idp-label-group">
-            <label class="idp-label" for="item-desc-input">Complete Item Name</label>
-            <button type="button" class="idp-mini idp-view-only" data-idp="edit-name" title="Rename the item in the Item master">
+            <label class="idp-label" for="item-desc-name">Complete Item Name</label>
+            <span id="item-desc-mode" class="idp-mode" hidden><span aria-hidden="true">●</span> Editing Mode</span>
+            <button type="button" id="item-desc-edit" class="idp-mini" data-idp="edit-name" title="Edit the name, its formatting and the unit of this line">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
               <span>Edit</span>
             </button>
-            <span class="idp-mode idp-edit-only"><span class="idp-mode-dot" aria-hidden="true"></span>Editing Mode</span>
           </span>
-          <span id="item-desc-code" class="idp-code"></span>
+          <span id="item-desc-code-inline" class="idp-code idp-code-inline"></span>
         </div>
-        <!-- The name as saved, with its bold / colours. -->
-        <div id="item-desc-name" class="idp-name idp-view-only"></div>
-        <!-- Editing: the formatting toolbar over the name. -->
-        <div class="idp-editor idp-edit-only">
-          <div class="idp-toolbar">
-            <div class="idp-tools" role="toolbar" aria-label="Item name formatting">
-              <button type="button" class="idp-tool" data-idp-format="bold" title="Bold the highlighted text (Ctrl+B)"><b aria-hidden="true">B</b> Bold</button>
-              <button type="button" class="idp-tool idp-tool-plain" data-idp-format="bold-all" title="Bold the whole name">Bold All</button>
-              <span class="idp-tool-sep" aria-hidden="true"></span>
-              <button type="button" class="idp-tool idp-tool-red" data-idp-format="color" data-colour="#dc2626"><span class="idp-swatch" aria-hidden="true"></span>Red</button>
-              <button type="button" class="idp-tool idp-tool-blue" data-idp-format="color" data-colour="#2563eb"><span class="idp-swatch" aria-hidden="true"></span>Blue</button>
-              <button type="button" class="idp-tool idp-tool-black" data-idp-format="color" data-colour="#0f172a"><span class="idp-swatch" aria-hidden="true"></span>Black</button>
-              <span class="idp-tool-sep" aria-hidden="true"></span>
-              <button type="button" class="idp-tool idp-tool-plain" data-idp-format="plain" title="Remove bold and colour"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 3l18 18"></path></svg>Plain</button>
-            </div>
-            <p class="idp-tool-hint">Highlight text for partial style</p>
+        <input id="item-desc-name" class="idp-name" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper readonly hidden>
+        <div id="item-desc-view" class="idp-name idp-view" tabindex="-1" hidden></div>
+        <div id="item-desc-editor" class="idp-editor" hidden>
+          <div class="idp-tools" role="toolbar" aria-label="Item name formatting" aria-controls="item-desc-rich">
+            <button type="button" class="idp-tool" data-idp-tool="bold" title="Bold the highlighted text (Ctrl+B)"><b>B</b> Bold</button>
+            <button type="button" class="idp-tool" data-idp-tool="bold-all" title="Bold the whole name">Bold All</button>
+            <span class="idp-tool-sep" aria-hidden="true"></span>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#dc2626" title="Red text"><span class="idp-dot" style="--dot: #dc2626" aria-hidden="true"></span>Red</button>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#2563eb" title="Blue text"><span class="idp-dot" style="--dot: #2563eb" aria-hidden="true"></span>Blue</button>
+            <button type="button" class="idp-tool" data-idp-tool="colour" data-colour="#0f172a" title="Black text"><span class="idp-dot" style="--dot: #0f172a" aria-hidden="true"></span>Black</button>
+            <span class="idp-tool-sep" aria-hidden="true"></span>
+            <button type="button" class="idp-tool" data-idp-tool="plain" title="Remove all formatting"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Plain</button>
           </div>
-          <div id="item-desc-input" class="idp-input" contenteditable="true" tabindex="0" role="textbox" aria-multiline="false" spellcheck="false" aria-labelledby="item-desc-title"></div>
+          <p class="idp-tools-hint">Highlight text for partial style</p>
+          <div id="item-desc-rich" class="idp-rich" contenteditable="true" role="textbox" aria-label="Complete item name" aria-multiline="false" spellcheck="false"></div>
         </div>
-        <div class="idp-tip idp-edit-only">
+        <div id="item-desc-tip" class="idp-tip" hidden>
           <span>Tip: <kbd>Ctrl+Enter</kbd> to save, <kbd>Ctrl+B</kbd> for bold, <kbd>Tab</kbd> to unit</span>
           <span id="item-desc-count" class="idp-count">0 chars</span>
         </div>
         <div class="idp-facts">
-          <div class="idp-fact idp-view-only"><span class="idp-fact-label">Unit</span><span id="item-desc-unit" class="idp-fact-value"></span></div>
-          <div class="idp-unit-edit idp-edit-only">
-            <div class="idp-unit-head"><label class="idp-fact-label" for="item-desc-unit-input">Unit (Editable)</label><span class="idp-unit-hint">Enter to save</span></div>
-            <input id="item-desc-unit-input" class="idp-unit-input" type="text" maxlength="80" autocomplete="off" spellcheck="false" data-upper>
+          <div class="idp-fact idp-fact-unit">
+            <span class="idp-fact-label idp-fact-label-row"><span id="item-desc-unit-label">Unit</span><span id="item-desc-unit-hint" class="idp-fact-hint" hidden>Enter to save</span></span>
+            <span id="item-desc-unit" class="idp-fact-value"></span>
+            <input id="item-desc-unit-input" class="idp-unit-input" type="text" maxlength="80" autocomplete="off" spellcheck="false" aria-label="Unit" hidden>
           </div>
           <div class="idp-fact"><span id="item-desc-price-label" class="idp-fact-label">Unit Price</span><span id="item-desc-price" class="idp-fact-value"></span></div>
         </div>
@@ -2753,15 +2799,15 @@
     </section>
   </div>
   <div class="sf-foot idp-foot">
-    <button type="button" class="ml-btn idp-cancel idp-edit-only" data-idp="cancel">Cancel (Esc)</button>
-    <button type="button" class="ml-btn ml-btn-plain idp-btn idp-view-only" data-idp="copy">
+    <button type="button" id="item-desc-copy" class="ml-btn ml-btn-plain idp-btn" data-idp="copy">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
       <span>Copy Name</span>
     </button>
-    <button type="button" class="ml-btn ml-btn-plain idp-btn idp-view-only" data-idp="edit-name" title="Rename the item in the Item master">
+    <button type="button" id="item-desc-edit-name" class="ml-btn ml-btn-plain idp-btn" data-idp="edit-name" title="Edit the name, its formatting and the unit of this line">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path><path d="m18 14 3 3-5 5h-3v-3z"></path></svg>
       <span>Edit Name</span>
     </button>
+    <button type="button" id="item-desc-cancel" class="ml-btn ml-btn-plain idp-btn idp-cancel" data-idp="cancel-edit" hidden>Cancel (Esc)</button>
     <button type="button" id="item-desc-primary" class="ml-btn ml-btn-green idp-btn idp-primary" data-idp="primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m8 12 3 3 5-6"></path></svg>
       <span id="item-desc-primary-label">Close</span>
