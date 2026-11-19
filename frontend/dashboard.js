@@ -1775,7 +1775,7 @@ function plainLookupCard(config, row) {
 /* The item popups list each item as a card: the code, the name, the category; on the right the
    price and "Available Stock: 12 PIECES" (amber at none, green with stock). */
 // A line of a document to a customer (Quotation, Sales Order, Delivery Note): its prices are selling prices.
-const SALES_ROW_KINDS = ['qt', 'so', 'dn', 'sales'];
+const SALES_ROW_KINDS = ['qt', 'so', 'dn', 'ti', 'se', 'sales'];
 const isSalesLine = node => SALES_ROW_KINDS.includes(node?.closest?.('[data-pb-row]')?.dataset.pbRow);
 // The price an item is offered at on this line: the selling price to a customer, else the buying rate.
 const itemLinePrice = (item, node) => (isSalesLine(node) ? item.sellingPrice : item.buyingRate);
@@ -1866,8 +1866,25 @@ const LOOKUPS = {
       return [...orders.map(row => ({ id: `so:${row.id}`, code: row.code, meta: `Sales Order · ${row.name}` })),
         ...quotations.map(row => ({ id: `qt:${row.id}`, code: row.code, meta: `Quotation · ${row.name}` }))];
     } },
+  // The Tax Invoice's Ref ID: the quotations, sales orders and delivery notes in one list (id "qt:5" / "so:12" / "dn:3").
+  invoiceref: { title: 'Select Reference Document', letter: 'R', list: 'Quotations, Sales Orders & Delivery Notes',
+    plural: 'quotations, sales orders and delivery notes',
+    subtitle: 'Its buyer, terms and items are copied into the invoice.', search: 'Search reference documents...',
+    // One tab per kind of document (the first column is named for it); ←/→ on an empty search switches tab.
+    tabs: [{ key: 'qt', label: 'Quotations', first: 'Quotation ID' }, { key: 'so', label: 'Sales Orders', first: 'Sales Order ID' },
+      { key: 'dn', label: 'Delivery Notes', first: 'Delivery Note ID' }],
+    columns: [['code', 'Document ID'], ['date', 'Date'], ['name', 'Client'], ['category', 'Project / Category'], ['total', 'Grand Total']],
+    display: row => row.code,
+    rows: async () => {
+      const [quotations, orders, notes] = await Promise.all(['api/quotations.php', 'api/sales-orders.php', 'api/delivery-notes.php']
+        .map(api => apiRequest(api).catch(() => [])));
+      const rows = (list, kind) => list.map(row => ({ id: `${kind}:${row.id}`, tab: kind, code: row.code, date: String(row.date || '').slice(0, 10),
+        name: row.name, category: String(row.purchaseCategory || '').trim() || '—', total: pbAmount(row.grandTotal) }));
+      return [...rows(quotations, 'qt'), ...rows(orders, 'so'), ...rows(notes, 'dn')];
+    } },
   salesorder: { title: 'Select Sales Order', letter: 'S', list: 'Sales Orders', plural: 'sales orders', api: 'api/sales-orders.php',
     columns: [['code', 'SO ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
+  // On a Purchase Entry (data-lookup-party): the selected supplier's purchase orders, all of them when it has none.
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
     columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name,
     subtitle: 'Choose the purchase order these goods were received against.', search: 'Search PO by number or supplier...',
@@ -1876,7 +1893,26 @@ const LOOKUPS = {
     filterFor: (rows, field) => {
       const supplierId = field?.id === 'grn-po' ? byId('grn-supplier-id').value : '';
       return supplierId ? rows.filter(row => String(row.supplierId) === supplierId) : rows;
+    }, narrow: narrowToParty('supplierId') },
+  // The Purchase Entry's GRN: its supplier, currency and accepted lines are copied into the purchase.
+  grn: { title: 'Select GRN', letter: 'G', list: 'Goods Received Notes', plural: 'GRNs',
+    rows: async () => (await apiRequest('api/grns.php')).map(row => ({ ...row, date: pbDate(row.grnDate) })),
+    columns: [['code', 'GRN ID'], ['name', 'Supplier'], ['date', 'Date']], display: row => row.code, meta: row => row.name,
+    // The GRNs received against the selected purchase order (data-lookup-order), else from the selected supplier.
+    narrow: (rows, field) => {
+      const orderId = byId(field.dataset.lookupOrder || '')?.value;
+      const forOrder = orderId ? rows.filter(row => String(row.purchaseOrderId) === String(orderId)) : [];
+      return forOrder.length ? forOrder : narrowToParty('supplierId')(rows, field);
     } },
+  // The Sales Entry's Tax Invoice / Delivery Note: its customer, currency and lines are copied into the sale.
+  taxinvoice: { title: 'Select Tax Invoice', letter: 'T', list: 'Tax Invoices', plural: 'tax invoices',
+    rows: async () => (await apiRequest('api/tax-invoices.php')).map(row => ({ ...row, date: pbDate(row.invoiceDate) })),
+    columns: [['code', 'Invoice ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code, meta: row => row.name,
+    narrow: narrowToParty('customerId') },
+  deliverynote: { title: 'Select Delivery Note', letter: 'D', list: 'Delivery Notes', plural: 'delivery notes',
+    rows: async () => (await apiRequest('api/delivery-notes.php')).map(row => ({ ...row, date: pbDate(row.deliveryNoteDate) })),
+    columns: [['code', 'DN ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code, meta: row => row.name,
+    narrow: narrowToParty('customerId') },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
   // Purchase Order currency: the hidden id holds the code (OMR), the field shows "OMR – Omani Rial".
@@ -1948,20 +1984,33 @@ const PO_CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'In
   ['EGP', 'Egyptian Pound'], ['JOD', 'Jordanian Dinar'], ['TRY', 'Turkish Lira'], ['CNY', 'Chinese Yuan'], ['JPY', 'Japanese Yen'], ['KRW', 'South Korean Won']]
   .map(([code, name]) => ({ id: code, code, name }));
 
+// A lookup opened from a field with data-lookup-party (the id input of the form's supplier / customer) lists only
+// that party's documents; all of them when none is picked or it has none.
+function narrowToParty(key) {
+  return (rows, field) => {
+    const partyId = byId(field.dataset.lookupParty || '')?.value;
+    const theirs = partyId ? rows.filter(row => String(row[key]) === String(partyId)) : [];
+    return theirs.length ? theirs : rows;
+  };
+}
+
 // Each list is fetched once per page load; forgetLookups() drops lists after a save changes them.
+// A field (the popup's) narrows the list with the lookup's narrow(rows, field).
 const lookupCache = {};
 async function loadLookup(kind, field = null) {
-  if (LOOKUPS[kind].rows) return LOOKUPS[kind].rows(field);
+  const config = LOOKUPS[kind];
+  const narrow = rows => (field && config.narrow ? config.narrow(rows, field) : rows);
+  if (config.rows) return narrow(await config.rows(field));
   if (!lookupCache[kind]) {
     try {
-      const rows = await apiRequest(LOOKUPS[kind].api);
-      lookupCache[kind] = LOOKUPS[kind].prepare ? rows.map(LOOKUPS[kind].prepare) : rows;   // e.g. a date shown DD-MM-YYYY
+      const rows = await apiRequest(config.api);
+      lookupCache[kind] = config.prepare ? rows.map(config.prepare) : rows;   // e.g. a date shown DD-MM-YYYY
     } catch (error) {
-      showToast(`Could not load ${LOOKUPS[kind].plural}`, error.message, true);
+      showToast(`Could not load ${config.plural}`, error.message, true);
       return [];
     }
   }
-  return lookupCache[kind];
+  return narrow(lookupCache[kind]);
 }
 
 function forgetLookups(...kinds) {
@@ -2019,7 +2068,7 @@ function showServerErrors(error, fieldNode, reveal) {
 
 // Fields that pick into a list (chips) instead of holding one value: entry → { picked, apply, onClear }.
 const lookupChipFields = new WeakMap();
-const lookup = { field: null, kind: '', rows: [], shown: [], active: 0, byKeyboard: false };
+const lookup = { field: null, kind: '', rows: [], shown: [], active: 0, byKeyboard: false, tab: '' };
 const lookupIdInput = field => field.parentElement.querySelector('input[type="hidden"]');
 const lookupParentField = field => (field.dataset.lookupParent ? byId(field.dataset.lookupParent) : null);
 const isLookupField = node => node instanceof HTMLInputElement && node.dataset.lookup !== undefined;
@@ -2061,8 +2110,10 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   Object.assign(lookup, { field, kind, rows, byKeyboard, multi });
   const currentId = lookupIdInput(field)?.value ?? field.value;
   // Fields without a hidden id (the master Edit pages) hold the shown name, so match on that.
-  lookup.active = Math.max(0, rows.findIndex(row => String(row.id) === currentId
-    || (!lookupIdInput(field) && config.display(row) === field.value)));
+  const isCurrent = row => String(row.id) === currentId || (!lookupIdInput(field) && config.display(row) === field.value);
+  // Tabbed popups open on the tab of the picked row, else the first tab.
+  lookup.tab = config.tabs ? (rows.find(isCurrent)?.tab || config.tabs[0].key) : '';
+  lookup.active = Math.max(0, lookupTabRows().findIndex(isCurrent));
   // Card style: the item popups everywhere (config.card), and fields marked data-lookup-cards (the Purchase Order's
   // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
   lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
@@ -2076,7 +2127,7 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId('lookup-letter').textContent = config.letter;
   byId('lookup-title').textContent = config.title;
   byId('lookup-list-title').textContent = parentId ? `${config.list} · ${parent.value}` : config.list;
-  byId('lookup-head').replaceChildren(...(multi ? [el('th', 'lk-check', '')] : []), ...config.columns.map(([, heading]) => el('th', '', heading)));
+  renderLookupTabs();
   byId('lookup-enter-hint').textContent = multi ? 'Tick / Untick' : 'Select';
   byId('lookup-cancel').textContent = multi ? 'Close' : 'Cancel';   // multi-select ticks are already applied
   byId('lookup-done-hint').hidden = !multi;
@@ -2098,15 +2149,48 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   byId(`lookup-row-${lookup.active}`)?.scrollIntoView({ block: 'nearest' });
 }
 
+// The rows of the open tab (all rows in a popup without tabs).
+const lookupTabRows = () => (LOOKUPS[lookup.kind]?.tabs ? lookup.rows.filter(row => row.tab === lookup.tab) : lookup.rows);
+
+// The tab strip (tabbed popups only) and the column headings; the first heading is named for the open tab.
+function renderLookupTabs() {
+  const config = LOOKUPS[lookup.kind];
+  const strip = byId('lookup-tabs');
+  strip.hidden = !config.tabs;
+  strip.replaceChildren(...(config.tabs || []).map(tab => {
+    const button = el('button', 'lk-tab', tab.label);
+    button.type = 'button';
+    button.tabIndex = -1;
+    button.dataset.lookupTab = tab.key;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(tab.key === lookup.tab));
+    return button;
+  }));
+  const first = config.tabs?.find(tab => tab.key === lookup.tab)?.first;
+  byId('lookup-head').replaceChildren(...(lookup.multi ? [el('th', 'lk-check', '')] : []),
+    ...config.columns.map(([, heading], i) => el('th', '', i === 0 && first ? first : heading)));
+}
+
+function switchLookupTab(key) {
+  const tabs = LOOKUPS[lookup.kind].tabs;
+  if (!tabs || key === lookup.tab || !tabs.some(tab => tab.key === key)) return;
+  lookup.tab = key;
+  lookup.active = 0;
+  renderLookupTabs();
+  renderLookupRows();
+  byId('lookup-search').focus();
+}
+
 function renderLookupRows() {
   const config = LOOKUPS[lookup.kind];
   const query = byId('lookup-search').value.trim().toLowerCase();
+  const pool = lookupTabRows();
   // Rows where a column starts with the search come first ("k" → KG before PKT).
   const texts = row => config.columns.map(([key]) => String(row[key] ?? '').toLowerCase());
   lookup.shown = query
-    ? [...lookup.rows.filter(row => texts(row).some(text => text.startsWith(query))),
-       ...lookup.rows.filter(row => !texts(row).some(text => text.startsWith(query)) && texts(row).some(text => text.includes(query)))]
-    : lookup.rows;
+    ? [...pool.filter(row => texts(row).some(text => text.startsWith(query))),
+       ...pool.filter(row => !texts(row).some(text => text.startsWith(query)) && texts(row).some(text => text.includes(query)))]
+    : pool;
   lookup.active = Math.min(lookup.active, Math.max(0, lookup.shown.length - 1));
   const rows = lookup.shown.map((row, index) => {
     const tr = el('tr');
@@ -2135,9 +2219,10 @@ function renderLookupRows() {
     rows.push(tr);
   }
   byId('lookup-rows').replaceChildren(...rows);
+  const tabLabel = config.tabs?.find(tab => tab.key === lookup.tab)?.label.toLowerCase();
   byId('lookup-count').textContent = query
-    ? `${lookup.shown.length} of ${lookup.rows.length} ${config.plural}`
-    : `${lookup.rows.length} ${config.plural}`;
+    ? `${lookup.shown.length} of ${pool.length} ${tabLabel || config.plural}`
+    : `${pool.length} ${tabLabel || config.plural}`;
   // Multi-select: Select applies the ticks (even none, which clears the field).
   byId('lookup-select').disabled = !lookup.multi && lookup.shown.length === 0;
   byId('lookup-select-label').textContent = lookup.multi ? `${config.title} (${lookup.multi.size})` : config.title;
@@ -2302,6 +2387,13 @@ function handleLookupDialogKeys(event) {
   if (ctrl || event.altKey) return;
   const search = byId('lookup-search');
   const [cancel, select] = [byId('lookup-cancel'), byId('lookup-select')];
+  const tabs = LOOKUPS[lookup.kind].tabs;
+  if (tabs && target === search && !search.value && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+    event.preventDefault();
+    const at = tabs.findIndex(tab => tab.key === lookup.tab);
+    switchLookupTab(tabs[(at + (key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length].key);
+    return;
+  }
   // Typing while a button has focus goes on in the search box (Space and Enter still press the button).
   if (target !== search && ((key.length === 1 && key !== ' ') || key === 'Backspace')) {
     event.preventDefault();
@@ -2444,6 +2536,10 @@ function initLookups() {
   });
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeLookup(); });
   byId('lookup-search').addEventListener('input', () => { lookup.active = 0; renderLookupRows(); });
+  byId('lookup-tabs').addEventListener('click', event => {
+    const tab = event.target.closest('[data-lookup-tab]');
+    if (tab) switchLookupTab(tab.dataset.lookupTab);
+  });
   // Rows are not focusable: keep focus (and typing) in the search box while clicking them.
   byId('lookup-rows').addEventListener('mousedown', event => event.preventDefault());
   byId('lookup-rows').addEventListener('click', event => {
@@ -7422,7 +7518,7 @@ const allLists = () => [...MASTER_LISTS, ...PURCHASE_LISTS];
 
 // An edit route opens the list's creation form with the record (see the lists' edit()).
 function masterEditPage(route) {
-  const match = /^((?:masters|purchase-book|trade)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
+  const match = /^((?:masters|purchase-book|trade|entry)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
   const list = match && allLists().find(entry => entry.config.route === match[1]);
   if (!list) return null;
   const id = Number(match[2]);
@@ -7520,7 +7616,7 @@ const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 // column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
-  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn']) {
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
     const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
@@ -7536,7 +7632,7 @@ function composePurchaseTemplates() {
       reason.setAttribute('aria-label', 'Rejection reason');
       nameCell.append(reason);
     }
-    if (id === 'pb-line-po' || id === 'pb-line-sales' || id === 'pb-line-dn') {          // priced lines keep the brand in the item name cell
+    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se'].includes(id)) {          // priced lines keep the brand in the item name cell
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
@@ -7547,7 +7643,7 @@ function composePurchaseTemplates() {
     if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
     else row.append(...cells('pb-cell-unit'));
     row.append(...cells('pb-cell-remove'));
-    if (id === 'pb-line-po') {
+    if (id === 'pb-line-po' || id === 'pb-line-pe' || id === 'pb-line-se') {
       // Purchase Order Unit: type to search, not a dropdown. The list shows only once a letter is typed ("k" → KG,
       // "p" → PCS, PACKET, PAIRS); no arrow; arriving selects the unit, so typing replaces it.
       const unit = row.querySelector('[data-field="unit"]');
@@ -9607,7 +9703,347 @@ const dnForm = createSalesForm({
   },
 });
 
-const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm];
+/* Tax Invoice (Transaction Entry): a VAT invoice to a customer, in the Transaction Entry teal. Document Title
+   (Invoice; Quotation / Sales Order / Delivery Note open that form with what is entered here), Ref ID (a quotation,
+   sales order or delivery note picked in its popup: its buyer, terms and lines are copied in), Customer PO Number,
+   Purchase Category, free-text Payment Terms, Delivery Location; lines with Delivery Term, Qty, Unit, Unit Price,
+   VAT % and Total Price (VAT Enabled in OMR); the summary: Total Selling Price, Transportation Charge, VAT / Tax
+   Total, Discount, Advance Payment, Grand Total. Send For Approval saves it approved. */
+const tiBase = () => byId('ti-currency-id').value || 'OMR';
+
+// What is entered on the invoice, as a saved document's shape (for copyFrom into the form its Document Title opens).
+function tiAsDocument() {
+  const value = id => byId(id).value.trim();
+  const items = tiForm.page.rowsOf('items').map(row => {
+    const cell = field => pbCell(row, field)?.value.trim() ?? '';
+    return {
+      itemId: cell('itemId') || null, itemCode: cell('itemCode'), itemName: cell('itemName'), itemNameHtml: cell('itemNameHtml'),
+      brandId: cell('brandId') || null, brandName: cell('brandName'), uomId: cell('uomId') || null, unit: cell('unit'),
+      deliveryTerm: cell('deliveryTerm'), quantity: cell('quantity'), price: cell('price'), vatRate: cell('vatRate'),
+      discountPct: '0', discountAmount: '0', foc: false,
+    };
+  }).filter(line => line.itemId || line.itemName);
+  return {
+    code: value('ti-code') || 'this invoice', customerId: value('ti-customer-id') || null, customerName: value('ti-customer'),
+    contactName: value('ti-contact'), contactNumber: value('ti-contact-number'), currency: tiBase(), deliveryLocation: value('ti-location'),
+    paymentMode: value('ti-payment'), creditPeriod: '', vatMode: 'exclude', discountAmount: value('ti-discount'), shipping: value('ti-shipping'),
+    customerPo: value('ti-customer-po'), purchaseCategory: value('ti-category'), items,
+  };
+}
+
+const tiForm = createSalesForm({
+  key: 'ti', route: 'entry/tax-invoice', noun: 'Tax Invoice', api: 'api/tax-invoices.php', dateKey: 'invoiceDate', lookups: [],
+  template: 'pb-line-ti', defaultLocation: false,
+  onShow: () => openLookup(byId('ti-customer')),          // a new invoice starts by picking the Buyer
+  // A sales order's lines carry no VAT: on the invoice they take VAT as usual (5% in OMR). A line's discount is kept
+  // (in the line's hidden cells), so the invoice totals what the document it came from does.
+  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && tiBase() === 'OMR' ? '5.00' : values.vatRate }),
+  fieldNodes: { documentTitle: 'ti-doc-title', referenceNo: 'ti-reference', quotationId: 'ti-reference', salesOrderId: 'ti-reference',
+    deliveryNoteId: 'ti-reference', customerPo: 'ti-customer-po', purchaseCategory: 'ti-category', advancePayment: 'ti-advance' },
+  header: () => {
+    const [kind, id] = byId('ti-reference-id').value.split(':');
+    return {
+      documentTitle: 'Invoice', referenceNo: byId('ti-reference').value.trim(),
+      quotationId: kind === 'qt' ? id : null, salesOrderId: kind === 'so' ? id : null, deliveryNoteId: kind === 'dn' ? id : null,
+      customerPo: byId('ti-customer-po').value.trim(), purchaseCategory: byId('ti-category').value.trim(),
+      advancePayment: byId('ti-advance').value.trim() || '0', sendForApproval: byId('ti-approval').checked,
+    };
+  },
+  check(errors) {
+    const amount = byId('ti-advance').value.trim();
+    if (amount !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(amount)) errors.push({ node: byId('ti-advance'), message: 'Enter an amount with up to 3 decimals.' });
+  },
+  afterRefresh() {
+    for (const label of byId('ti-form').querySelectorAll('[data-ti-base]')) label.textContent = tiBase();
+    byId('ti-vat-label').textContent = `VAT / Tax Total (${tiBase()})`;
+    byId('ti-save-label').textContent = FORM_PAGES['entry/tax-invoice/new']?.isEditing?.() ? 'Update Invoice' : 'Save Invoice';
+  },
+  fill(doc) {
+    const kind = doc.deliveryNoteId ? 'dn' : doc.salesOrderId ? 'so' : doc.quotationId ? 'qt' : '';
+    const id = { dn: doc.deliveryNoteId, so: doc.salesOrderId, qt: doc.quotationId }[kind];
+    byId('ti-reference').value = doc.referenceNo || '';
+    byId('ti-reference-id').value = kind ? `${kind}:${id}` : '';
+    byId('ti-customer-po').value = doc.customerPo || '';
+    byId('ti-category').value = doc.purchaseCategory || '';
+    byId('ti-advance').value = pbMoney(pbNum(doc.advancePayment));
+    byId('ti-approval').checked = Boolean(doc.sendForApproval);
+  },
+  onReset() {
+    byId('ti-doc-title').value = 'Invoice';
+    byId('ti-approval').checked = false;
+  },
+  init(form, sales) {
+    // A document picked in Ref ID: its buyer, terms and lines become the invoice's.
+    byId('ti-reference').addEventListener('input', async () => {
+      const [kind, id] = byId('ti-reference-id').value.split(':');
+      if (!id) return;
+      const api = { qt: 'quotations', so: 'sales-orders', dn: 'delivery-notes' }[kind];
+      try {
+        const doc = await apiRequest(`api/${api}.php?id=${id}`);
+        if (doc.customerPo && !byId('ti-customer-po').value.trim()) byId('ti-customer-po').value = doc.customerPo;
+        if (doc.purchaseCategory && !byId('ti-category').value.trim()) byId('ti-category').value = doc.purchaseCategory;
+        if (pbNum(doc.advancePayment) && !pbNum(byId('ti-advance').value)) byId('ti-advance').value = pbMoney(pbNum(doc.advancePayment));
+        await sales.copyFrom(doc, form);
+      } catch (error) { showToast('The document could not be loaded', error.message, true); }
+    });
+    // Document Title: Quotation, Sales Order or Delivery Note opens that form with what is entered here.
+    byId('ti-doc-title').addEventListener('change', async () => {
+      const target = { Quotation: ['qt', qtForm, 'trade/quotation/new'], 'Sales Order': ['so', soForm, 'trade/sales-order/new'],
+        'Delivery Note': ['dn', dnForm, 'trade/delivery-note/new'] }[byId('ti-doc-title').value];
+      if (!target) return;
+      const doc = tiAsDocument();
+      byId('ti-doc-title').value = 'Invoice';
+      location.hash = `#/${target[2]}`;
+      await new Promise(resolve => setTimeout(resolve, 150));          // the route opens the new, empty form
+      if (doc.customerId || doc.items.length) await SALES_HELPERS[target[0]].copyFrom(doc, target[1]);
+    });
+    byId('ti-advance').addEventListener('input', () => form.refresh());
+    byId('ti-approval').addEventListener('change', () => form.page.record());
+  },
+});
+
+/* ---------- Purchase Entry (Transaction Entry, PUR-0001) ----------
+   A supplier's bill recorded in the books: Supplier (+ New makes one in the Supplier master), the supplier's own
+   invoice number, the purchase order and / or GRN it is for (a pick fills the supplier, currency and lines), the
+   currency, lines priced quantity × rate (Total) with Line Total less the line's share of the discount, Remarks,
+   signatory slots and the seal. No VAT or shipping (pe_save() keeps them at 0). */
+const peCurrency = () => byId('pe-currency-id').value || 'OMR';
+function peSetCurrency(code) {
+  const text = String(code || 'OMR').toUpperCase();
+  fillLookup(byId('pe-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
+}
+
+const peForm = createPurchaseForm({
+  key: 'pe', route: 'entry/purchase-entry/new', noun: 'Purchase Entry', api: 'api/purchase-entries.php',
+  kind: 'po', template: 'pb-line-pe', lookups: ['purchaseorder', 'grn'], vatDefault: 'exclude',
+  firstField: () => byId('pe-date'),
+  fieldNodes: { purchaseDate: 'pe-date', supplierId: 'pe-supplier', supplierInvoiceNo: 'pe-invoice-no', purchaseOrderId: 'pe-po',
+    grnId: 'pe-grn', currency: 'pe-currency', discountAmount: 'pe-discount', remarks: 'pe-remarks-editor' },
+  header: () => ({
+    purchaseDate: byId('pe-date').value, supplierId: byId('pe-supplier-id').value || null,
+    supplierInvoiceNo: byId('pe-invoice-no').value.trim(), purchaseOrderId: byId('pe-po-id').value || null,
+    grnId: byId('pe-grn-id').value || null, currency: peCurrency(),
+  }),
+  check(form, errors) {
+    if (!byId('pe-date').value) errors.push({ node: byId('pe-date'), message: 'Enter the purchase date.' });
+    if (!byId('pe-supplier-id').value) errors.push({ node: byId('pe-supplier'), message: 'Select the supplier.' });
+  },
+  // Total = quantity × rate; Line Total = Total less the line's share of the Discount Amount. Total Items counts the filled lines.
+  afterRefresh(totals) {
+    const rows = peForm.page.rowsOf('items');
+    const shared = totals.discount;
+    rows.forEach((row, i) => {
+      const gross = totals.lineTotals[i];
+      row.querySelector('[data-gross]').textContent = pbMoney(gross);
+      row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
+    });
+    byId('pe-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
+    for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = peCurrency();
+    byId('pe-save-label').textContent = FORM_PAGES['entry/purchase-entry/new']?.isEditing?.() ? 'Update Purchase' : 'Save Purchase';
+  },
+  listRoute: 'entry/purchase-entry',
+  fill(form, pe) {
+    byId('pe-date').value = pe.purchaseDate;
+    fillLookup(byId('pe-supplier'), pe.supplierId ? { id: pe.supplierId, name: pe.supplierName } : null);
+    byId('pe-invoice-no').value = pe.supplierInvoiceNo || '';
+    fillLookup(byId('pe-po'), pe.purchaseOrderId ? { id: pe.purchaseOrderId, code: pe.purchaseOrderCode } : null);
+    fillLookup(byId('pe-grn'), pe.grnId ? { id: pe.grnId, code: pe.grnCode } : null);
+    peSetCurrency(pe.currency);
+  },
+  onReset() {
+    byId('pe-date').value = todayInputValue();
+    peSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    forgetLookups('purchaseorder', 'grn');
+  },
+  init(form) {
+    // + New: Quick Add Supplier; the new supplier is filled into Supplier Name.
+    byId('pe-supplier-new').addEventListener('click', () => openQuickSupplier(byId('pe-supplier')));
+    // A supplier picked: its currency becomes the purchase's.
+    byId('pe-supplier').addEventListener('input', async () => {
+      const id = byId('pe-supplier-id').value;
+      if (!id) return;
+      const supplier = await pbSupplier(id).catch(() => null);
+      if (supplier?.currency && byId('pe-supplier-id').value === id) peSetCurrency(supplier.currency);
+      form.page.absorb();
+      form.refresh();
+    });
+    byId('pe-form').addEventListener('input', event => {
+      if (event.target.id === 'pe-currency' || event.target.id === 'pe-discount') form.refresh();
+    });
+    // As the old Purchase Entry: a purchase order sets the supplier and currency, then takes its latest GRN (the
+    // lines from that GRN's accepted quantities); with no GRN yet, the purchase order's own lines. A GRN picked sets
+    // its lines, its purchase order when none is picked and the supplier only when none is picked.
+    const fetched = (count, from) => showToast('Items fetched', `${count} item${count === 1 ? '' : 's'} from ${from}.`);
+    const takeSupplier = async doc => {
+      if (!doc.supplierId) return;
+      fillLookup(byId('pe-supplier'), { id: doc.supplierId, name: doc.supplierName });
+      const code = doc.currency || (await pbSupplier(String(doc.supplierId)).catch(() => null))?.currency;
+      if (code) peSetCurrency(code);
+    };
+    const takeGrn = async id => {
+      const grn = await apiRequest(`api/grns.php?id=${id}`);
+      fillLookup(byId('pe-grn'), { id: grn.id, code: grn.code });
+      if (!byId('pe-supplier-id').value) await takeSupplier(grn);
+      if (grn.purchaseOrderId && !byId('pe-po-id').value) {
+        const po = (await loadLookup('purchaseorder')).find(row => String(row.id) === String(grn.purchaseOrderId));
+        fillLookup(byId('pe-po'), { id: grn.purchaseOrderId, code: po?.code || grn.poNumber });
+      }
+      // The accepted quantity is what is billed, at the GRN's unit cost.
+      const lines = grn.items.filter(line => pbNum(line.acceptedQty) > 0);
+      await loadPurchaseLines(form, lines, line => ({
+        ...purchaseLineRow(line), quantity: pbQty(pbNum(line.acceptedQty)), price: pbMoney(pbNum(line.unitCost)),
+        vatRate: '0.00', discountPct: '0.00', discountAmount: '0.000', foc: 'No',
+      }));
+      form.refresh();
+      fetched(lines.length, grn.code);
+    };
+    byId('pe-po').addEventListener('input', async () => {
+      const id = byId('pe-po-id').value;
+      if (!id) return;
+      try {
+        const po = await apiRequest(`api/purchase-orders.php?id=${id}`);
+        await takeSupplier(po);
+        forgetLookups('grn');
+        const grns = (await loadLookup('grn')).filter(grn => String(grn.purchaseOrderId) === String(po.id));   // newest first
+        if (grns.length) {
+          await takeGrn(grns[0].id);
+          if (grns.length > 1) showToast('GRN selected', `${grns[0].code} is the latest of ${grns.length} GRNs for ${po.code}; pick another in GRN to bill that one.`);
+          return;
+        }
+        fillLookup(byId('pe-grn'), null);
+        await loadPurchaseLines(form, po.items, line => ({
+          ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)), price: pbMoney(line.foc ? 0 : pbNum(line.price)),
+          vatRate: '0.00', discountPct: '0.00', discountAmount: '0.000', foc: 'No',
+        }));
+        form.refresh();
+        fetched(po.items.length, po.code);
+      } catch (error) { showToast('The purchase order could not be loaded', error.message, true); }
+    });
+    byId('pe-grn').addEventListener('input', async () => {
+      const id = byId('pe-grn-id').value;
+      if (!id) return;
+      try { await takeGrn(id); } catch (error) { showToast('The GRN could not be loaded', error.message, true); }
+    });
+  },
+});
+
+/* ---------- Sales Entry (Transaction Entry, SAL-0001) ----------
+   The Purchase Entry for a customer: Customer (+ New makes one in the Customer master), the customer's PO / reference
+   number, the tax invoice and / or delivery note it is for (a pick fills the customer, currency and lines), the
+   currency, lines priced quantity × rate (Total) with Line Total less the line's share of the discount, Remarks,
+   signatory slots and the seal. No VAT or shipping (sales_entry_save() keeps them at 0). */
+const seCurrency = () => byId('se-currency-id').value || 'OMR';
+function seSetCurrency(code) {
+  const text = String(code || 'OMR').toUpperCase();
+  fillLookup(byId('se-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
+}
+
+const seForm = createPurchaseForm({
+  key: 'se', route: 'entry/sales-entry/new', noun: 'Sales Entry', api: 'api/sales-entries.php',
+  kind: 'po', template: 'pb-line-se', lookups: ['taxinvoice', 'deliverynote'], vatDefault: 'exclude',
+  firstField: () => byId('se-date'),
+  fieldNodes: { salesDate: 'se-date', customerId: 'se-customer', customerRefNo: 'se-ref-no', taxInvoiceId: 'se-ti',
+    deliveryNoteId: 'se-dn', currency: 'se-currency', discountAmount: 'se-discount', remarks: 'se-remarks-editor' },
+  header: () => ({
+    salesDate: byId('se-date').value, customerId: byId('se-customer-id').value || null,
+    customerRefNo: byId('se-ref-no').value.trim(), taxInvoiceId: byId('se-ti-id').value || null,
+    deliveryNoteId: byId('se-dn-id').value || null, currency: seCurrency(),
+  }),
+  check(form, errors) {
+    if (!byId('se-date').value) errors.push({ node: byId('se-date'), message: 'Enter the sales date.' });
+    if (!byId('se-customer-id').value) errors.push({ node: byId('se-customer'), message: 'Select the customer.' });
+  },
+  // Total = quantity × rate; Line Total = Total less the line's share of the Discount Amount. Total Items counts the filled lines.
+  afterRefresh(totals) {
+    const rows = seForm.page.rowsOf('items');
+    const shared = totals.discount;
+    rows.forEach((row, i) => {
+      const gross = totals.lineTotals[i];
+      row.querySelector('[data-gross]').textContent = pbMoney(gross);
+      row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
+    });
+    byId('se-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
+    for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = seCurrency();
+    byId('se-save-label').textContent = FORM_PAGES['entry/sales-entry/new']?.isEditing?.() ? 'Update Sale' : 'Save Sale';
+  },
+  listRoute: 'entry/sales-entry',
+  fill(form, se) {
+    byId('se-date').value = se.salesDate;
+    fillLookup(byId('se-customer'), se.customerId ? { id: se.customerId, name: se.customerName } : null);
+    byId('se-ref-no').value = se.customerRefNo || '';
+    fillLookup(byId('se-ti'), se.taxInvoiceId ? { id: se.taxInvoiceId, code: se.taxInvoiceCode } : null);
+    fillLookup(byId('se-dn'), se.deliveryNoteId ? { id: se.deliveryNoteId, code: se.deliveryNoteCode } : null);
+    seSetCurrency(se.currency);
+  },
+  onReset() {
+    byId('se-date').value = todayInputValue();
+    seSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    forgetLookups('taxinvoice', 'deliverynote');
+  },
+  init(form) {
+    // + New: Quick Add Customer; the new customer is filled into Customer Name.
+    byId('se-customer-new').addEventListener('click', () => openQuickSupplier(byId('se-customer'), '', 'customer'));
+    // A customer picked: its currency becomes the sale's.
+    byId('se-customer').addEventListener('input', async () => {
+      const id = byId('se-customer-id').value;
+      if (!id) return;
+      const customer = await pbCustomer(id).catch(() => null);
+      if (customer?.currency && byId('se-customer-id').value === id) seSetCurrency(customer.currency);
+      form.page.absorb();
+      form.refresh();
+    });
+    byId('se-form').addEventListener('input', event => {
+      if (event.target.id === 'se-currency' || event.target.id === 'se-discount') form.refresh();
+    });
+    // The Purchase Entry's fetching with the tax invoice in place of the purchase order and the delivery note in
+    // place of the GRN: a tax invoice sets the customer and currency, its delivery note and its lines (what was
+    // billed); a delivery note picked sets its lines, a tax invoice made from it when none is picked and the customer
+    // only when none is picked.
+    const fetched = (count, from) => showToast('Items fetched', `${count} item${count === 1 ? '' : 's'} from ${from}.`);
+    const takeCustomer = async doc => {
+      if (!doc.customerId) return;
+      fillLookup(byId('se-customer'), { id: doc.customerId, name: doc.customerName });
+      const code = doc.currency || (await pbCustomer(String(doc.customerId)).catch(() => null))?.currency;
+      if (code) seSetCurrency(code);
+    };
+    const takeRef = doc => { if (doc.customerPo && !byId('se-ref-no').value.trim()) byId('se-ref-no').value = doc.customerPo; };
+    const takeLines = async doc => {
+      await loadPurchaseLines(form, doc.items, line => ({
+        ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)), price: pbMoney(line.foc ? 0 : pbNum(line.price)),
+        vatRate: '0.00', discountPct: '0.00', discountAmount: '0.000', foc: 'No',
+      }));
+      form.refresh();
+      fetched(doc.items.length, doc.code);
+    };
+    byId('se-ti').addEventListener('input', async () => {
+      const id = byId('se-ti-id').value;
+      if (!id) return;
+      try {
+        const ti = await apiRequest(`api/tax-invoices.php?id=${id}`);
+        await takeCustomer(ti);
+        takeRef(ti);
+        fillLookup(byId('se-dn'), ti.deliveryNoteId ? { id: ti.deliveryNoteId, code: ti.deliveryNoteCode } : null);
+        await takeLines(ti);
+      } catch (error) { showToast('The tax invoice could not be loaded', error.message, true); }
+    });
+    byId('se-dn').addEventListener('input', async () => {
+      const id = byId('se-dn-id').value;
+      if (!id) return;
+      try {
+        const dn = await apiRequest(`api/delivery-notes.php?id=${id}`);
+        if (!byId('se-customer-id').value) await takeCustomer(dn);
+        takeRef(dn);
+        if (!byId('se-ti-id').value) {
+          const ti = (await loadLookup('taxinvoice')).find(row => String(row.deliveryNoteId) === String(dn.id));   // newest first
+          if (ti) fillLookup(byId('se-ti'), { id: ti.id, code: ti.code });
+        }
+        await takeLines(dn);
+      } catch (error) { showToast('The delivery note could not be loaded', error.message, true); }
+    });
+  },
+});
+
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm];
 
 /* ---------- GRN line: rejection reason and Stock Transfer ----------
    Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
@@ -10209,7 +10645,77 @@ const dnList = salesList({
     detail({ key: 'vehicleNo', label: 'Vehicle #', group: 'Delivery & Payment' })],
 });
 
-const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList];
+const tiList = salesList({
+  key: 'ti', route: 'entry/tax-invoice', noun: 'Tax Invoice', nouns: 'Tax Invoices', api: 'api/tax-invoices.php', form: tiForm, lookups: [],
+  idLabel: 'Invoice ID', referenceLabel: 'Ref ID', reference: r => r.referenceNo, dateKey: 'invoiceDate', dateHeader: 'invoice date',
+  details: [detail({ key: 'status', label: 'Status', type: 'pill', group: 'Document' }),
+    detail({ key: 'customerPo', label: 'Customer PO No.', group: 'Document' }),
+    detail({ key: 'purchaseCategory', label: 'Purchase Category', group: 'Document' }),
+    detail({ key: 'advancePayment', label: 'Advance Payment', type: 'mono', group: 'Delivery & Payment' })],
+  fromApi: r => ({ advancePayment: pbAmount(r.advancePayment) }),
+});
+
+const peList = purchaseList({
+  key: 'pe', route: 'entry/purchase-entry', noun: 'Purchase Entry', nouns: 'Purchase Entries', api: 'api/purchase-entries.php',
+  kind: 'po', form: peForm, lookups: ['purchaseorder', 'grn'], dateOf: record => record.purchaseDate,
+  columns: [
+    { key: 'code', label: 'Purchase No', type: 'code', group: 'Purchase' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Purchase' },
+    { key: 'name', label: 'Supplier', type: 'name', group: 'Supplier' },
+    { key: 'supplierInvoiceNo', label: 'Supplier Invoice No', type: 'mono', group: 'Supplier' },
+    { key: 'reference', label: 'PO / GRN', type: 'mono', group: 'Purchase' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Purchase' },
+    { key: 'grandTotal', label: 'Grand Total', type: 'qty-ok', group: 'Purchase' },
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
+    detail({ key: 'discountAmount', label: 'Discount Amount', type: 'mono', group: 'Purchase' }),
+  ],
+  fromApi: r => ({ ...r, date: r.purchaseDate, reference: [r.purchaseOrderCode, r.grnCode].filter(Boolean).join(' / '),
+    grandTotal: pbAmount(r.grandTotal), discountAmount: pbAmount(r.discountAmount) }),
+  importColumns: [{ key: 'purchaseDate', label: 'Date', headers: ['purchase date', 'bill date', 'invoice date'], read: readSheetDate('Date') },
+    { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor'] },
+    { key: 'supplierInvoiceNo', label: 'Supplier Invoice No', headers: ['invoice no', 'supplier invoice', 'bill no'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'price', label: 'Rate', headers: ['price', 'unit price'], read: readSheetNumber('Rate') },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', purchaseDate: '2026-11-19', supplier: 'GULF VALVES LLC', supplierInvoiceNo: 'INV-98234', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces', price: '12.500' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces', price: '0.350' },
+  ],
+  importHeader: async g => ({ purchaseDate: g.purchaseDate, supplierId: await importLookupId('supplier', g.supplier), supplierInvoiceNo: g.supplierInvoiceNo }),
+  importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: '0', discountPct: '0' }),
+});
+
+const seList = purchaseList({
+  key: 'se', route: 'entry/sales-entry', noun: 'Sales Entry', nouns: 'Sales Entries', api: 'api/sales-entries.php',
+  kind: 'po', form: seForm, lookups: ['taxinvoice', 'deliverynote'], dateOf: record => record.salesDate,
+  columns: [
+    { key: 'code', label: 'Sales No', type: 'code', group: 'Sale' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Sale' },
+    { key: 'name', label: 'Customer', type: 'name', group: 'Customer' },
+    { key: 'customerRefNo', label: 'Customer PO / Ref No', type: 'mono', group: 'Customer' },
+    { key: 'reference', label: 'Invoice / DN', type: 'mono', group: 'Sale' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Sale' },
+    { key: 'grandTotal', label: 'Grand Total', type: 'qty-ok', group: 'Sale' },
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Customer' }),
+    detail({ key: 'discountAmount', label: 'Discount Amount', type: 'mono', group: 'Sale' }),
+  ],
+  fromApi: r => ({ ...r, date: r.salesDate, reference: [r.taxInvoiceCode, r.deliveryNoteCode].filter(Boolean).join(' / '),
+    grandTotal: pbAmount(r.grandTotal), discountAmount: pbAmount(r.discountAmount) }),
+  importColumns: [{ key: 'salesDate', label: 'Date', headers: ['sales date', 'sale date', 'invoice date'], read: readSheetDate('Date') },
+    { key: 'customer', label: 'Customer', headers: ['customer name', 'buyer', 'client'] },
+    { key: 'customerRefNo', label: 'Customer PO / Ref No', headers: ['customer po', 'po no', 'ref no', 'reference'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'price', label: 'Rate', headers: ['price', 'unit price', 'selling price'], read: readSheetNumber('Rate') },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', salesDate: '2026-11-19', customer: 'AL NOOR TRADING LLC', customerRefNo: 'PO-4471', itemName: 'GATE VALVE 2"', quantity: '10', unit: 'Pieces', price: '15.750' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces', price: '0.500' },
+  ],
+  importHeader: async g => ({ salesDate: g.salesDate, customerId: await importLookupId('customer', g.customer), customerRefNo: g.customerRefNo }),
+  importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: '0', discountPct: '0' }),
+});
+
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList];
 
 /* ---------- The company letterhead behind every printed page ----------
    The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
@@ -10355,8 +10861,8 @@ function letterheadBands(source, width, height) {
    details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
 const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note',
-  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note' };
-const SALES_KEYS = ['qt', 'so', 'dn'];             // Trade Management documents (to a customer)
+  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice' };
+const SALES_KEYS = ['qt', 'so', 'dn', 'ti', 'se'];       // documents to a customer (Trade Management, Sales Entry)
 let companyProfilePromise = null;
 function companyProfile() {
   companyProfilePromise ||= apiRequest('api/company-profile.php').catch(() => null);
@@ -10372,7 +10878,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const isSales = SALES_KEYS.includes(spec.key);
   // Everything the page needs is asked for at once (not one after another), so it shows without a wait.
   const [profile, uploadedLetterhead, ownSupplier, picked, customer] = await Promise.all([companyProfile(), companyLetterhead(),
-    (procurement || spec.key === 'po') && doc.supplierId ? pbSupplier(String(doc.supplierId)).catch(() => null) : null,
+    (procurement || spec.key === 'po' || spec.key === 'pe') && doc.supplierId ? pbSupplier(String(doc.supplierId)).catch(() => null) : null,
     chosenSupplier,
     isSales && doc.customerId ? pbCustomer(String(doc.customerId)).catch(() => null) : null]);
   if (!stillWanted()) return;
@@ -10459,13 +10965,34 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['DN No', doc.code], ['Date', pbDate(doc.deliveryNoteDate)], ['Customer PO No', doc.customerPo], ['Ref Num', doc.referenceNo],
         ['Delivery Location', doc.deliveryLocation], ['Carrier', doc.carrier], ['Vehicle #', doc.vehicleNo], ['Salesman', doc.salesman]],
     }),
+    ti: () => ({
+      party: buyer(),
+      meta: [['Invoice No', doc.code], ['Date', pbDate(doc.invoiceDate)], ['Customer PO No', doc.customerPo], ['Ref ID', doc.referenceNo],
+        ['Purchase Category', doc.purchaseCategory], ...terms],
+    }),
+    // The old Purchase Invoice: Buyer (this company) beside the Supplier (address, country, e-mail, contact person,
+    // contact number), then Purchase No · Purchase Date · Supplier Inv No over PO Ref · GRN Ref · Currency.
+    pe: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier).filter(line => !Array.isArray(line) || line[0] !== 'VATIN') },
+      cols: 3,
+      meta: [['Purchase No', doc.code], ['Purchase Date', poSlashDate(doc.purchaseDate)], ['Supplier Inv No', doc.supplierInvoiceNo],
+        ['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode], ['Currency', doc.currency]],
+    }),
+    // The same for a sale: the customer as Buyer; Sales No · Sales Date · Customer PO / Ref No over Tax Invoice Ref ·
+    // Delivery Note Ref · Currency.
+    se: () => ({
+      party: buyer(),
+      cols: 3,
+      meta: [['Sales No', doc.code], ['Sales Date', poSlashDate(doc.salesDate)], ['Customer PO / Ref No', doc.customerRefNo],
+        ['Tax Invoice Ref', doc.taxInvoiceCode], ['Delivery Note Ref', doc.deliveryNoteCode], ['Currency', doc.currency]],
+    }),
   }[spec.key]();
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
   const qty = value => pbQty(pbNum(value));
   const grnMoney = value => pbNum(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 12,946.500
   const columns = [
-    [spec.key === 'grn' ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
+    [['grn', 'pe', 'se'].includes(spec.key) ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
     ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
     ['Item Name', 'name', l => l.itemName],
     ...{
@@ -10479,8 +11006,11 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
     so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
       [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
-      ...(proforma ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
-    }[spec.key === 'so' ? 'so' : spec.kind],
+      ...(proforma || spec.key === 'ti' ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
+    // A purchase entry: quantity × rate, no VAT or line discount.
+    pe: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
+      [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+    }[spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
@@ -10577,7 +11107,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   parts.push(box);
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
-    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items' }[spec.key]));
+    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items', ti: 'Invoiced Items', pe: 'Ordered Items', se: 'Sold Items' }[spec.key]));
   const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}${spec.key === 'po' ? ' ps-table-pdoc' : ''}`);
   const thead = el('thead');
   const headRow = el('tr');
@@ -10656,16 +11186,17 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
       [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
       ['Discount', doc.discountAmount],
-      [grn ? 'Shipping / Freight' : ({ qt: 'Delivery Charge', so: 'Transportation Charge', dn: 'Delivery Charge' }[spec.key] || 'Shipping'), doc.shipping],
+      [grn ? 'Shipping / Freight' : ({ qt: 'Delivery Charge', so: 'Transportation Charge', dn: 'Delivery Charge', ti: 'Transportation Charge' }[spec.key] || 'Shipping'), doc.shipping],
       ...(spec.key === 'qt' ? [['Round Off', doc.roundOff]] : []),          // left out when 0
       ['Grand Total', doc.grandTotal, true],
       // A sales order's advance (left out when none) and what is still due.
-      ...(spec.key === 'so' && pbNum(doc.advancePayment) ? [['Advance Payment', doc.advancePayment], ['Balance Due', pbNum(doc.grandTotal) - pbNum(doc.advancePayment)]] : [])]) {
+      ...((spec.key === 'so' || spec.key === 'ti') && pbNum(doc.advancePayment) ? [['Advance Payment', doc.advancePayment], ['Balance Due', pbNum(doc.grandTotal) - pbNum(doc.advancePayment)]] : [])]) {
       if (!strong && !pbNum(value) && !label.startsWith('Subtotal') && !label.includes('VAT')) continue;   // a zero discount / shipping is left out
-      if (spec.key === 'so' && !proforma && label.includes('VAT')) continue;                             // a sales order carries no VAT
+      if ((spec.key === 'pe' || spec.key === 'se' || (spec.key === 'so' && !proforma)) && label.includes('VAT')) continue;   // no VAT on a sales order / purchase or sales entry
       const discount = label === 'Discount';
-      const row = el('div', strong ? 'ps-total-grand' : discount && grn ? 'ps-total-discount' : '');
-      row.append(el('dt', '', `${label}:`), el('dd', '', `${discount && grn ? '-' : ''}${pbAmount(value)}${currency}`));
+      const entry = spec.key === 'pe' || spec.key === 'se';                 // the old Purchase Invoice: "Special Discount: -1.000"
+      const row = el('div', strong ? 'ps-total-grand' : discount && (grn || entry) ? 'ps-total-discount' : '');
+      row.append(el('dt', '', `${discount && entry ? 'Special Discount' : label}:`), el('dd', '', `${discount && (grn || entry) ? '-' : ''}${pbAmount(value)}${currency}`));
       totals.append(row);
     }
     bottom.append(totals);
@@ -10685,9 +11216,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   }
   const loading = [];
   const imageLoaded = img => new Promise(resolve => { img.onload = resolve; img.onerror = () => { img.remove(); resolve(); }; });
+  // A quotation: the General Terms & Conditions on a page of their own (the company's, from Create a Company, else
+  // the standard ones in terms.js), with the quotation's own Offer Validity and currency in them.
+  const termsText = spec.key === 'qt' && typeof renderQuotationTerms === 'function'
+    ? String(profile?.termsConditions ?? '').trim() || (typeof QUOTATION_TERMS_DEFAULT === 'string' ? QUOTATION_TERMS_DEFAULT : '')
+    : '';
   const sealSrc = doc.attachSeal ? await companySealImage() : null;
   if (!stillWanted()) return;
-  if (sealSrc) {
+  if (sealSrc && !termsText) {             // a quotation with terms: the seal only under the terms, not here too
     const seal = el('img', 'ps-seal');
     seal.alt = 'Company seal';
     loading.push(imageLoaded(seal));
@@ -10705,11 +11241,6 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
-  // A quotation: the General Terms & Conditions on a page of their own (the company's, from Create a Company, else
-  // the standard ones in terms.js), with the quotation's own Offer Validity and currency in them.
-  const termsText = spec.key === 'qt' && typeof renderQuotationTerms === 'function'
-    ? String(profile?.termsConditions ?? '').trim() || (typeof QUOTATION_TERMS_DEFAULT === 'string' ? QUOTATION_TERMS_DEFAULT : '')
-    : '';
   if (termsText) {
     const currencyCode = String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
     const currencyName = PO_CURRENCIES.find(row => row.code === currencyCode)?.name;
@@ -10718,7 +11249,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const termsCell = el('td', 'ps-body ps-terms');
     termsCell.append(el('div', 'ps-terms-title', 'General Terms & Conditions'),
       renderQuotationTerms(termsText, { validity, currency: currencyName ? `${currencyName} (${currencyCode})` : currencyCode }));
-    if (sealSrc) {                         // Attach Seal: the seal under the terms too, as on the first page
+    if (sealSrc) {                         // Attach Seal: on a quotation, only here (not on the first page as well)
       const termsSeal = el('img', 'ps-seal ps-terms-seal');
       termsSeal.alt = 'Company seal';
       loading.push(imageLoaded(termsSeal));

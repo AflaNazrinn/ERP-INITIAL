@@ -15,6 +15,9 @@ require_once __DIR__ . '/purchase_book.php';
  *                  Send For Approval; the buying total and profit are worked out here (sb_order_costs).
  *                  A Sales Order has no VAT (its lines are saved at 0%); a Proforma Invoice has.
  *   delivery note  the sales order it came from, customer PO no, stock point, carrier, vehicle no
+ *   tax invoice    (Transaction Entry, INV-0001) document title, Ref ID (the quotation, sales order or delivery note it
+ *                  came from), customer PO no, purchase category, free-text payment terms, advance payment and
+ *                  Send For Approval (instantly approves it)
  */
 
 const SB_DOCS = [
@@ -24,6 +27,8 @@ const SB_DOCS = [
         'stem' => 'SO-', 'noun' => 'Sales order', 'dateKey' => 'orderDate', 'dateLabel' => 'Order date'],
     'dn' => ['table' => 'delivery_notes', 'items' => 'delivery_note_items', 'owner' => 'delivery_note_id', 'code' => 'dn_code', 'date' => 'dn_date',
         'stem' => 'DN-', 'noun' => 'Delivery note', 'dateKey' => 'deliveryNoteDate', 'dateLabel' => 'Delivery note date'],
+    'ti' => ['table' => 'tax_invoices', 'items' => 'tax_invoice_items', 'owner' => 'tax_invoice_id', 'code' => 'ti_code', 'date' => 'ti_date',
+        'stem' => 'INV-', 'noun' => 'Tax invoice', 'dateKey' => 'invoiceDate', 'dateLabel' => 'Invoice date'],
 ];
 
 /* The header keys a saved document sends back as a save payload (a PUT that changes only some keys). */
@@ -34,6 +39,8 @@ const SB_EXTRA_KEYS = [
     'so' => ['orderDate', 'documentTitle', 'supplierMode', 'supplierId', 'supplierCurrency', 'quotationId', 'customerPo', 'purchaseCategory',
         'customDuty', 'businessPromotion', 'advancePayment', 'sendForApproval'],
     'dn' => ['deliveryNoteDate', 'referenceNo', 'salesOrderId', 'quotationId', 'customerPo', 'carrier', 'vehicleNo'],
+    'ti' => ['invoiceDate', 'documentTitle', 'referenceNo', 'quotationId', 'salesOrderId', 'deliveryNoteId', 'customerPo',
+        'purchaseCategory', 'advancePayment', 'sendForApproval'],
 ];
 
 function sb_format(string $kind, array $row): array
@@ -69,6 +76,18 @@ function sb_format(string $kind, array $row): array
             'totalBuying' => $row['total_buying'], 'totalProfit' => $row['total_profit'],
             'profitPercent' => (float) $row['subtotal'] > 0 ? number_format((float) $row['total_profit'] / (float) $row['subtotal'] * 100, 2, '.', '') : '0.00',
             'sendForApproval' => (bool) $row['send_for_approval'], 'status' => $row['status']];
+    } elseif ($kind === 'ti') {
+        $code = static fn (string $table, string $column, $id) => $id === null ? '' : (string) query("SELECT `$column` FROM `$table` WHERE id = ?", [$id])->fetchColumn();
+        $qt = $code('quotations', 'qt_code', $row['quotation_id']);
+        $so = $code('sales_orders', 'so_code', $row['sales_order_id']);
+        $dn = $code('delivery_notes', 'dn_code', $row['delivery_note_id']);
+        $doc += ['documentTitle' => $row['document_title'],
+            'referenceNo' => $row['reference_no'] !== '' ? $row['reference_no'] : ($dn !== '' ? $dn : ($so !== '' ? $so : $qt)),
+            'quotationId' => $row['quotation_id'] === null ? null : (int) $row['quotation_id'], 'quotationCode' => $qt,
+            'salesOrderId' => $row['sales_order_id'] === null ? null : (int) $row['sales_order_id'], 'salesOrderCode' => $so,
+            'deliveryNoteId' => $row['delivery_note_id'] === null ? null : (int) $row['delivery_note_id'], 'deliveryNoteCode' => $dn,
+            'customerPo' => $row['customer_po'], 'purchaseCategory' => $row['purchase_category'],
+            'advancePayment' => $row['advance_payment'], 'sendForApproval' => (bool) $row['send_for_approval'], 'status' => $row['status']];
     } else {
         $so = $row['sales_order_id'] === null ? '' : (string) query('SELECT so_code FROM sales_orders WHERE id = ?', [$row['sales_order_id']])->fetchColumn();
         $warehouse = $row['warehouse_id'] === null ? null
@@ -128,7 +147,7 @@ function sb_save(string $kind, array $data, ?int $id = null): array
         'contact_number' => $in->text('contactNumber', 'Contact number', 40),
         'currency' => sb_currency($in, $customerId),
         'delivery_location' => $in->text('deliveryLocation', 'Delivery location', 200),
-        'payment_mode' => $in->text('paymentMode', $kind === 'so' ? 'Payment terms' : 'Payment mode', $kind === 'so' ? 100 : 40),
+        'payment_mode' => $in->text('paymentMode', SB_FREE_TERMS[$kind] ? 'Payment terms' : 'Payment mode', SB_FREE_TERMS[$kind] ? 100 : 40),
         'credit_period' => $in->text('creditPeriod', 'Credit period', 40),
         'salesman' => $in->text('salesman', 'Salesman / created by', 100),
         'salesman_contact' => $in->text('salesmanContact', 'Salesman contact', 40),
@@ -166,6 +185,19 @@ function sb_save(string $kind, array $data, ?int $id = null): array
         if ($v['document_title'] !== 'Sales Order' || $v['supplier_mode'] === 'multi') {
             $v['supplier_id'] = null;
         }
+    } elseif ($kind === 'ti') {
+        $v += [
+            'document_title' => $in->choice('documentTitle', 'Document title', SB_INVOICE_TITLES, 'Invoice'),
+            'reference_no' => $in->text('referenceNo', 'Ref ID', 60),
+            'quotation_id' => $in->id('quotationId', 'quotation', 'quotations'),
+            'sales_order_id' => $in->id('salesOrderId', 'sales order', 'sales_orders'),
+            'delivery_note_id' => $in->id('deliveryNoteId', 'delivery note', 'delivery_notes'),
+            'customer_po' => $in->text('customerPo', 'Customer PO number', 60),
+            'purchase_category' => $in->text('purchaseCategory', 'Purchase category', 100),
+            'advance_payment' => $in->decimal('advancePayment', 'Advance payment', 14, 3) ?? '0',
+            'send_for_approval' => pb_flag($data, 'sendForApproval'),
+        ];
+        $v['status'] = $v['send_for_approval'] ? 'Approved' : 'Draft';
     } else {
         $v += [
             'reference_no' => $in->text('referenceNo', 'Ref num', 60),
@@ -183,7 +215,7 @@ function sb_save(string $kind, array $data, ?int $id = null): array
     if ($v['payment_mode'] !== 'Credit') {
         $v['credit_period'] = '';
     }
-    if ($kind !== 'so' && $v['payment_mode'] !== '' && !in_array($v['payment_mode'], PB_PAYMENT_MODES, true)) {
+    if (!SB_FREE_TERMS[$kind] && $v['payment_mode'] !== '' && !in_array($v['payment_mode'], PB_PAYMENT_MODES, true)) {
         $in->fail('paymentMode', 'Payment mode must be one of: ' . implode(', ', PB_PAYMENT_MODES) . '.');
     }
     foreach (['salesman_contact' => 'salesmanContact', 'contact_number' => 'contactNumber'] as $column => $key) {
@@ -234,7 +266,10 @@ function sb_save(string $kind, array $data, ?int $id = null): array
 }
 
 const SB_ORDER_TITLES = ['Sales Order', 'Proforma Invoice'];
-const SB_LINE_KINDS = ['qt' => 'sales', 'so' => 'salesorder', 'dn' => 'deliverynote'];
+const SB_LINE_KINDS = ['qt' => 'sales', 'so' => 'salesorder', 'dn' => 'deliverynote', 'ti' => 'sales'];
+/* The kinds whose Payment Terms are free text ("50% Advance, 50% on Delivery"); the others pick a payment mode. */
+const SB_FREE_TERMS = ['qt' => false, 'so' => true, 'dn' => false, 'ti' => true];
+const SB_INVOICE_TITLES = ['Invoice'];
 
 /* Fixed rates to OMR for a sales order's buying costs (the order screen uses the same table). */
 const SB_RATES_TO_OMR = ['OMR' => 1.0, 'AED' => 0.1055, 'USD' => 0.385, 'SAR' => 0.1026, 'INR' => 0.0046, 'EUR' => 0.42,
@@ -301,7 +336,7 @@ function sb_serve(string $kind): void
     // used, newest first, once each (the lines' Delivery Term suggests them as it is typed).
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['deliveryTerms'])) {
         $terms = [];
-        foreach (['quotation_items', 'sales_order_items', 'delivery_note_items'] as $table) {
+        foreach (['quotation_items', 'sales_order_items', 'delivery_note_items', 'tax_invoice_items'] as $table) {
             try {
                 foreach (query("SELECT delivery_term AS term, MAX(id) AS last FROM $table WHERE delivery_term <> '' GROUP BY delivery_term")->fetchAll() as $row) {
                     $key = mb_strtoupper(trim((string) $row['term']));
