@@ -2876,6 +2876,7 @@ function handleItemPageKeys(event) {
   if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey
       && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
     event.preventDefault();
+    if (target.type === 'checkbox') { if (!event.repeat) target.click(); return true; }   // Enter ticks / unticks
     if (isDateField(target) && target.closest('.fp-source-row')) { addSourceRow(); setItemDirty(true); return true; }
     if (openDropdownOnEnter(target)) return true;
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
@@ -3237,6 +3238,10 @@ function createFormPage(config) {
     if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
       if (target.dataset.enterNewline) return false;
       event.preventDefault();
+      if (target.type === 'checkbox') {   // Enter ticks / unticks a checkbox (Include Signatory Slots, Attach Seal …)
+        if (!event.repeat) target.click();
+        return true;
+      }
       if (target.dataset.enterOpens && target instanceof HTMLSelectElement) {   // a dropdown that always opens on Enter
         if (!event.repeat) openSelectMenu(target);
         return true;
