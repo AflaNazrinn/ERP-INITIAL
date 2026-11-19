@@ -1803,7 +1803,8 @@ const LOOKUPS = {
 };
 
 const PO_LOCATIONS = ['DDP MUSCAT LIMIT', 'DAP MUSCAT', 'EX-WORKS', 'MUSCAT MAIN WAREHOUSE', 'SOHAR SITE STORE'];
-const PO_TERMS = ['2-3 days from PO date', '2-3 weeks from PO date, DAF', '1 week from PO date', '4-6 weeks from PO date', 'Immediate delivery', 'Ex-stock'];
+// Delivery Terms: no preset values; only the terms typed on saved orders are suggested (as they are typed).
+const PO_TERMS = [];
 const PO_CREDIT_PERIODS = ['7 Days', '15 Days', '30 Days', '45 Days', '60 Days', '90 Days'];
 // The suggestions for a Purchase Order text field: the presets, then other values saved orders used (once each).
 async function poTextRows(key, presets) {
