@@ -1807,9 +1807,17 @@ const PO_LOCATIONS = ['DDP MUSCAT LIMIT', 'DAP MUSCAT', 'EX-WORKS', 'MUSCAT MAIN
 const PO_TERMS = [];
 const PO_CREDIT_PERIODS = ['7 Days', '15 Days', '30 Days', '45 Days', '60 Days', '90 Days'];
 // The suggestions for a Purchase Order text field: the presets, then other values saved orders used (once each).
+// The saved orders are read again when the list opens (at most every few seconds), so a value another user has
+// just saved is suggested straight away.
+let poSavedOrders = { at: 0, rows: null };
 async function poTextRows(key, presets) {
   let used = [];
-  try { used = (await loadLookup('purchaseorder')).map(po => String(po[key] ?? '').trim()).filter(Boolean); } catch { /* presets only */ }
+  try {
+    if (!poSavedOrders.rows || Date.now() - poSavedOrders.at > 3000) {
+      poSavedOrders = { at: Date.now(), rows: await apiRequest('api/purchase-orders.php') };
+    }
+    used = poSavedOrders.rows.map(po => String(po[key] ?? '').trim()).filter(Boolean);
+  } catch { /* presets only */ }
   const seen = new Set();
   return [...presets, ...used].filter(text => !seen.has(text.toLowerCase()) && seen.add(text.toLowerCase()))
     .map(text => ({ id: text, code: '', name: text }));
