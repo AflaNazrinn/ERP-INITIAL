@@ -8638,7 +8638,7 @@ async function poShowSupplier({ fresh = false } = {}) {
     // The supplier's first contact person and number (the others are in the Select Contact Person popup); with none, its own phone.
     if (contacts.length) {
       fillLookup(byId('po-contact'), { id: contacts[0].name, name: contacts[0].name });
-      putPhone(byId('po-contact-number'), poSupplierPhone(contacts[0].number || supplier.phone || supplier.telephone, supplier));
+      putPhone(byId('po-contact-number'), contacts[0].number ? poSupplierPhone(contacts[0].number, supplier) : '');   // its own number only
     } else if (supplier.phone || supplier.telephone) {
       putPhone(byId('po-contact-number'), poSupplierPhone(supplier.phone || supplier.telephone, supplier));
     }
@@ -8746,12 +8746,16 @@ const poForm = createPurchaseForm({
       form.page.absorb();
       form.refresh();
     });
-    // A contact picked in the Select Contact Person popup (or just created) brings its number.
+    // A contact picked in the Select Contact Person popup (or just created) brings its number; a contact
+    // without a number (or no contact) leaves Contact Person Number empty, never the previous contact's.
     byId('po-contact').addEventListener('input', async () => {
+      const name = byId('po-contact').value;
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
-      const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
-      if (contact?.number) { putPhone(byId('po-contact-number'), poSupplierPhone(contact.number, supplier)); form.page.absorb(); }
+      if (byId('po-contact').value !== name) return;            // another pick came in meanwhile
+      const contact = name ? supplier?.contacts?.find(entry => sameText(entry.name, name)) : null;
+      putPhone(byId('po-contact-number'), contact?.number ? poSupplierPhone(contact.number, supplier) : '');
+      form.page.absorb();
     });
     // A pick in the Select Currency popup: the form records it first (its listener is older), then VAT follows in the same step.
     byId('po-form').addEventListener('input', event => {
