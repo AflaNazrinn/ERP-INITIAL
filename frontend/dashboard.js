@@ -9001,7 +9001,7 @@ function createSalesForm(cfg) {
    of Payment As usual / Cash / Credit (Credit asks Credit Days), the line shows its Brand, and the summary reads
    Items Total Amount (before line discounts), Total VAT, Line Discounts Total, Delivery Charge, Special Discount,
    Round Off and Grand Total (Round Off added). */
-const QT_VALIDITY = ['30 Days', '15 Days', '45 Days', '60 Days', '90 Days', '120 Days'];
+const QT_VALIDITY = ['15 Days', '30 Days', '45 Days', '60 Days', '90 Days', '120 Days'];
 function qtShowValidity({ focus = false } = {}) {
   const custom = byId('qt-validity-pick').value === 'CUSTOM';
   byId('qt-validity').hidden = !custom;
