@@ -3065,6 +3065,604 @@
   </form>
 </section>
 
+<!-- TAX INVOICE list  (#/entry/tax-invoice) -->
+<section id="ti-list-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="ti-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="m15 8-6 8"></path><circle cx="9.5" cy="9" r="1"></circle><circle cx="14.5" cy="15" r="1"></circle></svg></div>
+      <h1 id="ti-list-title" class="fp-title pb-list-title">Tax Invoice</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Invoice</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="ti-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Tax Invoices</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="ti-list-search" type="search" placeholder="Search invoice, customer..." autocomplete="off" aria-label="Search tax invoices" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="ti-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="ti-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/entry/tax-invoice/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Invoice</span>
+        </a>
+        <button type="button" id="ti-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="ti-list-head"></tr></thead>
+        <tbody id="ti-list-body"></tbody>
+      </table>
+      <div id="ti-list-empty" class="table-state" hidden>No tax invoices match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="ti-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TAX INVOICE  (#/entry/tax-invoice/new · Quick Menu › Transaction Entry). The Transaction Entry teal. -->
+<section id="ti-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="ti-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="m15 8-6 8"></path><circle cx="9.5" cy="9" r="1"></circle><circle cx="14.5" cy="15" r="1"></circle></svg></div>
+      <h1 id="ti-title" class="fp-title">Tax Invoice</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="ti-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="ti-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Document Details</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <label class="fp-label" for="ti-doc-title">Document Title</label>
+          <select id="ti-doc-title" class="fp-input fp-select pb-input-strong" data-enter-opens="true"><option selected>Invoice</option><option>Quotation</option><option>Sales Order</option><option>Delivery Note</option></select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-code">Invoice ID</label>
+          <input id="ti-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the invoice is saved">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-date">Requested Date <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="ti-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-customer">Buyer Name <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="ti-customer" class="fp-input fp-lookup" type="text" data-lookup="customer" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select buyer..."><input id="ti-customer-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <!-- The buyer's contact (from the Customer master) goes with the invoice and prints on it. -->
+          <input id="ti-contact" type="hidden"><datalist id="ti-contact-list"></datalist><input id="ti-contact-number" type="hidden">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-reference">Ref ID (Click to Select Quotation, Sales Order, or Delivery Note)</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="ti-reference" class="fp-input fp-lookup" type="text" data-lookup="invoiceref" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select Quotation, Sales Order, or Delivery Note"><input id="ti-reference-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-customer-po">Customer PO Number <span class="fp-optional">(optional)</span></label>
+          <input id="ti-customer-po" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="E.g. PO-98765 (Optional)">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-category">Purchase Category</label>
+          <input id="ti-category" class="fp-input" type="text" maxlength="100" autocomplete="off" placeholder="E.g. Spares, Equipment">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-currency">Currency (Base) <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="ti-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="ti-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-payment">Payment Terms</label>
+          <input id="ti-payment" class="fp-input" type="text" maxlength="100" autocomplete="off" list="ti-payment-list" placeholder="E.g. Cash / 30 Days Net"><datalist id="ti-payment-list"><option value="Cash"></option><option value="As usual"></option><option value="Credit"></option><option value="100% Advance"></option><option value="50% Advance, 50% on Delivery"></option><option value="30 Days Net"></option><option value="60 Days Net"></option></datalist>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="ti-location">Delivery Location</label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="ti-location" class="fp-input" type="text" maxlength="200" data-suggest="poLocation" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="E.g. Muscat Warehouse / Site"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery locations" hidden></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. Order Line Items</h2>
+        <div class="pb-head-actions">
+          <input id="ti-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-vat-switch" data-vat-switch aria-pressed="true" title="VAT Enabled: VAT % is added on top of the prices. Click for prices that already include VAT.">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+            <span data-vat-label>VAT Enabled</span>
+          </button>
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Master Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sales pb-table-ti">
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Unit Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-total">Total Price (<span data-ti-base>OMR</span>)</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="ti-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="pb-pair-summary pb-pair-po">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; Notes &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" id="ti-remarks-label" for="ti-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="ti-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks &amp; Notes formatting" aria-controls="ti-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="ti-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="ti-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Deliver to site gate 2"></div>
+          </div>
+        </div>
+        <label class="pb-check ti-approval"><input id="ti-approval" type="checkbox" data-transient="true"><span>Send For Approval (instantly approves the document)</span></label>
+        <div class="pb-print" data-print="ti"></div>
+      </section>
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">4. Financial Summary</h2>
+        <dl class="pb-sum pb-sum-po">
+          <div><dt>Total Selling Price (<span data-ti-base>OMR</span>)</dt><dd id="ti-subtotal">0.000</dd></div>
+          <div><dt><label for="ti-shipping">Transportation Charge (<span data-ti-base>OMR</span>)</label></dt><dd><input id="ti-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt id="ti-vat-label">VAT / Tax Total</dt><dd id="ti-vat">0.000</dd></div>
+          <div><dt><label for="ti-discount">Discount (<span data-ti-base>OMR</span>)</label></dt><dd><input id="ti-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt><label for="ti-advance">Advance Payment (<span data-ti-base>OMR</span>)</label></dt><dd><input id="ti-advance" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total (<span id="ti-grand-currency">OMR</span>)</dt><dd id="ti-grand">0.000</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="ti-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="ti-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="ti-save-label">Save Invoice</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- PURCHASE ENTRY list  (#/entry/purchase-entry) -->
+<section id="pe-list-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="pe-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"></path></svg></div>
+      <h1 id="pe-list-title" class="fp-title pb-list-title">Purchase Entry</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Purchase</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="pe-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Purchase Entries</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="pe-list-search" type="search" placeholder="Search purchase no, supplier, invoice no..." autocomplete="off" aria-label="Search purchase entries" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="pe-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="pe-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/entry/purchase-entry/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Purchase</span>
+        </a>
+        <button type="button" id="pe-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="pe-list-head"></tr></thead>
+        <tbody id="pe-list-body"></tbody>
+      </table>
+      <div id="pe-list-empty" class="table-state" hidden>No purchase entries match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="pe-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PURCHASE ENTRY  (#/entry/purchase-entry/new · Quick Menu › Transaction Entry). The Transaction Entry teal. -->
+<section id="pe-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="pe-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"></path></svg></div>
+      <h1 id="pe-title" class="fp-title">Purchase Entry</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="pe-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="pe-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Purchase Details</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <label class="fp-label" for="pe-code">Purchase No</label>
+          <input id="pe-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the purchase is saved">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pe-date">Date <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="pe-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" for="pe-supplier">Supplier Name <span class="fp-req" aria-hidden="true">*</span></label>
+            <button type="button" id="pe-supplier-new" class="pe-new" tabindex="-1" title="Create a new supplier in the Supplier master">+ New</button>
+          </div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="pe-supplier" class="fp-input fp-lookup" type="text" data-lookup="supplier" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select supplier..."><input id="pe-supplier-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pe-invoice-no">Supplier Invoice No</label>
+          <input id="pe-invoice-no" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="e.g. INV-98234 (Optional)">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pe-po">PO Number <span class="fp-optional">(optional)</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="pe-po" class="fp-input fp-lookup" type="text" data-lookup="purchaseorder" data-lookup-party="pe-supplier-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select PO..."><input id="pe-po-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pe-grn">GRN (Goods Received Note)</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="pe-grn" class="fp-input fp-lookup" type="text" data-lookup="grn" data-lookup-party="pe-supplier-id" data-lookup-order="pe-po-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select GRN..."><input id="pe-grn-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="pe-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="pe-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="pe-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. Line Items</h2>
+        <div class="pb-head-actions">
+          <input id="pe-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Master Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Row</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-pe">
+          <thead><tr><th class="pb-col-sno">#</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Quantity</th><th class="pb-col-num">Rate</th><th class="pb-col-total">Total</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="pe-items"></tbody>
+        </table>
+      </div>
+      <div class="pe-items-foot"><span>Tip: press <kbd>Alt+A</kbd> to add a new row.</span><span>Total Items: <strong id="pe-item-count">1</strong></span></div>
+    </section>
+
+    <div class="pb-pair-summary pb-pair-po">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; Notes &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" id="pe-remarks-label" for="pe-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="pe-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks &amp; Notes formatting" aria-controls="pe-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="pe-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="pe-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Deliver to site gate 2"></div>
+          </div>
+        </div>
+        <div class="pb-print" data-print="pe"></div>
+      </section>
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">4. Purchase Summary</h2>
+        <dl class="pb-sum pb-sum-po">
+          <div><dt>Subtotal (Net) (<span data-pe-base>OMR</span>)</dt><dd id="pe-subtotal">0.000</dd></div>
+          <div><dt><label for="pe-discount">Discount Amount (<span data-pe-base>OMR</span>)</label></dt><dd><input id="pe-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total (<span id="pe-grand-currency">OMR</span>)</dt><dd id="pe-grand">0.000</dd></div>
+          <!-- No VAT or shipping on a purchase entry: kept at 0 for the shared totals. -->
+          <dd id="pe-vat" hidden>0.000</dd><span id="pe-vat-label" hidden></span><input id="pe-shipping" type="hidden" value="0.000">
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="pe-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="pe-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg><span id="pe-save-label">Save Purchase</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- SALES ENTRY list  (#/entry/sales-entry) -->
+<section id="se-list-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="se-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"></path></svg></div>
+      <h1 id="se-list-title" class="fp-title pb-list-title">Sales Entry</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Sale</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="se-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Sales Entries</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="se-list-search" type="search" placeholder="Search sales no, customer, ref no..." autocomplete="off" aria-label="Search sales entries" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="se-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="se-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/entry/sales-entry/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Sale</span>
+        </a>
+        <button type="button" id="se-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="se-list-head"></tr></thead>
+        <tbody id="se-list-body"></tbody>
+      </table>
+      <div id="se-list-empty" class="table-state" hidden>No sales entries match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="se-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SALES ENTRY  (#/entry/sales-entry/new · Quick Menu › Transaction Entry). The Transaction Entry teal. -->
+<section id="se-page" class="form-page form-page-auto fp-theme-purchase fp-theme-entry" aria-labelledby="se-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"></path></svg></div>
+      <h1 id="se-title" class="fp-title">Sales Entry</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="se-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="se-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Sales Details</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <label class="fp-label" for="se-code">Sales No</label>
+          <input id="se-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the sale is saved">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-date">Date <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="se-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" for="se-customer">Customer Name <span class="fp-req" aria-hidden="true">*</span></label>
+            <button type="button" id="se-customer-new" class="pe-new" tabindex="-1" title="Create a new customer in the Customer master">+ New</button>
+          </div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-customer" class="fp-input fp-lookup" type="text" data-lookup="customer" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select customer..."><input id="se-customer-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-ref-no">Customer PO / Ref No</label>
+          <input id="se-ref-no" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="e.g. PO-4471 (Optional)">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-ti">Tax Invoice <span class="fp-optional">(optional)</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-ti" class="fp-input fp-lookup" type="text" data-lookup="taxinvoice" data-lookup-party="se-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select invoice..."><input id="se-ti-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-dn">Delivery Note</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-dn" class="fp-input fp-lookup" type="text" data-lookup="deliverynote" data-lookup-party="se-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select delivery note..."><input id="se-dn-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="se-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. Line Items</h2>
+        <div class="pb-head-actions">
+          <input id="se-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Master Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Row</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-se">
+          <thead><tr><th class="pb-col-sno">#</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Quantity</th><th class="pb-col-num">Rate</th><th class="pb-col-total">Total</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="se-items"></tbody>
+        </table>
+      </div>
+      <div class="pe-items-foot"><span>Tip: press <kbd>Alt+A</kbd> to add a new row.</span><span>Total Items: <strong id="se-item-count">1</strong></span></div>
+    </section>
+
+    <div class="pb-pair-summary pb-pair-po">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; Notes &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" id="se-remarks-label" for="se-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="se-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks &amp; Notes formatting" aria-controls="se-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0f766e" style="--swatch: #0f766e" title="Teal" aria-label="Teal text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#15803d" style="--swatch: #15803d" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#7c3aed" style="--swatch: #7c3aed" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="se-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="se-remarks-label" tabindex="0" spellcheck="true" data-placeholder="e.g. Delivered to site gate 2"></div>
+          </div>
+        </div>
+        <div class="pb-print" data-print="se"></div>
+      </section>
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">4. Sales Summary</h2>
+        <dl class="pb-sum pb-sum-po">
+          <div><dt>Subtotal (Net) (<span data-se-base>OMR</span>)</dt><dd id="se-subtotal">0.000</dd></div>
+          <div><dt><label for="se-discount">Discount Amount (<span data-se-base>OMR</span>)</label></dt><dd><input id="se-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Grand Total (<span id="se-grand-currency">OMR</span>)</dt><dd id="se-grand">0.000</dd></div>
+          <!-- No VAT or shipping on a sales entry: kept at 0 for the shared totals. -->
+          <dd id="se-vat" hidden>0.000</dd><span id="se-vat-label" hidden></span><input id="se-shipping" type="hidden" value="0.000">
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="se-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="se-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg><span id="se-save-label">Save Sale</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
 <!-- Purchase Book row templates. Cells shared by every document come first. -->
 <template id="pb-cell-item">
   <td class="pb-col-sno" data-row-label></td>
@@ -3150,6 +3748,34 @@
   <td><output class="pb-line-total" data-total>—</output><input type="hidden" data-field="foc" value="No"></td>
 </tr></template>
 
+<!-- Tax Invoice line: the sales line without discount columns (Delivery Term, Qty, Unit, Unit Price, VAT %, Total) -->
+<template id="pb-line-ti"><tr class="fp-row" data-pb-row="ti">
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
+  <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
+  <td data-unit-cell></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Unit price"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5.00" aria-label="VAT %"></td>
+  <td><output class="pb-line-total" data-total>—</output><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
+</tr></template>
+
+<!-- Purchase Entry line: Unit, Quantity, Rate, Total (quantity × rate) and Line Total (less its share of the discount) -->
+<template id="pb-line-pe"><tr class="fp-row" data-pb-row="pe">
+  <td data-unit-cell></td>
+  <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Rate"></td>
+  <td><output class="pb-line-total pb-line-total-plain" data-gross>0.000</output></td>
+  <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="vatRate" value="0.00"><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
+</tr></template>
+
+<!-- Sales Entry line (the Purchase Entry line at selling prices): Unit, Quantity, Rate, Total (quantity × rate) and Line Total (less its share of the discount) -->
+<template id="pb-line-se"><tr class="fp-row" data-pb-row="se">
+  <td data-unit-cell></td>
+  <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
+  <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Rate"></td>
+  <td><output class="pb-line-total pb-line-total-plain" data-gross>0.000</output></td>
+  <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="vatRate" value="0.00"><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
+</tr></template>
+
 <!-- GRN line -->
 <template id="pb-line-grn"><tr class="fp-row" data-pb-row="grn">
   <td><input class="fp-cell fp-cell-num pb-cell-rec" data-field="receivedQty" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Received quantity"></td>
@@ -3232,6 +3858,8 @@
   <div class="lk-body">
     <section class="lk-card" aria-labelledby="lookup-list-title">
       <h3 id="lookup-list-title" class="fp-section-title lk-list-title"></h3>
+      <!-- Tabbed popups (the Tax Invoice's Ref ID: Quotations · Sales Orders · Delivery Notes); ←/→ on an empty search. -->
+      <div id="lookup-tabs" class="lk-tabs" role="tablist" hidden></div>
       <label class="lk-label" for="lookup-search">Search</label>
       <div class="lk-search-row">
         <div class="lk-search">
@@ -4103,22 +4731,22 @@
         <kbd class="qm-kbd">Alt</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
-      <h3 class="qm-section">Create (Alt)</h3>
-      <a class="qm-item qm-item-sm" href="#/entry/purchase-entry/new" data-key="p" aria-keyshortcuts="Alt+P P">
+      <h3 class="qm-section">Transaction Entry</h3>
+      <a class="qm-item qm-item-sm" href="#/entry/purchase-entry" data-key="p" aria-keyshortcuts="P">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"></path></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">P</span>urchase Entry</span><span class="qm-desc">Supplier bills recorded in the books</span></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">P</span>urchase Entry</span><span class="qm-desc">All supplier bills recorded in the books</span></span>
         <kbd class="qm-kbd">P</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/entry/sales-entry/new" data-key="s" aria-keyshortcuts="Alt+S S">
+      <a class="qm-item qm-item-sm" href="#/entry/sales-entry" data-key="s" aria-keyshortcuts="S">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"></path></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Entry</span><span class="qm-desc">Customer sales recorded in the books</span></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Entry</span><span class="qm-desc">All customer sales recorded in the books</span></span>
         <kbd class="qm-kbd">S</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice/new" data-key="t" aria-keyshortcuts="Alt+T T">
+      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice" data-key="t" aria-keyshortcuts="T">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">VAT invoices issued to customers</span></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">All VAT invoices issued to customers</span></span>
         <kbd class="qm-kbd">T</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>

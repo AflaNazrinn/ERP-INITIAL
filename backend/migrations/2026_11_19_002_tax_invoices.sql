@@ -1,0 +1,77 @@
+-- Transaction Entry › Tax Invoice: VAT invoices issued to customers (INV-0001).
+-- The sales documents' shape (a customer, currency, payment terms, delivery location, priced item lines with a
+-- delivery term, remarks, signatory slots, the seal) plus: the document title, the quotation / sales order /
+-- delivery note it was made from (Ref ID), customer PO number, purchase category, advance payment and
+-- Send For Approval (instantly approves the invoice).
+-- Applied by backend/bin/migrate.php. MySQL 8 / MariaDB 10.6+.
+
+CREATE TABLE tax_invoices (
+  id                INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  ti_code           VARCHAR(20)   NOT NULL,
+  ti_date           DATE          NOT NULL,
+  document_title    VARCHAR(30)   NOT NULL DEFAULT 'Invoice',
+  reference_no      VARCHAR(60)   NOT NULL DEFAULT '',
+  quotation_id      INT UNSIGNED  NULL,
+  sales_order_id    INT UNSIGNED  NULL,
+  delivery_note_id  INT UNSIGNED  NULL,
+  customer_po       VARCHAR(60)   NOT NULL DEFAULT '',
+  purchase_category VARCHAR(100)  NOT NULL DEFAULT '',
+  customer_id       INT UNSIGNED  NULL,
+  contact_name      VARCHAR(100)  NOT NULL DEFAULT '',
+  contact_number    VARCHAR(40)   NOT NULL DEFAULT '',
+  currency          VARCHAR(10)   NOT NULL DEFAULT 'OMR',
+  delivery_location VARCHAR(200)  NOT NULL DEFAULT '',
+  payment_mode      VARCHAR(100)  NOT NULL DEFAULT '',
+  credit_period     VARCHAR(40)   NOT NULL DEFAULT '',
+  salesman          VARCHAR(100)  NOT NULL DEFAULT '',
+  salesman_contact  VARCHAR(40)   NOT NULL DEFAULT '',
+  vat_mode          VARCHAR(10)   NOT NULL DEFAULT 'exclude',
+  subtotal          DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_amount        DECIMAL(14,3) NOT NULL DEFAULT 0,
+  discount_amount   DECIMAL(14,3) NOT NULL DEFAULT 0,
+  shipping          DECIMAL(14,3) NOT NULL DEFAULT 0,
+  grand_total       DECIMAL(14,3) NOT NULL DEFAULT 0,
+  advance_payment   DECIMAL(14,3) NOT NULL DEFAULT 0,
+  send_for_approval TINYINT(1)    NOT NULL DEFAULT 0,
+  status            VARCHAR(20)   NOT NULL DEFAULT 'Draft',
+  remarks           TEXT          NULL,
+  include_signatory TINYINT(1)    NOT NULL DEFAULT 0,
+  extra_signatories TEXT          NULL,
+  attach_seal       TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tax_invoices_code (ti_code),
+  CONSTRAINT fk_tax_invoices_quotation FOREIGN KEY (quotation_id)     REFERENCES quotations (id)     ON DELETE RESTRICT,
+  CONSTRAINT fk_tax_invoices_order     FOREIGN KEY (sales_order_id)   REFERENCES sales_orders (id)   ON DELETE RESTRICT,
+  CONSTRAINT fk_tax_invoices_delivery  FOREIGN KEY (delivery_note_id) REFERENCES delivery_notes (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_tax_invoices_customer  FOREIGN KEY (customer_id)      REFERENCES customers (id)      ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE tax_invoice_items (
+  id              INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  tax_invoice_id  INT UNSIGNED  NOT NULL,
+  sort_order      INT           NOT NULL DEFAULT 0,
+  item_id         INT UNSIGNED  NULL,
+  item_code       VARCHAR(30)   NOT NULL DEFAULT '',
+  item_name       VARCHAR(200)  NOT NULL,
+  item_name_html  TEXT          NULL,
+  brand_id        INT UNSIGNED  NULL,
+  brand_name      VARCHAR(150)  NOT NULL DEFAULT '',
+  delivery_term   VARCHAR(200)  NOT NULL DEFAULT '',
+  quantity        DECIMAL(14,3) NOT NULL,
+  uom_id          INT UNSIGNED  NULL,
+  unit            VARCHAR(80)   NOT NULL DEFAULT '',
+  price           DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_rate        DECIMAL(5,2)  NOT NULL DEFAULT 5,
+  discount_pct    DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  discount_amount DECIMAL(14,3) NOT NULL DEFAULT 0,
+  foc             TINYINT(1)    NOT NULL DEFAULT 0,
+  line_total      DECIMAL(14,3) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_tax_invoice_items_doc (tax_invoice_id),
+  CONSTRAINT fk_tax_invoice_items_doc   FOREIGN KEY (tax_invoice_id) REFERENCES tax_invoices (id) ON DELETE CASCADE,
+  CONSTRAINT fk_tax_invoice_items_item  FOREIGN KEY (item_id)  REFERENCES items (id)  ON DELETE RESTRICT,
+  CONSTRAINT fk_tax_invoice_items_brand FOREIGN KEY (brand_id) REFERENCES brands (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_tax_invoice_items_uom   FOREIGN KEY (uom_id)   REFERENCES uoms (id)   ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

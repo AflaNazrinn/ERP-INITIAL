@@ -834,6 +834,14 @@ th[data-under]:not([hidden]) { display: table-cell; }
   padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
 }
 .lk-list-title { font-size: 12px; }
+.lk-tabs { display: flex; gap: 22px; margin: 2px 0 12px; border-bottom: 1px solid var(--line); }
+.lk-tabs[hidden] { display: none; }
+.lk-tab {
+  margin-bottom: -1px; padding: 8px 2px 10px; border: 0; border-bottom: 2px solid transparent; background: none;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink-500); cursor: pointer;
+}
+.lk-tab:hover { color: var(--ink-900); }
+.lk-tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--accent-ink-deep, var(--ink-900)); font-weight: 700; }
 .lk-label { display: block; margin: 4px 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-700); }
 .lk-search {
   flex: none; display: flex; align-items: center; gap: 10px; height: 42px; margin-bottom: 12px; padding: 0 12px;
@@ -2059,6 +2067,42 @@ body:is([data-page="qt"], [data-page="so"], [data-page="dn"], [data-page="qt-lis
 
 .ps-remarks-body { white-space: normal; }
 
+/* ---------- Transaction Entry pages (Tax Invoice, Purchase Entry; forms and lists) ----------
+   The Trade Management layout in the Transaction Entry teal (its Quick Menu colour, #0e7490). */
+.fp-theme-entry,
+body:is([data-page="ti"], [data-page="ti-list"], [data-page="pe"], [data-page="pe-list"], [data-page="se"], [data-page="se-list"]) {
+  --accent: #0e7490;
+  --accent-hover: #155e75;
+  --accent-bar: #0891b2;
+  --accent-soft: #ecfeff;
+  --accent-soft-2: #cffafe;
+  --accent-line: #a5f3fc;
+  --accent-ink: #155e75;
+  --accent-ink-deep: #164e63;
+  --entry-bg: #67e8f9;
+  --entry-line: #0e7490;
+  --entry-ring: 0 0 0 3px rgba(8, 145, 178, .3);
+  --lk-search-glow: rgba(8, 145, 178, .15);
+}
+.fp-theme-entry .fp-req { color: #0891b2; }
+.fp-theme-entry .pb-cell-name { background: #ecfeff; border-color: #a5f3fc; }
+.fp-theme-entry .pb-vat-switch[aria-pressed="true"] { border-color: #67e8f9; background: #ecfeff; color: #0e7490; }
+.fp-theme-entry .pb-sum-po .pb-sum-grand dd { color: #0e7490; }
+.fp-theme-entry .ml-btn-outline-green { border-color: #0e7490; color: #0e7490; }
+.fp-theme-entry .ml-btn-outline-green:hover { background: #ecfeff; }
+.fp-theme-entry .ml-table .ml-qty-ok { color: #0e7490; }
+.fp-theme-entry .pb-list-table .ml-act[data-action="view"] { color: #0e7490; border-color: #a5f3fc; }
+.fp-theme-entry .pb-list-table .ml-act[data-action="view"]:hover { background: #ecfeff; }
+.pb-table-ti { min-width: 1040px; }
+.fp-optional { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--accent); }
+.ti-approval { margin: 14px 0 4px; }
+.pb-table-pe, .pb-table-se { min-width: 960px; }
+.pe-new { padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 700; color: var(--accent); cursor: pointer; }
+.pe-new:hover { text-decoration: underline; }
+.pe-items-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--ink-500); }
+.pe-items-foot kbd { padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-muted); font-family: var(--font-mono); font-size: 11px; color: var(--ink-700); }
+.pe-items-foot strong { color: var(--ink-900); }
+
 /* ---------- Quick item popup (Purchase Book › Create Item) ---------- */
 .qi { width: min(560px, calc(100vw - 32px)); }
 .qi[open] { display: flex; flex-direction: column; }
@@ -2400,6 +2444,27 @@ input::-webkit-contacts-auto-fill-button {
 /* Quick Add Customer (the sales pages' Select Customer › + Create Customer): Save in the Trade Management blue. */
 :is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .qs .ml-btn-green { background: #2563eb; }
 :is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .qs .ml-btn-green:hover { background: #1d4ed8; }
+/* The same popups on the Tax Invoice, in the Transaction Entry teal. */
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp {
+  --tone-green-bg: #ecfeff; --tone-green-line: #a5f3fc; --tone-green-ink: #155e75;
+}
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-icon { background: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-card-title { border-left-color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-name { border-color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-name:not([readonly]) { border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8, 145, 178, .15); }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(8, 145, 178, .2); }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-mini:hover { border-color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-mini[aria-pressed="true"] { background: #0891b2; border-color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-mode > span { color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-editor { border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8, 145, 178, .12); }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-tool:hover { border-color: #0891b2; background: #ecfeff; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-tool:focus { border-color: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-unit-input:focus { border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8, 145, 178, .2); background: #ecfeff; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp-rich:focus { background: #f5feff; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp .ml-btn-green { background: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp .ml-btn-green:hover { background: #0e7490; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green { background: #0891b2; }
+:is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green:hover { background: #0e7490; }
 
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }

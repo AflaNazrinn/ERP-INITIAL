@@ -1,0 +1,60 @@
+-- Transaction Entry › Purchase Entry: supplier bills recorded in the books (PUR-0001).
+-- A supplier with the supplier's own invoice number, the purchase order and / or GRN it is for, the currency,
+-- priced item lines (quantity × rate; no VAT or line discount on this screen), a discount on the total, remarks,
+-- signatory slots and the seal.
+-- Applied by backend/bin/migrate.php. MySQL 8 / MariaDB 10.6+.
+
+CREATE TABLE purchase_entries (
+  id                  INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  pe_code             VARCHAR(20)   NOT NULL,
+  pe_date             DATE          NOT NULL,
+  supplier_id         INT UNSIGNED  NULL,
+  supplier_invoice_no VARCHAR(60)   NOT NULL DEFAULT '',
+  purchase_order_id   INT UNSIGNED  NULL,
+  grn_id              INT UNSIGNED  NULL,
+  currency            VARCHAR(10)   NOT NULL DEFAULT 'OMR',
+  vat_mode            VARCHAR(10)   NOT NULL DEFAULT 'exclude',
+  subtotal            DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_amount          DECIMAL(14,3) NOT NULL DEFAULT 0,
+  discount_amount     DECIMAL(14,3) NOT NULL DEFAULT 0,
+  shipping            DECIMAL(14,3) NOT NULL DEFAULT 0,
+  grand_total         DECIMAL(14,3) NOT NULL DEFAULT 0,
+  remarks             TEXT          NULL,
+  include_signatory   TINYINT(1)    NOT NULL DEFAULT 0,
+  extra_signatories   TEXT          NULL,
+  attach_seal         TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_purchase_entries_code (pe_code),
+  CONSTRAINT fk_purchase_entries_supplier FOREIGN KEY (supplier_id)       REFERENCES suppliers (id)       ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_entries_order    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_entries_grn      FOREIGN KEY (grn_id)            REFERENCES grns (id)            ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE purchase_entry_items (
+  id                INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  purchase_entry_id INT UNSIGNED  NOT NULL,
+  sort_order        INT           NOT NULL DEFAULT 0,
+  item_id           INT UNSIGNED  NULL,
+  item_code         VARCHAR(30)   NOT NULL DEFAULT '',
+  item_name         VARCHAR(200)  NOT NULL,
+  item_name_html    TEXT          NULL,
+  brand_id          INT UNSIGNED  NULL,
+  brand_name        VARCHAR(150)  NOT NULL DEFAULT '',
+  quantity          DECIMAL(14,3) NOT NULL,
+  uom_id            INT UNSIGNED  NULL,
+  unit              VARCHAR(80)   NOT NULL DEFAULT '',
+  price             DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_rate          DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  discount_pct      DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  discount_amount   DECIMAL(14,3) NOT NULL DEFAULT 0,
+  foc               TINYINT(1)    NOT NULL DEFAULT 0,
+  line_total        DECIMAL(14,3) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_purchase_entry_items_doc (purchase_entry_id),
+  CONSTRAINT fk_purchase_entry_items_doc   FOREIGN KEY (purchase_entry_id) REFERENCES purchase_entries (id) ON DELETE CASCADE,
+  CONSTRAINT fk_purchase_entry_items_item  FOREIGN KEY (item_id)  REFERENCES items (id)  ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_entry_items_brand FOREIGN KEY (brand_id) REFERENCES brands (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_entry_items_uom   FOREIGN KEY (uom_id)   REFERENCES uoms (id)   ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
