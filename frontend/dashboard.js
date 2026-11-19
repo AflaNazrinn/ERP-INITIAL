@@ -10108,13 +10108,14 @@ function companyProfile() {
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false } = {}) {
-  // The Purchase Order and the GRN: the procurement document design (letterhead, supplier details, totals box).
-  const procurement = spec.key === 'po' || spec.key === 'grn';
+  // The GRN: the procurement document design (letterhead, supplier details, totals box). The Purchase Order keeps
+  // Nathaneal's design.
+  const procurement = spec.key === 'grn';
   const [profile, uploadedLetterhead, ownSupplier] = await Promise.all([companyProfile(), companyLetterhead(),
     procurement && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
   // The supplier this copy is addressed to: the one chosen on a Quotation Request, a Purchase Order's / GRN's own.
   const supplier = chosenSupplier || ownSupplier;
-  // A Purchase Order and a GRN always print on a letterhead: the uploaded one, else the drawn "Blue bars" design.
+  // A GRN always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
   const letterhead = uploadedLetterhead
     || (procurement ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
   // GRN Inspection Mode: no Rate / VAT / Amount and no money totals, only the number of items.
@@ -10149,23 +10150,13 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
         : { label: 'Suppliers', name: `${(doc.suppliers || []).length} Suppliers`, lines: (doc.suppliers || []).map((s, i) => `${i + 1}. ${s.name}`) },
       meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)]],   // the PR stays internal
     }),
-    po: () => {
-      const certifications = (doc.certifications || []).filter(value => value !== 'N/A').join(', ');
-      return {
-        // Supplier / Vendor: the name, Country and E-mail only (a compact box).
-        party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [['Country', supplier?.country], ['E-mail', supplier?.email]] },
-        // No Buyer box: the Supplier / Vendor box with PO ID and PO Date stacked beside it, then the rows below.
-        noBuyer: true,
-        idBox: [['PO ID', doc.code], ['PO Date', poSlashDate(doc.poDate)]],
-        cols: 3,
-        meta: [['Quotation / Other Reference', [doc.quotationNumber || doc.quotationRequestCode, doc.purchaseRequestCode].filter(Boolean).join(' · '), 'full'],
-          ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', `${doc.paymentMode || ''}${doc.creditPeriod ? ` (${doc.creditPeriod})` : ''}`], ['Currency', doc.currency],
-          // The buyer's contact on this order: the salesman who created it.
-          ['Contact Person', doc.salesman], ['Contact Number', doc.salesmanContact || profile?.phone],
-          ...(doc.deliveryDate ? [['Delivery Date', poSlashDate(doc.deliveryDate)]] : []),
-          ['Delivery To', doc.deliveryLocation, 'full']],
-      };
-    },
+    po: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+      meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
+        ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
+        ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
+        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact]],
+    }),
     // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Stock Point.
     // Goods Received Note: Buyer / Receiver over Supplier / Vendor on the left; GRN ID, GRN Date and the supplier's
     // PO over the Stock Point on the right.
@@ -10207,7 +10198,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
         [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
-        ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc (%)', 'num', l => pbNum(l.discountPct).toFixed(2)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+        ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc.', 'num', l => pbAmount(l.discountAmount)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
@@ -10485,7 +10476,7 @@ async function printPurchaseDocument(spec, id) {
   switcher.replaceChildren(new Option('All Suppliers', ''), ...suppliers.map(s => new Option(s.name, String(s.id))));
   switcher.value = previewDoc.supplierId;
   switcher.closest('.pv-supplier').hidden = suppliers.length < 2;
-  dialog.classList.toggle('pv-po', spec.key === 'po' || spec.key === 'grn');   // the dark bar scrolls away with the page
+  dialog.classList.toggle('pv-po', spec.key === 'grn');   // a GRN: the dark bar scrolls away with the page
   previewDoc.hidePrices = false;
   syncPriceToggle();
   byId('pv-title').textContent = `${PB_TITLES[spec.key]} • ${doc.code}`;
