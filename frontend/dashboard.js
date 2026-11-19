@@ -75,7 +75,7 @@ const state = {
   activityPage: 1,
   data: null,
 };
-const ACTIVITY_PAGE_SIZE = 15;
+const ACTIVITY_PAGE_SIZE = 5;
 
 /* =====================================================================
    Header
@@ -1352,7 +1352,7 @@ async function checkSignedIn() {
   try {
     const session = await apiRequest('api/session.php');
     csrfToken = session.csrfToken;
-    if (session.user) return session.user;
+    if (session.user) { pageCompany = session.user.company?.code ?? null; return session.user; }
   } catch { /* server down: the sign-in page says so */ }
   goToSignIn();
   return null;
@@ -1490,8 +1490,13 @@ async function loadCsrfToken() {
 }
 
 // options: { method, json (body to send as JSON), body (e.g. FormData) }. Resolves to the response's data.
+// The company this page was opened for (set by checkSignedIn). Every request names it, so the server never
+// answers with another company's records after a sign-in to that company in another tab.
+let pageCompany = null;
+
 async function apiRequest(url, { method = 'GET', json, body } = {}, retried = false) {
   const headers = { Accept: 'application/json' };
+  if (pageCompany) headers['X-Company'] = pageCompany;
   if (json !== undefined) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(json);
@@ -1514,6 +1519,8 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
   }
   // Signed out meanwhile (another tab, or the session ended): back to the sign-in page, then here again.
   if (response.status === 401) goToSignIn();
+  // Signed in to another company in another tab: show that company here too, never its records under this name.
+  if (response.status === 412 && pageCompany) location.reload();
   if (!response.ok || !result || !('data' in result)) {
     throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
   }
@@ -2876,6 +2883,7 @@ function handleItemPageKeys(event) {
   if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey
       && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
     event.preventDefault();
+    if (target.type === 'checkbox') { if (!event.repeat) target.click(); return true; }   // Enter ticks / unticks
     if (isDateField(target) && target.closest('.fp-source-row')) { addSourceRow(); setItemDirty(true); return true; }
     if (openDropdownOnEnter(target)) return true;
     const order = formEnterOrder(itemEl('form'), itemEl('save'));
@@ -3237,6 +3245,10 @@ function createFormPage(config) {
     if (key === 'Enter' && !ctrl && !event.altKey && !event.shiftKey && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) {
       if (target.dataset.enterNewline) return false;
       event.preventDefault();
+      if (target.type === 'checkbox') {   // Enter ticks / unticks a checkbox (Include Signatory Slots, Attach Seal …)
+        if (!event.repeat) target.click();
+        return true;
+      }
       if (target.dataset.enterOpens && target instanceof HTMLSelectElement) {   // a dropdown that always opens on Enter
         if (!event.repeat) openSelectMenu(target);
         return true;

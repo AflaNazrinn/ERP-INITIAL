@@ -355,6 +355,14 @@ if (!defined('PUBLIC_ENDPOINT') && current_user() === null) {
     json_error('Please sign in.', 401);
 }
 
+// The page names the company it was opened for (X-Company). The session is shared by every tab, so after
+// signing in to another company in one tab, an older tab would show that company's records under its own
+// name: refuse (412), and the page reloads as the company now signed in.
+$pageCompany = $_SERVER['HTTP_X_COMPANY'] ?? '';
+if (!defined('PUBLIC_ENDPOINT') && $pageCompany !== '' && $pageCompany !== ($_SESSION['company'] ?? null)) {
+    json_error('You are now signed in to another company. Reloading.', 412);
+}
+
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)
     && !csrf_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
     json_error('Your session has expired. Reload the page and try again.', 403);

@@ -46,7 +46,17 @@ function csrf_valid(?string $token): bool
    A session without a company (signed in before companies existed) counts as signed out. */
 function current_user(): ?array
 {
-    return isset($_SESSION['user']['id'], $_SESSION['company']) ? $_SESSION['user'] : null;
+    if (!isset($_SESSION['user']['id'], $_SESSION['company'])) {
+        return null;
+    }
+    // The company's name as companyconfig.php has it now, so a renamed company shows its new name
+    // without signing out and in again.
+    $user = $_SESSION['user'];
+    $company = company_find((string) $_SESSION['company']);
+    if ($company !== null) {
+        $user['company']['name'] = (string) ($company['name'] ?? $company['code']);
+    }
+    return $user;
 }
 
 /* Wrong sign-ins a session may make before it has to wait, and how long (seconds). */
