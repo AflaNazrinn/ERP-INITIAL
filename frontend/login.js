@@ -2,7 +2,7 @@
    GET api/session.php gives the CSRF token (and the user, when already signed in: straight to the
    dashboard). POST api/login.php { username, password } signs in to the company the username belongs to
    (usernames are unique across companies, each company has its own database); then the page opens the
-   dashboard, at the screen the user was sent away from (?next=#/masters/item) when there is one. The name of
+   dashboard's home page (never the screen the user was last on, e.g. a Unit page). The name of
    the company this browser signed in to last is the heading; ?company=CODE (from Create a Company) says the
    new company is ready. "Create a company" opens company.html. */
 
@@ -11,10 +11,9 @@
 const $ = id => document.getElementById(id);
 let csrfToken = null;
 
-// Only a hash route of the dashboard: never another site or path.
+// Signing in always opens the dashboard's home page, not the screen that was open before.
 function nextPage() {
-  const next = new URLSearchParams(location.search).get('next') || '';
-  return `dashboard.html${/^#\/[\w\-/]*$/.test(next) ? next : ''}`;
+  return 'dashboard.html';
 }
 
 async function loadSession() {

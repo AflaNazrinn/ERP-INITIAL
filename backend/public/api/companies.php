@@ -12,7 +12,7 @@ declare(strict_types=1);
  *                       companyconfig.php. Needs X-CSRF-Token (from api/session.php), like every write.
  * Fields: companyName, companyCode (or codeAuto=1: the server assigns the next code for the name), companyType, businessType, crNumber, crExpiry, vatNumber, legalStructure,
  * baseCurrency, financialYearStart, vatApplicable (1/0), vatPercentage, building, street, area, city, country,
- * poBox, postalCode, bankName, accountHolder, accountNumber, iban, swiftCode, username, password,
+ * poBox, postalCode, bankName, accountHolder, accountNumber, iban, swiftCode, termsConditions, username, password,
  * confirmPassword, accessKey; files logo, letterhead, crCertificate, vatCertificate.
  */
 

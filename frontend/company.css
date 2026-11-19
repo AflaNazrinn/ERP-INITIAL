@@ -297,6 +297,13 @@ html.has-modal { overflow: hidden; }
 }
 .cc-mini-btn:hover { background: var(--page); }
 .cc-file { display: none; }
+/* 07 Terms & Conditions: the quotation's terms in a box, Upload (.txt) and Standard above it. */
+.cc-terms-bar { display: flex; align-items: center; gap: 8px; padding: 4px 0 6px; }
+.cc-terms-note { flex: 1; min-width: 0; font-size: 11.5px; color: var(--ink-500); }
+.cc-terms-row { display: block; padding-top: 0; }
+.cc-textarea { height: auto; min-height: 180px; padding: 8px 10px; resize: vertical; font-family: inherit; font-size: 12px; line-height: 1.5; }
+.cc-terms-help { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: var(--ink-500); }
+.cc-terms-help code { padding: 0 3px; border-radius: 3px; background: var(--page); font-size: 10.5px; }
 
 .cc-sub-head { margin: 14px 0 6px; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .cc-preview {

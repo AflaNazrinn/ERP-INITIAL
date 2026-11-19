@@ -6,6 +6,7 @@
 <title>Growth Engine Dashboard</title>
 <link rel="stylesheet" href="dashboard.css">
 <script src="letterheads.js" defer></script>   <!-- the Purchase Order PDF's drawn letterhead (no uploaded one) -->
+<script src="terms.js" defer></script>   <!-- the quotation PDF's General Terms & Conditions (standard text) -->
 <script src="dashboard.js" defer></script>
 <script src="sync.js" defer></script>
 </head>
@@ -162,7 +163,8 @@
     </div>
     <div class="audit-foot">
       <span id="audit-table-count"></span>
-      <nav id="audit-pagination" class="pager" aria-label="Activity pages"></nav>
+      <a id="audit-view-all" class="audit-view-all" href="#/audit">View All
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg></a>
     </div>
   </section>
 
@@ -179,6 +181,47 @@
 </div>
 
 <!-- ITEM CREATION  (#/masters/item/new · Masters › Create › Item) -->
+<!-- AUDIT TRAIL (#/audit): every recorded activity, from the dashboard's View All. Previous / Next / page numbers. -->
+<section id="audit-page" class="form-page form-page-auto" aria-labelledby="audit-page-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg></div>
+      <h1 id="audit-page-title" class="fp-title">Audit Trail &amp; Recent Activities</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>←</kbd><kbd>→</kbd> Page</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="audit-page-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+  <section class="audit audit-full">
+    <div class="table-scroll">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th class="col-edge">Timestamp</th>
+            <th>User</th>
+            <th>Activity Done</th>
+            <th>Module / Reference</th>
+            <th class="col-edge col-right">Status</th>
+          </tr>
+        </thead>
+        <tbody id="audit-page-body"></tbody>
+      </table>
+      <div id="audit-page-empty" class="table-state" hidden>No activity recorded yet.</div>
+    </div>
+    <div class="audit-foot">
+      <span id="audit-page-count"></span>
+      <nav id="audit-page-pager" class="pager" aria-label="Audit trail pages"></nav>
+    </div>
+  </section>
+</section>
+
 <section id="item-page" class="form-page" aria-labelledby="item-title" hidden>
 
   <header class="fp-header">
@@ -2562,7 +2605,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="qt-currency">Customer Currency<span class="fp-req" aria-hidden="true">*</span></label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="qt-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="qt-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="qt-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="qt-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="qt-location">Delivery Location</label>
@@ -2594,7 +2637,7 @@
         </div>
         <div class="fp-field" id="qt-credit-field" hidden>
           <label class="fp-label" for="qt-credit-period">Credit Days <span class="fp-req" aria-hidden="true">*</span></label>
-          <input id="qt-credit-period" class="fp-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="e.g. 30">
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="qt-credit-period" class="fp-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" spellcheck="false" data-suggest="qtCreditDays" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 30"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Credit days used before" hidden></ul></div>
         </div>
         </div>
         <div class="fp-field pb-cert qt-cert">
@@ -3030,7 +3073,7 @@
   <td data-brand-cell><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup pb-cell-brand" data-field="brandName" type="text" data-lookup="brand" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select brand..." aria-label="Brand"><input type="hidden" data-field="brandId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
 </template>
 <template id="pb-cell-unit">
-  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><span class="pb-unit-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-unit" data-field="unit" type="text" data-suggest="uom" data-enter-skip role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Unit" aria-label="Unit"><input type="hidden" data-field="uomId"><span class="pb-unit-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span><ul class="fp-suggest" role="listbox" aria-label="Units" hidden></ul></div></td>
 </template>
 <template id="pb-cell-remove">
   <td class="pb-col-act"><div class="pb-row-actions">
@@ -3058,7 +3101,7 @@
 
 <!-- Sales Order line: brand, delivery term, the line's supplier (multi-supplier mode), price, VAT (proforma invoice), buying cost and profit -->
 <template id="pb-line-so"><tr class="fp-row" data-pb-row="so">
-  <td><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" data-upper placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
   <td class="so-col-supplier"><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup" data-field="supplierName" type="text" data-lookup="supplier" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select supplier..." aria-label="Supplier"><input type="hidden" data-field="supplierId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div><input type="hidden" data-field="supplierCurrency"></td>
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
   <td data-unit-cell></td>
@@ -3072,7 +3115,7 @@
 
 <!-- Quotation / Sales Order / Delivery Note line: the PO line with a Delivery Term (printed under the item name) -->
 <template id="pb-line-sales"><tr class="fp-row" data-pb-row="sales">
-  <td><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" data-upper placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
   <td data-unit-cell></td>
   <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Price"></td>
@@ -3085,7 +3128,7 @@
 <!-- Delivery Note line: the sales line with a Branch (stock point; Auto = the one with the most stock) -->
 <template id="pb-line-dn"><tr class="fp-row" data-pb-row="dn">
   <td><select class="fp-cell fp-select pb-cell-select" data-field="warehouseId" aria-label="Branch"><option value="">Auto (Highest Stock)</option></select></td>
-  <td><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" data-upper placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
   <td data-unit-cell></td>
   <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Price"></td>
@@ -3097,7 +3140,7 @@
 
 <!-- Quotation line: the sales line with its Brand shown -->
 <template id="pb-line-qt"><tr class="fp-row" data-pb-row="qt">
-  <td><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" data-upper placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"></td>
+  <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
   <td data-unit-cell></td>
   <td><input class="fp-cell fp-cell-num pb-cell-strong" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Price"></td>
@@ -3508,12 +3551,20 @@
   </div>
   <form id="quick-supplier-form" class="qi-body qs-body" novalidate>
     <div class="fp-field qi-wide">
-      <label class="fp-label" for="quick-supplier-name">Supplier Name <span class="fp-req">*</span></label>
+      <label class="fp-label" for="quick-supplier-name"><span id="quick-supplier-name-label">Supplier Name</span> <span class="fp-req">*</span></label>
       <input id="quick-supplier-name" class="fp-input" type="text" maxlength="150" autocomplete="off" spellcheck="false" data-upper placeholder="E.G. GLOBAL SUPPLIES LLC">
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-supplier-contact">Contact Person</label>
       <input id="quick-supplier-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" placeholder="E.g. Ahmed Ali">
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-supplier-country">Country</label>
+      <div class="fp-input-wrap fp-lookup-wrap"><input id="quick-supplier-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select country..." value="Oman"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+    </div>
+    <div class="fp-field">
+      <label class="fp-label" for="quick-supplier-currency">Currency</label>
+      <select id="quick-supplier-currency" class="fp-input fp-select pb-input-strong"></select>
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-supplier-phone">Mobile / Phone</label>
@@ -3522,15 +3573,6 @@
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-supplier-email">Email</label>
       <input id="quick-supplier-email" class="fp-input" type="email" maxlength="150" autocomplete="off" placeholder="E.g. sales@globalsupplies.com">
-    </div>
-    <div class="fp-field">
-      <label class="fp-label" for="quick-supplier-country">Country</label>
-      <input id="quick-supplier-country" class="fp-input" type="text" maxlength="80" autocomplete="off" list="quick-supplier-countries" value="Oman">
-      <datalist id="quick-supplier-countries"></datalist>
-    </div>
-    <div class="fp-field">
-      <label class="fp-label" for="quick-supplier-currency">Currency</label>
-      <select id="quick-supplier-currency" class="fp-input fp-select pb-input-strong"></select>
     </div>
     <p id="quick-supplier-error" class="qi-error" role="alert" hidden></p>
   </form>

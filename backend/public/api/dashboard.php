@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 /*
  * The dashboard's figures, from the signed-in company's own records.
- *   GET ?year=2026&month=11 → { kpis, profitLoss, chart, returns, quotations, activities }
+ *   GET ?year=2026&month=11 → { kpis, profitLoss, chart, returns, quotations, activities (the latest 5), activityTotal }
+ *   GET ?audit=1            → { activities }: every recorded activity, newest first (the Audit Trail page)
  *
  *   Total Purchase   purchase orders dated in the chosen month (not Cancelled), grand totals
  *   Pending Purchase purchase orders not yet Received (or Cancelled), any date
  *   Total Items      items in the Item master
- *   Creditors        suppliers' opening balances + goods received (GRN totals): nothing is paid yet in the app
- *   Debtors          customers' opening balances
+ *   Creditors        how many suppliers there are (Party › Creditors)
+ *   Debtors          how many customers there are (Party › Debtors)
  *   Total Employees  user accounts
  *   Chart            purchase orders per week of the chosen month
  *   Activities       the latest records created or changed (Purchase Book documents and masters)
@@ -21,6 +22,7 @@ require_once __DIR__ . '/../../src/api_bootstrap.php';
 allow_methods('GET');
 header('Cache-Control: no-store');
 
+$auditPage = isset($_GET['audit']);
 $year = (int) ($_GET['year'] ?? date('Y'));
 $month = (int) ($_GET['month'] ?? date('n'));
 if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
@@ -33,8 +35,6 @@ $scalar = static fn (string $sql, array $params = []) => query($sql, $params)->f
 
 $totalPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE po_date BETWEEN ? AND ? AND status <> 'Cancelled'", [$from, $to]);
 $pendingPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE status NOT IN ('Received', 'Cancelled')");
-$creditors = (float) $scalar('SELECT COALESCE(SUM(opening_balance), 0) FROM suppliers')
-    + (float) $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM grns');
 
 // Purchase per week of the month: days 1–7 are W1, 8–14 W2 …
 $weeks = (int) ceil((int) date('t', strtotime($from)) / 7);
@@ -59,7 +59,9 @@ $sources = [
 $activities = [];
 foreach ($sources as [$table, $codeColumn, $detail, $noun, $module]) {
     try {
-        $rows = query("SELECT $codeColumn AS code, $detail AS detail, created_at, updated_at FROM $table ORDER BY GREATEST(created_at, updated_at) DESC LIMIT 40")->fetchAll();
+        // The dashboard needs only the newest few of each table; the Audit Trail page lists them all.
+        $limit = $auditPage ? '' : ' LIMIT 5';
+        $rows = query("SELECT $codeColumn AS code, $detail AS detail, created_at, updated_at FROM $table ORDER BY GREATEST(created_at, updated_at) DESC$limit")->fetchAll();
     } catch (PDOException) {
         continue;                                 // a table this company's database does not have yet
     }
@@ -75,14 +77,26 @@ foreach ($sources as [$table, $codeColumn, $detail, $noun, $module]) {
     }
 }
 usort($activities, static fn ($a, $b) => strcmp($b['at'], $a['at']));
+if ($auditPage) {
+    json_out(['activities' => $activities]);
+}
+// How many activities there are in all (shown under the dashboard's latest 5).
+$activityTotal = 0;
+foreach ($sources as [$table]) {
+    try {
+        $activityTotal += (int) $scalar("SELECT COUNT(*) FROM $table");
+    } catch (PDOException) {
+        // a table this company's database does not have yet
+    }
+}
 
 json_out([
     'kpis' => [
         'totalSales' => $money(0), 'totalPurchase' => $money($totalPurchase), 'pendingPurchase' => $money($pendingPurchase),
         'totalItems' => (int) $scalar('SELECT COUNT(*) FROM items'),
         'totalEmployees' => (int) $scalar('SELECT COUNT(*) FROM users'),
-        'creditors' => $money($creditors),
-        'debtors' => $money($scalar('SELECT COALESCE(SUM(opening_balance), 0) FROM customers')),
+        'creditors' => (int) $scalar('SELECT COUNT(*) FROM suppliers'),
+        'debtors' => (int) $scalar('SELECT COUNT(*) FROM customers'),
     ],
     'profitLoss' => ['overall' => ['margin' => '0.0'], 'lastMonth' => ['margin' => '0.0']],
     'chart' => [
@@ -91,5 +105,6 @@ json_out([
     ],
     'returns' => ['purchaseReturn' => $money(0), 'salesReturn' => $money(0), 'rmaCount' => 0, 'resolvedCount' => 0],
     'quotations' => ['total' => 0, 'totalValue' => $money(0), 'pending' => 0, 'approved' => 0, 'rejected' => 0],
-    'activities' => array_slice($activities, 0, 60),
+    'activities' => array_slice($activities, 0, 5),
+    'activityTotal' => $activityTotal,
 ]);

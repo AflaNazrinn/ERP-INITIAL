@@ -54,7 +54,7 @@ async function fetchDashboard({ chartYear, chartMonth }) {
     console.warn('Dashboard figures not loaded:', error);
   }
   return {
-    kpis: { totalSales: '0.000', totalPurchase: '0.000', pendingPurchase: '0.000', totalItems: 0, totalEmployees: 0, creditors: '0.000', debtors: '0.000' },
+    kpis: { totalSales: '0.000', totalPurchase: '0.000', pendingPurchase: '0.000', totalItems: 0, totalEmployees: 0, creditors: 0, debtors: 0 },
     profitLoss: { lastMonth: { ...lastMonth, margin: '0.0' }, overall: { margin: '0.0' } },
     chart: { sales: '0.000', purchase: '0.000',
       weeks: Array.from({ length: weeks }, (_, i) => ({ label: `W${i + 1}`, sales: '0.000', purchase: '0.000' })) },
@@ -72,10 +72,9 @@ const today = new Date();
 const state = {
   chartYear: today.getFullYear(),
   chartMonth: today.getMonth() + 1,        // 1..12
-  activityPage: 1,
   data: null,
 };
-const ACTIVITY_PAGE_SIZE = 5;
+const ACTIVITY_PAGE_SIZE = 5;                 // the dashboard shows the latest 5; View All shows the rest
 
 /* =====================================================================
    Header
@@ -107,8 +106,8 @@ const KPI_TILES = [
   { key: 'totalPurchase', label: 'Total Purchase', money: true, tone: 'purchase', icon: 'purchase' },
   { key: 'pendingPurchase', label: 'Pending Purchase', money: true, tone: 'purchase', icon: 'pending' },
   { key: 'totalItems', label: 'Total Items', money: false, tone: 'masters', icon: 'items' },
-  { key: 'creditors', label: 'Creditors', money: true, tone: 'masters', icon: 'creditors' },
-  { key: 'debtors', label: 'Debtors', money: true, tone: 'masters', icon: 'debtors' },
+  { key: 'creditors', label: 'Creditors', money: false, tone: 'masters', icon: 'creditors' },
+  { key: 'debtors', label: 'Debtors', money: false, tone: 'masters', icon: 'debtors' },
   { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees' },
 ];
 
@@ -297,44 +296,114 @@ function activityRow(a) {
   return tr;
 }
 
-function pagerButton(label, page, { disabled = false, current = false } = {}) {
+function pagerButton(label, onClick, { disabled = false, current = false, pressed = null } = {}) {
   const btn = el('button', 'pager-btn', label);
   btn.type = 'button';
   btn.disabled = disabled;
   if (current) btn.setAttribute('aria-current', 'page');
-  if (!disabled && !current) {
-    btn.addEventListener('click', () => { state.activityPage = page; renderActivities(state.data.activities); });
-  }
+  if (pressed !== null) btn.setAttribute('aria-pressed', String(pressed));
+  if (!disabled && !current) btn.addEventListener('click', onClick);
   return btn;
 }
 
-function renderActivities(rows) {
-  const pages = Math.max(1, Math.ceil(rows.length / ACTIVITY_PAGE_SIZE));
-  state.activityPage = Math.min(Math.max(1, state.activityPage), pages);
-  const start = (state.activityPage - 1) * ACTIVITY_PAGE_SIZE;
-  const visible = rows.slice(start, start + ACTIVITY_PAGE_SIZE);
-
+// The dashboard: the latest 5 activities only; View All opens the Audit Trail page with every one.
+function renderActivities(rows, total = rows.length) {
+  const visible = rows.slice(0, ACTIVITY_PAGE_SIZE);
   byId('audit-table-body').replaceChildren(...visible.map(activityRow));
-  byId('audit-table-empty').hidden = rows.length > 0;
-
+  byId('audit-table-empty').hidden = visible.length > 0;
   const count = byId('audit-table-count');
-  if (rows.length === 0) {
-    count.textContent = 'No recent activities';
-  } else {
-    const range = el('strong', '', `${start + 1}–${start + visible.length}`);
-    const total = el('strong', '', formatCount(rows.length));
-    count.replaceChildren('Showing ', range, ' of ', total, ' recent activities');
-  }
+  if (visible.length === 0) count.textContent = 'No recent activities';
+  else count.replaceChildren('Latest ', el('strong', '', String(visible.length)), ' of ', el('strong', '', formatCount(Math.max(total, visible.length))), ' activities');
+  byId('audit-view-all').hidden = visible.length === 0;
+}
 
-  const p = state.activityPage;
-  const nav = byId('audit-pagination');
+/* ---------- Audit Trail page (#/audit) ----------
+   Every recorded activity, newest first: AUDIT_PAGE_SIZE a page with Previous / Next / page numbers.
+   Keys: ← / → (or PageUp / PageDown) the previous / next page, Esc back. */
+const AUDIT_PAGE_SIZE = 15;
+const audit = { rows: [], page: 1, all: false, loaded: false, seq: 0 };
+
+async function loadAuditPage() {
+  const seq = ++audit.seq;
+  try {
+    const { activities } = await apiRequest('api/dashboard.php?audit=1');
+    if (seq !== audit.seq) return;
+    audit.rows = activities || [];
+  } catch (error) {
+    if (seq !== audit.seq) return;
+    audit.rows = [];
+    showToast('The audit trail could not be loaded', error.message, true);
+  }
+  audit.loaded = true;
+  renderAuditPage();
+}
+
+// Page numbers around the current one, with the first and last always shown: 1 … 4 5 6 … 12.
+function auditPageNumbers(pages, current) {
+  const shown = new Set([1, pages, current - 1, current, current + 1].filter(n => n >= 1 && n <= pages));
+  return [...shown].sort((a, b) => a - b);
+}
+
+function renderAuditPage() {
+  const rows = audit.rows;
+  const pages = Math.max(1, Math.ceil(rows.length / AUDIT_PAGE_SIZE));
+  audit.page = Math.min(Math.max(1, audit.page), pages);
+  const start = audit.all ? 0 : (audit.page - 1) * AUDIT_PAGE_SIZE;
+  const visible = audit.all ? rows : rows.slice(start, start + AUDIT_PAGE_SIZE);
+  byId('audit-page-body').replaceChildren(...visible.map(activityRow));
+  byId('audit-page-empty').hidden = rows.length > 0 || !audit.loaded;
+  const count = byId('audit-page-count');
+  if (!audit.loaded) count.textContent = 'Loading…';
+  else if (rows.length === 0) count.textContent = 'No recent activities';
+  else count.replaceChildren('Showing ', el('strong', '', `${start + 1}–${start + visible.length}`), ' of ', el('strong', '', formatCount(rows.length)), ' activities');
+
+  const nav = byId('audit-page-pager');
   const hadFocus = nav.contains(document.activeElement);
-  nav.replaceChildren(
-    pagerButton('Prev', p - 1, { disabled: p <= 1 }),
-    ...Array.from({ length: pages }, (_, i) => pagerButton(String(i + 1), i + 1, { current: i + 1 === p })),
-    pagerButton('Next', p + 1, { disabled: p >= pages }),
-  );
-  if (hadFocus) refocusWithin(nav, '[aria-current="page"]');
+  const focusedLabel = hadFocus ? document.activeElement.textContent : '';
+  const go = page => () => { audit.all = false; audit.page = page; renderAuditPage(); };
+  const p = audit.page;
+  const buttons = [pagerButton('Previous', go(p - 1), { disabled: audit.all || p <= 1 })];
+  let last = 0;
+  for (const n of auditPageNumbers(pages, p)) {
+    if (n - last > 1) buttons.push(el('span', 'pager-gap', '…'));
+    buttons.push(pagerButton(String(n), go(n), { current: !audit.all && n === p }));
+    last = n;
+  }
+  buttons.push(pagerButton('Next', go(p + 1), { disabled: audit.all || p >= pages }));
+  nav.replaceChildren(...buttons);
+  if (hadFocus) {
+    const same = [...nav.querySelectorAll('button:not([disabled])')].find(btn => btn.textContent === focusedLabel);
+    (same || nav.querySelector('[aria-current="page"], [aria-pressed="true"]') || byId('audit-page-back')).focus();
+  }
+}
+
+// #/audit: a page of its own (opened from the dashboard's View All); it loads afresh on every visit.
+function initAuditPage() {
+  FORM_PAGES.audit = {
+    page: 'audit',
+    reset: () => { Object.assign(audit, { page: 1, all: false, rows: [], loaded: false }); renderAuditPage(); loadAuditPage(); },
+    firstField: () => byId('audit-page-back'),
+  };
+  FORM_KEY_HANDLERS.audit = handleAuditPageKeys;
+  byId('audit-page-back').addEventListener('click', () => { location.hash = '#/home'; });
+}
+
+function handleAuditPageKeys(event) {
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  const pages = Math.max(1, Math.ceil(audit.rows.length / AUDIT_PAGE_SIZE));
+  const step = { ArrowLeft: -1, PageUp: -1, ArrowRight: 1, PageDown: 1 }[event.key];
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (!event.repeat) location.hash = '#/home';
+    return true;
+  }
+  if (step && !audit.all) {
+    event.preventDefault();
+    const page = Math.min(pages, Math.max(1, audit.page + step));
+    if (page !== audit.page) { audit.page = page; renderAuditPage(); }
+    return true;
+  }
+  return false;
 }
 
 /* =====================================================================
@@ -1274,8 +1343,12 @@ function pickSelectMenu(index, { advance }) {
     select.dispatchEvent(new Event('input', { bubbles: true }));
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
-  // A change handler may already have moved focus (Party › Under goes straight to Name).
-  if (advance && document.activeElement === select && select.closest('form')) focusNextField(select);
+  // A change handler may already have moved focus (Party › Under goes straight to Name). Outside a form (the GRN
+  // Stock Transfer popup) the popup moves on itself, on 'menu-advance'.
+  if (advance && document.activeElement === select) {
+    if (select.closest('form')) focusNextField(select);
+    else select.dispatchEvent(new CustomEvent('menu-advance', { bubbles: true }));
+  }
 }
 
 // Every key while the list is open. Returns true when handled.
@@ -1343,9 +1416,9 @@ class ApiError extends Error {
 }
 
 let csrfToken = null;
-// login.html, coming back to this screen (#/masters/item …) once signed in.
+// login.html; once signed in, the dashboard opens on its home page.
 function goToSignIn() {
-  location.replace(`login.html${location.hash ? `?next=${encodeURIComponent(location.hash)}` : ''}`);
+  location.replace('login.html');      // signing in again opens the dashboard's home page
 }
 // Before anything loads: the signed-in user, or off to the sign-in page (null).
 async function checkSignedIn() {
@@ -1517,7 +1590,7 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
     await loadCsrfToken();
     return apiRequest(url, { method, json, body: json === undefined ? body : undefined }, true);
   }
-  // Signed out meanwhile (another tab, or the session ended): back to the sign-in page, then here again.
+  // Signed out meanwhile (another tab, or the session ended): back to the sign-in page.
   if (response.status === 401) goToSignIn();
   // Signed in to another company in another tab: show that company here too, never its records under this name.
   if (response.status === 412 && pageCompany) location.reload();
@@ -1694,6 +1767,12 @@ function plainLookupCard(config, row) {
 
 /* The item popups list each item as a card: the code, the name, the category; on the right the
    price and "Available Stock: 12 PIECES" (amber at none, green with stock). */
+// A line of a document to a customer (Quotation, Sales Order, Delivery Note): its prices are selling prices.
+const SALES_ROW_KINDS = ['qt', 'so', 'dn', 'sales'];
+const isSalesLine = node => SALES_ROW_KINDS.includes(node?.closest?.('[data-pb-row]')?.dataset.pbRow);
+// The price an item is offered at on this line: the selling price to a customer, else the buying rate.
+const itemLinePrice = (item, node) => (isSalesLine(node) ? item.sellingPrice : item.buyingRate);
+
 function itemLookupCard(row) {
   const stock = pbNum(row.availableStock);
   const td = el('td', 'lk-item');
@@ -1703,7 +1782,7 @@ function itemLookupCard(row) {
   main.append(top, el('div', 'lk-item-name', row.name));
   if (row.category) main.append(el('span', 'lk-item-cat', row.category));
   const side = el('div', 'lk-item-side');
-  side.append(el('div', 'lk-item-price', pbMoney(pbNum(row.buyingRate))),
+  side.append(el('div', 'lk-item-price', pbMoney(pbNum(itemLinePrice(row, lookup.field)))),
     el('span', `lk-stock lk-stock-wide${stock > 0 ? ' has-stock' : ''}`, `Available Stock: ${pbQty(stock)}${row.unit ? ` ${row.unit.toUpperCase()}` : ''}`));
   td.append(main, side);
   return td;
@@ -1738,18 +1817,19 @@ const LOOKUPS = {
     subtitle: 'Choose an item from the catalog.', search: 'Search items by code, name, category...' },
   // The Quotation Request's PR ID: its items fill the request's lines.
   purchaserequest: { title: 'Select Purchase Request', letter: 'R', list: 'Purchase Requests', plural: 'purchase requests', api: 'api/purchase-requests.php',
-    columns: [['code', 'PR ID'], ['name', 'Type · Items'], ['requestedBy', 'Requested By']], display: row => row.code },
+    columns: [['code', 'PR ID'], ['name', 'Type · Items'], ['requestedBy', 'Requested By'], ['requestedDateText', 'Date']], display: row => row.code,
+    prepare: row => ({ ...row, requestedDateText: viewDate(row.requestedDate) }) },
   // Trade Management: the customer (card style, as the Purchase Order's supplier), and the documents a sales order or delivery note comes from.
   customer: { title: 'Select Customer', letter: 'C', list: 'Customer List', plural: 'customers', api: 'api/customers.php',
     columns: [['code', 'Code'], ['name', 'Customer Name'], ['city', 'City']], display: row => row.name,
     subtitle: 'Choose a customer from the database catalog.', search: 'Search customer by name or code...',
-    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • ') },
+    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Customer', newCustomer: true, compact: true },
   // The quotation's Buyer Name: the picked customer's contact persons (field data-lookup-customer names its customer id
   // input); + New Contact adds one to the buyer (Party › Debtors › Contact Persons) and picks it.
   buyercontact: { title: 'Select Buyer Name', letter: 'B', list: 'Contact Persons', plural: 'contact persons',
     columns: [['name', 'Name'], ['designation', 'Designation'], ['number', 'Mobile']], plainFirst: true, display: row => row.name,
     subtitle: 'Choose a contact person of the selected buyer.', search: 'Search or type a buyer name...',
-    cardMeta: row => [row.designation, row.number].filter(Boolean).join(' • '), create: 'New Contact', newContact: true,
+    cardMeta: row => [row.designation, row.number].filter(Boolean).join(' • '), create: 'New Contact', newContact: true, compact: 'small',
     rows: async field => {
       const customerId = field && byId(field.dataset.lookupCustomer)?.value;
       if (!customerId) return [];
@@ -1780,7 +1860,39 @@ const LOOKUPS = {
   poLocation: { plural: 'locations', rows: () => poTextRows('deliveryLocation', PO_LOCATIONS), display: row => row.name, meta: () => '' },
   poTerms: { plural: 'delivery terms', rows: () => poTextRows('deliveryTerms', PO_TERMS), display: row => row.name, meta: () => '' },
   poCredit: { plural: 'credit periods', rows: () => poTextRows('creditPeriod', PO_CREDIT_PERIODS), display: row => row.name, meta: () => '' },
+  // Quotation, Sales Order, Delivery Note lines: the Delivery Terms used before, as they are typed (free text kept as typed).
+  salesTerm: { plural: 'delivery terms', rows: () => salesTermRows(), display: row => row.name, meta: () => '' },
+  // The quotation's Credit Days: the days used before, as they are typed (any number can still be typed).
+  qtCreditDays: { plural: 'credit days', rows: () => qtCreditDayRows(), display: row => row.name, meta: () => 'days' },
 };
+
+let qtCreditDaysCache = null;
+function qtCreditDayRows() {
+  if (!qtCreditDaysCache || Date.now() - qtCreditDaysCache.at > 60000) {
+    qtCreditDaysCache = { at: Date.now(), rows: apiRequest('api/quotations.php?creditDays=1').catch(() => []) };
+  }
+  return qtCreditDaysCache.rows.then(used => {
+    const seen = new Set();
+    return [...used, '7', '15', '30', '45', '60', '90']
+      .filter(days => !seen.has(days) && seen.add(days))
+      .map(days => ({ id: days, code: '', name: days }));
+  });
+}
+
+// The Delivery Terms the sales documents' lines have used (newest first), then a few usual ones. Read again after a
+// minute, so a term saved meanwhile (here or elsewhere) shows up.
+let salesTermsCache = null;
+function salesTermRows() {
+  if (!salesTermsCache || Date.now() - salesTermsCache.at > 60000) {
+    salesTermsCache = { at: Date.now(), rows: apiRequest('api/quotations.php?deliveryTerms=1').catch(() => []) };
+  }
+  return salesTermsCache.rows.then(used => {
+    const seen = new Set();
+    return [...used, '2-3 DAYS', '1 WEEK', '2-3 WEEKS', 'EX-STOCK', 'IMMEDIATE']
+      .filter(text => !seen.has(text.toUpperCase()) && seen.add(text.toUpperCase()))
+      .map(text => ({ id: text, code: '', name: text }));
+  });
+}
 
 const PO_LOCATIONS = ['DDP MUSCAT LIMIT', 'DAP MUSCAT', 'EX-WORKS', 'MUSCAT MAIN WAREHOUSE', 'SOHAR SITE STORE'];
 const PO_TERMS = ['2-3 days from PO date', '2-3 weeks from PO date, DAF', '1 week from PO date', '4-6 weeks from PO date', 'Immediate delivery', 'Ex-stock'];
@@ -1806,7 +1918,8 @@ async function loadLookup(kind, field = null) {
   if (LOOKUPS[kind].rows) return LOOKUPS[kind].rows(field);
   if (!lookupCache[kind]) {
     try {
-      lookupCache[kind] = await apiRequest(LOOKUPS[kind].api);
+      const rows = await apiRequest(LOOKUPS[kind].api);
+      lookupCache[kind] = LOOKUPS[kind].prepare ? rows.map(LOOKUPS[kind].prepare) : rows;   // e.g. a date shown DD-MM-YYYY
     } catch (error) {
       showToast(`Could not load ${LOOKUPS[kind].plural}`, error.message, true);
       return [];
@@ -1918,6 +2031,8 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
   lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
   dialog.classList.toggle('lk-cards', lookup.cards);
+  dialog.classList.toggle('lk-compact', lookup.cards && Boolean(config.compact));   // Buyer, Buyer Name: a small popup
+  dialog.classList.toggle('lk-compact-sm', lookup.cards && config.compact === 'small');   // Buyer Name: smaller still
   byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
   byId('lookup-sub').hidden = !lookup.cards || !config.subtitle;
   byId('lookup-new').hidden = !(lookup.cards && config.create);
@@ -6216,12 +6331,19 @@ function initQuickItem() {
   });
 }
 
-/* ---------- Quick Add Supplier (Purchase Order › Select Supplier › + Create Supplier) ----------
-   Saved to the Supplier master with its contact, then picked into the field the popup was opened from. */
+/* ---------- Quick Add Supplier / Customer (Purchase Order › Select Supplier › + Create Supplier; Quotation,
+   Sales Order, Delivery Note › Select Customer › + Create Customer) ----------
+   One popup for both: saved to the Supplier or Customer master with its contact, then picked into the field the
+   popup was opened from. */
 
-const quickSupplier = { field: null, saving: false };
+const quickSupplier = { field: null, saving: false, kind: 'supplier' };
+const QUICK_PARTY = {
+  supplier: { noun: 'Supplier', api: 'api/suppliers.php', nameKey: 'supplierName', lookup: 'supplier', example: 'E.G. GLOBAL SUPPLIES LLC' },
+  customer: { noun: 'Customer', api: 'api/customers.php', nameKey: 'customerName', lookup: 'customer', example: 'E.G. AL NOOR TRADING LLC' },
+};
 const qsEl = suffix => byId(`quick-supplier-${suffix}`);
-const QUICK_SUPPLIER_FIELDS = ['name', 'contact', 'phone', 'email', 'country', 'currency'];
+// Country and Currency come before the phone: a country sets the currency and the phone code.
+const QUICK_SUPPLIER_FIELDS = ['name', 'contact', 'country', 'currency', 'phone', 'email'];
 
 // The Select Supplier popup's + Create Supplier: its searched text becomes the new supplier's name.
 function createSupplierFromLookup() {
@@ -6230,11 +6352,18 @@ function createSupplierFromLookup() {
   const config = LOOKUPS[lookup.kind];
   closeLookup();
   if (config.newContact) { openQuickContact(field, name); return; }   // the quotation's Buyer Name
-  openQuickSupplier(field, name);
+  openQuickSupplier(field, name, config.newCustomer ? 'customer' : 'supplier');
 }
 
-function openQuickSupplier(field, name = '') {
+function openQuickSupplier(field, name = '', kind = 'supplier') {
   quickSupplier.field = field;
+  quickSupplier.kind = kind;
+  const party = QUICK_PARTY[kind];
+  qsEl('title').textContent = `Quick Add ${party.noun}`;
+  qsEl('sub').textContent = `Create a new ${party.noun.toLowerCase()} master record instantly.`;
+  qsEl('name-label').textContent = `${party.noun} Name`;
+  qsEl('name').placeholder = party.example;
+  qsEl('save').textContent = `Save ${party.noun}`;
   byId('quick-supplier-form').reset();
   clearFormErrors(byId('quick-supplier-form'));
   qsEl('error').hidden = true;
@@ -6268,27 +6397,28 @@ async function saveQuickSupplier() {
   clearFormErrors(byId('quick-supplier-form'));
   qsEl('error').hidden = true;
   const value = suffix => qsEl(suffix).value.trim();
-  if (!value('name')) return quickSupplierError(qsEl('name'), 'Enter the supplier name.');
+  const party = QUICK_PARTY[quickSupplier.kind];
+  if (!value('name')) return quickSupplierError(qsEl('name'), `Enter the ${party.noun.toLowerCase()} name.`);
   const phone = phoneOf(qsEl('phone'));                 // the code dropdown + the number
   const email = value('email');
   const problem = phoneProblem(value('phone'), qsEl('phone-code').value);
   if (problem) return quickSupplierError(qsEl('phone'), problem);
   if (email && !EMAIL.test(email)) return quickSupplierError(qsEl('email'), 'Enter a valid email address.');
   const payload = {
-    supplierName: value('name'), country: value('country'), currency: qsEl('currency').value || 'OMR', phone, email,
+    [party.nameKey]: value('name'), country: value('country'), currency: qsEl('currency').value || 'OMR', phone, email,
     contacts: value('contact') || phone || email ? [{ name: value('contact'), designation: '', number: phone, email }] : [],
   };
   quickSupplier.saving = true;
   qsEl('save').disabled = true;
   try {
-    const supplier = await apiRequest('api/suppliers.php', { method: 'POST', json: payload });
-    forgetLookups('supplier');
+    const record = await apiRequest(party.api, { method: 'POST', json: payload });
+    forgetLookups(party.lookup);
     const { field } = quickSupplier;
     closeQuickSupplier({ picked: true });
-    showToast('Supplier created', `${supplier.code} · ${supplier.name}`);
-    if (field && document.contains(field)) setLookupValue(field, supplier);   // the order takes it (contact, currency, VAT)
+    showToast(`${party.noun} created`, `${record.code} · ${record.name}`);
+    if (field && document.contains(field)) setLookupValue(field, record);   // the document takes it (contact, currency, VAT)
   } catch (error) {
-    const fields = { supplierName: 'name', phone: 'phone', email: 'email', country: 'country', currency: 'currency' };
+    const fields = { [party.nameKey]: 'name', phone: 'phone', email: 'email', country: 'country', currency: 'currency' };
     const key = Object.keys(error.fields || {}).find(field => fields[field] || field.startsWith('contacts'));
     const target = key ? qsEl(fields[key] || 'contact') : null;
     quickSupplierError(target, key ? error.fields[key] : error.message);
@@ -6314,7 +6444,7 @@ function handleQuickSupplierKeys(event) {
     if (index === -1) return false;                       // buttons: their own click
     event.preventDefault();
     if (index === QUICK_SUPPLIER_FIELDS.length - 1) saveQuickSupplier();
-    else qsEl(QUICK_SUPPLIER_FIELDS[index + 1]).focus();
+    else enterField(qsEl(QUICK_SUPPLIER_FIELDS[index + 1]));   // a popup or dropdown opens on arrival, as on the forms
     return true;
   }
   return false;
@@ -6323,7 +6453,6 @@ function handleQuickSupplierKeys(event) {
 function initQuickSupplier() {
   const dialog = byId('quick-supplier');
   qsEl('currency').replaceChildren(...PO_CURRENCIES.map(row => new Option(`${row.code} - ${row.name}`, row.code)));
-  qsEl('countries').replaceChildren(...COUNTRIES.map(country => new Option(country.name)));
   dialog.addEventListener('cancel', event => { event.preventDefault(); closeQuickSupplier(); });
   dialog.addEventListener('click', event => {
     if (event.target === dialog) { closeQuickSupplier(); return; }   // backdrop
@@ -6332,9 +6461,10 @@ function initQuickSupplier() {
     if (action === 'save') saveQuickSupplier();
   });
   byId('quick-supplier-form').addEventListener('submit', event => event.preventDefault());
-  qsEl('country').addEventListener('input', () => {        // the phone code follows the Country
-    const dial = countryNamed(qsEl('country').value.trim())?.dial;
-    if (dial) qsEl('phone-code').value = dial;
+  qsEl('country').addEventListener('input', () => {        // the phone code and the currency follow the Country
+    const country = countryNamed(qsEl('country').value.trim());
+    if (country?.dial) qsEl('phone-code').value = country.dial;
+    if (country?.currency && [...qsEl('currency').options].some(option => option.value === country.currency)) qsEl('currency').value = country.currency;
   });
   byId('quick-supplier-form').addEventListener('input', event => {
     event.target.classList.remove('is-invalid');
@@ -6437,7 +6567,7 @@ function handleQuickContactKeys(event) {
     if (index === -1) return false;
     event.preventDefault();
     if (index === QUICK_CONTACT_FIELDS.length - 1) saveQuickContact();
-    else qcEl(QUICK_CONTACT_FIELDS[index + 1]).focus();
+    else enterField(qcEl(QUICK_CONTACT_FIELDS[index + 1]));
     return true;
   }
   return false;
@@ -7487,10 +7617,16 @@ async function applyPurchaseItem(form, row, itemId) {
   pbCell(row, 'uomId').value = item.uomId ? String(item.uomId) : '';
   pbCell(row, 'unit').value = item.unit || '';
   syncBoundSelects(row);
+  const offered = pbNum(itemLinePrice(item, row));    // a quotation / sales order / delivery note line: the selling price
+  const sales = isSalesLine(row);
   for (const field of ['price', 'unitCost']) {
     const cell = pbCell(row, field);
-    if (cell && pbNum(cell.value) === 0 && pbNum(item.buyingRate) > 0) cell.value = pbMoney(pbNum(item.buyingRate));
+    // A sales line always takes the picked item's selling price (never a price left from the item it had before).
+    if (cell && offered > 0 && (sales || pbNum(cell.value) === 0)) cell.value = pbMoney(offered);
   }
+  // The sales order's Buying Cost: the item's buying rate, until a supplier's price is chosen for the line.
+  const buying = pbCell(row, 'buyingCost');
+  if (buying && pbNum(buying.value) === 0 && pbNum(item.buyingRate) > 0) buying.value = pbMoney(pbNum(item.buyingRate));
   form.page.absorb();
   form.refresh();
 }
@@ -8432,16 +8568,26 @@ async function loadPurchaseMasters() {
 }
 
 let sealOnFile = false;
+// The seal image, downloaded once per page load and kept in memory (the PDF preview shows it without a wait).
+let sealImagePromise = null;
+function companySealImage() {
+  sealImagePromise ||= fetch('api/company-seal.php?file=1', { credentials: 'same-origin' })
+    .then(response => (response.ok ? response.blob() : null))
+    .then(blob => (blob ? URL.createObjectURL(blob) : null))
+    .catch(() => { sealImagePromise = null; return null; });
+  return sealImagePromise;
+}
+
 async function showSealName() {
   let seal = null;
   try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
   sealOnFile = Boolean(seal);
   // The seal under Attach Seal (shown while it is ticked), as the PDF prints it.
-  const src = seal ? `api/company-seal.php?file=1&t=${Date.now()}` : '';
+  const src = seal ? (await companySealImage()) || '' : '';
   for (const preview of document.querySelectorAll('[data-seal-preview]')) {
     preview.hidden = !seal;
     const img = preview.querySelector('[data-seal-image]');
-    if (seal) img.src = src; else img.removeAttribute('src');
+    if (src) img.src = src; else img.removeAttribute('src');
   }
 }
 
@@ -9469,7 +9615,7 @@ function initGrnTransfer(form) {
     remove.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg>';
     li.append(place, amount, remove);
     list.append(li);
-    if (focus) select.focus();
+    if (focus) enterField(select);           // a new row's stock point list opens at once
     totals();
   }
 
@@ -9490,7 +9636,9 @@ function initGrnTransfer(form) {
     if (saved.length) saved.forEach(transfer => addLine(transfer, false)); else addLine({}, false);
     totals();
     dialog.showModal();
-    (list.querySelector('select') || dialog.querySelector('[data-gt="add"]')).focus();
+    const first = list.querySelector('select');
+    if (first && !first.value) enterField(first);   // nothing chosen yet: its list opens straight away
+    else (first || dialog.querySelector('[data-gt="add"]')).focus();
   }
 
   function close() {
@@ -9551,6 +9699,11 @@ function initGrnTransfer(form) {
     }
   });
   dialog.addEventListener('input', totals);
+  // A stock point picked from its list with Enter: on to that row's quantity.
+  dialog.addEventListener('menu-advance', event => {
+    const qty = event.target.closest('li.gt-row')?.querySelector('[data-gt-qty]');
+    if (qty) { qty.focus(); qty.select(); }
+  });
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });   // Esc
   // Keys: Shift+X adds a row; Enter goes stock point → quantity → the next row (Save after the last);
   // ↑ / ↓ move between the rows' same field; Ctrl+Enter saves.
@@ -9575,7 +9728,8 @@ function initGrnTransfer(form) {
       event.stopPropagation();
       if (target.matches('[data-gt-point]')) { li.querySelector('[data-gt-qty]').focus(); li.querySelector('[data-gt-qty]').select(); return; }
       const next = li.nextElementSibling;
-      (next ? next.querySelector('[data-gt-point]') : dialog.querySelector('[data-gt="save"]')).focus();
+      if (next) enterField(next.querySelector('[data-gt-point]'));   // the next row's stock point list opens, as on the forms
+      else dialog.querySelector('[data-gt="save"]').focus();
       return;
     }
     if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && li && target.matches('[data-gt-qty]')) {
@@ -9761,12 +9915,14 @@ const rfqList = purchaseList({
     { key: 'code', label: 'RFQ ID', type: 'code', group: 'Request' },
     { key: 'date', label: 'Date', type: 'mono', group: 'Request' },
     { key: 'purchaseRequestCode', label: 'PR ID', type: 'mono', group: 'Request' },
-    { key: 'name', label: 'Suppliers', type: 'name', wrap: true, group: 'Suppliers' },
+    // The list shows how many suppliers a request went to; their names are in View (and the search finds them).
+    { key: 'supplierCount', label: 'Suppliers', type: 'qty', group: 'Suppliers' },
+    detail({ key: 'name', label: 'Supplier Names', type: 'wrap', group: 'Suppliers' }),
     { key: 'submissionDeadline', label: 'Deadline', type: 'mono', group: 'Schedule' },
     { key: 'itemCount', label: 'Items', type: 'qty', group: 'Request' },
     { key: 'totalQty', label: 'Total Qty', type: 'qty-ok', group: 'Request' },
   ],
-  fromApi: r => ({ ...r, date: r.requestDate, submissionDeadline: r.submissionDeadline || '' }),
+  fromApi: r => ({ ...r, date: r.requestDate, submissionDeadline: r.submissionDeadline || '', supplierCount: (r.suppliers || []).length }),
   importColumns: [{ key: 'prCode', label: 'PR ID', headers: ['purchase request', 'pr', 'pr no'] },
     { key: 'requestDate', label: 'Quotation Req Date', headers: ['date', 'request date', 'rfq date'], read: readSheetDate('Request date') },
     { key: 'deadline', label: 'Submission Deadline', headers: ['deadline'], read: readSheetDate('Submission deadline') },
@@ -9991,12 +10147,20 @@ async function loadLetterhead() {
   const name = profile?.files?.letterhead;
   if (!name) return null;
   const url = 'api/company-profile.php?file=letterhead';
-  const source = /\.pdf$/i.test(name) ? await pdfFirstPage(url) : await loadPrintImage(url);
+  // An image is downloaded once and kept in memory: the server sends it uncached, so pointing every preview at
+  // the API address would download it again (a blank page until it arrives).
+  let source;
+  if (/\.pdf$/i.test(name)) source = await pdfFirstPage(url);
+  else {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error('the letterhead image could not be loaded');
+    source = await loadPrintImage(URL.createObjectURL(await response.blob()));
+  }
   const width = source.naturalWidth || source.width, height = source.naturalHeight || source.height;
   const bands = letterheadBands(source, width, height);
   const src = source instanceof HTMLCanvasElement
     ? URL.createObjectURL(await new Promise(resolve => source.toBlob(resolve, 'image/png')))
-    : url;
+    : source.src;
   return { src, ...bands };
 }
 
@@ -10118,31 +10282,49 @@ function companyProfile() {
 }
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
-async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false } = {}) {
+// supplier may be a promise; stillWanted() false (another supplier or document was picked meanwhile) leaves the sheet alone.
+async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false, stillWanted = () => true } = {}) {
   // The GRN: the procurement document design (letterhead, supplier details, totals box). The Purchase Order keeps
   // Nathaneal's design.
   const procurement = spec.key === 'grn';
-  const [profile, uploadedLetterhead, ownSupplier] = await Promise.all([companyProfile(), companyLetterhead(),
-    procurement && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
+  const isSales = SALES_KEYS.includes(spec.key);
+  // Everything the page needs is asked for at once (not one after another), so it shows without a wait.
+  const [profile, uploadedLetterhead, ownSupplier, picked, customer] = await Promise.all([companyProfile(), companyLetterhead(),
+    (procurement || spec.key === 'po') && doc.supplierId ? pbSupplier(String(doc.supplierId)).catch(() => null) : null,
+    chosenSupplier,
+    isSales && doc.customerId ? pbCustomer(String(doc.customerId)).catch(() => null) : null]);
+  if (!stillWanted()) return;
   // The supplier this copy is addressed to: the one chosen on a Quotation Request, a Purchase Order's / GRN's own.
-  const supplier = chosenSupplier || ownSupplier;
+  const supplier = picked || ownSupplier;
   // A GRN always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
   const letterhead = uploadedLetterhead
     || (procurement ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
+  if (!stillWanted()) return;
   // GRN Inspection Mode: no Rate / VAT / Amount and no money totals, only the number of items.
   const noPrices = spec.key === 'grn' && hidePrices;
   const proforma = spec.key === 'so' && doc.documentTitle === 'Proforma Invoice';
   const title = proforma ? 'Proforma Invoice' : PB_TITLES[spec.key];
   const text = value => String(value ?? '').trim() || '—';
   const cell = (tag, className, value) => el(tag, className, text(value));
-  // Trade Management documents go to a customer: its details from the Customer master (the name kept on the document otherwise).
-  const isSales = SALES_KEYS.includes(spec.key);
-  const customer = isSales && doc.customerId ? await pbCustomer(String(doc.customerId)).catch(() => null) : null;
+  // Only what is filled is printed: a detail, party line or box left blank on the document is left off the page.
+  const filled = value => String(value ?? '').trim() !== '';
+  const filledPair = ([, value]) => filled(value);
+  // Trade Management documents go to a customer: `customer` has its details from the Customer master (the name
+  // kept on the document otherwise).
   const buyer = () => ({
     label: 'Buyer', name: customer?.name || doc.customerName,
     lines: [customer?.address, ['Country', customer?.country], ['VATIN', customer?.taxRegNo], ['E-mail', customer?.email],
       ['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]],
   });
+  // The supplier's details from the Supplier master, as the Buyer's: address, country, VATIN, e-mail, contact
+  // (the document's own contact first). Blank ones are left out (party() skips them).
+  const supplierLines = (s, contactName = '', contactNumber = '') => {
+    const contact = (s?.contacts || []).find(c => filled(c.name) || filled(c.email) || filled(c.number)) || {};
+    return [[s?.address, s?.city, filled(s?.zipCode) && `PC: ${s.zipCode}`].filter(filled).join(', '),
+      ['Country', s?.country], ['VATIN', s?.taxRegNo], ['E-mail', s?.email || contact.email],
+      ['Contact Person', contactName || s?.contactPerson || contact.name],
+      ['Contact Number', contactNumber || s?.phone || s?.telephone || contact.number]];
+  };
   const terms = [['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Payment Terms', doc.paymentMode],
     ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : [])];
   // The other party (right of this company) and the details grid, for each kind.
@@ -10154,15 +10336,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     rfq: () => ({
       // One copy per supplier (the preview's Supplier switch): addressed to that supplier, with its details.
       party: supplier
-        ? { label: 'Supplier', name: supplier.name, lines: [supplier.address, ['Country', supplier.country], ['E-mail', supplier.email],
-          ['Contact Person', supplier.contactPerson], ['Contact Number', supplier.phone || supplier.telephone]] }
+        ? { label: 'Supplier', name: supplier.name, lines: supplierLines(supplier) }
         : (doc.suppliers || []).length === 1 ? { label: 'Supplier', name: doc.suppliers[0].name, lines: [] }
         // All Suppliers: one copy naming every supplier the request goes to.
         : { label: 'Suppliers', name: `${(doc.suppliers || []).length} Suppliers`, lines: (doc.suppliers || []).map((s, i) => `${i + 1}. ${s.name}`) },
       meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)]],   // the PR stays internal
     }),
     po: () => ({
-      party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+      party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier, doc.contactName, doc.contactNumber) },
       meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
         ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
         ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
@@ -10173,7 +10354,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // PO over the Stock Point on the right.
     grn: () => ({
       buyerLabel: 'Buyer / Receiver',
-      party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [] },
+      party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: supplierLines(supplier) },
       grnBox: {
         ids: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['Supplier PO / Other Reference', doc.poNumber || doc.purchaseOrderCode, 'ref']],
         point: ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')],
@@ -10233,12 +10414,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   // Buyer (this company, from Create a Company) | the other party.
   const party = (label, name, lines) => {
     const box = el('div', 'ps-party');
-    box.append(el('div', 'ps-label', label), cell('div', 'ps-party-name', name));
+    box.append(el('div', 'ps-label', label));
+    if (filled(name)) box.append(el('div', 'ps-party-name', String(name).trim()));
     const list = el('div', 'ps-party-lines');
     for (const line of lines) {
       if (Array.isArray(line)) {
+        if (!filled(line[1])) continue;
         const row = el('div', 'ps-party-line');
-        row.append(el('span', 'ps-party-key', line[0]), el('span', '', `: ${String(line[1] ?? '').trim() || '-'}`));   // label | value columns
+        row.append(el('span', 'ps-party-key', line[0]), el('span', '', `: ${String(line[1]).trim()}`));   // label | value columns
         list.append(row);
       } else if (String(line ?? '').trim()) {
         list.append(el('div', 'ps-party-text', line));
@@ -10266,9 +10449,9 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   if (layout.grnBox) {
     const grid = el('div', 'ps-grnbox');
     const ids = el('dl', 'ps-idbox ps-grnbox-ids');
-    ids.append(...layout.grnBox.ids.map(stackItem));
+    ids.append(...layout.grnBox.ids.filter(filledPair).map(stackItem));
     const point = el('dl', 'ps-idbox ps-grnbox-point');
-    point.append(stackItem(layout.grnBox.point));
+    if (filledPair(layout.grnBox.point)) point.append(stackItem(layout.grnBox.point));
     const [buyerBox, supplierBox] = [...parties.children];
     grid.append(buyerBox, ids, supplierBox, point);
     box.append(grid);
@@ -10276,7 +10459,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // Supplier / Vendor on the left, the document number and date stacked on the right.
     const top = el('div', 'ps-docbox-top');
     const ids = el('dl', 'ps-idbox');
-    for (const [label, value] of layout.idBox) {
+    for (const [label, value] of layout.idBox.filter(filledPair)) {
       const item = el('div', 'ps-idbox-item');
       item.append(el('dt', '', label), cell('dd', '', value));
       ids.append(item);
@@ -10287,6 +10470,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     box.append(parties);
   }
   const metaGrid = el('dl', 'ps-meta');
+  layout.meta = layout.meta.filter(filledPair);
   const count = layout.meta.length;
   const cols = layout.cols || (count <= 4 ? count : count % 3 === 0 ? 3 : 4);
   metaGrid.style.setProperty('--ps-cols', String(cols));
@@ -10320,7 +10504,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const tbody = el('tbody');
   doc.items.forEach((line, i) => {
     const tr = el('tr');
-    tr.append(...columns.map(([, kind, value]) => cell('td', cellClass(kind), value(line, i))));
+    tr.append(...columns.map(([, kind, value]) => el('td', cellClass(kind), String(value(line, i) ?? '').trim())));   // a blank cell stays blank
     // The item name (with the line's bold / colour), then "MAKE: brand" under it when the line has a brand.
     const nameCell = tr.querySelector('.ps-c-name');
     if (line.itemNameHtml) nameCell.replaceChildren(remarksFragment(line.itemNameHtml));
@@ -10355,10 +10539,10 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     }
     side.append(remarks);
   }
-  if (spec.key === 'po' || spec.key === 'qt') {
+  if ((spec.key === 'po' || spec.key === 'qt') && (doc.certifications || []).length) {
     const certification = el('div', 'ps-remarks ps-certification');
     certification.append(el('div', 'ps-label', 'Certification Required'),
-      el('div', 'ps-remarks-text', (doc.certifications || []).join(', ') || 'N/A'));
+      el('div', 'ps-remarks-text', doc.certifications.join(', ')));
     side.append(certification);
   }
   if (side.childElementCount) bottom.append(side);
@@ -10419,11 +10603,13 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   }
   const loading = [];
   const imageLoaded = img => new Promise(resolve => { img.onload = resolve; img.onerror = () => { img.remove(); resolve(); }; });
-  if (doc.attachSeal) {
+  const sealSrc = doc.attachSeal ? await companySealImage() : null;
+  if (!stillWanted()) return;
+  if (sealSrc) {
     const seal = el('img', 'ps-seal');
     seal.alt = 'Company seal';
     loading.push(imageLoaded(seal));
-    seal.src = `api/company-seal.php?file=1&t=${Date.now()}`;
+    seal.src = sealSrc;
     foot.append(seal);
   }
   if (foot.childElementCount) parts.push(foot);
@@ -10437,6 +10623,29 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
+  // A quotation: the General Terms & Conditions on a page of their own (the company's, from Create a Company, else
+  // the standard ones in terms.js), with the quotation's own Offer Validity and currency in them.
+  const termsText = spec.key === 'qt' && typeof renderQuotationTerms === 'function'
+    ? String(profile?.termsConditions ?? '').trim() || (typeof QUOTATION_TERMS_DEFAULT === 'string' ? QUOTATION_TERMS_DEFAULT : '')
+    : '';
+  if (termsText) {
+    const currencyCode = String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
+    const currencyName = PO_CURRENCIES.find(row => row.code === currencyCode)?.name;
+    const validity = String(doc.offerValidity ?? '').trim().toLowerCase() || '30 days';   // "30 Days" → "30 days"
+    const termsRow = el('tr', 'ps-terms-row');
+    const termsCell = el('td', 'ps-body ps-terms');
+    termsCell.append(el('div', 'ps-terms-title', 'General Terms & Conditions'),
+      renderQuotationTerms(termsText, { validity, currency: currencyName ? `${currencyName} (${currencyCode})` : currencyCode }));
+    if (sealSrc) {                         // Attach Seal: the seal under the terms too, as on the first page
+      const termsSeal = el('img', 'ps-seal ps-terms-seal');
+      termsSeal.alt = 'Company seal';
+      loading.push(imageLoaded(termsSeal));
+      termsSeal.src = sealSrc;
+      termsCell.append(termsSeal);
+    }
+    termsRow.append(termsCell);
+    frameBody.append(termsRow);
+  }
   frame.append(frameHead, frameBody, frameFoot);
   const sheetParts = [frame];
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
@@ -10458,12 +10667,87 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
 }
 
 // On screen: the page is as tall as the whole A4 pages it takes, with the letterhead on each of them.
+// On screen the A4 pages are one tall sheet, so it is laid out as printing would: anything that would run past a page's
+// writing area (the letterhead's footer) moves down to the next page's writing area (under its header): an item row
+// (the table's header row repeats over it), the totals, the signatures, a term. The quotation's terms always start a
+// new page. Then the sheet is as tall as its whole pages, with the letterhead and a gap on each.
 function fitPreviewPages(sheet, letterhead) {
   sheet.style.minHeight = '';
-  for (const extra of sheet.querySelectorAll('.ps-letterhead + .ps-letterhead, .ps-letterhead[data-page]')) extra.remove();
+  for (const node of sheet.querySelectorAll('.pv-break, .pv-repeat-head, .pv-page-gap, .ps-letterhead[data-page]')) node.remove();
+  const sheetTop = () => sheet.getBoundingClientRect().top;
   const pageHeight = sheet.getBoundingClientRect().width * 297 / 210;
+  const topSpace = sheet.querySelector('.ps-space-top')?.offsetHeight || 0;
+  const bottomSpace = sheet.querySelector('.ps-space-bottom')?.offsetHeight || 0;
+  const usable = pageHeight - topSpace - bottomSpace;
+  const pageStart = page => page * pageHeight + topSpace;          // where a page's writing area starts
+  // How far `node` must move down to sit wholly inside one page's writing area (0: it already does, or it is too
+  // tall for any page and is left to run on).
+  const shiftFor = (node, forceNewPage = false) => {
+    const box = node.getBoundingClientRect();
+    if (!box.height && !forceNewPage) return 0;
+    const top = box.top - sheetTop();
+    const page = Math.floor(top / pageHeight);
+    if (forceNewPage) return top > pageStart(page) + 1 || page === 0 ? pageStart(page + 1) - top : 0;
+    if (page > 0 && top < pageStart(page)) return pageStart(page) - top;           // in the next page's header
+    const end = page * pageHeight + pageHeight - bottomSpace;
+    if (top + box.height <= end + 0.5 || box.height > usable) return 0;
+    return pageStart(page + 1) - top;
+  };
+  const spacer = (height, tag = 'div') => {
+    const node = el(tag, 'pv-break');
+    node.style.height = `${height}px`;
+    return node;
+  };
+  const pushBlock = (node, force = false) => {
+    const shift = shiftFor(node, force);
+    if (shift > 0.5) node.before(spacer(shift));
+  };
+  const pushRow = (row, table) => {
+    const shift = shiftFor(row);
+    if (shift <= 0.5) return;
+    const columns = row.children.length;
+    const gapRow = el('tr', 'pv-break');
+    const gapCell = el('td');
+    gapCell.colSpan = columns;
+    gapRow.append(gapCell);
+    row.before(gapRow);
+    const head = table.tHead?.rows[0]?.cloneNode(true);       // the column headings again, at the top of the new page
+    if (head) { head.classList.add('pv-repeat-head'); row.before(head); }
+    // The gap takes what is left of this page, so the headings and the row start the next one.
+    gapCell.style.height = `${Math.max(0, shift)}px`;
+  };
+  for (const body of sheet.querySelectorAll('.ps-frame > tbody > tr > td.ps-body')) {
+    if (body.classList.contains('ps-terms')) pushBlock(body.firstElementChild, true);   // the terms: a page of their own
+    for (const part of [...body.children]) {
+      if (part.classList.contains('pv-break')) continue;
+      if (part.matches('table.ps-table')) {
+        // The headings with the first row: never alone at the foot of a page (the spacer goes before the table).
+        const firstRow = part.tBodies[0]?.rows[0];
+        const lead = el('div');
+        const headTop = (part.tHead || part).getBoundingClientRect().top;
+        const leadBottom = (firstRow || part.tHead || part).getBoundingClientRect().bottom;
+        Object.assign(lead.style, { position: 'absolute', left: '0', width: '1px', top: `${headTop - sheetTop()}px`, height: `${leadBottom - headTop}px` });
+        sheet.append(lead);
+        const shift = shiftFor(lead);
+        lead.remove();
+        if (shift > 0.5) part.before(spacer(shift));
+        for (const row of [...part.tBodies[0]?.rows || []]) pushRow(row, part);
+      } else if (part.matches('.ps-terms-list')) {
+        for (const item of [...part.children]) pushBlock(item);
+      } else if (!part.matches('.ps-terms-title') || !body.classList.contains('ps-terms')) {
+        pushBlock(part);
+      }
+    }
+  }
   const pages = Math.max(1, Math.ceil((sheet.scrollHeight - 2) / pageHeight));
   sheet.style.minHeight = `${pages * 297}mm`;
+  // Between two pages a gap, so the preview shows separate A4 sheets (as they print), not one long page.
+  for (let page = 1; page < pages; page++) {
+    const gap = el('div', 'pv-page-gap');
+    gap.style.top = `${page * 297}mm`;
+    gap.setAttribute('aria-hidden', 'true');
+    sheet.append(gap);
+  }
   const first = sheet.querySelector('.ps-letterhead');
   if (!letterhead || !first) return;
   for (let page = 1; page < pages; page++) {
@@ -10513,10 +10797,11 @@ async function showPreviewSheet() {
   sheet.replaceChildren();
   sheet.style.minHeight = '';
   dialog.scrollTop = 0;
+  const { supplierId, hidePrices } = current;
   try {
-    const supplier = await previewSupplier();
-    if (previewDoc !== current) return;
-    await fillPurchaseSheet(sheet, current.spec, current.doc, { screen: true, supplier, hidePrices: current.hidePrices });
+    // The chosen supplier's details load alongside the rest of the page (fillPurchaseSheet waits for them all at once).
+    await fillPurchaseSheet(sheet, current.spec, current.doc, { screen: true, supplier: previewSupplier(), hidePrices: current.hidePrices,
+      stillWanted: () => previewDoc === current && current.supplierId === supplierId && current.hidePrices === hidePrices });
   } catch (error) {
     showToast('The document could not be shown', error.message, true);
   }
@@ -10592,6 +10877,17 @@ function initPurchasePreview() {
   });
 }
 
+// The PDF preview's letterhead (read from the image), company details and seal are made ready once the dashboard has
+// shown, so the first preview opens at once instead of after a blank pause.
+function warmUpPreview() {
+  const warm = async () => {
+    const letterhead = await companyLetterhead();
+    if (!letterhead) await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent);   // the GRN's drawn one
+  };
+  const later = window.requestIdleCallback || (callback => setTimeout(callback, 1500));
+  later(() => { warm().catch(() => {}); }, { timeout: 3000 });
+}
+
 function initPurchaseBook() {
   composePurchaseTemplates();
   for (const form of PURCHASE_FORMS) form.page.init();
@@ -10599,6 +10895,7 @@ function initPurchaseBook() {
   initSealButtons();
   initPurchasePreview();
   loadPurchaseMasters();
+  warmUpPreview();
   // Items made in another tab (Create Item) show up in the searches once this tab is back in front.
   window.addEventListener('focus', () => {
     if (!PURCHASE_FORMS.some(form => form.spec.key === currentPage)) return;
@@ -10612,11 +10909,12 @@ function initPurchaseBook() {
    ===================================================================== */
 
 let loadSeq = 0;
-async function loadDashboard() {
+// pending: the figures already on their way (asked for together with the sign-in check, at start-up).
+async function loadDashboard(pending) {
   const seq = ++loadSeq;
   renderRange();
   renderChartMonths();
-  const data = await fetchDashboard(state);
+  const data = await (pending || fetchDashboard(state));
   if (seq !== loadSeq) return;            // a newer selection is already loading
   state.data = data;
   renderKpis(data.kpis);
@@ -10624,13 +10922,17 @@ async function loadDashboard() {
   renderChart(data.chart);
   renderReturns(data.returns);
   renderQuotations(data.quotations);
-  renderActivities(data.activities);
+  renderActivities(data.activities, data.activityTotal);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // The figures are asked for at once, beside the sign-in check, so they arrive with the page instead of after
+  // every screen below has been set up (a lag right after signing in).
+  const firstFigures = fetchDashboard(state);
   const user = await checkSignedIn();
   if (!user) return;
   document.documentElement.classList.remove('auth-pending');
+  loadDashboard(firstFigures);
   byId('header-user').textContent = user.fullName || user.username;
   // The signed-in company's name in the header (also printed on Purchase Book PDFs, which read it from there).
   if (user.company?.name) {
@@ -10664,8 +10966,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initQuickSupplier();
   initQuickContact();
   initItemDescription();
+  initAuditPage();
   for (const list of MASTER_LISTS) list.init();
-  loadDashboard();
   window.addEventListener('hashchange', renderRoute);
   renderRoute();
 });

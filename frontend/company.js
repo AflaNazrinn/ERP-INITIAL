@@ -20,6 +20,7 @@ const SECTIONS = {
   financial:    ['financialYearStart', 'vatApplicable', 'vatPercentage'],
   address:      ['building', 'street', 'area', 'city', 'country', 'baseCurrency', 'poBox', 'postalCode', 'phone', 'email', 'website'],
   bank:         ['bankName', 'accountHolder', 'accountNumber', 'iban', 'swiftCode'],
+  terms:        ['termsConditions'],
   documents:    ['logo', 'letterhead', 'crCertificate', 'vatCertificate', 'seal'],
   login:        ['username', 'password', 'confirmPassword'],
 };
@@ -1234,6 +1235,7 @@ function handleKeys(event) {
 
   if (key === 'Enter' && form.contains(target)) {
     if (target.tagName === 'BUTTON' && !target.matches('.cc-toggle-btn')) return;   // a button's own click
+    if (target.tagName === 'TEXTAREA') return;                   // Terms & Conditions: Enter starts a new line
     if (target instanceof HTMLInputElement && target.list && target.dataset.pickerOpen === undefined && target.value === '') {
       event.preventDefault();
       if (showSuggestions(target)) return;                       // bank name: Enter shows the list, Enter again moves on
@@ -1468,6 +1470,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   $('cc-generate').addEventListener('click', openGen);
+
+  // 07 Terms & Conditions: starts with the standard terms (also after Clear); Upload puts a .txt file's text in the
+  // box, Standard puts the standard terms back.
+  const terms = field('termsConditions');
+  terms.defaultValue = typeof QUOTATION_TERMS_DEFAULT === 'string' ? QUOTATION_TERMS_DEFAULT : '';
+  terms.value = terms.defaultValue;
+  const setTerms = text => { terms.value = text; terms.dispatchEvent(new Event('input', { bubbles: true })); terms.focus(); terms.setSelectionRange(0, 0); terms.scrollTop = 0; };
+  $('cc-terms-upload').addEventListener('click', () => $('cc-terms-file').click());
+  $('cc-terms-reset').addEventListener('click', () => setTerms(terms.defaultValue));
+  $('cc-terms-file').addEventListener('change', async () => {
+    const file = $('cc-terms-file').files[0];
+    $('cc-terms-file').value = '';
+    if (!file) return;
+    if (!/\.txt$/i.test(file.name) && file.type !== 'text/plain') { setFieldError('termsConditions', 'Upload a .txt file (plain text), or paste the terms into the box.'); return; }
+    if (file.size > 200 * 1024) { setFieldError('termsConditions', 'That file is too large for terms and conditions (200 KB at most).'); return; }
+    const text = (await file.text()).replace(/\r\n?/g, '\n').trim();
+    if (!text) { setFieldError('termsConditions', 'That file is empty.'); return; }
+    setTerms(text.slice(0, 20000));
+  });
   $('cc-preview-open').addEventListener('click', viewLetterhead);
   $('cc-letterhead-view').addEventListener('click', viewLetterhead);
   $('cc-view').addEventListener('cancel', event => { event.preventDefault(); closeView(); });
