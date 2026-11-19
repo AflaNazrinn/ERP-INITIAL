@@ -2075,7 +2075,7 @@
         <div class="fp-field">
           <label class="fp-label" for="po-payment">Payment Mode <span class="fp-req" aria-hidden="true">*</span></label>
           <select id="po-payment" class="fp-input fp-select">
-            <option selected>As usual</option><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Credit</option><option>Card</option>
+            <option selected>As usual</option><option>Credit</option><option>Cash</option>
           </select>
         </div>
         <div class="fp-field" id="po-credit-field" hidden>
@@ -2241,7 +2241,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="grn-po">PO Number</label>
-          <div class="fp-input-wrap fp-suggest-wrap"><input id="grn-po" class="fp-input" type="text" data-suggest="purchaseorder" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="grn-po-options" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Optional PO / reference number"><input id="grn-po-id" type="hidden"><ul id="grn-po-options" class="fp-suggest" role="listbox" aria-label="Purchase orders" hidden></ul></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="grn-po" class="fp-input fp-lookup" type="text" data-lookup="purchaseorder" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" maxlength="60" placeholder="Click to select PO (optional)..."><input id="grn-po-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
       </div>
     </section>

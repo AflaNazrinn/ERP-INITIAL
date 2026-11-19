@@ -1782,7 +1782,14 @@ const LOOKUPS = {
   salesorder: { title: 'Select Sales Order', letter: 'S', list: 'Sales Orders', plural: 'sales orders', api: 'api/sales-orders.php',
     columns: [['code', 'SO ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
   purchaseorder: { title: 'Select Purchase Order', letter: 'P', list: 'Purchase Orders', plural: 'purchase orders', api: 'api/purchase-orders.php',
-    columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name },
+    columns: [['code', 'PO ID'], ['name', 'Supplier']], display: row => row.code, meta: row => row.name,
+    subtitle: 'Choose the purchase order these goods were received against.', search: 'Search PO by number or supplier...',
+    cardMeta: row => [row.name, pbDate(row.poDate), `${row.itemCount ?? 0} item${row.itemCount === 1 ? '' : 's'}`].filter(Boolean).join(' • '),
+    // The GRN's PO Number: only the selected supplier's orders (all of them before a supplier is picked).
+    filterFor: (rows, field) => {
+      const supplierId = field?.id === 'grn-po' ? byId('grn-supplier-id').value : '';
+      return supplierId ? rows.filter(row => String(row.supplierId) === supplierId) : rows;
+    } },
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
     columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
   // Purchase Order currency: the hidden id holds the code (OMR), the field shows "OMR – Omani Rial".
@@ -8802,9 +8809,10 @@ const grnForm = createPurchaseForm({
   init(form) {
     form.warehouseId = () => byId('grn-warehouse-id').value;
     initGrnTransfer(form);
-    // Picking a purchase order fills the supplier and its lines (received = ordered, all accepted).
+    // Picking a purchase order in the Select Purchase Order popup fills the supplier and its lines
+    // (received = ordered, all accepted).
     byId('grn-form').addEventListener('input', async event => {
-      if (event.target.id !== 'grn-po' || !suggest.picking) return;
+      if (event.target.id !== 'grn-po') return;
       const id = byId('grn-po-id').value;
       if (!id) return;
       try {
