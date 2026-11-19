@@ -2215,6 +2215,11 @@ input::-webkit-contacts-auto-fill-button {
    A short list leaves space under it; a long one scrolls inside. New lookup popups get this size too. */
 #lookup.lookup, #lookup.lookup.lk-cards { width: min(680px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px)); }
 #lookup .lk-table-wrap, #lookup.lk-cards .lk-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+/* Select Contact Person (Purchase Order): a smaller popup. */
+#lookup.lookup.lk-compact { width: min(520px, calc(100vw - 32px)); height: min(440px, calc(100vh - 32px)); }
+#lookup.lk-compact .lk-head { padding: 16px 20px 14px; }
+#lookup.lk-compact .lk-title { font-size: 18px; }
+#lookup.lk-compact .lk-body { padding: 16px 20px 0; }
 
 /* Card rows for the popups without a card of their own (the Purchase Order's Supplier and Currency, .lk-card-cell):
    the name over "code • country" and a tick circle. The rest of the card style is the item popups' (.lk-cards above). */

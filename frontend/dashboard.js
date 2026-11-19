@@ -1762,7 +1762,7 @@ const LOOKUPS = {
   suppliercontact: { title: 'Select Contact Person', letter: 'C', list: 'Contact Persons', plural: 'contact persons',
     columns: [['name', 'Name'], ['designation', 'Designation'], ['number', 'Mobile']], plainFirst: true, display: row => row.name,
     subtitle: 'Choose a contact person of the selected supplier.', search: 'Search or type a contact name...',
-    cardMeta: row => row.number, create: 'Create Contact', newContact: true,
+    cardMeta: row => row.number, create: 'Create Contact', newContact: true, compact: true,
     rows: async field => {
       const supplierId = field && byId(field.dataset.lookupSupplier)?.value;
       if (!supplierId) return [];
@@ -1938,6 +1938,7 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
   lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
   dialog.classList.toggle('lk-cards', lookup.cards);
+  dialog.classList.toggle('lk-compact', Boolean(config.compact));   // a short list (Select Contact Person): a smaller popup
   byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
   byId('lookup-sub').hidden = !lookup.cards || !config.subtitle;
   byId('lookup-new').hidden = !(lookup.cards && config.create);
