@@ -3000,7 +3000,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sales pb-table-dn">
-          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-branch">Branch</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-branch">Stock Point</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="dn-items"></tbody>
         </table>
       </div>
@@ -3124,9 +3124,9 @@
   <td><output class="pb-line-total" data-total>—</output><input type="hidden" data-field="foc" value="No"></td>
 </tr></template>
 
-<!-- Delivery Note line: the sales line with a Branch (stock point; Auto = the one with the most stock) -->
+<!-- Delivery Note line: the sales line with a Stock Point (Auto = the one with the most stock) -->
 <template id="pb-line-dn"><tr class="fp-row" data-pb-row="dn">
-  <td><select class="fp-cell fp-select pb-cell-select" data-field="warehouseId" aria-label="Branch"><option value="">Auto (Highest Stock)</option></select></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-field="warehouseId" aria-label="Stock Point"><option value="">Auto (Highest Stock)</option></select></td>
   <td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell pb-cell-term" data-field="deliveryTerm" type="text" maxlength="200" autocomplete="off" spellcheck="false" data-upper data-suggest="salesTerm" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. 2-3 DAYS" aria-label="Delivery term"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery terms used before" hidden></ul></div></td>
   <td><input class="fp-cell fp-cell-num" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Quantity"></td>
   <td data-unit-cell></td>
