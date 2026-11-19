@@ -4527,7 +4527,7 @@ function createMasterList(config) {
       const group = el('div', 'ml-actions');
       // A locked record (a predefined unit) has no Delete; the server refuses it too.
       const canDelete = !config.locked?.(row);
-      for (const [action, label] of [['view', 'View'], ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ...(canDelete ? [['delete', 'Delete']] : [])]) {
+      for (const [action, label] of [...(config.noView ? [] : [['view', 'View']]), ['edit', 'Edit'], ...(config.pdf ? [['pdf', 'PDF']] : []), ...(canDelete ? [['delete', 'Delete']] : [])]) {
         const button = el('button', `ml-act${action === 'delete' ? ' ml-act-danger' : ''}`);
         button.type = 'button';
         button.dataset.action = action;
@@ -4658,7 +4658,7 @@ function createMasterList(config) {
       case 'ArrowLeft': if (at <= 0) focusRow(tr); else buttons[at - 1].focus(); break;
       case 'Enter': {
         const row = list.rows.find(entry => entry.code === tr.dataset.code);
-        if (row) openMasterView(list, row);
+        if (row) { if (config.noView) openMasterEdit(list, row); else openMasterView(list, row); }   // no View: Enter edits
         break;
       }
     }
@@ -9786,6 +9786,7 @@ function purchaseList(spec) {
     key: spec.key, route: spec.route, newRoute: `#/${spec.route}/new`, noun: spec.noun, nouns: spec.nouns,
     api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
     dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind), viewTitle: () => spec.noun,
+    noView: ['pr', 'rfq', 'po', 'grn'].includes(spec.key),      // the Purchase Book lists: Edit, PDF, Delete (no View)
     columns: spec.columns, fromApi: spec.fromApi, sample: {},
     importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
     importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
