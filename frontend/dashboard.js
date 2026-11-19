@@ -7406,9 +7406,13 @@ function composePurchaseTemplates() {
       const unit = row.querySelector('[data-field="unit"]');
       unit.dataset.suggestTyped = '';
       unit.dataset.selectOnFocus = '';
-      unit.dataset.enterSkip = '';            // Enter passes it by (Qty → Price); the arrow keys still reach it
       unit.placeholder = 'Unit';
       row.querySelector('.pb-unit-chevron')?.remove();
+    }
+    // Purchase Book lines (PR, RFQ, PO, GRN): Enter passes the Unit by; it is picked by hand (the arrow keys or a click reach it).
+    if (['pb-line-simple', 'pb-line-po', 'pb-line-grn'].includes(id)) {
+      const unit = row.querySelector('[data-field="unit"]');
+      if (unit) unit.dataset.enterSkip = '';
     }
   }
 }
