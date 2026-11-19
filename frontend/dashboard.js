@@ -1762,7 +1762,7 @@ const LOOKUPS = {
   suppliercontact: { title: 'Select Contact Person', letter: 'C', list: 'Contact Persons', plural: 'contact persons',
     columns: [['name', 'Name'], ['designation', 'Designation'], ['number', 'Mobile']], plainFirst: true, display: row => row.name,
     subtitle: 'Choose a contact person of the selected supplier.', search: 'Search or type a contact name...',
-    cardMeta: row => [row.designation, row.number].filter(Boolean).join(' • '), create: 'Create Contact', newContact: true,
+    cardMeta: row => row.number, create: 'Create Contact', newContact: true,
     rows: async field => {
       const supplierId = field && byId(field.dataset.lookupSupplier)?.value;
       if (!supplierId) return [];
@@ -6367,6 +6367,8 @@ function initQuickSupplier() {
 const quickContact = { field: null, saving: false };
 const qcEl = suffix => byId(`quick-contact-${suffix}`);
 const QUICK_CONTACT_FIELDS = ['name', 'designation', 'phone', 'email'];
+// The fields shown: a supplier's contact (Purchase Order) asks the name and number only.
+const quickContactFields = () => QUICK_CONTACT_FIELDS.filter(suffix => !qcEl(suffix).closest('.fp-field').hidden);
 
 // The party a contact field belongs to: the quotation's buyer (customer) or the purchase order's supplier.
 function quickContactParty(field) {
@@ -6397,6 +6399,7 @@ function openQuickContact(field, name = '') {
     if (dial && !qcEl('phone').value.trim()) qcEl('phone-code').value = dial;
   }).catch(() => {});
   byId('quick-contact-title').textContent = party.supplier ? 'Create Contact' : 'New Contact';
+  for (const suffix of ['designation', 'email']) qcEl(suffix).closest('.fp-field').hidden = party.supplier;
   qcEl('sub').textContent = `Add a contact person to ${party.nameField?.value || `the ${party.noun}`}.`;
   document.documentElement.classList.add('has-modal');
   byId('quick-contact').showModal();
@@ -6466,11 +6469,12 @@ function handleQuickContactKeys(event) {
     return true;
   }
   if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-    const index = QUICK_CONTACT_FIELDS.findIndex(suffix => qcEl(suffix) === event.target);
+    const fields = quickContactFields();
+    const index = fields.findIndex(suffix => qcEl(suffix) === event.target);
     if (index === -1) return false;
     event.preventDefault();
-    if (index === QUICK_CONTACT_FIELDS.length - 1) saveQuickContact();
-    else qcEl(QUICK_CONTACT_FIELDS[index + 1]).focus();
+    if (index === fields.length - 1) saveQuickContact();
+    else qcEl(fields[index + 1]).focus();
     return true;
   }
   return false;
