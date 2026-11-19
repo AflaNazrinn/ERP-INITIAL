@@ -10402,7 +10402,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   // (the document's own contact first). Blank ones are left out (party() skips them).
   const supplierLines = (s, contactName = '', contactNumber = '') => {
     const contact = (s?.contacts || []).find(c => filled(c.name) || filled(c.email) || filled(c.number)) || {};
-    return [[s?.address, s?.city, filled(s?.zipCode) && `PC: ${s.zipCode}`].filter(filled).join(', '),
+    return [[s?.address, s?.city, filled(s?.zipCode) ? `PC: ${s.zipCode}` : ''].filter(filled).join(', '),   // no postal code: nothing (not "false")
       ['Country', s?.country], ['VATIN', s?.taxRegNo], ['E-mail', s?.email || contact.email],
       ['Contact Person', contactName || s?.contactPerson || contact.name],
       ['Contact Number', contactNumber || s?.phone || s?.telephone || contact.number]];
@@ -10436,7 +10436,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // PO over the Stock Point on the right.
     grn: () => ({
       buyerLabel: 'Buyer / Receiver',
-      party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: supplierLines(supplier) },
+      party: { label: 'Supplier / Vendor', name: doc.supplierName, lines: [] },   // the name only (the final GRN design)
       grnBox: {
         ids: [['GRN ID', doc.code], ['GRN Date', poSlashDate(doc.grnDate)], ['Supplier PO / Other Reference', doc.poNumber || doc.purchaseOrderCode, 'ref']],
         point: ['Stock Point', [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' · ')],
