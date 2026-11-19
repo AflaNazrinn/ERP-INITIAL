@@ -10191,12 +10191,22 @@ function companyProfile() {
 }
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
+// A supplier's address on one line: Address, then the city and postal code when the address does not hold them yet.
+function supplierAddress(supplier) {
+  if (!supplier) return '';
+  const address = String(supplier.address ?? '').trim();
+  const has = text => address.toLowerCase().includes(String(text).toLowerCase());
+  const city = String(supplier.city ?? '').trim();
+  const zip = String(supplier.zipCode ?? '').trim();
+  return [address, city && !has(city) ? city : '', zip && !has(zip) ? `PC: ${zip}` : ''].filter(Boolean).join(', ');
+}
+
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false } = {}) {
   // The GRN: the procurement document design (letterhead, supplier details, totals box). The Purchase Order keeps
   // Nathaneal's design.
   const procurement = spec.key === 'grn';
   const [profile, uploadedLetterhead, ownSupplier] = await Promise.all([companyProfile(), companyLetterhead(),
-    procurement && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
+    (procurement || spec.key === 'po') && doc.supplierId ? pbSupplier(doc.supplierId).catch(() => null) : null]);
   // The supplier this copy is addressed to: the one chosen on a Quotation Request, a Purchase Order's / GRN's own.
   const supplier = chosenSupplier || ownSupplier;
   // A GRN always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
@@ -10235,7 +10245,9 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)]],   // the PR stays internal
     }),
     po: () => ({
-      party: { label: 'Supplier', name: doc.supplierName, lines: [['Contact Person', doc.contactName], ['Contact Number', doc.contactNumber]] },
+      // The supplier's address, Country and VATIN from the Supplier master; the contact person and number this order uses.
+      party: { label: 'Supplier', name: doc.supplierName, lines: [supplierAddress(supplier), ['Country', supplier?.country], ['VATIN', supplier?.taxRegNo],
+        ['Contact Person', doc.contactName || supplier?.contactPerson], ['Contact Number', doc.contactNumber || supplier?.phone || supplier?.telephone]] },
       meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
         ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
         ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
