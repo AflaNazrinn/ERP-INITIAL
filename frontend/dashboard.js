@@ -10380,7 +10380,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const supplier = picked || ownSupplier;
   // A GRN always prints on a letterhead: the uploaded one, else the drawn "Blue bars" design.
   const letterhead = uploadedLetterhead
-    || (procurement ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);
+    || (procurement || spec.key === 'po' ? await drawnLetterhead(byId('app')?.querySelector('.brand-name')?.textContent) : null);   // GRN and PO
   if (!stillWanted()) return;
   // GRN Inspection Mode: no Rate / VAT / Amount and no money totals, only the number of items.
   const noPrices = spec.key === 'grn' && hidePrices;
@@ -10578,7 +10578,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
     qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items' }[spec.key]));
-  const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}`);
+  const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}${spec.key === 'po' ? ' ps-table-pdoc' : ''}`);
   const thead = el('thead');
   const headRow = el('tr');
   headRow.append(...columns.map(([label, kind]) => el('th', cellClass(kind), label)));
@@ -10650,7 +10650,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     totals.append(grand);
     bottom.append(totals);
   } else if (spec.kind !== 'simple') {
-    const totals = el('dl', 'ps-totals');
+    const totals = el('dl', spec.key === 'po' ? 'ps-totals ps-po-totals' : 'ps-totals');   // the PO: Grand Total in a green box
     const currency = doc.currency ? ` ${doc.currency}` : '';
     const grn = spec.key === 'grn';
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],

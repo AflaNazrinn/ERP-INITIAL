@@ -2436,6 +2436,32 @@ input::-webkit-contacts-auto-fill-button {
    # · Description of Goods (wraps; MAKE under it) · Qty (accepted; stock transfers under it) · Unit · Rate · VAT % · Amount.
    The PO Ref in blue; a discount in red; Inspection Mode (no prices) ends on the number of items. */
 .ps-table-grn { table-layout: fixed; }
+/* Purchase Order PDF: SL.NO + Item Name take half the table, so the Item Name edge continues the line between
+   Buyer | Supplier and the middle of the details grid; the other columns share the rest. */
+.ps-table-pdoc { table-layout: fixed; }
+.ps-table-pdoc th:nth-child(1) { width: 7%; }
+.ps-table-pdoc th:nth-child(2) { width: 43%; }
+.ps-table-pdoc th:nth-child(3) { width: 6.5%; }
+.ps-table-pdoc th:nth-child(4) { width: 9%; }
+.ps-table-pdoc th:nth-child(5) { width: 10.5%; }
+.ps-table-pdoc th:nth-child(6) { width: 7.5%; }
+.ps-table-pdoc th:nth-child(7) { width: 7%; }
+.ps-table-pdoc th:nth-child(8) { width: 9.5%; }
+.ps-table-pdoc td.ps-c-name { white-space: normal; overflow-wrap: anywhere; }
+.ps-table-pdoc td { color: #0f172a; }      /* the numbers in the same dark ink as the names */
+/* Purchase Order totals: Subtotal and VAT, then the Grand Total in a green box. */
+.ps-po-totals { padding: 12px 14px !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; background: #fff !important; }
+.ps-po-totals > div { padding: 3px 0 !important; border: 0 !important; }
+.ps-po-totals dt { font-size: 10.5px !important; font-weight: 500 !important; text-transform: none !important; color: #334155 !important; }
+.ps-po-totals dd { font-family: var(--ps-mono); font-size: 11px; font-weight: 800; color: #0f172a; }
+.ps-po-totals .ps-total-grand {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 10px 14px !important;
+  border: 1px solid #86efac !important; border-radius: 10px; background: #f0fdf4;
+}
+.ps-po-totals .ps-total-grand dt { font-size: 10px !important; font-weight: 800 !important; letter-spacing: .04em; text-transform: uppercase !important; color: #15803d !important; }
+.ps-po-totals .ps-total-grand dd { font-size: 17px; font-weight: 800; color: #15803d; }
+/* Certification Required: a line under its title. */
+.ps-table-pdoc ~ .ps-bottom .ps-certification .ps-label { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
 .ps-table-grn th:first-child, .ps-table-grn td:first-child { width: 5.3%; text-align: center; }
 .ps-table-grn th.ps-c-name { width: 39.7%; }
 .ps-table-grn th.ps-c-qty { width: 8.5% !important; }
