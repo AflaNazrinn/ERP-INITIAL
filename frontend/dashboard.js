@@ -7406,6 +7406,7 @@ function composePurchaseTemplates() {
       const unit = row.querySelector('[data-field="unit"]');
       unit.dataset.suggestTyped = '';
       unit.dataset.selectOnFocus = '';
+      unit.dataset.enterSkip = '';            // Enter passes it by (Qty → Price); the arrow keys still reach it
       unit.placeholder = 'Unit';
       row.querySelector('.pb-unit-chevron')?.remove();
     }
