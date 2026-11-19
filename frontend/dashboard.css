@@ -2438,7 +2438,6 @@ input::-webkit-contacts-auto-fill-button {
 .so-profit.is-loss { color: #dc2626; }
 .so-sum-strong dt { font-weight: 800; color: var(--ink-900); }
 .so-sum-strong dd { font-weight: 800; }
-.so-approval { margin: 14px 0 4px; }
 
 /* ---------- Item lines fit the card in every module (Purchase Request, Quotation Request, Purchase Order, GRN,
    Quotation, Sales Order, Delivery Note) ----------

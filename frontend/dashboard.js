@@ -9207,7 +9207,7 @@ const soForm = createSalesForm({
     supplierCurrency: byId('so-supplier-currency').value, quotationId: byId('so-quotation-id').value || null,
     customerPo: byId('so-customer-po').value.trim(), purchaseCategory: byId('so-category').value.trim(),
     customDuty: byId('so-duty').value.trim() || '0', businessPromotion: byId('so-promotion').value.trim() || '0',
-    advancePayment: byId('so-advance').value.trim() || '0', sendForApproval: byId('so-approval').checked,
+    advancePayment: byId('so-advance').value.trim() || '0',   // no Send For Approval on this screen: an edit keeps the saved status
     // Multi Supplier: no order-level Payment Terms or Delivery Location (each line's supplier has its own terms).
     ...(soIsMulti() && !soIsInvoice() ? { paymentMode: '', deliveryLocation: '' } : {}),
   }),
@@ -9234,7 +9234,6 @@ const soForm = createSalesForm({
     byId('so-duty').value = pbMoney(pbNum(doc.customDuty));
     byId('so-promotion').value = pbMoney(pbNum(doc.businessPromotion));
     byId('so-advance').value = pbMoney(pbNum(doc.advancePayment));
-    byId('so-approval').checked = Boolean(doc.sendForApproval);
     soShowMode();
   },
   onReset() {
@@ -9242,7 +9241,6 @@ const soForm = createSalesForm({
     byId('so-doc-title').value = 'Sales Order';
     byId('so-mode').value = 'single';
     byId('so-supplier-currency').value = 'OMR';
-    byId('so-approval').checked = false;
     soShowMode();
   },
   init(form, sales) {
