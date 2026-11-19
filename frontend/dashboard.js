@@ -10578,7 +10578,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
     qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items' }[spec.key]));
-  const table = el('table', `ps-table ps-table-${spec.kind}`);
+  const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}`);
   const thead = el('thead');
   const headRow = el('tr');
   headRow.append(...columns.map(([label, kind]) => el('th', cellClass(kind), label)));

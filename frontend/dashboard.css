@@ -2435,7 +2435,16 @@ input::-webkit-contacts-auto-fill-button {
 /* ---------- Goods Received Note PDF (.ps-grn), as view_grn_pdf ----------
    # · Description of Goods (wraps; MAKE under it) · Qty (accepted; stock transfers under it) · Unit · Rate · VAT % · Amount.
    The PO Ref in blue; a discount in red; Inspection Mode (no prices) ends on the number of items. */
-.ps-table-grn th:first-child, .ps-table-grn td:first-child { width: 32px; text-align: center; }
+.ps-table-grn { table-layout: fixed; }
+.ps-table-grn th:first-child, .ps-table-grn td:first-child { width: 5.3%; text-align: center; }
+.ps-table-grn th.ps-c-name { width: 39.7%; }
+.ps-table-grn th.ps-c-qty { width: 8.5% !important; }
+.ps-table-grn th.ps-c-center { width: 8.6% !important; }
+.ps-table-grn th.ps-c-num:not(.ps-c-total) { width: 14%; }
+.ps-table-grn th.ps-c-num:not(.ps-c-total) + th.ps-c-num:not(.ps-c-total) { width: 9.2%; }   /* VAT % */
+.ps-table-grn th.ps-c-total { width: 14.7%; }
+/* Inspection Mode (no prices): Qty and Unit share the rest; the Item Name edge stays on the box's line. */
+.ps-table-grn.ps-table-noprices th.ps-c-qty, .ps-table-grn.ps-table-noprices th.ps-c-center { width: 27.5% !important; }
 .ps-table-grn td.ps-c-name { font-family: inherit; font-size: 10.5px; font-weight: 800; text-transform: uppercase; white-space: normal; overflow-wrap: anywhere; color: #0f172a; }
 .ps-table-grn th.ps-c-qty, .ps-table-grn td.ps-c-qty { width: 70px; text-align: center; }
 .ps-table-grn td.ps-c-qty { font-family: var(--ps-mono); font-weight: 800; white-space: nowrap; vertical-align: middle; }
@@ -2453,7 +2462,8 @@ input::-webkit-contacts-auto-fill-button {
 .ps-grn .ps-totals-count .ps-total-grand { padding-top: 6px !important; }
 .ps-grn .ps-totals-count dt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 /* GRN details: Buyer / Receiver (wide) | GRN ID · GRN Date · Supplier PO stacked; Supplier / Vendor | Stock Point. */
-.ps-grnbox { display: grid; grid-template-columns: minmax(0, 1fr) 40%; }
+/* The box's middle line and the item table's Item Name edge line up: Buyer / Supplier take 45%, as # + Item Name. */
+.ps-grnbox { display: grid; grid-template-columns: 45% minmax(0, 1fr); }
 .ps-grnbox > .ps-party { padding: 10px 12px; border-left: 0; }
 .ps-grnbox > .ps-party:nth-child(3) { border-top: 1px solid #cbd5e1; }
 .ps-grnbox .ps-idbox { display: flex; flex-direction: column; margin: 0; border-left: 1px solid #cbd5e1; }
