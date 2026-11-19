@@ -356,6 +356,8 @@ function company_validate(array $post): array
         'account_number'       => $in->text('accountNumber', 'Account number', 40) ?: null,
         'iban'                 => $iban ?: null,
         'swift_code'           => $swift ?: null,
+        // The quotation's General Terms & Conditions (blank: the standard terms are printed).
+        'terms_conditions'     => $in->text('termsConditions', 'Terms & conditions', 20000) ?: null,
     ];
 
     $username = $in->text('username', 'Username', 50, true);

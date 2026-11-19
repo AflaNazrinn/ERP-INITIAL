@@ -121,14 +121,18 @@ function attempt_login(string $username, string $password): ?array
 
 /* Passwords made on Create a Company are saved in capitals (the page types every field in capitals), so a password
    typed in small letters also counts in capitals. Accounts from before that keep their password exactly as set.
-   Returns the form of the password that matched (as typed, or in capitals), or null. */
+   Returns the form of the password that matched (as typed, or in capitals), or null.
+   The capitals are tried first: that is how most passwords are saved, so a sign-in usually costs one bcrypt check
+   (each takes a noticeable fraction of a second) instead of two. */
 function password_matches(string $password, string $hash): ?string
 {
-    if (password_verify($password, $hash)) {
-        return $password;
-    }
     $upper = mb_strtoupper($password);
-    return $upper !== $password && password_verify($upper, $hash) ? $upper : null;
+    foreach ($upper === $password ? [$password] : [$upper, $password] as $form) {
+        if (password_verify($form, $hash)) {
+            return $form;
+        }
+    }
+    return null;
 }
 
 function logout(): void

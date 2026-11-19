@@ -297,6 +297,38 @@ function sb_delete(string $kind, int $id): void
 /* The serve_master() callbacks for one kind. */
 function sb_serve(string $kind): void
 {
+    // GET ?deliveryTerms=1: every Delivery Term the item lines of quotations, sales orders and delivery notes have
+    // used, newest first, once each (the lines' Delivery Term suggests them as it is typed).
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['deliveryTerms'])) {
+        $terms = [];
+        foreach (['quotation_items', 'sales_order_items', 'delivery_note_items'] as $table) {
+            try {
+                foreach (query("SELECT delivery_term AS term, MAX(id) AS last FROM $table WHERE delivery_term <> '' GROUP BY delivery_term")->fetchAll() as $row) {
+                    $key = mb_strtoupper(trim((string) $row['term']));
+                    $terms[$key] = max($terms[$key] ?? 0, (int) $row['last']);
+                }
+            } catch (PDOException) {
+                // a table this company's database does not have yet
+            }
+        }
+        arsort($terms);
+        json_out(array_slice(array_keys($terms), 0, 200));
+    }
+    // GET ?creditDays=1: the Credit Days quotations have used (whole numbers), newest first, once each.
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['creditDays'])) {
+        $days = [];
+        try {
+            foreach (query("SELECT credit_period AS days, MAX(id) AS last FROM quotations WHERE credit_period <> '' GROUP BY credit_period")->fetchAll() as $row) {
+                if (preg_match('/^\s*(\d{1,4})/', (string) $row['days'], $m)) {
+                    $days[$m[1]] = max($days[$m[1]] ?? 0, (int) $row['last']);
+                }
+            }
+        } catch (PDOException) {
+            // no quotations table yet
+        }
+        arsort($days);
+        json_out(array_map('strval', array_keys($days)));
+    }
     serve_master(
         static fn (string $search = '', bool $all = false) => sb_list($kind, $search),
         static fn (int $id) => sb_find($kind, $id),

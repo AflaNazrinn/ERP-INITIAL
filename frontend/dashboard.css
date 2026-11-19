@@ -369,6 +369,17 @@ button, select { font-family: inherit; }
 }
 .pager-btn:disabled { cursor: not-allowed; }
 .pager-btn[aria-current="page"] { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 700; cursor: default; }
+.pager-btn[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 700; }   /* All */
+.pager-gap { align-self: center; padding: 0 2px; color: var(--ink-400); }
+/* The dashboard's View All (the Audit Trail page). */
+.audit-view-all {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-800); font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.audit-view-all:hover { border-color: var(--ink-400); color: var(--ink-900); }
+.audit-view-all:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+/* The Audit Trail page: the dashboard's table at full width. */
+.audit-full { margin-top: 4px; }
 
 /* ---------- Footer ---------- */
 .app-footer {
@@ -870,8 +881,8 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .lk-cards .lk-table-wrap { overflow-x: hidden; }
 .lk-cards .lk-item-code { overflow-wrap: anywhere; }
 .lk-cards .lk-table tbody tr[data-index] { background: var(--surface); }               /* white until navigated to */
-.lk-cards .lk-table tbody tr[data-index]:hover { background: #f3fbf6; }
-.lk-cards.lk-navigated .lk-table tbody tr.is-active { background: #dcf5e6; }           /* the item ↑/↓ is on: light green */
+.lk-cards .lk-table tbody tr[data-index]:hover { background: var(--accent-soft); }   /* the module's colour: Purchase green, Sales blue, Masters amber */
+.lk-cards.lk-navigated .lk-table tbody tr.is-active { background: var(--accent-soft-2); }   /* the item ↑/↓ is on, in the module's light colour */
 .lk-cards:not(.lk-navigated) .lk-table tbody tr.is-active td.lk-item { box-shadow: none; }   /* not navigated yet: all white */
 .lk-cards:not(.lk-navigated) .lk-table tbody tr.is-active td { font-weight: inherit; }
 .lk-cards .lk-table tbody tr + tr td { border-top: 1px solid var(--line); }
@@ -1062,7 +1073,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
   display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 8px;
   background: var(--surface); border: 1px solid var(--input-line); color: var(--ink-500);
 }
-.sf-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .12); }
+.sf-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .sf-search svg { width: 18px; height: 18px; }
 .sf-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink-900); }
 .sf-search input:focus-visible { outline: none; box-shadow: none; }
@@ -1083,7 +1094,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .sf-radio:checked::before { transform: scale(1); }
 .sf-radio:indeterminate { border-color: var(--accent); }
 .sf-radio:indeterminate::before { transform: scale(1); width: 9px; height: 2px; border-radius: 1px; }
-.sf-radio:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(217, 119, 6, .25); }
+.sf-radio:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 /* Date: a small panel under the button, holding a From and a To date. */
 .sf-date-wrap { position: relative; }
 .sf-date-btn {
@@ -1092,7 +1103,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
   font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap;
 }
 .sf-date-btn:hover { border-color: var(--accent); }
-.sf-date-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .25); }
+.sf-date-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 .sf-date-btn.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sf-date-btn[aria-expanded="true"] .sf-date-chev { transform: rotate(180deg); }
 .sf-date-pop {
@@ -1107,7 +1118,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
   height: 36px; padding: 0 8px; border: 1px solid var(--input-line); border-radius: 6px; background: var(--surface);
   font: inherit; font-size: 13px; color: var(--ink-900);
 }
-.sf-date-input:focus, .sf-date-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .15); }
+.sf-date-input:focus, .sf-date-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
 .sf-date-error { margin: 8px 0 0; font-size: 12px; color: var(--danger); }
 .sf-date-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .sf-date-actions .ml-btn { height: 32px; padding: 0 12px; }
@@ -1147,7 +1158,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
   border: 1.5px dashed var(--input-line); border-radius: 10px; background: var(--surface); font: inherit; color: var(--ink-900);
 }
 .si-drop:hover, .si-drop.is-dragover { border-color: var(--accent); background: var(--accent-soft); }
-.si-drop:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .2); }
+.si-drop:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .si-drop-icon {
   width: 40px; height: 40px; margin-bottom: 6px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
   background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent);
@@ -1285,7 +1296,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 }
 .mv-tab:hover { color: var(--ink-900); }
 .mv-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
-.mv-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgba(217, 119, 6, .35); }
+.mv-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .mv-tab-count {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
   background: var(--surface-sunk); font-size: 10px; font-weight: 800; letter-spacing: 0; color: var(--ink-600);
@@ -1383,7 +1394,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 }
 .mv-doc-act .mv-icon { color: inherit; }
 .mv-doc-act:hover { border-color: var(--ink-400); color: var(--ink-900); }
-.mv-doc-act:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(217, 119, 6, .25); }
+.mv-doc-act:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 
 .mv-foot { background: var(--surface); }
 .mv-foot [data-mv="delete"] { margin-right: auto; }
@@ -1817,10 +1828,21 @@ dialog.pv::backdrop { background: #eef2f6; }
 .pv-supplier select:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
 .pv-paper { max-width: 980px; margin: 28px auto 0; overflow-x: auto; }
 .pv-sheet {
-  position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; overflow: hidden;
+  position: relative; isolation: isolate; width: 210mm; min-height: 297mm; margin: 0 auto; overflow: hidden;
   border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(15, 23, 42, .08);
 }
 .pv-sheet .ps-letterhead { position: absolute; top: 0; left: 0; width: 100%; height: 297mm; object-fit: fill; pointer-events: none; }
+/* The space left at the foot of a page when the next row or block moves on to the next page (screen only). */
+.pv-sheet .pv-break { display: block; }
+.pv-sheet tr.pv-break { display: table-row; }
+.pv-sheet tr.pv-break > td { padding: 0 !important; border: 0 !important; background: transparent !important; }
+/* The gap between two A4 pages in the preview (fitPreviewPages): the page's grey background, with the edge
+   shadows of the sheet above and the one below. Screen only: the print sheet has no gaps. */
+.pv-page-gap {
+  position: absolute; left: 0; right: 0; z-index: 3; height: 28px; transform: translateY(-50%); pointer-events: none;
+  background: #eef2f6;
+  box-shadow: inset 0 8px 8px -8px rgba(15, 23, 42, .18), inset 0 -8px 8px -8px rgba(15, 23, 42, .18);
+}
 @media (max-width: 720px) {
   .pv-bar { flex-wrap: wrap; top: 12px; margin-top: 12px; padding: 14px 16px; }
   .pv-actions { width: 100%; }
@@ -1904,7 +1926,19 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-sign { flex: 1 1 26%; max-width: 32%; min-width: 0; overflow-wrap: anywhere; margin-top: 36px; padding-top: 4px; border-top: 1px solid #94a3b8; text-align: center; }
 .ps-sign-name { font-size: 10.5px; font-weight: 700; color: #0f172a; }
 .ps-sign-title { font-size: 9.5px; font-weight: 500; color: #64748b; }
-.ps-seal { width: 110px; height: 110px; object-fit: contain; margin-left: auto; }
+.ps-seal { width: 170px; height: 120px; object-fit: contain; margin-left: auto; }   /* about a sixth of the page width, as the stamped originals */
+/* Quotation: General Terms & Conditions, a page of their own (printed: a new page; on screen fitPreviewPages pushes
+   them down to the next page). */
+.ps-terms-row { break-before: page; page-break-before: always; }
+.ps-terms-title {
+  margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b;
+}
+.ps-terms-list { font-size: 10.5px; line-height: 1.55; color: #1e293b; text-align: justify; }
+.ps-terms-list p { margin: 0 0 7px; break-inside: avoid; }
+.ps-terms-list strong { font-weight: 700; color: #0f172a; }
+.ps-terms-list .ps-term-gap { margin-top: 16px; }
+.ps-terms-seal { display: block; margin: 24px 0 0 auto; }
 
 .print-sheet { display: none; }
 @media print {
@@ -2122,7 +2156,7 @@ input::-webkit-contacts-auto-fill-button {
 .po-attach-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .po-attach-btn svg { flex: none; }
 .po-attach-btn:hover { border-color: var(--ink-400); }
-.po-attach-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 119, 6, .18); }
+.po-attach-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .po-attach.has-file .po-attach-btn { color: var(--ink-900); padding-right: 36px; }
 .po-attach-clear {
   position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 26px; height: 26px; border: 0; border-radius: 6px;
@@ -2165,7 +2199,7 @@ input::-webkit-contacts-auto-fill-button {
 .po-act-view:hover { border-color: var(--accent); }
 .po-act-delete { border-color: #fecdd3; color: #be123c; }
 .po-act-delete:hover { background: #fff1f2; }
-.po-act:focus-visible, .po-doc:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(217, 119, 6, .25); }
+.po-act:focus-visible, .po-doc:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 .ov { width: min(560px, calc(100vw - 32px)); }
 
 @media (max-width: 1100px) {
@@ -2200,7 +2234,7 @@ input::-webkit-contacts-auto-fill-button {
    :focus, not only :focus-visible, because the arrow keys move focus from script (Safari would not always show it). */
 .mv .ml-btn:focus, .mc .ml-btn:focus {
   outline: 2px solid var(--accent); outline-offset: 2px;
-  box-shadow: 0 0 0 5px rgba(217, 119, 6, .28), 0 4px 10px rgba(15, 23, 42, .16);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 28%, transparent), 0 4px 10px rgba(15, 23, 42, .16);
   transform: translateY(-1px);
 }
 .mv .ml-btn-plain:focus, .mc .ml-btn-plain:focus { background: var(--accent-soft); border-color: var(--accent); color: var(--ink-900); }
@@ -2208,18 +2242,41 @@ input::-webkit-contacts-auto-fill-button {
 .mc .ml-btn-danger-solid:focus { outline-color: var(--danger); box-shadow: 0 0 0 5px rgba(225, 29, 72, .25), 0 4px 10px rgba(15, 23, 42, .16); }
 .mv .ml-btn-primary:focus { background: var(--accent-hover); }
 .mv .mv-tab:focus { outline: 2px solid var(--accent); outline-offset: -2px; box-shadow: none; background: var(--accent-soft); color: var(--ink-900); }
-.mv .lk-close:focus, .mv .mv-doc-act:focus { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(217, 119, 6, .25); }
+.mv .lk-close:focus, .mv .mv-doc-act:focus { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent); }
 @media (prefers-reduced-motion: reduce) { .mv .ml-btn:focus, .mc .ml-btn:focus { transform: none; } }
 
 /* ---------- Every "Select …" popup (#lookup) is one size: 680 × 680, shrinking to fit a small window ----------
    A short list leaves space under it; a long one scrolls inside. New lookup popups get this size too. */
 #lookup.lookup, #lookup.lookup.lk-cards { width: min(680px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px)); }
 #lookup .lk-table-wrap, #lookup.lk-cards .lk-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
-/* Select Contact Person (Purchase Order): a smaller popup. */
-#lookup.lookup.lk-compact { width: min(520px, calc(100vw - 32px)); height: min(440px, calc(100vh - 32px)); }
-#lookup.lk-compact .lk-head { padding: 16px 20px 14px; }
+/* Compact (the sales documents' Buyer and Buyer Name): narrower, as tall as its rows (about five, then it scrolls). */
+#lookup.lookup.lk-cards.lk-compact { width: min(520px, calc(100vw - 32px)); height: auto; max-height: min(560px, calc(100vh - 32px)); }
+#lookup.lk-compact .lk-head { padding: 16px 20px 12px; }
 #lookup.lk-compact .lk-title { font-size: 18px; }
-#lookup.lk-compact .lk-body { padding: 16px 20px 0; }
+#lookup.lk-compact .lk-sub { font-size: 13px; }
+#lookup.lk-compact .lk-body { padding: 14px 20px 0; }
+#lookup.lk-compact .lk-search { height: 40px; padding: 0 12px; }
+#lookup.lk-compact .lk-search input { font-size: 14px; }
+#lookup.lk-compact .lk-new { height: 40px; padding: 0 14px; font-size: 11px; }
+#lookup.lk-compact .lk-table-wrap { flex: 0 1 auto; min-height: 60px; max-height: 300px; }
+#lookup.lk-compact .lk-table td.lk-card-cell { padding: 10px 14px; }
+#lookup.lk-compact .lk-card-name { font-size: 14px; }
+#lookup.lk-compact .lk-foot { margin: 0 20px; padding: 12px 0 14px; }
+/* Buyer Name (a few contact persons): smaller still. */
+#lookup.lookup.lk-cards.lk-compact.lk-compact-sm { width: min(420px, calc(100vw - 32px)); max-height: min(440px, calc(100vh - 32px)); }
+#lookup.lk-compact-sm .lk-head { padding: 12px 16px 10px; }
+#lookup.lk-compact-sm .lk-title { font-size: 16px; }
+#lookup.lk-compact-sm .lk-sub { font-size: 12px; }
+#lookup.lk-compact-sm .lk-body { padding: 10px 16px 0; }
+#lookup.lk-compact-sm .lk-search-row { gap: 8px; margin-bottom: 8px; }
+#lookup.lk-compact-sm .lk-search { height: 34px; padding: 0 10px; }
+#lookup.lk-compact-sm .lk-search input { font-size: 13px; }
+#lookup.lk-compact-sm .lk-new { height: 34px; padding: 0 10px; font-size: 10.5px; }
+#lookup.lk-compact-sm .lk-table-wrap { max-height: 220px; }
+#lookup.lk-compact-sm .lk-table td.lk-card-cell { padding: 8px 12px; gap: 10px; }
+#lookup.lk-compact-sm .lk-card-name { font-size: 13px; }
+#lookup.lk-compact-sm .lk-card-meta { font-size: 12px; }
+#lookup.lk-compact-sm .lk-foot { margin: 0 16px; padding: 10px 0 12px; }
 
 /* Card rows for the popups without a card of their own (the Purchase Order's Supplier and Currency, .lk-card-cell):
    the name over "code • country" and a tick circle. The rest of the card style is the item popups' (.lk-cards above). */
@@ -2239,7 +2296,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 .lk-new:hover { background: var(--accent-hover); }
 .lk-new[hidden] { display: none; }
-.lk-new:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
+.lk-new:focus { outline: 3px solid var(--entry-bg); outline-offset: 2px; box-shadow: 0 0 0 6px var(--lk-search-glow, color-mix(in srgb, var(--accent) 25%, transparent)); }   /* the module's colours */
 .lk-cards .lk-foot .fp-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 600px) { .lk-search-row { flex-wrap: wrap; } .lk-new { width: 100%; justify-content: center; } }
 
@@ -2249,7 +2306,7 @@ input::-webkit-contacts-auto-fill-button {
 .qs .lk-close { border: 0; background: none; }
 .qs-body { padding: 20px 26px; }
 /* Keyboard focus on the item popups' + Create Item (→ from the search box), as + Create Supplier. */
-.lk-create-inline:focus { outline: 3px solid #fde047; outline-offset: 2px; box-shadow: 0 0 0 6px rgba(22, 163, 74, .25); }
+.lk-create-inline:focus { outline: 3px solid var(--entry-bg); outline-offset: 2px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent); }
 
 /* ---------- Full Item Description on a Purchase Book line (.idp.idp-line: every module) ----------
    Two fixed sizes: the view 600 × 315, editing mode 600 × 464 (a smaller window: it shrinks and the body scrolls).
@@ -2340,6 +2397,9 @@ input::-webkit-contacts-auto-fill-button {
 :is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-rich:focus { background: #f8fbff; }
 :is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp .ml-btn-green { background: #2563eb; }
 :is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp .ml-btn-green:hover { background: #1d4ed8; }
+/* Quick Add Customer (the sales pages' Select Customer › + Create Customer): Save in the Trade Management blue. */
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .qs .ml-btn-green { background: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .qs .ml-btn-green:hover { background: #1d4ed8; }
 
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }

@@ -6,6 +6,7 @@
 <title>Create a Company · Growth Engine</title>
 <link rel="stylesheet" href="company.css">
 <script src="letterheads.js" defer></script>
+<script src="terms.js" defer></script>   <!-- the standard quotation Terms & Conditions -->
 <script src="company.js" defer></script>
 </head>
 <body>
@@ -269,8 +270,26 @@
         <p id="cc-error-files" class="cc-error" hidden></p>
       </section>
 
-      <section class="cc-card" data-section="login" aria-labelledby="cc-s7">
-        <header class="cc-card-head"><span class="cc-num">07</span><h2 id="cc-s7">Login Account</h2><span class="cc-count" data-count></span></header>
+      <!-- The quotation's General Terms & Conditions: printed on a page of their own at the end of every quotation PDF.
+           Starts with the standard terms; edit them here, or Upload a .txt file to put its text in the box. -->
+      <section class="cc-card" data-section="terms" aria-labelledby="cc-s7">
+        <header class="cc-card-head"><span class="cc-num">07</span><h2 id="cc-s7">Terms &amp; Conditions</h2><span class="cc-count" data-count></span></header>
+        <div class="cc-terms-bar">
+          <span class="cc-terms-note">Printed on every quotation PDF</span>
+          <button type="button" class="cc-mini-btn" id="cc-terms-upload" title="Put the text of a .txt file in the box">Upload</button>
+          <button type="button" class="cc-mini-btn" id="cc-terms-reset" title="Put the standard terms back">Standard</button>
+          <input type="file" id="cc-terms-file" class="cc-file" accept=".txt,text/plain" tabindex="-1" aria-hidden="true">
+        </div>
+        <div class="cc-row cc-terms-row">
+          <textarea id="cc-termsConditions" name="termsConditions" class="cc-input cc-textarea" rows="9" maxlength="20000" spellcheck="true"
+                    aria-label="Terms and conditions"></textarea>
+          <p class="cc-terms-help">One item per line, e.g. <code>1. Delivery: …</code> (the title before the colon prints in bold).
+            <code>**text**</code> prints in bold. <code>{validity}</code> becomes the quotation's Offer Validity and <code>{currency}</code> its currency.</p>
+        </div>
+      </section>
+
+      <section class="cc-card" data-section="login" aria-labelledby="cc-s8">
+        <header class="cc-card-head"><span class="cc-num">08</span><h2 id="cc-s8">Login Account</h2><span class="cc-count" data-count></span></header>
         <div class="cc-row">
           <label class="cc-label" for="cc-username">Username&nbsp;<span class="cc-req">*</span></label>
           <input id="cc-username" name="username" class="cc-input" type="text" data-upper maxlength="50" required autocomplete="username"
