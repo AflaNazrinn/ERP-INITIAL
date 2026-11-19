@@ -11121,7 +11121,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const nameCell = tr.querySelector('.ps-c-name');
     if (line.itemNameHtml) nameCell.replaceChildren(remarksFragment(line.itemNameHtml));
     const brand = String(line.brandName ?? '').trim();
-    if (brand) nameCell.append(el('div', 'ps-make', `Make: ${brand}`));
+    if (brand && spec.key !== 'po' && spec.key !== 'grn') nameCell.append(el('div', 'ps-make', `Make: ${brand}`));   // no brand on the PO and GRN PDFs
     const term = String(line.deliveryTerm ?? '').trim();           // sales lines
     if (term) nameCell.append(el('div', 'ps-make', `Delivery: ${term}`));
     const transfers = (line.transfers || []).filter(t => pbNum(t.quantity) > 0);
