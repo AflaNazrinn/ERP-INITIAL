@@ -1757,6 +1757,19 @@ const LOOKUPS = {
       return (customer?.contacts || []).filter(contact => contact.name)
         .map(contact => ({ id: contact.name, name: contact.name, designation: contact.designation || '', number: contact.number || '' }));
     } },
+  // The Purchase Order's Contact Person Name: the picked supplier's contact persons (data-lookup-supplier names its
+  // supplier id input); + Create Contact adds one to the supplier (Party › Creditors › Contact Persons) and picks it.
+  suppliercontact: { title: 'Select Contact Person', letter: 'C', list: 'Contact Persons', plural: 'contact persons',
+    columns: [['name', 'Name'], ['designation', 'Designation'], ['number', 'Mobile']], plainFirst: true, display: row => row.name,
+    subtitle: 'Choose a contact person of the selected supplier.', search: 'Search or type a contact name...',
+    cardMeta: row => [row.designation, row.number].filter(Boolean).join(' • '), create: 'Create Contact', newContact: true,
+    rows: async field => {
+      const supplierId = field && byId(field.dataset.lookupSupplier)?.value;
+      if (!supplierId) return [];
+      const supplier = await pbSupplier(supplierId).catch(() => null);
+      return (supplier?.contacts || []).filter(contact => contact.name)
+        .map(contact => ({ id: contact.name, name: contact.name, designation: contact.designation || '', number: contact.number || '' }));
+    } },
   quotation: { title: 'Select Quotation', letter: 'Q', list: 'Quotations', plural: 'quotations', api: 'api/quotations.php',
     columns: [['code', 'Quotation ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
   // The Delivery Note's Ref Num (SO / Quote): the sales orders and quotations as suggestions (id "so:12" / "qt:5").
@@ -6348,23 +6361,36 @@ const quickContact = { field: null, saving: false };
 const qcEl = suffix => byId(`quick-contact-${suffix}`);
 const QUICK_CONTACT_FIELDS = ['name', 'designation', 'phone', 'email'];
 
+// The party a contact field belongs to: the quotation's buyer (customer) or the purchase order's supplier.
+function quickContactParty(field) {
+  const supplier = Boolean(field.dataset.lookupSupplier);
+  const idInput = byId(supplier ? field.dataset.lookupSupplier : field.dataset.lookupCustomer);
+  return {
+    supplier, id: idInput?.value || '', nameField: byId(idInput.id.replace(/-id$/, '')),
+    noun: supplier ? 'supplier' : 'buyer', api: supplier ? 'api/suppliers.php' : 'api/customers.php',
+    load: id => (supplier ? pbSupplier(id) : pbCustomer(id)), cache: supplier ? pbData.suppliers : pbData.customers,
+  };
+}
+
 function openQuickContact(field, name = '') {
-  const customerId = byId(field.dataset.lookupCustomer)?.value;
+  const party = quickContactParty(field);
+  const customerId = party.id;
   if (!customerId) {
-    showToast('Select the Buyer first', 'A new contact is added to the buyer’s contact persons.', true);
-    focusField(byId(field.dataset.lookupCustomer.replace(/-id$/, '')));
+    showToast(`Select the ${party.supplier ? 'Supplier' : 'Buyer'} first`, `A new contact is added to the ${party.noun}’s contact persons.`, true);
+    focusField(party.nameField);
     return;
   }
-  Object.assign(quickContact, { field, customerId });
+  Object.assign(quickContact, { field, customerId, party });
   byId('quick-contact-form').reset();
   clearFormErrors(byId('quick-contact-form'));
   qcEl('error').hidden = true;
   qcEl('name').value = name;
-  pbCustomer(customerId).then(customer => {
+  party.load(customerId).then(customer => {
     const dial = countryNamed(customer?.country)?.dial;
     if (dial && !qcEl('phone').value.trim()) qcEl('phone-code').value = dial;
   }).catch(() => {});
-  qcEl('sub').textContent = `Add a contact person to ${byId(field.dataset.lookupCustomer.replace(/-id$/, '')).value || 'the buyer'}.`;
+  byId('quick-contact-title').textContent = party.supplier ? 'Create Contact' : 'New Contact';
+  qcEl('sub').textContent = `Add a contact person to ${party.nameField?.value || `the ${party.noun}`}.`;
   document.documentElement.classList.add('has-modal');
   byId('quick-contact').showModal();
   qcEl('name').focus();
@@ -6399,15 +6425,15 @@ async function saveQuickContact() {
   const problem = phoneProblem(value('phone'), qcEl('phone-code').value);
   if (problem) return quickContactError(qcEl('phone'), problem);
   if (email && !EMAIL.test(email)) return quickContactError(qcEl('email'), 'Enter a valid email address.');
-  const { field, customerId } = quickContact;
+  const { field, customerId, party } = quickContact;
   quickContact.saving = true;
   qcEl('save').disabled = true;
   try {
-    const customer = await apiRequest(`api/customers.php?id=${customerId}`);
+    const customer = await apiRequest(`${party.api}?id=${customerId}`);
     if (customer.contacts.some(contact => sameText(contact.name, name))) return quickContactError(qcEl('name'), `${customer.name} already has a contact named ${name}.`);
     const contacts = [...customer.contacts, { name, designation: value('designation'), number: phone, email }];
-    const saved = await apiRequest(`api/customers.php?id=${customerId}`, { method: 'PUT', json: { contacts } });
-    pbData.customers.set(customerId, Promise.resolve(saved));       // the popup and Buyer Contact read the new contact
+    const saved = await apiRequest(`${party.api}?id=${customerId}`, { method: 'PUT', json: { contacts } });
+    party.cache.set(customerId, Promise.resolve(saved));            // the popup and the contact number read the new contact
     closeQuickContact({ picked: true });
     showToast('Contact added', `${name} · ${saved.name}`);
     if (field && document.contains(field)) setLookupValue(field, { id: name, name });   // Buyer Name, and its number into Buyer Contact
@@ -8590,22 +8616,16 @@ function poShowCertifications() {
 // The supplier's contacts as suggestions for Contact Person Name; its currency becomes the order's.
 async function poShowSupplier({ fresh = false } = {}) {
   const id = byId('po-supplier-id').value;
-  const list = byId('po-contact-list');
-  if (!id) { list.replaceChildren(); return null; }
+  if (!id) return null;
   let supplier;
   try { supplier = await pbSupplier(id); } catch (error) { showToast('The supplier could not be loaded', error.message, true); return null; }
   if (byId('po-supplier-id').value !== id) return null;
   const contacts = (supplier.contacts || []).filter(contact => contact.name);
-  list.replaceChildren(...contacts.map(contact => {
-    const option = new Option(contact.name);
-    if (contact.designation) option.label = contact.designation;
-    return option;
-  }));
   if (fresh) {
     if (supplier.currency) poSetCurrency(supplier.currency);
-    // The supplier's first contact person and number (the others stay as suggestions); with none, its own phone.
+    // The supplier's first contact person and number (the others are in the Select Contact Person popup); with none, its own phone.
     if (contacts.length) {
-      byId('po-contact').value = contacts[0].name;
+      fillLookup(byId('po-contact'), { id: contacts[0].name, name: contacts[0].name });
       putPhone(byId('po-contact-number'), poSupplierPhone(contacts[0].number || supplier.phone || supplier.telephone, supplier));
     } else if (supplier.phone || supplier.telephone) {
       putPhone(byId('po-contact-number'), poSupplierPhone(supplier.phone || supplier.telephone, supplier));
@@ -8691,7 +8711,7 @@ const poForm = createPurchaseForm({
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
     fillLookup(byId('po-supplier'), po.supplierId ? { id: po.supplierId, name: po.supplierName } : null);   // the Select Supplier popup field
-    byId('po-contact').value = po.contactName;
+    fillLookup(byId('po-contact'), po.contactName ? { id: po.contactName, name: po.contactName } : null);
     putPhone(byId('po-contact-number'), po.contactNumber);
     poSetCurrency(po.currency);
   },
@@ -8707,15 +8727,15 @@ const poForm = createPurchaseForm({
   },
   init(form) {
     byId('po-supplier').addEventListener('input', async () => {      // a pick in the Select Supplier popup
-      byId('po-contact').value = '';
+      fillLookup(byId('po-contact'), null);
       byId('po-contact-number').value = '';
       const supplier = await poShowSupplier({ fresh: true });   // the order takes the supplier's currency
       if (supplier) poVatFromCurrency(form);
       form.page.absorb();
       form.refresh();
     });
-    // A contact picked from the suggestions brings its number.
-    byId('po-contact').addEventListener('change', async () => {
+    // A contact picked in the Select Contact Person popup (or just created) brings its number.
+    byId('po-contact').addEventListener('input', async () => {
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
       const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
