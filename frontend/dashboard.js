@@ -8848,6 +8848,18 @@ const grnForm = createPurchaseForm({
         }));
         form.syncVatToggle();
         showToast('Items fetched', `${po.items.length} item${po.items.length === 1 ? '' : 's'} from ${po.code}.`);
+        // On to the first line: its Brand popup opens (the PO's brand already there: straight to Rec. Qty).
+        const first = form.page.rowsOf('items')[0];
+        if (first) {
+          const brand = pbCell(first, 'brandName');
+          if (brand?.matches('.fp-lookup') && pbCell(first, 'itemId').value && !pbCell(first, 'brandId').value) {
+            lockRowBrand(first, false);
+            brand.focus();
+            openLookup(brand, { byKeyboard: true });
+          } else {
+            focusField(pbCell(first, 'receivedQty'));
+          }
+        }
       } catch (error) { showToast('The purchase order could not be loaded', error.message, true); }
     });
   },
