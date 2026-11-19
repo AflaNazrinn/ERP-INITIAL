@@ -11137,7 +11137,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   parts.push(table);
 
   // Remarks & Notes and the PO's Certification Required on the left, the totals on the right.
-  const bottom = el('div', 'ps-bottom');
+  const bottom = el('div', noPrices ? 'ps-bottom ps-bottom-count' : 'ps-bottom');   // Inspection Mode: the count box runs the full width
   const side = el('div', 'ps-side');
   if (doc.remarks) {
     const remarks = el('div', 'ps-remarks');

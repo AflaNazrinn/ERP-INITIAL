@@ -2535,7 +2535,9 @@ input::-webkit-contacts-auto-fill-button {
 .ps-table-grn th.ps-c-num:not(.ps-c-total) + th.ps-c-num:not(.ps-c-total) { width: 9.2%; }   /* VAT % */
 .ps-table-grn th.ps-c-total { width: 14.7%; }
 /* Inspection Mode (no prices): Qty and Unit share the rest; the Item Name edge stays on the box's line. */
-.ps-table-grn.ps-table-noprices th.ps-c-qty, .ps-table-grn.ps-table-noprices th.ps-c-center { width: 27.5% !important; }
+.ps-table-grn.ps-table-noprices th.ps-c-name { width: 73.2%; }
+.ps-table-grn.ps-table-noprices th.ps-c-qty, .ps-table-grn.ps-table-noprices th.ps-c-center { width: 10.75% !important; }
+.ps-table-grn.ps-table-noprices td.ps-c-center { text-transform: uppercase; }
 .ps-table-grn td.ps-c-name { font-family: inherit; font-size: 10.5px; font-weight: 800; text-transform: uppercase; white-space: normal; overflow-wrap: anywhere; color: #0f172a; }
 .ps-table-grn th.ps-c-qty, .ps-table-grn td.ps-c-qty { width: 70px; text-align: center; }
 .ps-table-grn td.ps-c-qty { font-family: var(--ps-mono); font-weight: 800; white-space: nowrap; vertical-align: middle; }
@@ -2550,8 +2552,13 @@ input::-webkit-contacts-auto-fill-button {
 .ps-transfer::before { content: ''; flex: none; width: 2.5px; height: 10px; border-radius: 1px; background: #0284c7; }
 .ps-grn .ps-meta-item.is-ref dd { font-family: var(--ps-mono); color: #0284c7; text-transform: none; }
 .ps-grn .ps-total-discount dt, .ps-grn .ps-total-discount dd { color: #be123c; }
-.ps-grn .ps-totals-count .ps-total-grand { padding-top: 6px !important; }
-.ps-grn .ps-totals-count dt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+/* Inspection Mode: one full-width box, "TOTAL NUMBER OF ITEMS:" and the count. */
+.ps-bottom.ps-bottom-count { grid-template-columns: minmax(0, 1fr); }
+.ps-bottom.ps-bottom-count .ps-totals-count { grid-row: 1; grid-column: 1 / -1; justify-self: stretch; width: auto !important; max-width: none !important; margin: 0 !important; }   /* first, full width; remarks under it */
+.ps-grn .ps-totals-count { padding: 16px 20px !important; border: 1px solid #dbe3ee !important; border-radius: 12px !important; background: #f1f5fb !important; }
+.ps-grn .ps-totals-count .ps-total-grand { display: flex; align-items: center; justify-content: space-between; margin: 0 !important; padding: 0 !important; border: 0 !important; }
+.ps-grn .ps-totals-count dt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #0f172a; }
+.ps-grn .ps-totals-count dd { font-family: var(--ps-mono); font-size: 15px; font-weight: 800; color: #0f172a; }
 /* GRN details: Buyer / Receiver (wide) | GRN ID · GRN Date · Supplier PO stacked; Supplier / Vendor | Stock Point. */
 /* The box's middle line and the item table's Item Name edge line up: Buyer / Supplier take 45%, as # + Item Name. */
 .ps-grnbox { display: grid; grid-template-columns: 45% minmax(0, 1fr); }
