@@ -2930,7 +2930,7 @@ function handleItemPageKeys(event) {
 // ↑ on the first row or ← on its first cell to the last field before it. New rows: Shift+X or Alt+A.
 // A lookup field (Item Code, Item Name, Brand …) holds a picked value with no caret to move: ←/→ leave it at
 // once. A Purchase Book line's Action buttons (move up, move down, remove) are cells too, after its fields.
-const isRowActionButton = node => node.tagName === 'BUTTON' && Boolean(node.closest('.fp-row .pb-col-act'));
+const isRowActionButton = node => node.tagName === 'BUTTON' && Boolean(node.closest('.fp-row .pb-col-act, .fp-row .pb-col-transfer'));
 // A number cell (Qty, Price, VAT %, Disc. …) or a date: ←/→ move to the next cell at once, like a spreadsheet,
 // wherever the caret is (a number is retyped or Backspaced, not walked through).
 const isNumberCell = node => node.tagName === 'INPUT' && (['decimal', 'numeric'].includes(node.inputMode) || isDateField(node));
@@ -2940,7 +2940,8 @@ function handleTableArrows(event) {
   if (!row || !(['INPUT', 'SELECT'].includes(input.tagName) || isRowActionButton(input))
     || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   const rows = [...row.parentElement.rows].filter(other => other.matches('.fp-row'));
-  const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]), select, .pb-col-act button')];
+  // A date cell's calendar (.fp-date-picker) is not a stop of its own; the GRN's Transfer button is.
+  const columnCells = r => [...r.querySelectorAll('input:not([readonly]):not([type="hidden"]):not(.fp-date-picker), select, .pb-col-transfer button, .pb-col-act button')];
   const col = columnCells(row).indexOf(input);
   // A cell in a hidden column (the Sales Order's Supplier, VAT or buying columns) is skipped.
   const usable = r => columnCells(r).filter(cell => !cell.disabled && cell.getClientRects().length > 0);
@@ -2959,7 +2960,8 @@ function handleTableArrows(event) {
     event.preventDefault();
     if (index < rows.length - 1) focusField(cellAt(rows[index + 1])); else leave(true);
   } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-    && (input.tagName === 'BUTTON' || isLookupField(input) || isNumberCell(input) || caretAtEdge(input, event.key))) {
+    // The Unit (picked from its list, not edited letter by letter) moves on at once too.
+    && (input.tagName === 'BUTTON' || isLookupField(input) || isNumberCell(input) || input.dataset.field === 'unit' || caretAtEdge(input, event.key))) {
     event.preventDefault();
     const forward = event.key === 'ArrowRight';
     const neighbour = cells[cells.indexOf(input) + (forward ? 1 : -1)];
