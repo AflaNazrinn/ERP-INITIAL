@@ -8282,6 +8282,16 @@ function initPurchaseForm(form) {
         if (picked) fillLookup(other, picked);
         lockRowBrand(row, false);        // at once: Enter moves on from the item to Brand (and opens it), not past it
         applyPurchaseItem(form, row, id);
+        // A pick by mouse leaves the cursor on the item: on to Brand and its popup, as Enter does (PR, RFQ, GRN).
+        const brand = pbCell(row, 'brandName');
+        if (['pr', 'rfq', 'grn'].includes(spec.key) && brand?.matches('.fp-lookup')) {
+          setTimeout(() => {
+            if (byId('lookup').open || !row.isConnected || brand.disabled) return;   // Enter already opened it
+            if (document.activeElement !== target && document.activeElement !== document.body) return;
+            focusField(brand);
+            openLookup(brand, { byKeyboard: true });
+          }, 0);
+        }
       } else {
         for (const cell of [pbCell(row, 'itemCode'), pbCell(row, 'itemName')]) fillLookup(cell, null);
         for (const name of ['brandId', 'brandName', 'uomId', 'unit']) if (pbCell(row, name)) pbCell(row, name).value = '';
