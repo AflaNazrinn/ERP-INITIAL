@@ -4402,7 +4402,8 @@ function masterValue(column, value) {
 }
 
 function masterCell(column, value) {
-  const td = el('td', ML_CELL_CLASS[column.type] || '');
+  // column.wrap: the cell keeps its type's style but wraps onto more lines (an RFQ's many suppliers).
+  const td = el('td', [ML_CELL_CLASS[column.type], column.wrap && 'ml-wrap'].filter(Boolean).join(' '));
   td.append(masterValue(column, value));
   return td;
 }
@@ -9760,7 +9761,7 @@ const rfqList = purchaseList({
     { key: 'code', label: 'RFQ ID', type: 'code', group: 'Request' },
     { key: 'date', label: 'Date', type: 'mono', group: 'Request' },
     { key: 'purchaseRequestCode', label: 'PR ID', type: 'mono', group: 'Request' },
-    { key: 'name', label: 'Suppliers', type: 'name', group: 'Suppliers' },
+    { key: 'name', label: 'Suppliers', type: 'name', wrap: true, group: 'Suppliers' },
     { key: 'submissionDeadline', label: 'Deadline', type: 'mono', group: 'Schedule' },
     { key: 'itemCount', label: 'Items', type: 'qty', group: 'Request' },
     { key: 'totalQty', label: 'Total Qty', type: 'qty-ok', group: 'Request' },

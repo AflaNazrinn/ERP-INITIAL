@@ -1251,6 +1251,7 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .ml-status-off { border-color: var(--line); background: var(--surface-sunk); color: var(--ink-500); }
 .ml-table .ml-mono { font-family: var(--font-mono); font-size: 11px; }
 .ml-table .ml-wrap { white-space: normal; min-width: 200px; max-width: 340px; }
+.ml-table .ml-name.ml-wrap { min-width: 260px; max-width: 460px; line-height: 1.45; }   /* a list of names, e.g. an RFQ's suppliers */
 .ml-table th:first-child, .ml-table td:first-child { padding-left: 16px; }
 .ml-table th:last-child, .ml-table td:last-child { padding-right: 16px; }
 
