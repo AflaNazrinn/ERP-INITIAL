@@ -1583,6 +1583,14 @@ function setPhoneField(input, value, fallbackDial) {
   phoneCodeOf(input).value = code;
   input.value = number;
 }
+// Forms' phone fields: phoneOf(input) is "+968 9123 4567" (code + number), putPhone(input, value) shows a stored
+// number in the field and its code dropdown ('' clears the number and keeps the code).
+const phoneOf = input => (input.closest('.fp-phone') ? readPhoneField(input) : input.value.trim());
+function putPhone(input, value, fallbackDial = '+968') {
+  if (!input.closest('.fp-phone')) { input.value = value || ''; return; }
+  if (!String(value ?? '').trim()) { input.value = ''; return; }
+  setPhoneField(input, value, phoneCodeOf(input).value || fallbackDial);
+}
 // The value to store: code + number. A short extension (data-allow-extension, e.g. 204) is kept without a code.
 function readPhoneField(input) {
   const number = input.value.trim();
@@ -2948,8 +2956,21 @@ function initItemPage() {
   body.addEventListener('click', event => {
     const del = event.target.closest('[data-action="delete-row"]');
     if (del) removeSourceRow(del.closest('tr'));
+    const move = event.target.closest('[data-action="move-up"], [data-action="move-down"]');
+    if (move && moveTableRow(move)) setItemDirty(true);
   });
   body.addEventListener('keydown', handleTableArrows);
+}
+
+// Move up / Move down in a line table's Action column: the row swaps with its neighbour, the button keeps focus.
+function moveTableRow(button) {
+  const row = button.closest('tr');
+  const up = button.dataset.action === 'move-up';
+  const sibling = up ? row.previousElementSibling : row.nextElementSibling;
+  if (!sibling) return false;
+  if (up) sibling.before(row); else sibling.after(row);
+  button.focus();
+  return true;
 }
 
 /* =====================================================================
@@ -3246,6 +3267,8 @@ function createFormPage(config) {
       if (add) { addRowAndFocus(add.dataset.addRow); return; }
       const del = event.target.closest('[data-action="delete-row"]');
       if (del) deleteRow(del.closest('tr'));
+      const move = event.target.closest('[data-action="move-up"], [data-action="move-down"]');
+      if (move && moveTableRow(move)) record();         // the S.No labels follow (refresh)
     });
     for (const [name, list] of Object.entries(lists)) {
       byId(list.body).addEventListener('keydown', handleTableArrows);
@@ -6204,6 +6227,7 @@ function openQuickSupplier(field, name = '') {
   qsEl('error').hidden = true;
   qsEl('name').value = name.toUpperCase();
   qsEl('country').value = 'Oman';
+  qsEl('phone-code').value = '+968';
   qsEl('currency').value = 'OMR';
   document.documentElement.classList.add('has-modal');
   byId('quick-supplier').showModal();
@@ -6232,9 +6256,9 @@ async function saveQuickSupplier() {
   qsEl('error').hidden = true;
   const value = suffix => qsEl(suffix).value.trim();
   if (!value('name')) return quickSupplierError(qsEl('name'), 'Enter the supplier name.');
-  const phone = value('phone');
+  const phone = phoneOf(qsEl('phone'));                 // the code dropdown + the number
   const email = value('email');
-  const problem = phoneProblem(phone, '');
+  const problem = phoneProblem(value('phone'), qsEl('phone-code').value);
   if (problem) return quickSupplierError(qsEl('phone'), problem);
   if (email && !EMAIL.test(email)) return quickSupplierError(qsEl('email'), 'Enter a valid email address.');
   const payload = {
@@ -6295,6 +6319,10 @@ function initQuickSupplier() {
     if (action === 'save') saveQuickSupplier();
   });
   byId('quick-supplier-form').addEventListener('submit', event => event.preventDefault());
+  qsEl('country').addEventListener('input', () => {        // the phone code follows the Country
+    const dial = countryNamed(qsEl('country').value.trim())?.dial;
+    if (dial) qsEl('phone-code').value = dial;
+  });
   byId('quick-supplier-form').addEventListener('input', event => {
     event.target.classList.remove('is-invalid');
     qsEl('error').hidden = true;
@@ -6319,6 +6347,10 @@ function openQuickContact(field, name = '') {
   clearFormErrors(byId('quick-contact-form'));
   qcEl('error').hidden = true;
   qcEl('name').value = name;
+  pbCustomer(customerId).then(customer => {
+    const dial = countryNamed(customer?.country)?.dial;
+    if (dial && !qcEl('phone').value.trim()) qcEl('phone-code').value = dial;
+  }).catch(() => {});
   qcEl('sub').textContent = `Add a contact person to ${byId(field.dataset.lookupCustomer.replace(/-id$/, '')).value || 'the buyer'}.`;
   document.documentElement.classList.add('has-modal');
   byId('quick-contact').showModal();
@@ -6349,9 +6381,9 @@ async function saveQuickContact() {
   const value = suffix => qcEl(suffix).value.trim();
   const name = value('name');
   if (!name) return quickContactError(qcEl('name'), 'Enter the contact name.');
-  const phone = value('phone');
+  const phone = phoneOf(qcEl('phone'));
   const email = value('email');
-  const problem = phoneProblem(phone, '');
+  const problem = phoneProblem(value('phone'), qcEl('phone-code').value);
   if (problem) return quickContactError(qcEl('phone'), problem);
   if (email && !EMAIL.test(email)) return quickContactError(qcEl('email'), 'Enter a valid email address.');
   const { field, customerId } = quickContact;
@@ -6800,7 +6832,7 @@ function partyViewSections(kind) {
     let second;
     if (supplier) {
       second = { label: labels[1], count: record.quotations.length, sections: [viewCard({ title: 'Quotations', count: viewCount(record.quotations.length, 'item'), wide: true },
-        viewTable(['S.No', 'Item Name', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
+        viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
           record.quotations.map((q, i) => [viewSerial(i), el('strong', '', q.itemName || '—'), q.description, q.unit, amount(q.rate), q.deliveryTime, q.warranty]), 'No quotations.'))] };
     } else {
       const lines = record.poItems ?? [];
@@ -6813,7 +6845,7 @@ function partyViewSections(kind) {
           { label: 'Total Quantity', value: lines.length ? String(Math.round(qty * 1000) / 1000) : '', column: { type: 'mono' } },
           { label: 'Total Value (OMR)', value: lines.length ? formatAmount(total) : '', column: { type: 'mono' } }])),
         viewCard({ title: 'Items', count: viewCount(lines.length, 'item'), wide: true },
-          viewTable(['S.No', 'Item Name', 'Description', 'Unit', 'Qty', 'Rate (OMR)', 'Amount (OMR)'],
+          viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', 'Qty', 'Rate (OMR)', 'Amount (OMR)'],
             lines.map((line, i) => [viewSerial(i), el('strong', '', line.itemName || '—'), line.description, line.unit, viewMono(line.qty == null ? '' : String(Number(line.qty))),
               amount(line.rate), line.qty == null || line.rate == null ? '' : amount(Number(line.qty) * Number(line.rate))]), 'No purchase order lines.'))] };
     }
@@ -7192,7 +7224,7 @@ const allLists = () => [...MASTER_LISTS, ...PURCHASE_LISTS];
 
 // An edit route opens the list's creation form with the record (see the lists' edit()).
 function masterEditPage(route) {
-  const match = /^((?:masters|purchase-book)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
+  const match = /^((?:masters|purchase-book|trade)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
   const list = match && allLists().find(entry => entry.config.route === match[1]);
   if (!list) return null;
   const id = Number(match[2]);
@@ -7371,15 +7403,17 @@ const itemBrands = item => {
   return [...seen].map(([value, label]) => ({ value, label }));
 };
 
-function setRowBrands(row, item) {
-  // The Brand lookup (PR / RFQ / GRN): locked, "Select an item first", until the row has an item.
+// The Brand lookup (PR / RFQ / GRN): locked, "Select an item first", until the row has an item.
+function lockRowBrand(row, locked = !pbCell(row, 'itemId').value) {
   const brandInput = pbCell(row, 'brandName');
-  if (brandInput?.matches('.fp-lookup')) {
-    const locked = !pbCell(row, 'itemId').value;
-    brandInput.disabled = locked;
-    brandInput.placeholder = locked ? 'Select an item first' : 'Select brand...';
-    brandInput.closest('.fp-input-wrap')?.classList.toggle('is-locked', locked);
-  }
+  if (!brandInput?.matches('.fp-lookup')) return;
+  brandInput.disabled = locked;
+  brandInput.placeholder = locked ? 'Select an item first' : 'Select brand...';
+  brandInput.closest('.fp-input-wrap')?.classList.toggle('is-locked', locked);
+}
+
+function setRowBrands(row, item) {
+  lockRowBrand(row);
   const select = row.querySelector('select[data-bind="brandId"]');
   if (!select) return;                   // the purchase order has no Brand column
   if (!item) {
@@ -8181,6 +8215,7 @@ function initPurchaseForm(form) {
         const picked = lookupCache[other.dataset.lookup]?.find(entry => String(entry.id) === id)
           || lookupCache[target.dataset.lookup]?.find(entry => String(entry.id) === id);
         if (picked) fillLookup(other, picked);
+        lockRowBrand(row, false);        // at once: Enter moves on from the item to Brand (and opens it), not past it
         applyPurchaseItem(form, row, id);
       } else {
         for (const cell of [pbCell(row, 'itemCode'), pbCell(row, 'itemName')]) fillLookup(cell, null);
@@ -8241,9 +8276,10 @@ function initPurchaseForm(form) {
   function linkRowNumbers(row, field) {
     const cell = name => pbCell(row, name);
     if (spec.kind === 'grn' && (field === 'receivedQty' || field === 'acceptedQty')) {
+      // Rejected = Received - Accepted as either is typed. Accepted keeps its own value when Received changes (it is
+      // not cut while Received is still being typed: "12" passes through "1"); Save refuses Accepted above Received.
       const received = pbNum(cell('receivedQty').value);
-      if (field === 'receivedQty') cell('acceptedQty').value = cell('receivedQty').value.trim();
-      else if (pbNum(cell('acceptedQty').value) > received) cell('acceptedQty').value = pbQty(received);
+      if (field === 'acceptedQty' && pbNum(cell('acceptedQty').value) > received) cell('acceptedQty').value = pbQty(received);
       cell('rejectedQty').value = pbQty(Math.max(0, received - pbNum(cell('acceptedQty').value)));
       syncGrnRow(row);
     }
@@ -8554,9 +8590,12 @@ async function poShowSupplier({ fresh = false } = {}) {
   }));
   if (fresh) {
     if (supplier.currency) poSetCurrency(supplier.currency);
-    if (contacts.length === 1) {
+    // The supplier's first contact person and number (the others stay as suggestions); with none, its own phone.
+    if (contacts.length) {
       byId('po-contact').value = contacts[0].name;
-      byId('po-contact-number').value = poSupplierPhone(contacts[0].number, supplier);
+      putPhone(byId('po-contact-number'), poSupplierPhone(contacts[0].number || supplier.phone || supplier.telephone, supplier));
+    } else if (supplier.phone || supplier.telephone) {
+      putPhone(byId('po-contact-number'), poSupplierPhone(supplier.phone || supplier.telephone, supplier));
     }
   }
   return supplier;
@@ -8609,10 +8648,10 @@ const poForm = createPurchaseForm({
       poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
       creditPeriod: poIsCredit() ? byId('po-credit-period').value.trim() : '',
-      salesman: byId('po-salesman').value.trim(), salesmanContact: byId('po-salesman-contact').value.trim(),
+      salesman: byId('po-salesman').value.trim(), salesmanContact: phoneOf(byId('po-salesman-contact')),
       certifications: byId('po-certifications').value.split(',').map(value => value.trim()).filter(Boolean),
       supplierId: byId('po-supplier-id').value || null, contactName: byId('po-contact').value.trim(),
-      contactNumber: byId('po-contact-number').value.trim(), currency: poCurrency(),
+      contactNumber: phoneOf(byId('po-contact-number')), currency: poCurrency(),
     };
   },
   check(form, errors) {
@@ -8635,12 +8674,12 @@ const poForm = createPurchaseForm({
     byId('po-credit-period').value = po.creditPeriod || '';
     poShowCredit();
     byId('po-salesman').value = po.salesman || '';
-    byId('po-salesman-contact').value = po.salesmanContact || '';
+    putPhone(byId('po-salesman-contact'), po.salesmanContact);
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
     fillLookup(byId('po-supplier'), po.supplierId ? { id: po.supplierId, name: po.supplierName } : null);   // the Select Supplier popup field
     byId('po-contact').value = po.contactName;
-    byId('po-contact-number').value = po.contactNumber || '';
+    putPhone(byId('po-contact-number'), po.contactNumber);
     poSetCurrency(po.currency);
   },
   afterFill: () => poShowSupplier(),
@@ -8667,7 +8706,7 @@ const poForm = createPurchaseForm({
       const supplierId = byId('po-supplier-id').value;
       const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
       const contact = supplier?.contacts?.find(entry => sameText(entry.name, byId('po-contact').value));
-      if (contact?.number) { byId('po-contact-number').value = poSupplierPhone(contact.number, supplier); form.page.absorb(); }
+      if (contact?.number) { putPhone(byId('po-contact-number'), poSupplierPhone(contact.number, supplier)); form.page.absorb(); }
     });
     // A pick in the Select Currency popup: the form records it first (its listener is older), then VAT follows in the same step.
     byId('po-form').addEventListener('input', event => {
@@ -8814,9 +8853,9 @@ function createSalesForm(cfg) {
       if (contacts.length === 1) {
         $('contact').value = contacts[0].name;
         if ($('contact').dataset.lookup) lookupIdInput($('contact')).value = contacts[0].name;
-        $('contact-number').value = salesCustomerPhone(contacts[0].number, customer);
+        putPhone($('contact-number'), salesCustomerPhone(contacts[0].number, customer));
       } else if (!contacts.length && customer.phone) {
-        $('contact-number').value = salesCustomerPhone(customer.phone, customer);
+        putPhone($('contact-number'), salesCustomerPhone(customer.phone, customer));
       }
     }
     return customer;
@@ -8841,7 +8880,7 @@ function createSalesForm(cfg) {
   async function copyFrom(doc, form) {
     if (doc.customerId) fillLookup($('customer'), { id: doc.customerId, name: doc.customerName });
     $('contact').value = doc.contactName || '';
-    $('contact-number').value = doc.contactNumber || '';
+    putPhone($('contact-number'), doc.contactNumber);
     setCurrency(doc.currency);
     if (doc.deliveryLocation) $('location').value = doc.deliveryLocation;
     setPayment(doc.paymentMode);
@@ -8873,9 +8912,9 @@ function createSalesForm(cfg) {
     },
     header: () => ({
       [cfg.dateKey]: $('date').value, customerId: $('customer-id').value || null, contactName: $('contact').value.trim(),
-      contactNumber: $('contact-number').value.trim(), currency: currency(), deliveryLocation: $('location').value.trim(),
+      contactNumber: phoneOf($('contact-number')), currency: currency(), deliveryLocation: $('location').value.trim(),
       paymentMode: $('payment')?.value.trim() ?? '', creditPeriod: isCredit() ? $('credit-period').value.trim() : '',
-      ...($('salesman') ? { salesman: $('salesman').value.trim(), salesmanContact: $('salesman-contact').value.trim() } : {}),
+      ...($('salesman') ? { salesman: $('salesman').value.trim(), salesmanContact: phoneOf($('salesman-contact')) } : {}),
       ...cfg.header(),
     }),
     check(form, errors) {
@@ -8889,7 +8928,7 @@ function createSalesForm(cfg) {
       $('date').value = doc[cfg.dateKey];
       fillLookup($('customer'), doc.customerId ? { id: doc.customerId, name: doc.customerName } : null);
       $('contact').value = doc.contactName || '';
-      $('contact-number').value = doc.contactNumber || '';
+      putPhone($('contact-number'), doc.contactNumber);
       setCurrency(doc.currency);
       $('location').value = doc.deliveryLocation || '';
       setPayment(doc.paymentMode);
@@ -8897,7 +8936,7 @@ function createSalesForm(cfg) {
       showCredit();
       if ($('salesman')) {
         $('salesman').value = doc.salesman || '';
-        $('salesman-contact').value = doc.salesmanContact || '';
+        putPhone($('salesman-contact'), doc.salesmanContact);
       }
       cfg.fill(doc);
       showCerts();
@@ -8929,7 +8968,7 @@ function createSalesForm(cfg) {
         const customerId = $('customer-id').value;
         const customer = customerId ? await pbCustomer(customerId).catch(() => null) : null;
         const contact = customer?.contacts?.find(entry => sameText(entry.name, $('contact').value));
-        if (contact?.number) { $('contact-number').value = salesCustomerPhone(contact.number, customer); form.page.absorb(); }
+        if (contact?.number) { putPhone($('contact-number'), salesCustomerPhone(contact.number, customer)); form.page.absorb(); }
       });
       // VAT follows the currency: VAT Enabled (5%) in OMR, none in any other currency (the VAT button can still change it).
       $('form').addEventListener('input', event => {
@@ -9045,7 +9084,8 @@ function soShowMode() {
   formNode.dataset.mode = soIsMulti() ? 'multi' : 'single';
   for (const label of formNode.querySelectorAll('[data-so-base]')) label.textContent = soBase();
   for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = soIsMulti() ? '' : ` (${byId('so-supplier-currency').value})`;
-  byId('so-save-label').textContent = `Save ${soIsInvoice() ? 'Proforma Invoice' : 'Sales Order'}`;
+  // An opened Sales Order is updated (as the other forms' Update … Record).
+  byId('so-save-label').textContent = FORM_PAGES['trade/sales-order/new']?.isEditing?.() ? 'Update Sales Order Record' : 'Save Sales Order';
 }
 
 // Each line's buying side and the summary (after the form's own totals).
@@ -9102,7 +9142,7 @@ function soAsDocument() {
   }).filter(line => line.itemName || line.itemId);
   return {
     code: 'the Sales Order', customerId: value('so-customer-id') || null, customerName: value('so-customer'),
-    contactName: value('so-contact'), contactNumber: value('so-contact-number'), currency: value('so-currency-id') || 'OMR',
+    contactName: value('so-contact'), contactNumber: phoneOf(byId('so-contact-number')), currency: value('so-currency-id') || 'OMR',
     deliveryLocation: value('so-location'), paymentMode: value('so-payment'), creditPeriod: '',
     vatMode: 'exclude', discountAmount: value('so-discount'), shipping: value('so-shipping'), items,
   };

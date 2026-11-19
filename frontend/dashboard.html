@@ -258,7 +258,7 @@
               <th class="fp-col-num">Opening Stock</th>
               <th class="fp-col-num">Selling Price (OMR)</th>
               <th class="fp-col-date">Batch Expiry</th>
-              <th class="fp-col-del">Del</th>
+              <th class="fp-col-del fp-col-act">Action</th>
             </tr>
           </thead>
           <tbody id="item-source-body"></tbody>
@@ -331,7 +331,7 @@
       <td><input class="fp-cell fp-cell-num" data-field="openingStock" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Opening stock"></td>
       <td><input class="fp-cell fp-cell-num fp-cell-price" data-field="sellingPrice" type="text" inputmode="decimal" autocomplete="off" placeholder="0.000" aria-label="Selling price (OMR)"></td>
       <td><input class="fp-cell fp-cell-date" data-field="batchExpiry" type="date" aria-label="Batch expiry"></td>
-      <td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td>
+      <td class="fp-col-del fp-col-act"><div class="pb-row-actions"><button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button><button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></div></td>
     </tr>
   </template>
 </section>
@@ -965,7 +965,7 @@
           <input id="party-sup-email" class="fp-input" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com">
         </div>
       </div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:70px">S.No</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-sup-contacts"></tbody></table></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:70px">S.No</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del fp-col-act" style="width:112px">Action</th></tr></thead><tbody id="party-sup-contacts"></tbody></table></div>
     </section>
     <div class="fp-pair">
     <section class="fp-card">
@@ -1085,7 +1085,7 @@
           <input id="party-cus-email" class="fp-input" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com">
         </div>
       </div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:70px">S.No</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-cus-contacts"></tbody></table></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:70px">S.No</th><th class="" style="width:auto">Name</th><th class="" style="width:auto">Designation</th><th class="" style="width:auto">Mobile Number</th><th class="" style="width:auto">Email ID</th><th class="fp-col-del fp-col-act" style="width:112px">Action</th></tr></thead><tbody id="party-cus-contacts"></tbody></table></div>
     </section>
     <div class="fp-pair">
     <section class="fp-card">
@@ -1183,7 +1183,7 @@
     </section>
     <section class="fp-card">
       <div class="fp-section-head"><h2 class="fp-section-title">2. Parsed Item Details</h2><button type="button" class="fp-add-row" data-add-row="quotations" title="Add Row (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Row</span><kbd>Shift+X</kbd></button></div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:22%">Item Name</th><th class="" style="width:auto">Description</th><th class="" style="width:8%">Unit</th><th class="fp-col-num" style="width:11%">Rate (OMR)</th><th class="" style="width:11%">Delivery Time</th><th class="" style="width:11%">Warranty</th><th class="fp-col-del" style="width:70px">Action</th></tr></thead><tbody id="party-quote-rows"></tbody></table></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:22%">Item Name</th><th class="" style="width:auto">Description</th><th class="" style="width:8%">Unit</th><th class="fp-col-num" style="width:11%">Rate (OMR)</th><th class="" style="width:11%">Delivery Time</th><th class="" style="width:11%">Warranty</th><th class="fp-col-del fp-col-act" style="width:112px">Action</th></tr></thead><tbody id="party-quote-rows"></tbody></table></div>
       <p id="party-quote-summary" class="fp-table-note"></p>
     </section>
   </div>
@@ -1220,7 +1220,7 @@
           <input id="party-cpo-delivery" class="fp-input fp-input-sm" type="date">
         </div>
       </div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table cpo-table"><thead><tr><th style="width:56px">S.No</th><th style="width:22%">Item Name</th><th style="width:auto">Description</th><th style="width:9%">Unit</th><th class="fp-col-num" style="width:9%">Qty</th><th class="fp-col-num" style="width:12%">Rate (OMR)</th><th class="fp-col-num" style="width:13%">Amount (OMR)</th><th class="fp-col-del" style="width:64px">Action</th></tr></thead><tbody id="party-cpo-rows"></tbody><tfoot class="fp-table-foot cpo-foot"><tr><td></td><td id="party-cpo-foot-count"></td><td></td><td class="cpo-foot-label">Total Qty</td><td id="party-cpo-foot-qty" class="fp-foot-num"></td><td class="cpo-foot-label">Total Value</td><td id="party-cpo-foot-total" class="fp-foot-num cpo-foot-total"></td><td></td></tr></tfoot></table></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table cpo-table"><thead><tr><th style="width:62px;white-space:nowrap">SL.NO</th><th style="width:22%">Item Name</th><th style="width:auto">Description</th><th style="width:9%">Unit</th><th class="fp-col-num" style="width:9%">Qty</th><th class="fp-col-num" style="width:12%">Rate (OMR)</th><th class="fp-col-num" style="width:13%">Amount (OMR)</th><th class="fp-col-del fp-col-act" style="width:112px">Action</th></tr></thead><tbody id="party-cpo-rows"></tbody><tfoot class="fp-table-foot cpo-foot"><tr><td></td><td id="party-cpo-foot-count"></td><td></td><td class="cpo-foot-label">Total Qty</td><td id="party-cpo-foot-qty" class="fp-foot-num"></td><td class="cpo-foot-label">Total Value</td><td id="party-cpo-foot-total" class="fp-foot-num cpo-foot-total"></td><td></td></tr></tfoot></table></div>
     </section>
   </div>
 </div>
@@ -1286,9 +1286,9 @@
     </div>
   </form>
   <template id="party-doc-row"><tr class="fp-row"><td><div class="fp-doc"><span class="fp-doc-badge" data-doc-badge></span><div class="fp-doc-text"><strong class="fp-doc-name" data-doc-name></strong><span class="fp-doc-size" data-doc-size></span></div></div></td><td><select class="fp-cell fp-select fp-cell-select" data-field="type" aria-label="Document type"><option value="">Select type</option><option>Commercial Registration</option><option>VAT Certificate</option><option>Trade Licence</option><option>Bank Letter</option><option>Agreement</option><option>Other</option></select></td><td><input class="fp-cell fp-cell-date" data-field="expiry" type="date" aria-label="Expiry date"></td><td><input class="fp-cell" data-field="uploadedOn" type="text" readonly tabindex="-1" aria-label="Uploaded on"></td><td class="fp-col-del"><button type="button" class="fp-del" data-doc-preview title="View file" aria-label="View file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="fp-del" data-doc-remove title="Remove file" aria-label="Remove file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" data-letters placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" data-letters placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><div class="fp-phone fp-phone-cell"><select class="fp-cell fp-select fp-select-list fp-phone-code" data-field="mobileCode" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" inputmode="tel" data-check="phone" placeholder="9XXX XXXX" aria-label="Mobile number"></div></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-cpo-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="qty" type="text" autocomplete="off" inputmode="decimal" placeholder="0" aria-label="Qty"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><output class="cpo-amount" data-amount>0.000</output></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
-  <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="party-contact-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" data-letters placeholder="Full name" aria-label="Contact name"></td><td><input class="fp-cell" data-field="designation" type="text" autocomplete="off" data-letters placeholder="e.g. Sales Manager" aria-label="Designation"></td><td><div class="fp-phone fp-phone-cell"><select class="fp-cell fp-select fp-select-list fp-phone-code" data-field="mobileCode" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input class="fp-cell" data-field="mobile" type="text" autocomplete="off" inputmode="tel" data-check="phone" placeholder="9XXX XXXX" aria-label="Mobile number"></div></td><td><input class="fp-cell" data-field="email" type="text" autocomplete="off" inputmode="email" data-check="email" placeholder="name@company.com" aria-label="Email"></td><td class="fp-col-del fp-col-act"><div class="pb-row-actions"><button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button><button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></div></td></tr></template>
+  <template id="party-cpo-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="qty" type="text" autocomplete="off" inputmode="decimal" placeholder="0" aria-label="Qty"></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><output class="cpo-amount" data-amount>0.000</output></td><td class="fp-col-del fp-col-act"><div class="pb-row-actions"><button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button><button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></div></td></tr></template>
+  <template id="party-quote-row"><tr class="fp-row"><td><input class="fp-cell" data-field="itemName" type="text" autocomplete="off" placeholder="Item name" aria-label="Item name"></td><td><input class="fp-cell" data-field="description" type="text" autocomplete="off" placeholder="Description" aria-label="Description"></td><td><div class="fp-input-wrap fp-suggest-wrap"><input class="fp-cell" data-field="unit" type="text" data-suggest="uom" data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" placeholder="PCS" aria-label="Unit"><input data-field="unitId" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Units of measure" hidden></ul></div></td><td><input class="fp-cell fp-cell-num" data-field="rate" type="text" autocomplete="off" inputmode="decimal" placeholder="0.000" aria-label="Rate (OMR)"></td><td><input class="fp-cell" data-field="deliveryTime" type="text" autocomplete="off" placeholder="7 days" aria-label="Delivery time"></td><td><input class="fp-cell" data-field="warranty" type="text" autocomplete="off" placeholder="12 months" aria-label="Warranty"></td><td class="fp-col-del fp-col-act"><div class="pb-row-actions"><button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button><button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></div></td></tr></template>
 </section>
 
 <!-- BRAND CREATION  (#/masters/brand/new · Masters › Create › Brand) -->
@@ -1395,7 +1395,7 @@
     </section>
     <section class="fp-card">
       <div class="fp-section-head"><h2 class="fp-section-title">2. Subcategory Specification</h2><button type="button" class="fp-add-row" data-add-row="subcategories" title="Add Subcategory (Shift+X or Alt+A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Add Subcategory</span><kbd>Shift+X</kbd></button></div>
-      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:90px">S.No</th><th class="" style="width:auto">Subcategory Name</th><th class="fp-col-del" style="width:80px">Action</th></tr></thead><tbody id="category-subcategories"></tbody></table></div>
+      <div class="fp-table-wrap fp-table-wrap-auto"><table class="fp-table"><thead><tr><th class="" style="width:90px">S.No</th><th class="" style="width:auto">Subcategory Name</th><th class="fp-col-del fp-col-act" style="width:112px">Action</th></tr></thead><tbody id="category-subcategories"></tbody></table></div>
     </section>
     <section class="fp-card">
       <h2 class="fp-section-title">3. Operational Remarks &amp; Description</h2>
@@ -1413,7 +1413,7 @@
       </div>
     </div>
   </form>
-  <template id="category-subcategory-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" maxlength="100" data-upper placeholder="e.g. SOLENOID VALVES" aria-label="Subcategory name"></td><td class="fp-col-del"><button type="button" class="fp-del" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></td></tr></template>
+  <template id="category-subcategory-row"><tr class="fp-row"><td class="fp-row-label" data-row-label></td><td><input class="fp-cell" data-field="name" type="text" autocomplete="off" maxlength="100" data-upper placeholder="e.g. SOLENOID VALVES" aria-label="Subcategory name"></td><td class="fp-col-del fp-col-act"><div class="pb-row-actions"><button type="button" class="pb-icon-btn" data-action="move-up" title="Move up" aria-label="Move row up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button><button type="button" class="pb-icon-btn" data-action="move-down" title="Move down" aria-label="Move row down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button><button type="button" class="pb-icon-btn pb-icon-danger" data-action="delete-row" title="Remove row" aria-label="Remove row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button></div></td></tr></template>
 </section>
 
 <!-- STOCK POINT CREATION  (#/masters/stock-point/new · Masters › Create › Stock Point). Element ids keep the "warehouse-" prefix (the table is warehouses). -->
@@ -1867,7 +1867,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-simple">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="pr-items"></tbody>
         </table>
       </div>
@@ -1992,7 +1992,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-simple">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty">Quantity</th><th class="pb-col-unit">Unit</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="rfq-items"></tbody>
         </table>
       </div>
@@ -2058,7 +2058,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-salesman-contact">Salesman Contact</label>
-          <input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
+          <div class="fp-phone"><select id="po-salesman-contact-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="po-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-delivery-date">Delivery Date</label>
@@ -2099,7 +2099,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-contact-number">Contact Person Number</label>
-          <input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="e.g. +968 91234567">
+          <div class="fp-phone"><select id="po-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="po-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
@@ -2134,7 +2134,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-priced pb-table-po">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="po-items"></tbody>
         </table>
       </div>
@@ -2262,7 +2262,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-grn">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty pb-col-rec" title="Received quantity">Rec. Qty</th><th class="pb-col-qty pb-col-acc" title="Accepted quantity">Acc. Qty</th><th class="pb-col-qty pb-col-rej" title="Rejected quantity: Received - Accepted">Rej. Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-date">Expiry</th><th class="pb-col-num">Unit Cost</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-transfer" title="Send accepted stock on to other stock points">Transfer</th><th class="pb-col-total">Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-qty pb-col-rec" title="Received quantity">Rec. Qty</th><th class="pb-col-qty pb-col-acc" title="Accepted quantity">Acc. Qty</th><th class="pb-col-qty pb-col-rej" title="Rejected quantity: Received - Accepted">Rej. Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-date">Expiry</th><th class="pb-col-num">Unit Cost</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-transfer" title="Send accepted stock on to other stock points">Transfer</th><th class="pb-col-total">Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="grn-items"></tbody>
         </table>
       </div>
@@ -2558,7 +2558,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="qt-contact-number">Buyer Contact</label>
-          <input id="qt-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter buyer contact / phone">
+          <div class="fp-phone"><select id="qt-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="qt-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="qt-currency">Customer Currency<span class="fp-req" aria-hidden="true">*</span></label>
@@ -2583,7 +2583,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="qt-salesman-contact">Salesman Contact</label>
-          <input id="qt-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
+          <div class="fp-phone"><select id="qt-salesman-contact-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="qt-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
       </div>
       <div class="qt-terms-row">
@@ -2626,7 +2626,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sales pb-table-qt">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="qt-items"></tbody>
         </table>
       </div>
@@ -2773,7 +2773,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="so-contact-number">Buyer Contact Number</label>
-          <input id="so-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="E.g. +968 99000000">
+          <div class="fp-phone"><select id="so-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="so-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
       </div>
     </section>
@@ -2794,7 +2794,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sales pb-table-so">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-supplier so-col-supplier">Supplier</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Unit Price</th><th class="pb-col-pct so-col-vat">VAT %</th><th class="pb-col-total">Total Price (<span data-so-base>OMR</span>)</th><th class="pb-col-num so-col-buy">Buying/Unit<span data-so-sup-label> (OMR)</span></th><th class="pb-col-total so-col-buy">Total Buying<span data-so-sup-label> (OMR)</span></th><th class="pb-col-pct so-col-buy">Profit %</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-brand">Brand</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-supplier so-col-supplier">Supplier</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Unit Price</th><th class="pb-col-pct so-col-vat">VAT %</th><th class="pb-col-total">Total Price (<span data-so-base>OMR</span>)</th><th class="pb-col-num so-col-buy">Buying/Unit<span data-so-sup-label> (OMR)</span></th><th class="pb-col-total so-col-buy">Total Buying<span data-so-sup-label> (OMR)</span></th><th class="pb-col-pct so-col-buy">Profit %</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="so-items"></tbody>
         </table>
       </div>
@@ -2907,7 +2907,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-contact-number">Buyer Contact Number</label>
-          <input id="dn-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Contact Number">
+          <div class="fp-phone"><select id="dn-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="dn-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-currency">Customer Currency<span class="fp-req" aria-hidden="true">*</span></label>
@@ -2935,7 +2935,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-salesman-contact">Salesman Contact</label>
-          <input id="dn-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="Enter Salesman Contact Number">
+          <div class="fp-phone"><select id="dn-salesman-contact-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="dn-salesman-contact" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-vehicle">Vehicle #</label>
@@ -2959,7 +2959,7 @@
       </div>
       <div class="fp-table-wrap pb-table-wrap">
         <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sales pb-table-dn">
-          <thead><tr><th class="pb-col-sno">S.No</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-branch">Branch</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
+          <thead><tr><th class="pb-col-sno">SL.NO</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="pb-col-branch">Branch</th><th class="pb-col-term">Delivery Term</th><th class="pb-col-num">Qty</th><th class="pb-col-unit">Unit</th><th class="pb-col-num">Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-pct">Disc %</th><th class="pb-col-num">Disc. Amt</th><th class="pb-col-total">Line Total</th><th class="pb-col-act">Action</th></tr></thead>
           <tbody id="dn-items"></tbody>
         </table>
       </div>
@@ -3518,7 +3518,7 @@
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-supplier-phone">Mobile / Phone</label>
-      <input id="quick-supplier-phone" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" placeholder="E.g. +968 91234567">
+      <div class="fp-phone"><select id="quick-supplier-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="quick-supplier-phone" class="fp-input" type="text" inputmode="tel" data-check="phone" maxlength="30" autocomplete="off" placeholder="9XXX XXXX"></div>
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-supplier-email">Email</label>
@@ -3562,7 +3562,7 @@
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-contact-phone">Mobile</label>
-      <input id="quick-contact-phone" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" placeholder="E.g. +968 91234567">
+      <div class="fp-phone"><select id="quick-contact-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="quick-contact-phone" class="fp-input" type="text" inputmode="tel" data-check="phone" maxlength="30" autocomplete="off" placeholder="9XXX XXXX"></div>
     </div>
     <div class="fp-field qi-wide">
       <label class="fp-label" for="quick-contact-email">Email</label>
