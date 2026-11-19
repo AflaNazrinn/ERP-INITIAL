@@ -2315,6 +2315,25 @@ input::-webkit-contacts-auto-fill-button {
 .idp .idp-btn[hidden], .idp .idp-mini[hidden] { display: none; }
 .idp-cancel { border: 0 !important; background: none !important; box-shadow: none !important; padding: 0 6px !important; text-transform: none !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0 !important; color: var(--ink-700) !important; }
 .idp-cancel:focus { outline: 3px solid #fde047; outline-offset: 2px; }
+/* Trade Management (Quotation, Sales Order, Delivery Note): the Full Item Description popup in the Trade blue. */
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp {
+  --tone-green-bg: #eff6ff; --tone-green-line: #bfdbfe; --tone-green-ink: #1e40af;
+}
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-icon { background: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-card-title { border-left-color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-name { border-color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-name:not([readonly]) { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(37, 99, 235, .2); }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-mini:hover { border-color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-mini[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-mode > span { color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-editor { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-tool:hover { border-color: #2563eb; background: #eff6ff; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-tool:focus { border-color: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-unit-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .2); background: #eff6ff; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp-rich:focus { background: #f8fbff; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp .ml-btn-green { background: #2563eb; }
+:is(body[data-page="qt"], body[data-page="so"], body[data-page="dn"]) .idp .ml-btn-green:hover { background: #1d4ed8; }
 
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }
