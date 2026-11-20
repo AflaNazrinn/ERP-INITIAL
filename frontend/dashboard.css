@@ -2133,7 +2133,7 @@ body:is([data-page="ti"], [data-page="ti-list"], [data-page="pe"], [data-page="p
 /* ---------- Return & Replacement pages (Sales Return; form and list) ----------
    The Trade Management layout in the Return & Replacement crimson. */
 .fp-theme-return,
-body:is([data-page="sr"], [data-page="sr-list"], [data-page="rp"], [data-page="rp-list"]) {
+body:is([data-page="sr"], [data-page="sr-list"], [data-page="rp"], [data-page="rp-list"], [data-page="prt"], [data-page="prt-list"], [data-page="prp"], [data-page="prp-list"]) {
   --accent: #be123c;
   --accent-hover: #9f1239;
   --accent-bar: #be123c;
@@ -2160,14 +2160,22 @@ body:is([data-page="sr"], [data-page="sr-list"], [data-page="rp"], [data-page="r
 .fp-theme-return .pb-btn { text-transform: uppercase; letter-spacing: .02em; }
 /* The search icon before the text in the lookups (Ref ID, Buyer Name, the line's item code and name); a chevron after Currency. */
 #sr-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron),
+#prt-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron),
+#prp-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron),
 #rp-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron) { left: 12px; right: auto; }
 #sr-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)),
+#prt-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)),
+#prp-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)),
 #rp-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)) { padding-left: 34px; padding-right: 12px; }
 #sr-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron),
+#prt-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron),
+#prp-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron),
 #rp-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron) { left: 10px; }
 #sr-page .fp-lookup-wrap .fp-cell.fp-lookup,
+#prt-page .fp-lookup-wrap .fp-cell.fp-lookup,
+#prp-page .fp-lookup-wrap .fp-cell.fp-lookup,
 #rp-page .fp-lookup-wrap .fp-cell.fp-lookup { padding-left: 28px; padding-right: 8px; }
-#sr-page .sr-chevron, #rp-page .sr-chevron { color: var(--ink-600); }
+#sr-page .sr-chevron, #rp-page .sr-chevron, #prt-page .sr-chevron, #prp-page .sr-chevron { color: var(--ink-600); }
 .pb-table-sr { min-width: 1240px; }
 .pb-table-sr .pb-col-code { width: 136px; }
 .pb-table-sr .sr-col-brand { width: 126px; }
@@ -2178,6 +2186,9 @@ body:is([data-page="sr"], [data-page="sr-list"], [data-page="rp"], [data-page="r
 .sr-input-auto { background: var(--surface-muted); border-color: var(--line); color: var(--ink-900); font-family: var(--font-mono); font-weight: 700; cursor: default; }
 .sr-sum > div:not(.pb-sum-grand) { min-height: 46px; }
 .sr-sum .pb-sum-input { width: 182px; height: 44px !important; }
+/* Purchase Return and Replacement: no row number column. */
+.pb-table-prt .pb-col-sno, .pb-table-prp .pb-col-sno { display: none; }
+.pb-table-prt .pb-col-num { width: 112px; }
 
 /* Sales Replacement: the line columns, and the Price Difference with what it means for the buyer. */
 .pb-table-rp { min-width: 1360px; }

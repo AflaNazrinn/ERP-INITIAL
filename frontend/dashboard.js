@@ -1961,6 +1961,19 @@ const LOOKUPS = {
         items: String(row.itemCount ?? 0) }));
       return [...rows(rfqs, 'rfq', row => row.requestDate), ...rows(requests, 'pr', row => row.requestedDate)];
     } },
+  // The Purchase Return's Ref ID: the purchase orders and GRNs in one list (id "po:5" / "grn:3"), the selected
+  // supplier's only once one is picked; the picked one's supplier, stock point and lines are copied into the return.
+  prtref: { title: 'Select PO / GRN', letter: 'R', list: 'Purchase Orders & GRNs', plural: 'purchase orders and GRNs',
+    subtitle: 'Its supplier and items are copied into the return.', search: 'Search PO / GRN by number or supplier...',
+    tabs: [{ key: 'grn', label: 'GRNs', first: 'GRN ID' }, { key: 'po', label: 'Purchase Orders', first: 'PO ID' }],
+    columns: [['code', 'Document ID'], ['date', 'Date'], ['name', 'Supplier'], ['total', 'Grand Total']],
+    display: row => row.code,
+    rows: async () => {
+      const [orders, grns] = await Promise.all(['api/purchase-orders.php', 'api/grns.php'].map(api => apiRequest(api).catch(() => [])));
+      const rows = (list, kind, dateOf) => list.map(row => ({ id: `${kind}:${row.id}`, tab: kind, code: row.code, date: pbDate(dateOf(row)),
+        name: row.name, supplierId: row.supplierId, total: pbAmount(row.grandTotal) }));
+      return [...rows(grns, 'grn', row => row.grnDate), ...rows(orders, 'po', row => row.poDate)];
+    }, narrow: narrowToParty('supplierId') },
   salesorder: { title: 'Select Sales Order', letter: 'S', list: 'Sales Orders', plural: 'sales orders', api: 'api/sales-orders.php',
     columns: [['code', 'SO ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
   // On a Purchase Entry (data-lookup-party): the selected supplier's purchase orders, all of them when it has none.
@@ -7727,7 +7740,7 @@ const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 // column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
-  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp',
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp', 'pb-line-prt', 'pb-line-prp',
     'pb-line-sa', 'pb-line-st', 'pb-line-rsv']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
@@ -7744,7 +7757,7 @@ function composePurchaseTemplates() {
       reason.setAttribute('aria-label', 'Rejection reason');
       nameCell.append(reason);
     }
-    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp', 'pb-line-st'].includes(id)) {          // priced lines keep the brand in the item name cell
+    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp', 'pb-line-prt', 'pb-line-prp', 'pb-line-st'].includes(id)) {          // priced lines keep the brand in the item name cell
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
@@ -7910,10 +7923,10 @@ async function applyPurchaseItem(form, row, itemId) {
   syncBoundSelects(row);
   // A quotation / sales order / delivery note line: the selling price; a purchase order line: its supplier's buying price.
   const offered = poSource ? poSource.cost : pbNum(itemLinePrice(item, row));
-  const sales = isSalesLine(row) || !!poSource;       // a new pick replaces the old item's price
-  // A sales replacement line: the returned item's price is the Old Price, and the New Price too while the same item
-  // goes back (a replacement item picked keeps its own price).
-  const priceFields = row.dataset.pbRow !== 'rp' ? ['price', 'unitCost']
+  const sales = isSalesLine(row) || !!poSource || ['prt', 'prp'].includes(row.dataset.pbRow);   // a new pick replaces the old item's price
+  // A sales / purchase replacement line: the returned item's price is the Old Price, and the New Price too while the
+  // same item goes back (a replacement item picked keeps its own price).
+  const priceFields = !['rp', 'prp'].includes(row.dataset.pbRow) ? ['price', 'unitCost']
     : pbCell(row, 'replacementItemId').value ? ['oldPrice'] : ['oldPrice', 'price'];
   for (const field of priceFields) {
     const cell = pbCell(row, field);
@@ -9031,6 +9044,7 @@ function purchaseLineValues(kind, line) {
       discountAmount: pbMoney(pbNum(line.discountAmount)), foc: line.foc ? 'Yes' : 'No' });
   }
   if (line.soldQty !== undefined) values.soldQty = pbQty(pbNum(line.soldQty));       // a sales return line
+  if (line.receivedQty !== undefined) values.receivedQty = pbQty(pbNum(line.receivedQty));   // a purchase return line
   if (line.condition !== undefined) values.condition = line.condition;
   if (line.oldPrice !== undefined) {                                                     // a sales replacement line
     Object.assign(values, { oldPrice: pbMoney(pbNum(line.oldPrice)), replacementItemId: line.replacementItemId ? String(line.replacementItemId) : '',
@@ -10851,6 +10865,332 @@ const srForm = createPurchaseForm({
   },
 });
 
+/* ---------- Purchase Return (Return & Replacement) ----------
+   Goods sent back to a supplier. Ref ID picks the purchase order or GRN they came in on: its supplier, contact,
+   currency, stock point, VAT and lines are copied in, each line's quantity (a GRN's received quantity) as Received Qty
+   (Return Qty starts at all of it and can be at most that). VAT Enabled / Disabled (as on the Sales Return) sets
+   every line's VAT % to 5 or 0, added on top of the prices. Total Return Amount = the lines' total less the Discount and the Supplier Deduction, as
+   backend/src/purchase_return.php works it out. */
+// These helpers take the page's key: 'prt' (Purchase Return) or 'prp' (Purchase Replacement).
+const prtCurrency = (key = 'prt') => byId(`${key}-currency-id`).value || 'OMR';
+function prtSetCurrency(code, key = 'prt') {
+  const text = String(code || 'OMR').toUpperCase();
+  fillLookup(byId(`${key}-currency`), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
+}
+// The picked Ref ID ("po:5" / "grn:3").
+const prtRef = (key = 'prt') => { const [kind, id] = byId(`${key}-ref-id`).value.split(':'); return { kind, id: id || '' }; };
+const prtWarehouseLabel = doc => [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' – ');
+
+// A supplier picked: its currency, and its first contact person and number (its own phone when it has no contact).
+async function prtShowSupplier(key = 'prt') {
+  const id = byId(`${key}-supplier-id`).value;
+  if (!id) return;
+  const supplier = await pbSupplier(id).catch(() => null);
+  if (!supplier || byId(`${key}-supplier-id`).value !== id) return;
+  const code = String(supplier.currency || '').toUpperCase();
+  if (PO_CURRENCIES.some(row => row.code === code)) prtSetCurrency(code, key);
+  const contact = (supplier.contacts || []).find(entry => entry.name);
+  if (contact) {
+    fillLookup(byId(`${key}-contact`), { id: contact.name, name: contact.name });
+    putPhone(byId(`${key}-contact-number`), contact.number ? poSupplierPhone(contact.number, supplier) : '');
+  } else {
+    fillLookup(byId(`${key}-contact`), null);
+    putPhone(byId(`${key}-contact-number`), poSupplierPhone(supplier.phone || supplier.telephone, supplier));
+  }
+}
+
+// A contact picked in the Select Contact Person popup brings its number (none: the number is left empty).
+async function prtShowContact(form, key = 'prt') {
+  const name = byId(`${key}-contact`).value;
+  const supplierId = byId(`${key}-supplier-id`).value;
+  const supplier = supplierId ? await pbSupplier(supplierId).catch(() => null) : null;
+  if (byId(`${key}-contact`).value !== name) return;            // another pick came in meanwhile
+  const contact = name ? supplier?.contacts?.find(entry => sameText(entry.name, name)) : null;
+  putPhone(byId(`${key}-contact-number`), contact?.number ? poSupplierPhone(contact.number, supplier) : '');
+  form.page.absorb();
+}
+
+// Ref ID (a PO or GRN) picked: its supplier, contact, currency, stock point and VAT go into the form; resolves to the
+// document (null when another one was picked meanwhile). The caller turns its lines into rows.
+async function prtLoadRef(key = 'prt') {
+  const ref = byId(`${key}-ref-id`).value;
+  const { kind, id } = prtRef(key);
+  const grn = kind === 'grn';
+  const doc = await apiRequest(`api/${grn ? 'grns' : 'purchase-orders'}.php?id=${id}`);
+  if (byId(`${key}-ref-id`).value !== ref) return null;
+  if (doc.supplierId) {
+    fillLookup(byId(`${key}-supplier`), { id: doc.supplierId, name: doc.supplierName });
+    if (grn) await prtShowSupplier(key);                     // a GRN has no contact or currency of its own
+  }
+  if (byId(`${key}-ref-id`).value !== ref) return null;
+  if (!grn) {
+    prtSetCurrency(doc.currency, key);
+    fillLookup(byId(`${key}-contact`), doc.contactName ? { id: doc.contactName, name: doc.contactName } : null);
+    putPhone(byId(`${key}-contact-number`), doc.contactNumber);
+  }
+  if (doc.warehouseId) setSelectValue(byId(`${key}-warehouse`), String(doc.warehouseId), prtWarehouseLabel(doc));
+  byId(`${key}-vat-mode`).value = doc.vatMode === 'exclude' ? 'exclude' : 'include';
+  return { doc, grn };
+}
+
+// A PO / GRN line's received quantity and its net unit price (after its line discount).
+function prtRefLine(line, grn) {
+  const received = pbNum(grn ? line.receivedQty : line.quantity);
+  const net = grn ? pbNum(line.unitCost) * (1 - pbNum(line.discountPct) / 100)
+    : line.foc || received <= 0 ? 0 : Math.max(0, received * pbNum(line.price) - pbNum(line.discountAmount)) / received;
+  return { received: pbQty(received), unit: pbMoney(net) };
+}
+
+const prtForm = createPurchaseForm({
+  key: 'prt', route: 'returns/purchase-return/new', noun: 'Purchase Return', api: 'api/purchase-returns.php', listRoute: 'returns/purchase-return',
+  kind: 'po', template: 'pb-line-prt', lineExtras: ['receivedQty', 'condition'], lookups: ['prtref'], vatDefault: 'exclude',
+  firstField: () => byId('prt-date'),
+  onShow: () => openLookup(byId('prt-ref')),          // a new return starts by picking the PO / GRN
+  fieldNodes: { returnDate: 'prt-date', purchaseOrderId: 'prt-ref', grnId: 'prt-ref', createdBy: 'prt-created-by',
+    createdByContact: 'prt-created-by-contact', supplierInvoiceNo: 'prt-supplier-invoice', returnReason: 'prt-reason',
+    warehouseId: 'prt-warehouse', settlementMode: 'prt-settlement', supplierId: 'prt-supplier', contactName: 'prt-contact',
+    contactNumber: 'prt-contact-number', currency: 'prt-currency', discountAmount: 'prt-discount', supplierDeduction: 'prt-deduction',
+    remarks: 'prt-remarks-editor' },
+  header: () => ({
+    returnDate: byId('prt-date').value,
+    purchaseOrderId: prtRef().kind === 'po' ? prtRef().id : null, grnId: prtRef().kind === 'grn' ? prtRef().id : null,
+    createdBy: byId('prt-created-by').value.trim(), createdByContact: phoneOf(byId('prt-created-by-contact')),
+    supplierInvoiceNo: byId('prt-supplier-invoice').value.trim(), returnReason: byId('prt-reason').value,
+    warehouseId: byId('prt-warehouse').value || null, settlementMode: byId('prt-settlement').value,
+    supplierId: byId('prt-supplier-id').value || null, contactName: byId('prt-contact').value.trim(),
+    contactNumber: phoneOf(byId('prt-contact-number')), currency: prtCurrency(),
+    supplierDeduction: byId('prt-deduction').value.trim() || '0',
+  }),
+  check(form, errors) {
+    if (!byId('prt-date').value) errors.push({ node: byId('prt-date'), message: 'Enter the return date.' });
+    if (!byId('prt-created-by').value.trim()) errors.push({ node: byId('prt-created-by'), message: 'Enter who created the return.' });
+    if (!byId('prt-reason').value) errors.push({ node: byId('prt-reason'), message: 'Select the return reason.' });
+    if (!byId('prt-supplier-id').value) errors.push({ node: byId('prt-supplier'), message: 'Select the supplier.' });
+    const deduction = byId('prt-deduction').value.trim();
+    if (deduction !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(deduction)) errors.push({ node: byId('prt-deduction'), message: 'Enter an amount with up to 3 decimals.' });
+    form.page.rowsOf('items').forEach((row, index) => {
+      const received = pbNum(pbCell(row, 'receivedQty').value);
+      if (received > 0 && pbNum(pbCell(row, 'quantity').value) > received + 0.0005) {
+        errors.push({ node: pbCell(row, 'quantity'), message: `Row ${index + 1}: the return quantity cannot be more than the quantity received (${pbQty(received)}).` });
+      }
+    });
+  },
+  // Every line shows its total (0.000 on a blank one) and its brand; Total Return Amount less the Supplier Deduction.
+  afterRefresh(totals) {
+    prtForm.page.rowsOf('items').forEach((row, i) => {
+      row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]);
+      row.querySelector('[data-brand-show]').value = pbCell(row, 'brandName').value;
+    });
+    const deduction = Math.min(pbNum(byId('prt-deduction').value), Math.max(0, totals.grand));
+    byId('prt-grand').textContent = pbMoney(totals.grand - deduction);
+    for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = prtCurrency();
+  },
+  fill(form, prt) {
+    byId('prt-date').value = prt.returnDate;
+    fillLookup(byId('prt-ref'), prt.grnId ? { id: `grn:${prt.grnId}`, code: prt.grnCode }
+      : prt.purchaseOrderId ? { id: `po:${prt.purchaseOrderId}`, code: prt.purchaseOrderCode } : null);
+    byId('prt-created-by').value = prt.createdBy || '';
+    putPhone(byId('prt-created-by-contact'), prt.createdByContact);
+    byId('prt-supplier-invoice').value = prt.supplierInvoiceNo || '';
+    byId('prt-reason').value = prt.returnReason || '';
+    setSelectValue(byId('prt-warehouse'), prt.warehouseId ? String(prt.warehouseId) : '', prtWarehouseLabel(prt));
+    byId('prt-settlement').value = prt.settlementMode || 'Debit Note';
+    fillLookup(byId('prt-supplier'), prt.supplierId ? { id: prt.supplierId, name: prt.supplierName } : null);
+    fillLookup(byId('prt-contact'), prt.contactName ? { id: prt.contactName, name: prt.contactName } : null);
+    putPhone(byId('prt-contact-number'), prt.contactNumber);
+    prtSetCurrency(prt.currency);
+    byId('prt-deduction').value = pbMoney(pbNum(prt.supplierDeduction));
+  },
+  onReset() {
+    byId('prt-date').value = todayInputValue();
+    prtSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    byId('prt-deduction').value = '0.000';
+    forgetLookups('prtref');
+    // Return From: the stock points (the list is loaded before a saved return is filled in).
+    return purchaseOptions(byId('prt-warehouse'), 'api/warehouses.php', row => [row.code, row.name].filter(Boolean).join(' – '));
+  },
+  init(form) {
+    // A supplier picked by hand: its contact and currency; another supplier's PO / GRN goes.
+    byId('prt-supplier').addEventListener('input', async () => {
+      if (byId('prt-ref-id').value) fillLookup(byId('prt-ref'), null);
+      fillLookup(byId('prt-contact'), null);
+      byId('prt-contact-number').value = '';
+      await prtShowSupplier();
+      form.page.absorb();
+      form.refresh();
+    });
+    byId('prt-contact').addEventListener('input', () => prtShowContact(form));
+    byId('prt-form').addEventListener('input', event => {
+      if (['prt-currency', 'prt-discount', 'prt-deduction'].includes(event.target.id)) form.refresh();
+    });
+    // Another item picked on a line: the quantity received was for the item before, so there is none now.
+    byId('prt-items').addEventListener('input', event => {
+      if (!['itemName', 'itemCode'].includes(event.target.dataset.field)) return;
+      const received = pbCell(event.target.closest('tr'), 'receivedQty');
+      if (received) received.value = '0';
+    });
+    // Ref ID picked: the PO's or GRN's supplier, contact, currency, stock point, VAT and lines. Each line is returned at
+    // its net unit price (after its line discount), all of the quantity received to begin with.
+    byId('prt-ref').addEventListener('input', async () => {
+      if (!byId('prt-ref-id').value) return;
+      const grn = prtRef().kind === 'grn';
+      try {
+        const loaded = await prtLoadRef();
+        if (!loaded) return;                                    // another document was picked meanwhile
+        const { doc } = loaded;
+        await loadPurchaseLines(form, doc.items, line => {
+          const { received, unit } = prtRefLine(line, grn);
+          return { ...purchaseLineRow(line), receivedQty: received, quantity: received, condition: 'Damaged',
+            price: unit, vatRate: pbNum(line.vatRate).toFixed(2), discountPct: '0.00', discountAmount: '0.000', foc: 'No' };
+        });
+        form.syncVatToggle();
+        form.refresh();
+        showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+      } catch (error) { showToast(`The ${grn ? 'GRN' : 'purchase order'} could not be loaded`, error.message, true); }
+    });
+  },
+});
+
+/* ---------- Purchase Replacement (Return & Replacement) ----------
+   Goods a supplier sends in place of goods sent back to it. Ref ID picks the purchase order or GRN they came in on:
+   its supplier, contact, currency, stock point, VAT and lines are copied in, each line's quantity (a GRN's received
+   quantity) as Received Qty (Replace Qty starts at all of it and can be at most that) and its net unit price as Old
+   Price and New Price. A Replacement Item (none: the same item comes back) takes its buying rate as the New Price.
+   Each line's Difference = Replace Qty × (New − Old), its VAT % added on top (VAT Enabled; Disabled sets every line's
+   VAT % to 0). Price Difference = Replacement − Returned value (+ VAT on the difference when excluded) − Discount +
+   Handling / Delivery Charge, as backend/src/purchase_replacement.php works it out: above 0 it is paid to the
+   supplier, below 0 the supplier owes it. */
+const prpForm = createPurchaseForm({
+  key: 'prp', route: 'returns/purchase-replacement/new', noun: 'Purchase Replacement', api: 'api/purchase-replacements.php',
+  listRoute: 'returns/purchase-replacement',
+  kind: 'po', template: 'pb-line-prp', lineExtras: ['receivedQty', 'condition', 'oldPrice', 'replacementItemId'], lookups: ['prtref'], vatDefault: 'exclude',
+  firstField: () => byId('prp-date'),
+  onShow: () => openLookup(byId('prp-ref')),          // a new replacement starts by picking the PO / GRN
+  fieldNodes: { replacementDate: 'prp-date', purchaseOrderId: 'prp-ref', grnId: 'prp-ref', createdBy: 'prp-created-by',
+    createdByContact: 'prp-created-by-contact', supplierInvoiceNo: 'prp-supplier-invoice', replacementReason: 'prp-reason',
+    warehouseId: 'prp-warehouse', returnedGoods: 'prp-returned', supplierId: 'prp-supplier', contactName: 'prp-contact',
+    contactNumber: 'prp-contact-number', currency: 'prp-currency', discountAmount: 'prp-discount', handlingCharge: 'prp-shipping',
+    shipping: 'prp-shipping', remarks: 'prp-remarks-editor' },
+  header: () => ({
+    replacementDate: byId('prp-date').value,
+    purchaseOrderId: prtRef('prp').kind === 'po' ? prtRef('prp').id : null, grnId: prtRef('prp').kind === 'grn' ? prtRef('prp').id : null,
+    createdBy: byId('prp-created-by').value.trim(), createdByContact: phoneOf(byId('prp-created-by-contact')),
+    supplierInvoiceNo: byId('prp-supplier-invoice').value.trim(), replacementReason: byId('prp-reason').value,
+    warehouseId: byId('prp-warehouse').value || null, returnedGoods: byId('prp-returned').value,
+    supplierId: byId('prp-supplier-id').value || null, contactName: byId('prp-contact').value.trim(),
+    contactNumber: phoneOf(byId('prp-contact-number')), currency: prtCurrency('prp'),
+    handlingCharge: byId('prp-shipping').value.trim() || '0',
+  }),
+  check(form, errors) {
+    if (!byId('prp-date').value) errors.push({ node: byId('prp-date'), message: 'Enter the replacement date.' });
+    if (!byId('prp-created-by').value.trim()) errors.push({ node: byId('prp-created-by'), message: 'Enter who created the replacement.' });
+    if (!byId('prp-reason').value) errors.push({ node: byId('prp-reason'), message: 'Select the replacement reason.' });
+    if (!byId('prp-supplier-id').value) errors.push({ node: byId('prp-supplier'), message: 'Select the supplier.' });
+    const money = /^\d{1,11}(\.\d{1,3})?$/;
+    form.page.rowsOf('items').forEach((row, index) => {
+      if (!pbCell(row, 'itemName').value.trim() && !pbCell(row, 'itemId').value) return;
+      const old = pbCell(row, 'oldPrice').value.trim();
+      if (old !== '' && !money.test(old)) errors.push({ node: pbCell(row, 'oldPrice'), message: `Row ${index + 1}: enter the old price with up to 3 decimals.` });
+      const received = pbNum(pbCell(row, 'receivedQty').value);
+      if (received > 0 && pbNum(pbCell(row, 'quantity').value) > received + 0.0005) {
+        errors.push({ node: pbCell(row, 'quantity'), message: `Row ${index + 1}: the replace quantity cannot be more than the quantity received (${pbQty(received)}).` });
+      }
+    });
+  },
+  // The replacement's own totals (the shared ones cannot go below 0): each line's Difference, the values and the
+  // Price Difference, with what it means.
+  afterRefresh() {
+    const rows = prpForm.page.rowsOf('items');
+    const totals = rpTotals(rows, prpForm.vatMode(), 'prp');
+    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]); });
+    byId('prp-returned-value').textContent = pbMoney(totals.returned);
+    byId('prp-replacement-value').textContent = pbMoney(totals.replacement);
+    byId('prp-vat').textContent = pbMoney(totals.vat);
+    byId('prp-grand').textContent = pbMoney(totals.grand);
+    const grand = Math.round(totals.grand * 1000);
+    byId('prp-grand-note').textContent = grand > 0 ? 'Payable to the supplier'
+      : grand < 0 ? 'Owed by the supplier (debit note / refund)' : 'No difference – like-for-like replacement';
+    for (const label of byId('prp-form').querySelectorAll('[data-prp-base]')) label.textContent = prtCurrency('prp');
+  },
+  fill(form, prp) {
+    byId('prp-date').value = prp.replacementDate;
+    fillLookup(byId('prp-ref'), prp.grnId ? { id: `grn:${prp.grnId}`, code: prp.grnCode }
+      : prp.purchaseOrderId ? { id: `po:${prp.purchaseOrderId}`, code: prp.purchaseOrderCode } : null);
+    byId('prp-created-by').value = prp.createdBy || '';
+    putPhone(byId('prp-created-by-contact'), prp.createdByContact);
+    byId('prp-supplier-invoice').value = prp.supplierInvoiceNo || '';
+    setSelectValue(byId('prp-reason'), prp.replacementReason || '');
+    setSelectValue(byId('prp-warehouse'), prp.warehouseId ? String(prp.warehouseId) : '', prtWarehouseLabel(prp));
+    setSelectValue(byId('prp-returned'), prp.returnedGoods || 'Sent to Supplier');
+    fillLookup(byId('prp-supplier'), prp.supplierId ? { id: prp.supplierId, name: prp.supplierName } : null);
+    fillLookup(byId('prp-contact'), prp.contactName ? { id: prp.contactName, name: prp.contactName } : null);
+    putPhone(byId('prp-contact-number'), prp.contactNumber);
+    prtSetCurrency(prp.currency, 'prp');
+  },
+  onReset() {
+    byId('prp-date').value = todayInputValue();
+    byId('prp-returned').value = 'Sent to Supplier';
+    prtSetCurrency('OMR', 'prp');                   // hidden ids were cleared by the reset
+    forgetLookups('prtref');
+    // Receive To: the stock points (the list is loaded before a saved replacement is filled in).
+    return purchaseOptions(byId('prp-warehouse'), 'api/warehouses.php', row => [row.code, row.name].filter(Boolean).join(' – '));
+  },
+  init(form) {
+    // A supplier picked by hand: its contact and currency; another supplier's PO / GRN goes.
+    byId('prp-supplier').addEventListener('input', async () => {
+      if (byId('prp-ref-id').value) fillLookup(byId('prp-ref'), null);
+      fillLookup(byId('prp-contact'), null);
+      byId('prp-contact-number').value = '';
+      await prtShowSupplier('prp');
+      form.page.absorb();
+      form.refresh();
+    });
+    byId('prp-contact').addEventListener('input', () => prtShowContact(form, 'prp'));
+    byId('prp-form').addEventListener('input', event => {
+      if (['prp-currency', 'prp-discount', 'prp-shipping'].includes(event.target.id)) form.refresh();
+    });
+    byId('prp-items').addEventListener('input', async event => {
+      const row = event.target.closest('tr');
+      const field = event.target.dataset.field;
+      // Another returned item: the quantity received was for the item before, so there is none now.
+      if (['itemName', 'itemCode'].includes(field)) { pbCell(row, 'receivedQty').value = '0'; return; }
+      if (field !== 'replacementItemName') return;
+      // A replacement item picked: its buying rate is the New Price; cleared, the same item comes back at the old price.
+      const id = pbCell(row, 'replacementItemId').value;
+      if (!id) {
+        pbCell(row, 'replacementItemName').value = '';
+        pbCell(row, 'price').value = pbMoney(pbNum(pbCell(row, 'oldPrice').value));
+      } else {
+        const item = await pbItem(id).catch(() => null);
+        if (!item || pbCell(row, 'replacementItemId').value !== id) return;
+        if (pbNum(item.buyingRate) > 0) pbCell(row, 'price').value = pbMoney(pbNum(item.buyingRate));
+      }
+      form.page.absorb();
+      form.refresh();
+    });
+    // Ref ID (a PO or GRN) picked: its supplier, contact, currency, stock point, VAT and lines. Each line comes back at
+    // its net unit price (Old and New Price), all of the quantity received to begin with.
+    byId('prp-ref').addEventListener('input', async () => {
+      if (!byId('prp-ref-id').value) return;
+      const grn = prtRef('prp').kind === 'grn';
+      try {
+        const loaded = await prtLoadRef('prp');
+        if (!loaded) return;                                    // another document was picked meanwhile
+        const { doc } = loaded;
+        await loadPurchaseLines(form, doc.items, line => {
+          const { received, unit } = prtRefLine(line, grn);
+          return { ...purchaseLineRow(line), receivedQty: received, quantity: received, condition: 'Damaged',
+            replacementItemId: '', replacementItemName: '', oldPrice: unit, price: unit, vatRate: pbNum(line.vatRate).toFixed(2),
+            discountPct: '0.00', discountAmount: '0.000', foc: 'No' };
+        });
+        form.syncVatToggle();
+        form.refresh();
+        showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+      } catch (error) { showToast(`The ${grn ? 'GRN' : 'purchase order'} could not be loaded`, error.message, true); }
+    });
+  },
+});
+
 /* ---------- Sales Replacement (Return & Replacement) ----------
    Goods sent to a customer in place of goods they return. Ref ID picks the delivery note they went out on: its buyer,
    PO number, contact, currency, stock point and lines are copied in, with the Sales Entry made against it, each line's quantity as Sold Qty (Replace Qty
@@ -10889,7 +11229,7 @@ function rpSetSalesEntry(entry) {
 }
 // The totals as the server works them out (srp_totals()): the lines' differences, the returned and replacement
 // values, the VAT on the difference and the Price Difference.
-function rpTotals(rows, vatMode) {
+function rpTotals(rows, vatMode, key = 'rp') {
   let returned = 0;
   let replacement = 0;
   let vat = 0;
@@ -10905,8 +11245,8 @@ function rpTotals(rows, vatMode) {
     return vatMode === 'include' ? diff : diff * (1 + rate / 100);
   });
   const difference = replacement - returned + (vatMode === 'exclude' ? vat : 0);
-  const handling = pbNum(byId('rp-shipping').value);
-  const discount = Math.min(pbNum(byId('rp-discount').value), Math.max(0, difference + handling));
+  const handling = pbNum(byId(`${key}-shipping`).value);
+  const discount = Math.min(pbNum(byId(`${key}-discount`).value), Math.max(0, difference + handling));
   return { lineTotals, returned, replacement, vat, grand: difference - discount + handling };
 }
 
@@ -11060,7 +11400,7 @@ const rpForm = createPurchaseForm({
   },
 });
 
-const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm, srForm, rpForm, saForm, stForm, rsvForm];
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm, srForm, rpForm, prtForm, prpForm, saForm, stForm, rsvForm];
 
 /* ---------- GRN line: rejection reason and Stock Transfer ----------
    Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
@@ -11845,6 +12185,90 @@ const srList = purchaseList({
   importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: '0' }),
 });
 
+const prtList = purchaseList({
+  key: 'prt', route: 'returns/purchase-return', noun: 'Purchase Return', nouns: 'Purchase Returns', api: 'api/purchase-returns.php',
+  kind: 'po', form: prtForm, lookups: ['prtref'], dateOf: record => record.returnDate,
+  columns: [
+    { key: 'code', label: 'PRT ID', type: 'code', group: 'Return' },
+    { key: 'date', label: 'Return Date', type: 'mono', group: 'Return' },
+    { key: 'name', label: 'Supplier', type: 'name', group: 'Supplier' },
+    { key: 'referenceNo', label: 'PO / GRN', type: 'mono', group: 'Return' },
+    { key: 'returnReason', label: 'Return Reason', group: 'Return' },
+    { key: 'totalQty', label: 'Return Qty', type: 'qty', group: 'Return' },
+    { key: 'grandTotal', label: 'Total Return Amount', type: 'qty-ok', group: 'Return' },
+    detail({ key: 'settlementMode', label: 'Settlement Mode', type: 'pill', group: 'Return' }),
+    detail({ key: 'warehouseName', label: 'Return From (Stock Point)', group: 'Return' }),
+    detail({ key: 'supplierInvoiceNo', label: 'Supplier Invoice No', group: 'Supplier' }),
+    detail({ key: 'contactName', label: 'Contact Person', group: 'Supplier' }),
+    detail({ key: 'contactNumber', label: 'Contact Number', group: 'Supplier' }),
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
+    detail({ key: 'createdBy', label: 'Created By', group: 'Return' }),
+    detail({ key: 'discountAmount', label: 'Discount', type: 'mono', group: 'Return' }),
+    detail({ key: 'supplierDeduction', label: 'Supplier Deduction', type: 'mono', group: 'Return' }),
+  ],
+  fromApi: r => ({ ...r, date: r.returnDate, grandTotal: pbAmount(r.grandTotal), discountAmount: pbAmount(r.discountAmount),
+    supplierDeduction: pbAmount(r.supplierDeduction) }),
+  importColumns: [{ key: 'returnDate', label: 'Return Date', headers: ['date', 'return date'], read: readSheetDate('Return Date') },
+    { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor', 'creditor'] },
+    { key: 'supplierInvoiceNo', label: 'Supplier Invoice No', headers: ['supplier invoice', 'invoice no', 'invoice number'] },
+    { key: 'returnReason', label: 'Return Reason', headers: ['reason'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'price', label: 'Unit Price', headers: ['price', 'rate', 'unit cost'], read: readSheetNumber('Unit Price') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate', 'vat percent'], read: readSheetNumber('VAT %', 2) },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', returnDate: '2026-11-19', supplier: 'AL MAHA TRADING LLC', supplierInvoiceNo: 'INV-2026-118', returnReason: 'Damaged on Receipt', itemName: 'GATE VALVE 2"', quantity: '2', unit: 'Pieces', price: '12.500', vatRate: '5' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '5', unit: 'Pieces', price: '0.350', vatRate: '5' },
+  ],
+  importHeader: async g => ({ returnDate: g.returnDate, supplierId: await importLookupId('supplier', g.supplier), supplierInvoiceNo: g.supplierInvoiceNo,
+    returnReason: g.returnReason || 'Other', createdBy: 'ADMIN', vatMode: 'exclude' }),
+  importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: '0' }),
+});
+
+const prpList = purchaseList({
+  key: 'prp', route: 'returns/purchase-replacement', noun: 'Purchase Replacement', nouns: 'Purchase Replacements', api: 'api/purchase-replacements.php',
+  kind: 'po', form: prpForm, lookups: ['prtref'], dateOf: record => record.replacementDate,
+  columns: [
+    { key: 'code', label: 'PRP ID', type: 'code', group: 'Replacement' },
+    { key: 'date', label: 'Replacement Date', type: 'mono', group: 'Replacement' },
+    { key: 'name', label: 'Supplier', type: 'name', group: 'Supplier' },
+    { key: 'referenceNo', label: 'PO / GRN', type: 'mono', group: 'Replacement' },
+    { key: 'replacementReason', label: 'Replacement Reason', group: 'Replacement' },
+    { key: 'totalQty', label: 'Replace Qty', type: 'qty', group: 'Replacement' },
+    { key: 'grandTotal', label: 'Price Difference', type: 'qty-ok', group: 'Replacement' },
+    detail({ key: 'returnedGoods', label: 'Returned Goods', type: 'pill', group: 'Replacement' }),
+    detail({ key: 'warehouseName', label: 'Receive To (Stock Point)', group: 'Replacement' }),
+    detail({ key: 'supplierInvoiceNo', label: 'Supplier Invoice No', group: 'Supplier' }),
+    detail({ key: 'contactName', label: 'Contact Person', group: 'Supplier' }),
+    detail({ key: 'contactNumber', label: 'Contact Number', group: 'Supplier' }),
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Supplier' }),
+    detail({ key: 'createdBy', label: 'Created By', group: 'Replacement' }),
+    detail({ key: 'returnedValue', label: 'Returned Items Value', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'replacementValue', label: 'Replacement Items Value', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'discountAmount', label: 'Discount', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'handlingCharge', label: 'Handling / Delivery Charge', type: 'mono', group: 'Replacement' }),
+  ],
+  fromApi: r => ({ ...r, date: r.replacementDate, grandTotal: pbAmount(r.grandTotal), discountAmount: pbAmount(r.discountAmount),
+    handlingCharge: pbAmount(r.handlingCharge), returnedValue: pbAmount(r.returnedValue), replacementValue: pbAmount(r.replacementValue) }),
+  importColumns: [{ key: 'replacementDate', label: 'Replacement Date', headers: ['date', 'replacement date'], read: readSheetDate('Replacement Date') },
+    { key: 'supplier', label: 'Supplier', headers: ['supplier name', 'vendor', 'creditor'] },
+    { key: 'supplierInvoiceNo', label: 'Supplier Invoice No', headers: ['supplier invoice', 'invoice no', 'invoice number'] },
+    { key: 'replacementReason', label: 'Replacement Reason', headers: ['reason'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'oldPrice', label: 'Old Price', headers: ['old price', 'old rate'], read: readSheetNumber('Old Price') },
+    { key: 'price', label: 'New Price', headers: ['new price', 'price', 'rate'], read: readSheetNumber('New Price') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate', 'vat percent'], read: readSheetNumber('VAT %', 2) },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', replacementDate: '2026-11-20', supplier: 'AL MAHA TRADING LLC', supplierInvoiceNo: 'INV-2026-118', replacementReason: 'Damaged on Receipt', itemName: 'GATE VALVE 2"', quantity: '2', unit: 'Pieces', oldPrice: '12.500', price: '12.500', vatRate: '5' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '5', unit: 'Pieces', oldPrice: '0.350', price: '0.400', vatRate: '5' },
+  ],
+  importHeader: async g => ({ replacementDate: g.replacementDate, supplierId: await importLookupId('supplier', g.supplier), supplierInvoiceNo: g.supplierInvoiceNo,
+    replacementReason: g.replacementReason || 'Other', createdBy: 'ADMIN', vatMode: 'exclude' }),
+  importLine: line => ({ quantity: line.quantity || '1', oldPrice: line.oldPrice || line.price || '0', price: line.price || line.oldPrice || '0',
+    vatRate: line.vatRate || '5', discountPct: '0' }),
+});
+
 const rpList = purchaseList({
   key: 'rp', route: 'returns/sales-replacement', noun: 'Sales Replacement', nouns: 'Sales Replacements', api: 'api/sales-replacements.php',
   kind: 'po', form: rpForm, lookups: ['returndn', 'salesentry'], dateOf: record => record.replacementDate,
@@ -11888,7 +12312,7 @@ const rpList = purchaseList({
     vatRate: line.vatRate || '5', discountPct: '0' }),
 });
 
-const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList, srList, rpList, saList, stList, rsvList];
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList, srList, rpList, prtList, prpList, saList, stList, rsvList];
 
 /* ---------- The company letterhead behind every printed page ----------
    The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
@@ -12035,7 +12459,7 @@ function letterheadBands(source, width, height) {
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
 const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note',
   qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice', sr: 'Sales Return',
-  rp: 'Sales Replacement',
+  rp: 'Sales Replacement', prt: 'Purchase Return', prp: 'Purchase Replacement',
   sa: 'Stock Adjustment', st: 'Stock Transfer', rsv: 'Stock Reservation' };
 const SALES_KEYS = ['qt', 'so', 'dn', 'ti', 'se', 'sr', 'rp'];       // documents to a customer (Trade Management, Sales Entry)
 const SUPPLY_KEYS = ['sa', 'st', 'rsv'];                  // Supply Management documents (company and stock points, no supplier)
@@ -12054,7 +12478,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const isSales = SALES_KEYS.includes(spec.key);
   // Everything the page needs is asked for at once (not one after another), so it shows without a wait.
   const [profile, uploadedLetterhead, ownSupplier, picked, customer] = await Promise.all([companyProfile(), companyLetterhead(),
-    (procurement || spec.key === 'po' || spec.key === 'pe') && doc.supplierId ? pbSupplier(String(doc.supplierId)).catch(() => null) : null,
+    (procurement || ['po', 'pe', 'prt', 'prp'].includes(spec.key)) && doc.supplierId ? pbSupplier(String(doc.supplierId)).catch(() => null) : null,
     chosenSupplier,
     isSales && doc.customerId ? pbCustomer(String(doc.customerId)).catch(() => null) : null]);
   if (!stillWanted()) return;
@@ -12193,6 +12617,22 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['SR No', doc.code], ['Return Date', pbDate(doc.returnDate)], ['Delivery Note Ref', doc.deliveryNoteCode], ['Sales Entry Ref', doc.salesEntryCode], ['Customer PO No', doc.customerPo],
         ['Return Reason', doc.returnReason], ['Return To', doc.warehouseName], ['Refund Mode', doc.refundMode], ['Currency', doc.currency]],
     }),
+    // A purchase return: the supplier with its details; PRT No · Return Date · PO / GRN Ref · Supplier Inv No, then why,
+    // where from and how it is settled.
+    prt: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier, doc.contactName, doc.contactNumber) },
+      meta: [['PRT No', doc.code], ['Return Date', pbDate(doc.returnDate)], ['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode],
+        ['Supplier Inv No', doc.supplierInvoiceNo], ['Return Reason', doc.returnReason], ['Return From', doc.warehouseName],
+        ['Settlement Mode', doc.settlementMode], ['Currency', doc.currency], ['Created By', doc.createdBy], ['Created By Contact', doc.createdByContact]],
+    }),
+    // A purchase replacement: the supplier with its details; PRP No · Replacement Date · PO / GRN Ref · Supplier Inv No,
+    // then why, where it is received to and what happens to the returned goods.
+    prp: () => ({
+      party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier, doc.contactName, doc.contactNumber) },
+      meta: [['PRP No', doc.code], ['Replacement Date', pbDate(doc.replacementDate)], ['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode],
+        ['Supplier Inv No', doc.supplierInvoiceNo], ['Replacement Reason', doc.replacementReason], ['Receive To', doc.warehouseName],
+        ['Returned Goods', doc.returnedGoods], ['Currency', doc.currency], ['Created By', doc.createdBy], ['Created By Contact', doc.createdByContact]],
+    }),
     rp: () => ({
       party: buyer(),
       meta: [['SRP No', doc.code], ['Replacement Date', pbDate(doc.replacementDate)], ['Delivery Note Ref', doc.deliveryNoteCode], ['Sales Entry Ref', doc.salesEntryCode],
@@ -12208,7 +12648,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     : pbNum(l.quantity) * pbNum(l.price) > 0 ? pbNum(l.discountAmount) / (pbNum(l.quantity) * pbNum(l.price)) * 100 : 0);
   const grnMoney = value => pbNum(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 12,946.500
   const columns = [
-    [['grn', 'pe', 'se', 'sr'].includes(spec.key) ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
+    [['grn', 'pe', 'se', 'sr', 'prt'].includes(spec.key) ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
     ...(spec.key === 'pr' ? [['Item Code', 'code', l => l.itemCode]] : []),
     ['Item Name', 'name', l => l.itemName],
     // A multi-supplier sales order's All Suppliers copy: each line's supplier, after the item.
@@ -12232,6 +12672,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     sr: [['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
       [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
+    // A purchase return: the quantity received and returned, and the condition of the goods.
+    prt: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
+      ['Condition', 'center', l => l.condition], [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
+    // A purchase replacement: what the supplier sends in place of each returned item, at the old and the new price.
+    prp: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
+      ['Condition', 'center', l => l.condition], ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
+      ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference${doc.currency ? ` (${doc.currency})` : ''}`, 'num total', l => pbAmount(l.lineTotal)]],
     // A sales replacement: what goes back in place of each returned item, at the old and the new price.
     rp: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
       ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
@@ -12244,7 +12693,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     st: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'center', l => l.unit], ['Unit Cost', 'num', l => pbAmount(l.unitCost)],
       ['Total', 'num total', l => pbAmount(pbNum(l.quantity) * pbNum(l.unitCost))]],
     rsv: [['Reserved Qty', 'num', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
-    }[SUPPLY_KEYS.includes(spec.key) ? spec.key : spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.key === 'sr' || spec.key === 'rp' ? spec.key : spec.kind],
+    }[SUPPLY_KEYS.includes(spec.key) ? spec.key : spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : ['sr', 'rp', 'prt', 'prp'].includes(spec.key) ? spec.key : spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
@@ -12352,7 +12801,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   parts.push(box);
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
-    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items', ti: 'Invoiced Items', pe: 'Ordered Items', se: 'Sold Items', sr: 'Returned Items',
+    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items', ti: 'Invoiced Items', pe: 'Ordered Items', se: 'Sold Items', sr: 'Returned Items', prt: 'Returned Items', prp: 'Replacement Items',
     sa: 'Adjusted Items', st: 'Transferred Items', rsv: 'Reserved Items' }[spec.key]));
   const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}${spec.key === 'po' ? ' ps-table-pdoc' : ''}`);
   const thead = el('thead');
@@ -12450,9 +12899,9 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     grand.append(el('dt', '', `Grand Total${currency ? ` (${currency})` : ''}`), el('dd', '', grnMoney(doc.grandTotal)));
     totals.append(grand);
     bottom.append(totals);
-  } else if (spec.key === 'rp') {
-    // A sales replacement: the returned and replacement values, the VAT on the difference, then the Price Difference
-    // (below 0: owed to the buyer). A zero discount or charge is left out.
+  } else if (spec.key === 'rp' || spec.key === 'prp') {
+    // A sales / purchase replacement: the returned and replacement values, the VAT on the difference, then the Price
+    // Difference (below 0: owed to the buyer, or owed by the supplier). A zero discount or charge is left out.
     const totals = el('dl', 'ps-totals');
     const currency = doc.currency ? ` ${doc.currency}` : '';
     for (const [label, value, kind] of [['Returned Items Value', doc.returnedValue], ['Replacement Items Value', doc.replacementValue],
@@ -12474,15 +12923,16 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       [grn ? 'Shipping / Freight' : ({ qt: 'Delivery Charge', so: 'Transportation Charge', dn: 'Delivery Charge', ti: 'Transportation Charge' }[spec.key] || 'Shipping'), doc.shipping],
       ...(spec.key === 'qt' ? [['Round Off', doc.roundOff]] : []),          // left out when 0
       ...(spec.key === 'sr' ? [['Restocking Fee', doc.restockingFee]] : []),  // left out when 0
-      [spec.key === 'sr' ? 'Total Refund' : 'Grand Total', doc.grandTotal, true],
+      ...(spec.key === 'prt' ? [['Supplier Deduction', doc.supplierDeduction]] : []),
+      [{ sr: 'Total Refund', prt: 'Total Return Amount' }[spec.key] || 'Grand Total', doc.grandTotal, true],
       // A sales order's advance (left out when none) and what is still due.
       ...((spec.key === 'so' || spec.key === 'ti') && pbNum(doc.advancePayment) ? [['Advance Payment', doc.advancePayment], ['Balance Due', pbNum(doc.grandTotal) - pbNum(doc.advancePayment)]] : [])]) {
       if (!strong && !pbNum(value) && !label.startsWith('Subtotal') && !label.includes('VAT')) continue;   // a zero discount / shipping is left out
       if ((spec.key === 'pe' || spec.key === 'se' || (spec.key === 'so' && !proforma)) && label.includes('VAT')) continue;   // no VAT on a sales order / purchase or sales entry
-      const discount = label === 'Discount' || label === 'Restocking Fee';
-      const entry = spec.key === 'pe' || spec.key === 'se' || spec.key === 'sr';   // the old Purchase Invoice: "Special Discount: -1.000"
+      const discount = label === 'Discount' || label === 'Restocking Fee' || label === 'Supplier Deduction';
+      const entry = ['pe', 'se', 'sr', 'prt'].includes(spec.key);   // the old Purchase Invoice: "Special Discount: -1.000"
       const row = el('div', strong ? 'ps-total-grand' : discount && (grn || entry) ? 'ps-total-discount' : '');
-      row.append(el('dt', '', `${label === 'Discount' && entry && spec.key !== 'sr' ? 'Special Discount' : label}:`), el('dd', '', `${discount && (grn || entry) ? '-' : ''}${pbAmount(value)}${currency}`));
+      row.append(el('dt', '', `${label === 'Discount' && entry && !['sr', 'prt'].includes(spec.key) ? 'Special Discount' : label}:`), el('dd', '', `${discount && (grn || entry) ? '-' : ''}${pbAmount(value)}${currency}`));
       totals.append(row);
     }
     bottom.append(totals);

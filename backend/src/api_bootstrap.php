@@ -181,6 +181,8 @@ const MASTER_UNIQUE = [
     'stock-transfers'    => ['stock_transfers', 'st_code', null, null, 'stock transfer'],
     'stock-reservations' => ['stock_reservations', 'sr_code', null, null, 'stock reservation'],
     'sales-returns'      => ['sales_returns', 'sr_code', null, null, 'sales return'],
+    'purchase-returns'   => ['purchase_returns', 'prt_code', null, null, 'purchase return'],
+    'purchase-replacements' => ['purchase_replacements', 'prp_code', null, null, 'purchase replacement'],
     'sales-replacements' => ['sales_replacements', 'srp_code', null, null, 'sales replacement'],
 ];
 
