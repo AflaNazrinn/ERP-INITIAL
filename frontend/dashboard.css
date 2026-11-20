@@ -380,6 +380,15 @@ button, select { font-family: inherit; }
 .audit-view-all:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 /* The Audit Trail page: the dashboard's table at full width. */
 .audit-full { margin-top: 4px; }
+/* Audit Trail page: From / To dates and quick ranges above the table. */
+.audit-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-muted); }
+.audit-filter-field { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--ink-600); text-transform: uppercase; letter-spacing: .04em; }
+.audit-filter-field .fp-input { width: 160px; height: 36px; text-transform: none; letter-spacing: 0; }
+.audit-filter-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.audit-preset { height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-700); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.audit-preset:hover { border-color: var(--accent); color: var(--accent); }
+.audit-preset[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.audit-preset-clear { border-color: transparent; background: none; color: var(--danger); }
 
 /* ---------- Footer ---------- */
 .app-footer {
@@ -1487,7 +1496,9 @@ th[data-under]:not([hidden]) { display: table-cell; }
 }
 .lk-table tbody tr.is-picked td { font-weight: 700; color: var(--ink-900); }
 
-/* Party Creation before Under is chosen: the Debtors details show; Under stays on "Select…" (data-pending). */
+/* Party Creation before Under is chosen: the Debtors details show; Under stays on "Select…" (data-pending).
+   The tabs and fields are inert until then, and dimmed to show it. */
+#party-form[data-pending] .fp-tabs, #party-form[data-pending] [data-tab-panel] { opacity: .5; }
 
 /* ---------- Purchase Book pages (Purchase Request, Quotation Request, Purchase Order, GRN) ----------
    The same form layout as the masters, in the Purchase Book green. The body carries the theme too,
@@ -1657,6 +1668,10 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-sum-grand { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .pb-sum-grand dt { font-size: 16px; font-weight: 800; color: var(--ink-900); }
 .pb-sum-grand dd { font-size: 22px; color: var(--accent); }
+/* Grand Total (OMR), under a foreign-currency Grand Total. */
+.pb-sum > .pb-sum-omr { min-height: 30px; margin-top: -4px; }
+.pb-sum-omr dt { font-size: 13px; font-weight: 700; color: var(--ink-600); }
+.pb-sum-omr dd { font-size: 15px; font-weight: 800; color: var(--ink-800); }
 
 @media (max-width: 1180px) {
   .pb-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1907,6 +1922,8 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-table td.ps-c-name { font-weight: 800; text-transform: uppercase; color: #0f172a; }
 .ps-table .ps-c-num { text-align: right; }
 .ps-table .ps-c-center { text-align: center; }
+.ps-table .ps-c-supplier { text-align: left; }
+.ps-table td.ps-c-supplier { font-weight: 700; text-transform: uppercase; white-space: normal; overflow-wrap: anywhere; color: #0f172a; }
 .ps-table .ps-make { margin-top: 3px; font-size: 10px; font-weight: 700; letter-spacing: .01em; text-transform: uppercase; color: #0284c7; }   /* MAKE: brand, under the item name */
 .ps-table td.ps-c-num, .ps-table td.ps-c-center { font-family: var(--ps-mono); white-space: nowrap; }
 .ps-table td.ps-c-total, .ps-table td:last-child { font-weight: 800; }
@@ -2033,6 +2050,9 @@ dialog.pv::backdrop { background: #eef2f6; }
 .pb-sum-po .pb-sum-grand { margin-top: 8px; padding-top: 18px; }
 .pb-sum-po .pb-sum-grand dt { font-size: 15px; font-weight: 800; color: var(--ink-900); }
 .pb-sum-po .pb-sum-grand dd { font-family: var(--font-mono); font-size: 22px; font-weight: 800; color: #15803d; }
+/* The grand total in OMR under it, when the document is in another currency. */
+.pb-sum-omr dt { font-size: 13px; font-weight: 700; color: var(--ink-700); }
+.pb-sum-omr dd { font-family: var(--font-mono); font-size: 16px; font-weight: 800; color: var(--ink-900); }
 
 /* ---------- Trade Management pages (Quotation, Sales Order, Delivery Note; forms and lists) ----------
    The Purchase Book layout (the pages carry fp-theme-purchase too) in the Trade Management blue. */
@@ -2102,6 +2122,51 @@ body:is([data-page="ti"], [data-page="ti-list"], [data-page="pe"], [data-page="p
 .pe-items-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--ink-500); }
 .pe-items-foot kbd { padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-muted); font-family: var(--font-mono); font-size: 11px; color: var(--ink-700); }
 .pe-items-foot strong { color: var(--ink-900); }
+
+/* ---------- Return & Replacement pages (Sales Return; form and list) ----------
+   The Trade Management layout in the Return & Replacement crimson. */
+.fp-theme-return,
+body:is([data-page="sr"], [data-page="sr-list"]) {
+  --accent: #be123c;
+  --accent-hover: #9f1239;
+  --accent-bar: #be123c;
+  --accent-soft: #fff1f2;
+  --accent-soft-2: #ffe4e6;
+  --accent-line: #fecdd3;
+  --accent-ink: #9f1239;
+  --accent-ink-deep: #881337;
+  --entry-bg: #fda4af;
+  --entry-line: #be123c;
+  --entry-ring: 0 0 0 3px rgba(225, 29, 72, .25);
+  --lk-search-glow: rgba(225, 29, 72, .15);
+}
+.fp-theme-return .fp-title { color: #be123c; }
+.fp-theme-return .fp-req { color: #e11d48; }
+.fp-theme-return .pb-vat-switch[aria-pressed="true"] { border-color: #fda4af; background: #fff1f2; color: #be123c; }
+.fp-theme-return .pb-cell-name, .fp-theme-return .sr-cell-return { background: #fff1f2; border-color: #fecdd3; }
+.fp-theme-return .pb-sum-po .pb-sum-grand dd { color: #e11d48; }
+.fp-theme-return .ml-btn-outline-green { border-color: #be123c; color: #be123c; }
+.fp-theme-return .ml-btn-outline-green:hover { background: #fff1f2; }
+.fp-theme-return .ml-table .ml-qty-ok { color: #be123c; }
+.fp-theme-return .pb-list-table .ml-act[data-action="view"] { color: #be123c; border-color: #fecdd3; }
+.fp-theme-return .pb-list-table .ml-act[data-action="view"]:hover { background: #fff1f2; }
+.fp-theme-return .pb-btn { text-transform: uppercase; letter-spacing: .02em; }
+/* The search icon before the text in the lookups (Ref ID, Buyer Name, the line's item code and name); a chevron after Currency. */
+#sr-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron) { left: 12px; right: auto; }
+#sr-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)) { padding-left: 34px; padding-right: 12px; }
+#sr-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron) { left: 10px; }
+#sr-page .fp-lookup-wrap .fp-cell.fp-lookup { padding-left: 28px; padding-right: 8px; }
+#sr-page .sr-chevron { color: var(--ink-600); }
+.pb-table-sr { min-width: 1240px; }
+.pb-table-sr .pb-col-code { width: 136px; }
+.pb-table-sr .sr-col-brand { width: 126px; }
+.pb-table-sr .sr-col-cond { width: 152px; }
+.pb-table-sr .pb-col-total { width: 130px; }
+.sr-cell-auto { background: var(--surface-muted); border-color: var(--line); color: var(--ink-500); cursor: default; }
+.sr-cell-auto::placeholder { color: var(--ink-400); }
+.sr-input-auto { background: var(--surface-muted); border-color: var(--line); color: var(--ink-900); font-family: var(--font-mono); font-weight: 700; cursor: default; }
+.sr-sum > div:not(.pb-sum-grand) { min-height: 46px; }
+.sr-sum .pb-sum-input { width: 182px; height: 44px !important; }
 
 /* ---------- Quick item popup (Purchase Book › Create Item) ---------- */
 .qi { width: min(560px, calc(100vw - 32px)); }
