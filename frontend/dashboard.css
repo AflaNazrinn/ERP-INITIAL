@@ -2476,26 +2476,26 @@ input::-webkit-contacts-auto-fill-button {
 :is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green { background: #0891b2; }
 :is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green:hover { background: #0e7490; }
 /* The same popups on the Supply Management pages (Stock Adjustment, Transfer, Reservation), in their orange. */
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp {
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp {
   --tone-green-bg: #fff7ed; --tone-green-line: #fed7aa; --tone-green-ink: #9a3412;
 }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-icon { background: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-card-title { border-left-color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name { border-color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name:not([readonly]) { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .15); }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mini:hover { border-color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mini[aria-pressed="true"] { background: #ea580c; border-color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mode > span { color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-editor { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .12); }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-tool:hover { border-color: #ea580c; background: #fff7ed; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-tool:focus { border-color: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-unit-input:focus { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); background: #fff7ed; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-rich:focus { background: #fffaf5; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp .ml-btn-green { background: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp .ml-btn-green:hover { background: #c2410c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .qs .ml-btn-green { background: #ea580c; }
-:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .qs .ml-btn-green:hover { background: #c2410c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-icon { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-card-title { border-left-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-name { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-name:not([readonly]) { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .15); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-mini:hover { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-mini[aria-pressed="true"] { background: #ea580c; border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-mode > span { color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-editor { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .12); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-tool:hover { border-color: #ea580c; background: #fff7ed; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-tool:focus { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-unit-input:focus { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); background: #fff7ed; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp-rich:focus { background: #fffaf5; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp .ml-btn-green { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .idp .ml-btn-green:hover { background: #c2410c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .qs .ml-btn-green { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .qs .ml-btn-green:hover { background: #c2410c; }
 
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }
@@ -2807,13 +2807,13 @@ input::-webkit-contacts-auto-fill-button {
 .sm-col-reason { min-width: 170px; }
 .pb-table-sa .pb-col-name { min-width: 200px; }
 .pb-table-st .pb-col-name { width: 46%; }
-.pb-table-sr .pb-col-name { min-width: 240px; }
+.pb-table-rsv .pb-col-name { min-width: 240px; }
 .sm-summary .pb-sum { flex: 1; }
 .sm-cur { font-size: 10px; font-weight: 700; color: var(--ink-500, #64748b); }
 .sm-summary-save { width: 100%; justify-content: center; margin-top: 18px; }
 /* Supply Management colours: orange (forms, lists and their popups). */
 .fp-theme-supply,
-body:is([data-page="sa"], [data-page="sa-list"], [data-page="st"], [data-page="st-list"], [data-page="sr"], [data-page="sr-list"]) {
+body:is([data-page="sa"], [data-page="sa-list"], [data-page="st"], [data-page="st-list"], [data-page="rsv"], [data-page="rsv-list"]) {
   --accent: #c2410c;
   --accent-hover: #c2410c;
   --accent-bar: #ea580c;
@@ -2835,7 +2835,7 @@ body:is([data-page="sa"], [data-page="sa-list"], [data-page="st"], [data-page="s
 .fp-theme-supply .pb-list-table .ml-act[data-action="view"] { color: #c2410c; border-color: #fed7aa; }
 .fp-theme-supply .pb-list-table .ml-act[data-action="view"]:hover { background: #fff7ed; }
 .pb-table-sa { min-width: 1280px; }
-.pb-table-st, .pb-table-sr { min-width: 900px; }
+.pb-table-st, .pb-table-rsv { min-width: 900px; }
 
 /* Stock Adjustment: Stock In / Stock Out under Adj. Qty. */
 .sm-dir { margin-top: 2px; font-size: 9px; font-weight: 800; letter-spacing: .04em; line-height: 1; text-align: right; text-transform: uppercase; }
