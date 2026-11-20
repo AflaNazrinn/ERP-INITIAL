@@ -1,0 +1,78 @@
+-- Return & Replacement › Purchase Replacement: goods a supplier sends in place of goods sent back to it (PRP-0001).
+-- The purchase order or GRN the goods came in on (Ref ID), who made it and their contact, the supplier's invoice
+-- number, the replacement reason, the stock point the replacement is received to and what happens to the returned
+-- goods; the supplier, its contact and the currency; lines with the returned item, the quantity received and replaced,
+-- its condition, the replacement item (none: the same item), the old and new unit prices and the difference; a
+-- discount and a handling / delivery charge on the price difference; remarks, signatory slots and the seal.
+-- Applied by backend/bin/migrate.php. MySQL 8 / MariaDB 10.6+.
+
+CREATE TABLE purchase_replacements (
+  id                  INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  prp_code            VARCHAR(20)   NOT NULL,
+  prp_date            DATE          NOT NULL,
+  purchase_order_id   INT UNSIGNED  NULL,
+  grn_id              INT UNSIGNED  NULL,
+  created_by          VARCHAR(100)  NOT NULL DEFAULT '',
+  created_by_contact  VARCHAR(40)   NOT NULL DEFAULT '',
+  supplier_invoice_no VARCHAR(60)   NOT NULL DEFAULT '',
+  replacement_reason  VARCHAR(60)   NOT NULL DEFAULT '',
+  warehouse_id        INT UNSIGNED  NULL,
+  returned_goods      VARCHAR(60)   NOT NULL DEFAULT 'Sent to Supplier',
+  supplier_id         INT UNSIGNED  NULL,
+  contact_name        VARCHAR(100)  NOT NULL DEFAULT '',
+  contact_number      VARCHAR(40)   NOT NULL DEFAULT '',
+  currency            VARCHAR(10)   NOT NULL DEFAULT 'OMR',
+  vat_mode            VARCHAR(10)   NOT NULL DEFAULT 'exclude',
+  returned_value      DECIMAL(14,3) NOT NULL DEFAULT 0,
+  replacement_value   DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_amount          DECIMAL(14,3) NOT NULL DEFAULT 0,
+  discount_amount     DECIMAL(14,3) NOT NULL DEFAULT 0,
+  handling_charge     DECIMAL(14,3) NOT NULL DEFAULT 0,
+  grand_total         DECIMAL(14,3) NOT NULL DEFAULT 0,
+  remarks             TEXT          NULL,
+  include_signatory   TINYINT(1)    NOT NULL DEFAULT 0,
+  extra_signatories   TEXT          NULL,
+  attach_seal         TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_purchase_replacements_code (prp_code),
+  CONSTRAINT fk_purchase_replacements_supplier  FOREIGN KEY (supplier_id)       REFERENCES suppliers (id)       ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacements_po        FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacements_grn       FOREIGN KEY (grn_id)            REFERENCES grns (id)            ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacements_warehouse FOREIGN KEY (warehouse_id)      REFERENCES warehouses (id)      ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE purchase_replacement_items (
+  id                       INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  purchase_replacement_id  INT UNSIGNED  NOT NULL,
+  sort_order               INT           NOT NULL DEFAULT 0,
+  item_id                  INT UNSIGNED  NULL,
+  item_code                VARCHAR(30)   NOT NULL DEFAULT '',
+  item_name                VARCHAR(200)  NOT NULL,
+  item_name_html           TEXT          NULL,
+  brand_id                 INT UNSIGNED  NULL,
+  brand_name               VARCHAR(150)  NOT NULL DEFAULT '',
+  received_qty             DECIMAL(14,3) NOT NULL DEFAULT 0,
+  quantity                 DECIMAL(14,3) NOT NULL,
+  uom_id                   INT UNSIGNED  NULL,
+  unit                     VARCHAR(80)   NOT NULL DEFAULT '',
+  item_condition           VARCHAR(40)   NOT NULL DEFAULT 'Damaged',
+  replacement_item_id      INT UNSIGNED  NULL,
+  replacement_item_code    VARCHAR(30)   NOT NULL DEFAULT '',
+  replacement_item_name    VARCHAR(200)  NOT NULL DEFAULT '',
+  old_price                DECIMAL(14,3) NOT NULL DEFAULT 0,
+  price                    DECIMAL(14,3) NOT NULL DEFAULT 0,
+  vat_rate                 DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  discount_pct             DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  discount_amount          DECIMAL(14,3) NOT NULL DEFAULT 0,
+  foc                      TINYINT(1)    NOT NULL DEFAULT 0,
+  line_total               DECIMAL(14,3) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_purchase_replacement_items_doc (purchase_replacement_id),
+  CONSTRAINT fk_purchase_replacement_items_doc   FOREIGN KEY (purchase_replacement_id) REFERENCES purchase_replacements (id) ON DELETE CASCADE,
+  CONSTRAINT fk_purchase_replacement_items_item  FOREIGN KEY (item_id)  REFERENCES items (id)  ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacement_items_repl  FOREIGN KEY (replacement_item_id) REFERENCES items (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacement_items_brand FOREIGN KEY (brand_id) REFERENCES brands (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_purchase_replacement_items_uom   FOREIGN KEY (uom_id)   REFERENCES uoms (id)   ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
