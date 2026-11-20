@@ -282,7 +282,7 @@ function pb_read_lines(Input $in, string $kind): array
         try {
             $r->done();
         } catch (ValidationError $e) {
-            $in->fail('items', 'Item row ' . ($index + 1) . ': ' . reset($e->fields));
+            $in->fail('items', 'Item row ' . ($index + 1) . ': ' . (array_values($e->fields)[0] ?? 'is not valid.'));
             continue;
         }
         $lines[] = $line;
@@ -869,7 +869,7 @@ function grn_read_transfers(Input $r, mixed $raw, float $accepted): array
         try {
             $t->done();
         } catch (ValidationError $e) {
-            $r->fail('transfers', 'stock transfer: ' . reset($e->fields));
+            $r->fail('transfers', 'stock transfer: ' . (array_values($e->fields)[0] ?? 'is not valid.'));
             continue;
         }
         if ($warehouseId === null) {

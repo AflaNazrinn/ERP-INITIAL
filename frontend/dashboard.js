@@ -1811,8 +1811,14 @@ const LOOKUPS = {
     // The card style (a field with data-lookup-cards: the Purchase Order's Supplier Name).
     subtitle: 'Choose a supplier from the database catalog.', search: 'Search supplier by name or code...',
     cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Supplier' },
+  // data-lookup-exclude names another stock point field's id input: the stock point picked there is left off this
+  // list (Stock Transfer: To never offers the From stock point; From always lists every stock point).
   warehouse: { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points', api: 'api/warehouses.php',
-    columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: codeAndName },
+    columns: [['code', 'Code'], ['name', 'Stock Point Name'], ['type', 'Type']], display: codeAndName,
+    narrow: (rows, field) => {
+      const other = field.dataset.lookupExclude ? byId(field.dataset.lookupExclude)?.value : '';
+      return other ? rows.filter(row => String(row.id) !== String(other)) : rows;
+    } },
   rack: { title: 'Select Rack / Bin', letter: 'R', list: 'Rack / Bin List', plural: 'locations', api: 'api/rack-bins.php',
     columns: [['code', 'Location Code'], ['name', 'Location'], ['warehouseName', 'Warehouse']], display: row => row.code, parentKey: 'warehouseId' },
   item: { title: 'Select Item', letter: 'I', list: 'Item List', plural: 'items', api: 'api/items.php',
@@ -2778,6 +2784,15 @@ function showItemStock() {
   itemEl('stock').textContent = stockNumber.format(Math.round(total * 1000) / 1000);
 }
 
+// After Shift+X adds a row: the row's first popup field (a lookup) gets the focus and its popup opens; a row
+// without one keeps the focus on its first field.
+function openRowLookup(row) {
+  const field = row?.querySelector('input.fp-lookup:not([disabled])');
+  if (!field) return;
+  field.focus();
+  openLookup(field, { byKeyboard: true });
+}
+
 function addSourceRow({ focus = true } = {}) {
   const row = byId('item-source-row-template').content.firstElementChild.cloneNode(true);
   itemEl('source-body').append(row);
@@ -3123,7 +3138,8 @@ function handleItemPageKeys(event) {
   if ((event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && key.toLowerCase() === 'x' && !typingText)
       || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
     event.preventDefault();
-    addSourceRow();
+    if (event.repeat) return true;
+    openRowLookup(addSourceRow());         // the new sourcing row's Stock Point popup opens
     setItemDirty(true);
     return true;
   }
@@ -3321,7 +3337,9 @@ function createFormPage(config) {
   }
 
   function addRowAndFocus(name) {
-    addRow(name).querySelector('input').focus();
+    const row = addRow(name);
+    row.querySelector('input').focus();
+    return row;
   }
 
   // Replaces a list's rows (edit mode); an empty list keeps one blank row.
@@ -3487,7 +3505,10 @@ function createFormPage(config) {
       const shiftX = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && key.toLowerCase() === 'x' && !typingText;
       if (shiftX || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) {
         event.preventDefault();
-        addRowAndFocus(list);
+        if (event.repeat) return true;
+        const row = addRowAndFocus(list);
+        if (config.afterRowShortcut) config.afterRowShortcut(row);   // the Purchase Book line: its Select Item popup
+        else openRowLookup(row);              // the masters: the row's first popup field (e.g. a party quotation's item)
         return true;
       }
     }
@@ -7518,7 +7539,7 @@ const allLists = () => [...MASTER_LISTS, ...PURCHASE_LISTS];
 
 // An edit route opens the list's creation form with the record (see the lists' edit()).
 function masterEditPage(route) {
-  const match = /^((?:masters|purchase-book|trade|entry)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
+  const match = /^((?:masters|purchase-book|trade|entry|supply)\/[a-z-]+)\/edit\/(\d+)$/.exec(route);
   const list = match && allLists().find(entry => entry.config.route === match[1]);
   if (!list) return null;
   const id = Number(match[2]);
@@ -7616,7 +7637,8 @@ const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 // column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
-  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se']) {
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se',
+    'pb-line-sa', 'pb-line-st', 'pb-line-sr']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
     const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
@@ -7632,7 +7654,7 @@ function composePurchaseTemplates() {
       reason.setAttribute('aria-label', 'Rejection reason');
       nameCell.append(reason);
     }
-    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se'].includes(id)) {          // priced lines keep the brand in the item name cell
+    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-st'].includes(id)) {          // priced lines keep the brand in the item name cell
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
@@ -7640,7 +7662,11 @@ function composePurchaseTemplates() {
       brandCell.remove();
     }
     const unitSlot = row.querySelector('[data-unit-cell]');
-    if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
+    if (row.hasAttribute('data-no-unit')) {          // the Stock Adjustment: no Unit column (the item's unit is kept)
+      const unit = hidden(); unit.dataset.field = 'unit';
+      const uomId = hidden(); uomId.dataset.field = 'uomId';
+      nameCell.append(unit, uomId);
+    } else if (unitSlot) unitSlot.replaceWith(...cells('pb-cell-unit'));
     else row.append(...cells('pb-cell-unit'));
     row.append(...cells('pb-cell-remove'));
     if (id === 'pb-line-po' || id === 'pb-line-pe' || id === 'pb-line-se') {
@@ -7783,6 +7809,7 @@ async function applyPurchaseItem(form, row, itemId) {
   // The sales order's Buying Cost: what the item was last bought for (soBuyingPrice), the item's buying rate when it
   // was never bought.
   if (pbCell(row, 'buyingCost')) await soFillBuyingCost(row, item);
+  if (form.spec.onItem) await form.spec.onItem(form, row, item);
   if (row.dataset.itemApplied !== itemId || !row.isConnected) return;
   form.page.absorb();
   form.refresh();
@@ -8311,7 +8338,7 @@ function createPurchaseForm(spec) {
   form.refresh = function refresh() {
     syncVatToggle();
     if (spec.kind === 'grn') rows().forEach(syncGrnRow);
-    if (!priced) return;
+    if (!priced) { spec.afterRefresh?.(); return; }
     const totals = purchaseTotals(rows(), spec.kind, vatMode(), pbNum(el('discount').value), pbNum(el('shipping').value));
     rows().forEach((row, i) => {
       const filled = !isBlankRow(row) || totals.lineTotals[i] > 0;
@@ -8375,7 +8402,9 @@ function createPurchaseForm(spec) {
         }
       } else {
         line.quantity = value('quantity');
-        if (!(pbNum(line.quantity) > 0)) fail('quantity', 'the quantity must be more than 0.');
+        if (spec.zeroQty ? line.quantity === '' : !(pbNum(line.quantity) > 0)) {
+          fail('quantity', spec.zeroQty ? 'enter the counted quantity (0 when none).' : 'the quantity must be more than 0.');
+        }
       }
       if (spec.kind === 'po') {
         Object.assign(line, {
@@ -8449,6 +8478,13 @@ function createPurchaseForm(spec) {
       // A row added while VAT is disabled starts at 0% (the first row of a new document keeps the template's 5%).
       defaults: () => (priced && rows().length > 0 && !vatOn() ? { vatRate: vatRateText(0) } : {}) } },
     addRowList: () => 'items',
+    // Shift+X (or Alt+A): the new line's Select Item popup opens at once.
+    afterRowShortcut(row) {
+      const name = pbCell(row, 'itemName');
+      if (!name?.matches('.fp-lookup')) return;
+      name.focus();
+      openLookup(name, { byKeyboard: true });
+    },
     extra,
     extraFocus: () => spec.chips?.input,
     fieldNodes: {
@@ -8925,6 +8961,7 @@ const rfqForm = createPurchaseForm({
 });
 
 /* ---------- Purchase Order ---------- */
+let poPrLoaded = '';                      // the purchase request whose items the order's lines were fetched from
 // Certification Required: the ticks are kept in #po-certifications ("N/A" or "A, B"); N/A clears the others and back.
 const poCertBoxes = () => [...byId('po-form').querySelectorAll('[data-cert]')];
 function poShowCertifications() {
@@ -8989,15 +9026,23 @@ const poForm = createPurchaseForm({
   key: 'po', route: 'purchase-book/purchase-order/new', noun: 'Purchase Order', api: 'api/purchase-orders.php',
   kind: 'po', template: 'pb-line-po', lookups: ['purchaseorder'], vatDefault: 'exclude',
   previewOnCreate: true,           // a new order opens on its preview page (Print / Export PDF), as a new Purchase Request
-  firstField: () => byId('po-date'),
-  fieldNodes: { poDate: 'po-date', quotationNumber: 'po-quotation-no',
+  firstField: () => byId('po-pr'),
+  // A new order starts on PR Number with its popup open (pick a Purchase Request to fetch its items; Esc skips it).
+  opened(form) {
+    setTimeout(() => {
+      if (currentRoute !== 'purchase-book/purchase-order/new' || form.page.isEditing() || byId('po-pr-id').value || byId('lookup').open) return;
+      if (document.activeElement === byId('po-pr')) openLookup(byId('po-pr'), { byKeyboard: true });
+    }, 150);
+  },
+  fieldNodes: { poDate: 'po-date', purchaseRequestId: 'po-pr', quotationNumber: 'po-quotation-no',
     deliveryDate: 'po-delivery-date', deliveryLocation: 'po-location', deliveryTerms: 'po-terms', paymentMode: 'po-payment',
     creditPeriod: 'po-credit-period', salesman: 'po-salesman', salesmanContact: 'po-salesman-contact', certifications: 'po-cert-label', remarks: 'po-remarks-editor',
     supplierId: 'po-supplier', contactName: 'po-contact', contactNumber: 'po-contact-number', currency: 'po-currency',
     discountAmount: 'po-discount', shipping: 'po-shipping' },
   header() {
     return {
-      poDate: byId('po-date').value, quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
+      poDate: byId('po-date').value, purchaseRequestId: byId('po-pr-id').value || null,
+      quotationNumber: byId('po-quotation-no').value.trim(), deliveryDate: byId('po-delivery-date').value,
       deliveryLocation: byId('po-location').value.trim(), deliveryTerms: byId('po-terms').value.trim(), paymentMode: byId('po-payment').value,
       creditPeriod: poIsCredit() ? byId('po-credit-period').value.trim() : '',
       salesman: byId('po-salesman').value.trim(), salesmanContact: phoneOf(byId('po-salesman-contact')),
@@ -9018,6 +9063,9 @@ const poForm = createPurchaseForm({
   listRoute: 'purchase-book/purchase-order',
   fill(form, po) {
     byId('po-date').value = po.poDate;
+    byId('po-pr').value = po.purchaseRequestCode || '';
+    byId('po-pr-id').value = po.purchaseRequestId ?? '';
+    poPrLoaded = String(po.purchaseRequestId ?? '');      // the saved lines stay; picking another PR fetches its items
     byId('po-quotation-no').value = po.quotationNumber;
     byId('po-delivery-date').value = po.deliveryDate || '';
     byId('po-location').value = po.deliveryLocation;
@@ -9037,6 +9085,8 @@ const poForm = createPurchaseForm({
   afterFill: () => poShowSupplier(),
   async onReset(form) {
     byId('po-date').value = todayInputValue();
+    byId('po-pr').value = '';
+    poPrLoaded = '';
     poSetCurrency('OMR');                        // hidden ids were cleared by the reset
     poVatFromCurrency(form);                     // a new order is in OMR: VAT Enabled
     byId('po-certifications').value = 'N/A';
@@ -9045,6 +9095,30 @@ const poForm = createPurchaseForm({
     poShowSupplier();
   },
   init(form) {
+    // PR Number: a Purchase Request picked in its popup fills the lines with its items (quantity and unit as
+    // requested, the Item master's buying rate as the price, VAT as the order's currency sets it), and the
+    // Delivery Location / Delivery Date from the request when they are still empty. Once per pick.
+    byId('po-pr').addEventListener('input', async () => {
+      const id = byId('po-pr-id').value;
+      if (!id || id === poPrLoaded) { poPrLoaded = id; return; }
+      poPrLoaded = id;
+      try {
+        const pr = await apiRequest(`api/purchase-requests.php?id=${id}`);
+        if (byId('po-pr-id').value !== id) return;              // another pick came in meanwhile
+        await loadPurchaseLines(form, pr.items, line => ({ ...purchaseLineRow(line), quantity: pbQty(pbNum(line.quantity)) }));
+        await Promise.all(form.page.rowsOf('items').map(async row => {
+          const itemId = pbCell(row, 'itemId').value;
+          const item = itemId ? await pbItem(itemId).catch(() => null) : null;
+          if (item && pbNum(item.buyingRate) > 0) pbCell(row, 'price').value = pbMoney(pbNum(item.buyingRate));
+        }));
+        poVatFromCurrency(form);
+        if (!byId('po-location').value.trim() && pr.deliveryLocation) byId('po-location').value = pr.deliveryLocation;
+        if (!byId('po-delivery-date').value && pr.requiredDate && pr.requiredDate >= byId('po-date').value) byId('po-delivery-date').value = pr.requiredDate;
+        form.refresh();
+        form.page.absorb();
+        showToast('Items fetched', `${pr.items.length} item${pr.items.length === 1 ? '' : 's'} from ${pr.code}.`);
+      } catch (error) { showToast('The purchase request could not be loaded', error.message, true); }
+    });
     byId('po-supplier').addEventListener('input', async () => {      // a pick in the Select Supplier popup
       fillLookup(byId('po-contact'), null);
       byId('po-contact-number').value = '';
@@ -9835,6 +9909,336 @@ const tiForm = createSalesForm({
   },
 });
 
+/* ---------- Supply Management: Stock Adjustment, Stock Transfer, Stock Reservation ----------
+   Item lines from the Item master (Create Item adds one), Remarks, signatory slots and the seal, as the Purchase Book.
+   Stock figures come from api/stock-levels.php (src/supply.php): on hand at a stock point (opening stock, GRNs,
+   delivery notes, transfers, Approved adjustments) and what running reservations hold. Shift+X adds a line. */
+const smLevels = { sa: null, st: null, sr: null };          // the stock figures each page shows: { key, onHand, reserved }
+const smEditing = { sa: null, st: null, sr: null };         // the id of the document open for editing
+const smSigned = value => (value > 0.0005 ? `+${pbQty(value)}` : pbQty(value));
+const smUser = () => byId('header-user')?.textContent.trim() || '';
+const smFilled = row => Boolean(pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim());
+
+async function smLoadLevels(key, warehouseId, except) {
+  const query = new URLSearchParams();
+  if (warehouseId) query.set('warehouseId', warehouseId);
+  if (smEditing[key]) query.set(except, smEditing[key]);
+  const wanted = query.toString();
+  if (smLevels[key]?.key === wanted) return smLevels[key];
+  try {
+    const levels = await apiRequest(`api/stock-levels.php?${wanted}`);
+    smLevels[key] = { key: wanted, onHand: levels.onHand || {}, reserved: levels.reserved || {} };
+  } catch (error) {
+    showToast('Stock levels could not be loaded', error.message, true);
+    smLevels[key] = { key: wanted, onHand: {}, reserved: {} };
+  }
+  return smLevels[key];
+}
+const smOnHand = (levels, itemId) => pbNum(levels?.onHand?.[itemId]);
+// An item's buying cost (Item master) for the line's Unit Cost when it has none.
+function smUnitCost(row, item) {
+  const cell = pbCell(row, 'unitCost');
+  if (cell && pbNum(cell.value) === 0 && pbNum(item.buyingRate) > 0) cell.value = pbMoney(pbNum(item.buyingRate));
+}
+
+/* Stock Adjustment (ADJ000001): a stock point's counted quantities. System Qty is the stock there now (kept on the
+   line when saved); Physical Qty what was counted (starts at the system quantity); Difference = Physical − System;
+   Adj. Qty its size; Adj. Value = Difference × Unit Cost. Only an Approved adjustment moves the stock. */
+async function saSetSystem(form, rows) {
+  const levels = await smLoadLevels('sa', byId('sa-warehouse-id').value, 'adjustment');
+  for (const row of rows) {
+    const itemId = pbCell(row, 'itemId').value;
+    if (!itemId) continue;
+    const before = pbCell(row, 'systemQty').value;
+    const system = byId('sa-warehouse-id').value ? pbQty(smOnHand(levels, itemId)) : '';
+    pbCell(row, 'systemQty').value = system;
+    // A new count starts at the system quantity (only the differences are typed).
+    if (row.dataset.counted !== '1' && (pbCell(row, 'quantity').value === '0' || pbCell(row, 'quantity').value === before)) {
+      pbCell(row, 'quantity').value = system || '0';
+    }
+  }
+  form.refresh();
+}
+
+const saForm = createPurchaseForm({
+  key: 'sa', route: 'supply/stock-adjustment/new', noun: 'Stock Adjustment', api: 'api/stock-adjustments.php',
+  kind: 'simple', template: 'pb-line-sa', itemsFromMaster: true, zeroQty: true, shiftXAddsRow: true,
+  lineExtras: ['systemQty', 'unitCost', 'lineReason'],
+  firstField: () => byId('sa-warehouse'),
+  // A new adjustment starts on Stock Point with its popup open (no items are fetched: they are added by hand).
+  opened(form) {
+    setTimeout(() => {
+      if (currentRoute !== 'supply/stock-adjustment/new' || form.page.isEditing() || byId('sa-warehouse-id').value || byId('lookup').open) return;
+      if (document.activeElement === byId('sa-warehouse')) openLookup(byId('sa-warehouse'), { byKeyboard: true });
+    }, 150);
+  },
+  fieldNodes: { adjustmentDate: 'sa-date', warehouseId: 'sa-warehouse', status: 'sa-status', reason: 'sa-reason',
+    requestedBy: 'sa-requested', approvedBy: 'sa-approved', remarks: 'sa-remarks-editor' },
+  header: () => ({
+    adjustmentDate: byId('sa-date').value, warehouseId: byId('sa-warehouse-id').value || null, status: byId('sa-status').value,
+    reason: byId('sa-reason').value.trim(), requestedBy: byId('sa-requested').value.trim(), approvedBy: byId('sa-approved').value.trim(),
+  }),
+  check(form, errors) {
+    if (!byId('sa-warehouse-id').value) errors.push({ node: byId('sa-warehouse'), message: 'Select the stock point.' });
+    if (byId('sa-status').value === 'Approved' && !byId('sa-approved').value.trim()) {
+      errors.push({ node: byId('sa-approved'), message: 'Enter who approved the adjustment.' });
+    }
+    saForm.page.rowsOf('items').forEach((row, i) => {
+      const cost = pbCell(row, 'unitCost').value.trim();
+      if (smFilled(row) && cost !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(cost)) errors.push({ node: pbCell(row, 'unitCost'), message: `Row ${i + 1}: enter the unit cost with up to 3 decimals.` });
+    });
+  },
+  afterRefresh() {
+    const rows = saForm.page.rowsOf('items');
+    let net = 0;
+    let value = 0;
+    for (const row of rows) {
+      const filled = smFilled(row);
+      const systemText = pbCell(row, 'systemQty').value;
+      const diff = pbNum(pbCell(row, 'quantity').value) - pbNum(systemText);
+      const amount = diff * pbNum(pbCell(row, 'unitCost').value);
+      row.querySelector('[data-system]').textContent = filled && systemText !== '' ? systemText : '—';
+      const diffCell = row.querySelector('[data-diff]');
+      // ↑ 2 (counted more, green) or ↓ 2 (counted less, red); 0 when they match.
+      diffCell.textContent = !filled ? '—' : diff > 0.0005 ? `↑ ${pbQty(diff)}` : diff < -0.0005 ? `↓ ${pbQty(-diff)}` : '0';
+      diffCell.classList.toggle('is-up', filled && diff > 0.0005);
+      diffCell.classList.toggle('is-down', filled && diff < -0.0005);
+      row.querySelector('[data-adj]').textContent = filled ? pbQty(Math.abs(diff)) : '—';
+      // Under Adj. Qty: Stock In (counted more) or Stock Out (counted less); nothing when they match.
+      const dir = row.querySelector('[data-dir]');
+      dir.textContent = !filled ? '' : diff > 0.0005 ? 'Stock In' : diff < -0.0005 ? 'Stock Out' : '';
+      dir.className = `sm-dir${diff > 0.0005 ? ' is-in' : diff < -0.0005 ? ' is-out' : ''}`;
+      row.querySelector('[data-total]').textContent = pbMoney(filled ? amount : 0);
+      if (!filled) continue;
+      net += diff;
+      value += amount;
+    }
+    byId('sa-item-count').textContent = String(rows.filter(smFilled).length || rows.length);
+    byId('sa-net').textContent = smSigned(net);
+    byId('sa-subtotal').textContent = pbMoney(value);
+    byId('sa-grand').textContent = pbMoney(value);
+    byId('sa-save-label').textContent = FORM_PAGES['supply/stock-adjustment/new']?.isEditing?.() ? 'Update Adjustment' : 'Save Adjustment';
+  },
+  listRoute: 'supply/stock-adjustment',
+  async onItem(form, row, item) {
+    smUnitCost(row, item);
+    delete row.dataset.counted;
+    pbCell(row, 'quantity').value = '0';
+    await saSetSystem(form, [row]);
+  },
+  fill(form, doc) {
+    smEditing.sa = doc.id;
+    smLevels.sa = null;
+    byId('sa-date').value = doc.adjustmentDate;
+    fillLookup(byId('sa-warehouse'), doc.warehouseId ? { id: doc.warehouseId, code: doc.warehouseCode, name: doc.warehouseName } : null);
+    byId('sa-status').value = doc.status || 'Draft';
+    byId('sa-reason').value = doc.reason || '';
+    byId('sa-requested').value = doc.requestedBy || '';
+    byId('sa-approved').value = doc.approvedBy || '';
+  },
+  afterFill(form, doc) {
+    form.page.rowsOf('items').forEach((row, i) => {
+      const line = doc.items[i] || {};
+      row.dataset.counted = '1';
+      pbCell(row, 'systemQty').value = pbQty(pbNum(line.systemQty));
+      pbCell(row, 'unitCost').value = pbMoney(pbNum(line.unitCost));
+      pbCell(row, 'lineReason').value = line.lineReason || '';
+    });
+  },
+  onReset() {
+    smEditing.sa = null;
+    smLevels.sa = null;
+    byId('sa-date').value = todayInputValue();
+    byId('sa-status').value = 'Draft';
+    byId('sa-reason').value = 'Physical Count Difference';
+    byId('sa-requested').value = smUser();
+  },
+  init(form) {
+    byId('sa-warehouse').addEventListener('input', () => saSetSystem(form, form.page.rowsOf('items')));
+    byId('sa-form').addEventListener('input', event => {
+      if (event.target.dataset.field === 'quantity') event.target.closest('tr').dataset.counted = '1';
+      if (['quantity', 'unitCost'].includes(event.target.dataset.field)) form.refresh();
+    });
+  },
+});
+
+/* Stock Transfer (ST-0001): stock sent From one stock point To another; Total = Quantity × Unit Cost. A quantity
+   more than the source holds is marked (the transfer still saves). */
+async function stMarkStock(rows) {
+  const from = byId('st-from-id').value;
+  const levels = from ? await smLoadLevels('st', from, 'transfer') : null;
+  for (const row of rows) {
+    const itemId = pbCell(row, 'itemId').value;
+    const cell = pbCell(row, 'quantity');
+    const over = Boolean(levels && itemId && pbNum(cell.value) > smOnHand(levels, itemId) + 0.0005);
+    cell.classList.toggle('sm-over', over);
+    cell.title = levels && itemId ? `${pbQty(smOnHand(levels, itemId))} in stock at ${byId('st-from').value}` : '';
+  }
+}
+
+const stForm = createPurchaseForm({
+  key: 'st', route: 'supply/stock-transfer/new', noun: 'Stock Transfer', api: 'api/stock-transfers.php',
+  kind: 'simple', template: 'pb-line-st', itemsFromMaster: true, shiftXAddsRow: true, lineExtras: ['unitCost'],
+  firstField: () => byId('st-date'),
+  fieldNodes: { transferDate: 'st-date', expectedDate: 'st-expected', fromWarehouseId: 'st-from', toWarehouseId: 'st-to',
+    transferReason: 'st-reason', remarks: 'st-remarks-editor' },
+  header: () => ({
+    transferDate: byId('st-date').value, expectedDate: byId('st-expected').value || null,
+    fromWarehouseId: byId('st-from-id').value || null, toWarehouseId: byId('st-to-id').value || null, transferReason: byId('st-reason').value.trim(),
+  }),
+  check(form, errors) {
+    if (!byId('st-date').value) errors.push({ node: byId('st-date'), message: 'Enter the transfer date.' });
+    if (!byId('st-from-id').value) errors.push({ node: byId('st-from'), message: 'Select the stock point the stock leaves.' });
+    if (!byId('st-to-id').value) errors.push({ node: byId('st-to'), message: 'Select the stock point the stock goes to.' });
+    else if (byId('st-to-id').value === byId('st-from-id').value) errors.push({ node: byId('st-to'), message: 'The destination must be a different stock point from the source.' });
+    if (byId('st-expected').value && byId('st-date').value && byId('st-expected').value < byId('st-date').value) {
+      errors.push({ node: byId('st-expected'), message: 'The expected date cannot be before the transfer date.' });
+    }
+    stForm.page.rowsOf('items').forEach((row, i) => {
+      const cost = pbCell(row, 'unitCost').value.trim();
+      if (smFilled(row) && cost !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(cost)) errors.push({ node: pbCell(row, 'unitCost'), message: `Row ${i + 1}: enter the unit cost with up to 3 decimals.` });
+    });
+  },
+  afterRefresh() {
+    const rows = stForm.page.rowsOf('items');
+    let total = 0;
+    for (const row of rows) {
+      const amount = smFilled(row) ? pbNum(pbCell(row, 'quantity').value) * pbNum(pbCell(row, 'unitCost').value) : 0;
+      row.querySelector('[data-total]').textContent = pbMoney(amount);
+      total += amount;
+    }
+    byId('st-subtotal').textContent = pbMoney(total);
+    byId('st-grand').textContent = pbMoney(total);
+    byId('st-item-count').textContent = String(rows.filter(smFilled).length || rows.length);
+    byId('st-save-label').textContent = FORM_PAGES['supply/stock-transfer/new']?.isEditing?.() ? 'Update Stock Transfer' : 'Save Stock Transfer';
+    stMarkStock(rows);
+  },
+  listRoute: 'supply/stock-transfer',
+  onItem(form, row, item) { smUnitCost(row, item); },
+  fill(form, doc) {
+    smEditing.st = doc.id;
+    smLevels.st = null;
+    byId('st-date').value = doc.transferDate;
+    byId('st-expected').value = doc.expectedDate || '';
+    fillLookup(byId('st-from'), doc.fromWarehouseId ? { id: doc.fromWarehouseId, code: doc.fromWarehouseCode, name: doc.fromWarehouseName } : null);
+    fillLookup(byId('st-to'), doc.toWarehouseId ? { id: doc.toWarehouseId, code: doc.toWarehouseCode, name: doc.toWarehouseName } : null);
+    byId('st-reason').value = doc.transferReason || '';
+  },
+  afterFill(form, doc) {
+    form.page.rowsOf('items').forEach((row, i) => { pbCell(row, 'unitCost').value = pbMoney(pbNum(doc.items[i]?.unitCost)); });
+  },
+  onReset() {
+    smEditing.st = null;
+    smLevels.st = null;
+    byId('st-date').value = todayInputValue();
+  },
+  init(form) {
+    // From lists every stock point; picking the one already in To clears To (To never offers From's stock point).
+    byId('st-from').addEventListener('input', () => {
+      if (byId('st-from-id').value && byId('st-from-id').value === byId('st-to-id').value) fillLookup(byId('st-to'), null);
+      form.refresh();
+    });
+    byId('st-form').addEventListener('input', event => {
+      if (['quantity', 'unitCost'].includes(event.target.dataset.field)) form.refresh();
+    });
+  },
+});
+
+/* Stock Reservation (SR000001): stock held for a customer until the Required Date. Available Qty = on hand at the
+   stock point (every stock point when none is chosen) less what other running reservations hold; a reserved
+   quantity more than that is marked. */
+// Where an item's stock is (api/stock-levels.php?itemId=), kept for the page: shown under Available Qty when the
+// chosen stock point has none of it, e.g. "1200 at WH-2026-0003".
+const srStockPoints = new Map();
+function srItemPoints(itemId) {
+  if (!srStockPoints.has(itemId)) {
+    srStockPoints.set(itemId, apiRequest(`api/stock-levels.php?itemId=${encodeURIComponent(itemId)}`)
+      .then(result => result.points || []).catch(() => { srStockPoints.delete(itemId); return []; }));
+  }
+  return srStockPoints.get(itemId);
+}
+
+async function srShowAvailable(rows) {
+  const warehouseId = byId('sr-warehouse-id').value;
+  const levels = await smLoadLevels('sr', warehouseId, 'reservation');
+  for (const row of rows) {
+    const itemId = pbCell(row, 'itemId').value;
+    const available = itemId ? smOnHand(levels, itemId) - pbNum(levels.reserved?.[itemId]) : null;
+    row.querySelector('[data-available]').textContent = available === null ? '—' : pbQty(available);
+    pbCell(row, 'quantity').classList.toggle('sm-over', available !== null && pbNum(pbCell(row, 'quantity').value) > available + 0.0005);
+    const note = row.querySelector('[data-elsewhere]');
+    note.textContent = '';
+    note.title = '';
+    if (!itemId || !warehouseId || available > 0.0005) continue;
+    // None at this stock point: say where the item's stock is (or that there is none anywhere).
+    srItemPoints(itemId).then(points => {
+      if (pbCell(row, 'itemId').value !== itemId || byId('sr-warehouse-id').value !== warehouseId) return;
+      const others = points.filter(point => String(point.warehouseId) !== String(warehouseId) && pbNum(point.qty) > 0);
+      note.textContent = others.length ? `${pbQty(pbNum(others[0].qty))} at ${others[0].code}${others.length > 1 ? ` +${others.length - 1}` : ''}` : 'No stock';
+      note.title = others.length ? others.map(point => `${pbQty(pbNum(point.qty))} at ${point.code} · ${point.name}`).join(', ') : 'This item has no stock at any stock point.';
+    });
+  }
+}
+
+const srForm = createPurchaseForm({
+  key: 'sr', route: 'supply/stock-reservation/new', noun: 'Stock Reservation', api: 'api/stock-reservations.php',
+  kind: 'simple', template: 'pb-line-sr', itemsFromMaster: true, shiftXAddsRow: true,
+  firstField: () => byId('sr-date'),
+  fieldNodes: { reservationDate: 'sr-date', reservationType: 'sr-type', referenceNo: 'sr-reference', customerId: 'sr-customer',
+    warehouseId: 'sr-warehouse', requiredDate: 'sr-required', remarks: 'sr-remarks-editor' },
+  header: () => ({
+    reservationDate: byId('sr-date').value, reservationType: byId('sr-type').value, referenceNo: byId('sr-reference').value.trim(),
+    customerId: byId('sr-customer-id').value || null, warehouseId: byId('sr-warehouse-id').value || null,
+    requiredDate: byId('sr-required').value,
+  }),
+  check(form, errors) {
+    if (!byId('sr-date').value) errors.push({ node: byId('sr-date'), message: 'Enter the reservation date.' });
+    if (!byId('sr-required').value) errors.push({ node: byId('sr-required'), message: 'Enter the date the stock is required.' });
+    else if (byId('sr-date').value && byId('sr-required').value < byId('sr-date').value) {
+      errors.push({ node: byId('sr-required'), message: 'The required date cannot be before the reservation date.' });
+    }
+  },
+  afterRefresh() {
+    const rows = srForm.page.rowsOf('items');
+    byId('sr-item-count').textContent = String(rows.filter(smFilled).length || rows.length);
+    byId('sr-sum-point').textContent = byId('sr-warehouse').value.trim() || 'All stock points';
+    byId('sr-sum-required').textContent = poSlashDate(byId('sr-required').value) || '—';
+    byId('sr-total').textContent = pbQty(rows.filter(smFilled).reduce((sum, row) => sum + pbNum(pbCell(row, 'quantity').value), 0));
+    byId('sr-save-label').textContent = FORM_PAGES['supply/stock-reservation/new']?.isEditing?.() ? 'Update Stock Reservation' : 'Save Stock Reservation';
+    srShowAvailable(rows);
+  },
+  listRoute: 'supply/stock-reservation',
+  fill(form, doc) {
+    smEditing.sr = doc.id;
+    smLevels.sr = null;
+    byId('sr-date').value = doc.reservationDate;
+    byId('sr-type').value = doc.reservationType || 'Sales Order';
+    byId('sr-reference').value = doc.referenceNo || '';
+    fillLookup(byId('sr-customer'), doc.customerId ? { id: doc.customerId, name: doc.customerName } : null);
+    fillLookup(byId('sr-warehouse'), doc.warehouseId ? { id: doc.warehouseId, code: doc.warehouseCode, name: doc.warehouseName } : null);
+    byId('sr-required').value = doc.requiredDate || '';
+    byId('sr-created-by').value = doc.createdBy || '';
+    byId('sr-created-date').value = poSlashDate(doc.createdAt);
+  },
+  onReset() {
+    smEditing.sr = null;
+    smLevels.sr = null;
+    const today = todayInputValue();
+    byId('sr-date').value = today;
+    const required = new Date(`${today}T00:00:00`);
+    required.setDate(required.getDate() + 7);            // a week to collect, by default
+    byId('sr-required').value = `${required.getFullYear()}-${String(required.getMonth() + 1).padStart(2, '0')}-${String(required.getDate()).padStart(2, '0')}`;
+    byId('sr-type').value = 'Sales Order';
+    byId('sr-created-by').value = smUser();
+    byId('sr-created-date').value = poSlashDate(today);
+  },
+  init(form) {
+    byId('sr-form').addEventListener('input', event => {
+      if (['sr-warehouse', 'sr-required', 'sr-date'].includes(event.target.id) || event.target.dataset.field === 'quantity') form.refresh();
+    });
+  },
+});
+
 /* ---------- Purchase Entry (Transaction Entry, PUR-0001) ----------
    A supplier's bill recorded in the books: Supplier (+ New makes one in the Supplier master), the supplier's own
    invoice number, the purchase order and / or GRN it is for (a pick fills the supplier, currency and lines), the
@@ -10076,7 +10480,7 @@ const seForm = createPurchaseForm({
   },
 });
 
-const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm];
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm, saForm, stForm, srForm];
 
 /* ---------- GRN line: rejection reason and Stock Transfer ----------
    Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
@@ -10417,7 +10821,7 @@ function purchaseList(spec) {
     key: spec.key, route: spec.route, newRoute: `#/${spec.route}/new`, noun: spec.noun, nouns: spec.nouns,
     api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
     dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind), viewTitle: () => spec.noun,
-    noView: ['pr', 'rfq', 'po', 'grn'].includes(spec.key),      // the Purchase Book lists: Edit, PDF, Delete (no View)
+    noView: true,      // only the Masters lists have View; documents: Edit, PDF, Delete (Enter on a row edits it)
     columns: spec.columns, fromApi: spec.fromApi, sample: {},
     importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
     importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
@@ -10688,6 +11092,80 @@ const tiList = salesList({
   fromApi: r => ({ advancePayment: pbAmount(r.advancePayment) }),
 });
 
+const saList = purchaseList({
+  key: 'sa', route: 'supply/stock-adjustment', noun: 'Stock Adjustment', nouns: 'Stock Adjustments', api: 'api/stock-adjustments.php',
+  kind: 'simple', form: saForm, dateOf: record => record.adjustmentDate,
+  columns: [
+    { key: 'code', label: 'Adjustment ID', type: 'code', group: 'Adjustment' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Adjustment' },
+    { key: 'warehouseName', label: 'Stock Point', type: 'name', group: 'Adjustment' },
+    { key: 'itemCount', label: 'Items', type: 'qty', group: 'Adjustment' },
+    { key: 'netQuantity', label: 'Net Qty', type: 'qty', group: 'Adjustment' },
+    { key: 'totalValue', label: 'Adj. Value', type: 'qty-ok', group: 'Adjustment' },
+    detail({ key: 'reason', label: 'Reason', group: 'Approval' }),
+    detail({ key: 'requestedBy', label: 'Requested By', group: 'Approval' }),
+    detail({ key: 'approvedBy', label: 'Approved By', group: 'Approval' }),
+  ],
+  fromApi: r => ({ ...r, date: r.adjustmentDate, totalValue: pbAmount(r.totalValue) }),
+  importColumns: [{ key: 'adjustmentDate', label: 'Adjustment Date', headers: ['date'], read: readSheetDate('Adjustment date') },
+    { key: 'stockPoint', label: 'Stock Point', headers: ['warehouse', 'stock point name'] },
+    ...PB_IMPORT_ITEM, { key: 'quantity', label: 'Physical Qty', headers: ['physical', 'counted', 'qty', 'quantity'], read: readSheetNumber('Physical Qty') },
+    pbImportRemarks],
+  importSamples: [{ docNo: '1', adjustmentDate: '2026-11-20', stockPoint: 'Muscat Main Warehouse', itemName: 'GATE VALVE 2"', quantity: '8' }],
+  importHeader: async g => ({ adjustmentDate: g.adjustmentDate, warehouseId: await importLookupId('warehouse', g.stockPoint), reason: 'Physical Count Difference' }),
+  importLine: line => ({ quantity: line.quantity || '0', systemQty: '0', unitCost: '0' }),
+});
+
+const stList = purchaseList({
+  key: 'st', route: 'supply/stock-transfer', noun: 'Stock Transfer', nouns: 'Stock Transfers', api: 'api/stock-transfers.php',
+  kind: 'simple', form: stForm, dateOf: record => record.transferDate,
+  columns: [
+    { key: 'code', label: 'Transfer ID', type: 'code', group: 'Transfer' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Transfer' },
+    { key: 'fromWarehouseName', label: 'From', type: 'name', group: 'Transfer' },
+    { key: 'toWarehouseName', label: 'To', type: 'name', group: 'Transfer' },
+    { key: 'itemCount', label: 'Items', type: 'qty', group: 'Transfer' },
+    { key: 'totalQty', label: 'Total Qty', type: 'qty', group: 'Transfer' },
+    { key: 'grandTotal', label: 'Grand Total', type: 'qty-ok', group: 'Transfer' },
+    detail({ key: 'expectedDate', label: 'Expected Date', group: 'Transfer' }),
+    detail({ key: 'transferReason', label: 'Transfer Reason', group: 'Transfer' }),
+  ],
+  fromApi: r => ({ ...r, date: r.transferDate, grandTotal: pbAmount(r.grandTotal), expectedDate: r.expectedDate || '' }),
+  importColumns: [{ key: 'transferDate', label: 'Transfer Date', headers: ['date'], read: readSheetDate('Transfer date') },
+    { key: 'from', label: 'From Stock Point', headers: ['from', 'source'] }, { key: 'to', label: 'To Stock Point', headers: ['to', 'destination'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit, { key: 'unitCost', label: 'Unit Cost', headers: ['cost', 'rate'], read: readSheetNumber('Unit Cost') },
+    pbImportRemarks],
+  importSamples: [{ docNo: '1', transferDate: '2026-11-20', from: 'Muscat Main Warehouse', to: 'Sohar Branch', itemName: 'GATE VALVE 2"', quantity: '5', unit: 'Pieces', unitCost: '12.500' }],
+  importHeader: async g => ({ transferDate: g.transferDate, fromWarehouseId: await importLookupId('warehouse', g.from), toWarehouseId: await importLookupId('warehouse', g.to) }),
+  importLine: line => ({ quantity: line.quantity || '1', unitCost: line.unitCost || '0' }),
+});
+
+const srList = purchaseList({
+  key: 'sr', route: 'supply/stock-reservation', noun: 'Stock Reservation', nouns: 'Stock Reservations', api: 'api/stock-reservations.php',
+  kind: 'simple', form: srForm, dateOf: record => record.reservationDate,
+  columns: [
+    { key: 'code', label: 'Reservation ID', type: 'code', group: 'Reservation' },
+    { key: 'date', label: 'Date', type: 'mono', group: 'Reservation' },
+    { key: 'reservationType', label: 'Type', type: 'pill', group: 'Reservation' },
+    { key: 'name', label: 'Customer', type: 'name', group: 'Reservation' },
+    { key: 'warehouseName', label: 'Stock Point', type: 'name', group: 'Reservation' },
+    { key: 'requiredDate', label: 'Required Date', type: 'mono', group: 'Reservation' },
+    { key: 'totalQty', label: 'Reserved Qty', type: 'qty-ok', group: 'Reservation' },
+    detail({ key: 'status', label: 'Status', group: 'Reservation' }),
+    detail({ key: 'referenceNo', label: 'Reference Number', group: 'Reservation' }),
+    detail({ key: 'createdBy', label: 'Created By', group: 'Reservation' }),
+  ],
+  fromApi: r => ({ ...r, date: r.reservationDate, warehouseName: r.warehouseName || 'All stock points' }),
+  importColumns: [{ key: 'reservationDate', label: 'Reservation Date', headers: ['date'], read: readSheetDate('Reservation date') },
+    { key: 'requiredDate', label: 'Required Date', headers: ['required', 'required by'], read: readSheetDate('Required date') },
+    { key: 'customer', label: 'Customer', headers: ['customer name', 'client'] }, { key: 'referenceNo', label: 'Reference Number', headers: ['reference', 'ref'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit, pbImportRemarks],
+  importSamples: [{ docNo: '1', reservationDate: '2026-11-20', requiredDate: '2026-11-27', customer: 'AL NOOR TRADING', itemName: 'GATE VALVE 2"', quantity: '4', unit: 'Pieces' }],
+  importHeader: async g => ({ reservationDate: g.reservationDate, requiredDate: g.requiredDate, referenceNo: g.referenceNo,
+    customerId: g.customer ? await importLookupId('customer', g.customer) : null }),
+  importLine: line => ({ quantity: line.quantity || '1' }),
+});
+
 const peList = purchaseList({
   key: 'pe', route: 'entry/purchase-entry', noun: 'Purchase Entry', nouns: 'Purchase Entries', api: 'api/purchase-entries.php',
   kind: 'po', form: peForm, lookups: ['purchaseorder', 'grn'], dateOf: record => record.purchaseDate,
@@ -10748,7 +11226,7 @@ const seList = purchaseList({
   importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: '0', discountPct: '0' }),
 });
 
-const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList];
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList, saList, stList, srList];
 
 /* ---------- The company letterhead behind every printed page ----------
    The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
@@ -10894,7 +11372,9 @@ function letterheadBands(source, width, height) {
    details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
 const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note',
-  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice' };
+  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice',
+  sa: 'Stock Adjustment', st: 'Stock Transfer', sr: 'Stock Reservation' };
+const SUPPLY_KEYS = ['sa', 'st', 'sr'];                  // Supply Management documents (company and stock points, no supplier)
 const SALES_KEYS = ['qt', 'so', 'dn', 'ti', 'se'];       // documents to a customer (Trade Management, Sales Entry)
 let companyProfilePromise = null;
 function companyProfile() {
@@ -10963,12 +11443,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
         : { label: 'Suppliers', name: `${(doc.suppliers || []).length} Suppliers`, lines: (doc.suppliers || []).map((s, i) => `${i + 1}. ${s.name}`) },
       meta: [['RFQ No', doc.code], ['Request Date', pbDate(doc.requestDate)], ['Submission Deadline', pbDate(doc.submissionDeadline)]],   // the PR stays internal
     }),
+    // Purchase Order: Buyer | Supplier (no e-mail), then PO ID · PO Date · RFQ Ref · Payment Mode over Delivery Terms |
+    // Delivery To, always in the same places (a blank one shows "—").
     po: () => ({
-      party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier, doc.contactName, doc.contactNumber) },
-      meta: [['PO No', doc.code], ['PO Date', pbDate(doc.poDate)], ['Quotation No', doc.quotationNumber], ['Delivery Date', pbDate(doc.deliveryDate)],
-        ['Currency', doc.currency], ['Delivery Location', doc.deliveryLocation], ['Delivery Terms', doc.deliveryTerms], ['Payment Mode', doc.paymentMode],
-        ...(doc.creditPeriod ? [['Credit Period', doc.creditPeriod]] : []),
-        ['Reference', doc.purchaseRequestCode || doc.quotationRequestCode], ['Salesman / Created By', doc.salesman], ['Salesman Contact', doc.salesmanContact]],
+      party: { label: 'Supplier', name: doc.supplierName,
+        lines: supplierLines(supplier, doc.contactName, doc.contactNumber).filter(line => !Array.isArray(line) || line[0] !== 'E-mail') },
+      poGrid: [['PO ID', doc.code, 'id'], ['PO Date', poSlashDate(doc.poDate)], ['RFQ Ref', doc.quotationNumber || doc.quotationRequestCode, 'id'],
+        ['Payment Mode', [doc.paymentMode, doc.paymentMode === 'Credit' && doc.creditPeriod].filter(Boolean).join(' · ')],
+        ['Delivery Terms', doc.deliveryTerms, 'wide'], ['Delivery To', doc.deliveryLocation, 'wide']],
+      meta: [],
     }),
     // Goods Received Note (view_grn_pdf design): Buyer / Receiver beside Supplier / Vendor, then GRN ID · GRN Date · PO Ref · Stock Point.
     // Goods Received Note: Buyer / Receiver over Supplier / Vendor on the left; GRN ID, GRN Date and the supplier's
@@ -11011,6 +11494,28 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['Purchase No', doc.code], ['Purchase Date', poSlashDate(doc.purchaseDate)], ['Supplier Inv No', doc.supplierInvoiceNo],
         ['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode], ['Currency', doc.currency]],
     }),
+    // Supply Management: the company beside the stock point (adjustment), both stock points (transfer) or the
+    // customer (reservation).
+    sa: () => ({
+      buyerLabel: 'Company',
+      party: { label: 'Stock Point', name: doc.warehouseName, lines: [['Code', doc.warehouseCode]] },
+      meta: [['Adjustment ID', doc.code], ['Date', poSlashDate(doc.adjustmentDate)], ['Status', doc.status],
+        ['Reason', doc.reason], ['Requested By', doc.requestedBy], ['Approved By', doc.approvedBy]],
+    }),
+    st: () => ({
+      buyerLabel: 'Company',
+      party: { label: 'Stock Points', name: '', lines: [['From', [doc.fromWarehouseCode, doc.fromWarehouseName].filter(Boolean).join(' · ')],
+        ['To', [doc.toWarehouseCode, doc.toWarehouseName].filter(Boolean).join(' · ')]] },
+      meta: [['Transfer ID', doc.code], ['Transfer Date', poSlashDate(doc.transferDate)], ['Expected Date', poSlashDate(doc.expectedDate)],
+        ['Transfer Reason', doc.transferReason]],
+    }),
+    sr: () => ({
+      buyerLabel: 'Company',
+      party: { label: 'Customer', name: doc.customerName, lines: [] },
+      meta: [['Reservation ID', doc.code], ['Reservation Date', poSlashDate(doc.reservationDate)], ['Reservation Type', doc.reservationType],
+        ['Reference Number', doc.referenceNo], ['Stock Point', doc.warehouseName || 'All stock points'], ['Required Date', poSlashDate(doc.requiredDate)],
+        ['Created By', doc.createdBy]],
+    }),
     // The same for a sale: the customer as Buyer; Sales No · Sales Date · Customer PO / Ref No over Tax Invoice Ref ·
     // Delivery Note Ref · Currency.
     se: () => ({
@@ -11023,6 +11528,9 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
   const qty = value => pbQty(pbNum(value));
+  // The line's discount as a percent (the saved one, else worked out from the amount).
+  const poDiscPct = l => (l.discountPct != null && l.discountPct !== '' ? pbNum(l.discountPct)
+    : pbNum(l.quantity) * pbNum(l.price) > 0 ? pbNum(l.discountAmount) / (pbNum(l.quantity) * pbNum(l.price)) * 100 : 0);
   const grnMoney = value => pbNum(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 12,946.500
   const columns = [
     [['grn', 'pe', 'se'].includes(spec.key) ? '#' : 'SL.NO', 'sno', (l, i) => i + 1],
@@ -11032,7 +11540,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
         [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
-        ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Disc.', 'num', l => pbAmount(l.discountAmount)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+        ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`], ['Disc %', 'num', l => `${poDiscPct(l).toFixed(2)}%`], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
@@ -11043,7 +11551,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // A purchase entry: quantity × rate, no VAT or line discount.
     pe: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
       [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
-    }[spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.kind],
+    // Supply Management.
+    sa: [['System Qty', 'num', l => qty(l.systemQty)], ['Physical Qty', 'num', l => qty(l.quantity)],
+      ['Difference', 'num', l => { const d = pbNum(l.quantity) - pbNum(l.systemQty); return d > 0.0005 ? `+${pbQty(d)}` : pbQty(d); }],
+      ['Unit Cost', 'num', l => pbAmount(l.unitCost)], ['Adj. Value', 'num total', l => pbAmount((pbNum(l.quantity) - pbNum(l.systemQty)) * pbNum(l.unitCost))]],
+    st: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'center', l => l.unit], ['Unit Cost', 'num', l => pbAmount(l.unitCost)],
+      ['Total', 'num total', l => pbAmount(pbNum(l.quantity) * pbNum(l.unitCost))]],
+    sr: [['Reserved Qty', 'num', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
+    }[SUPPLY_KEYS.includes(spec.key) ? spec.key : spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
@@ -11114,6 +11629,15 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   } else {
     box.append(parties);
   }
+  if (layout.poGrid) {
+    const grid = el('dl', 'ps-pogrid');
+    for (const [label, value, kind] of layout.poGrid) {
+      const item = el('div', `ps-pogrid-item${kind ? ` is-${kind}` : ''}`);
+      item.append(el('dt', '', label), cell('dd', '', value));
+      grid.append(item);
+    }
+    box.append(grid);
+  }
   const metaGrid = el('dl', 'ps-meta');
   layout.meta = layout.meta.filter(filledPair);
   const count = layout.meta.length;
@@ -11140,7 +11664,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   parts.push(box);
 
   parts.push(el('div', 'ps-section-title', { pr: 'Requested Items', rfq: 'Requested Items', po: 'Ordered Items', grn: 'Received & Accepted Items',
-    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items', ti: 'Invoiced Items', pe: 'Ordered Items', se: 'Sold Items' }[spec.key]));
+    qt: 'Quoted Items', so: 'Ordered Items', dn: 'Delivered Items', ti: 'Invoiced Items', pe: 'Ordered Items', se: 'Sold Items',
+    sa: 'Adjusted Items', st: 'Transferred Items', sr: 'Reserved Items' }[spec.key]));
   const table = el('table', `ps-table ps-table-${spec.kind}${noPrices ? ' ps-table-noprices' : ''}${spec.key === 'po' ? ' ps-table-pdoc' : ''}`);
   const thead = el('thead');
   const headRow = el('tr');
@@ -11159,10 +11684,20 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     if (term) nameCell.append(el('div', 'ps-make', `Delivery: ${term}`));
     const transfers = (line.transfers || []).filter(t => pbNum(t.quantity) > 0);
     if (spec.key === 'grn' && transfers.length) {
+      // Under the item name: "↳ Stock Transfer: 2 BOX to [SOHAR STORE (WH-2026-0002)]", one line per stock point.
+      for (const t of transfers) {
+        const note = el('div', 'ps-transfer-note');
+        const point = t.warehouseName && t.warehouseCode ? `${t.warehouseName} (${t.warehouseCode})` : t.warehouseName || t.warehouseCode;
+        note.append(el('span', 'ps-transfer-label', '↳ Stock Transfer:'), el('b', '', ` ${qty(t.quantity)}`),
+          el('span', 'ps-transfer-label', ` ${String(line.unit || '').trim()} to`.replace(/\s+to$/, ' to')), el('span', 'ps-transfer-pill', point));
+        nameCell.append(note);
+      }
+      // Under the accepted quantity: a small "WH-2026-0002 : 2" tag per stock point.
       const list = el('div', 'ps-transfers');
       for (const t of transfers) list.append(el('div', 'ps-transfer', `${t.warehouseCode || t.warehouseName} : ${qty(t.quantity)}`));
       const qtyCell = tr.querySelector('.ps-c-qty');
-      qtyCell.replaceChildren(el('div', 'ps-qty-main', qtyCell.textContent), list);   // the accepted quantity, the transfers under it
+      qtyCell.replaceChildren(el('div', 'ps-qty-main', qtyCell.textContent), list);
+      table.classList.add('has-transfers');            // the Qty column widens to fit the tags
     }
     tbody.append(tr);
   });
@@ -11184,10 +11719,10 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     }
     side.append(remarks);
   }
-  if ((spec.key === 'po' || spec.key === 'qt') && (doc.certifications || []).length) {
+  if (spec.key === 'po' || (spec.key === 'qt' && (doc.certifications || []).length)) {   // the PO always has the box: N/A when none
     const certification = el('div', 'ps-remarks ps-certification');
     certification.append(el('div', 'ps-label', 'Certification Required'),
-      el('div', 'ps-remarks-text', doc.certifications.join(', ')));
+      el('div', 'ps-remarks-text', (doc.certifications || []).join(', ') || 'N/A'));
     side.append(certification);
   }
   if (side.childElementCount) bottom.append(side);
@@ -11196,6 +11731,21 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const row = el('div', 'ps-total-grand');
     row.append(el('dt', '', 'Total Number of Items:'), el('dd', '', String(doc.items.length)));
     totals.append(row);
+    bottom.append(totals);
+  } else if (SUPPLY_KEYS.includes(spec.key)) {
+    const totals = el('dl', 'ps-totals');
+    const lines = doc.items || [];
+    const rowsOut = {
+      sa: [['Total Items', String(lines.length)], ['Net Quantity Change', (() => { const n = pbNum(doc.netQuantity); return n > 0.0005 ? `+${pbQty(n)}` : pbQty(n); })()],
+        ['Grand Total', pbAmount(doc.totalValue), true]],
+      st: [['Total Items', String(lines.length)], ['Total Quantity', pbQty(pbNum(doc.totalQty))], ['Grand Total', pbAmount(doc.grandTotal), true]],
+      sr: [['Total Items', String(lines.length)], ['Total Reserved Quantity', pbQty(pbNum(doc.totalQty)), true]],
+    }[spec.key];
+    for (const [label, value, strong] of rowsOut) {
+      const row = el('div', strong ? 'ps-total-grand' : '');
+      row.append(el('dt', '', `${label}:`), el('dd', '', value));
+      totals.append(row);
+    }
     bottom.append(totals);
   } else if (spec.key === 'grn') {
     const totals = el('dl', 'ps-totals ps-grn-totals');
@@ -11256,12 +11806,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     : '';
   const sealSrc = doc.attachSeal ? await companySealImage() : null;
   if (!stillWanted()) return;
-  if (sealSrc && !termsText) {             // a quotation with terms: the seal only under the terms, not here too
-    const seal = el('img', 'ps-seal');
-    seal.alt = 'Company seal';
-    loading.push(imageLoaded(seal));
-    seal.src = sealSrc;
-    foot.append(seal);
+  // Attach Seal: the seal on every page, at its foot on the right above the letterhead's footer (added with the
+  // letterhead below; printed it is fixed, so the browser repeats it; on screen fitPreviewPages repeats it).
+  let pageSeal = null;
+  if (sealSrc) {
+    pageSeal = el('img', 'ps-seal ps-page-seal');
+    pageSeal.alt = 'Company seal';
+    loading.push(imageLoaded(pageSeal));
+    pageSeal.src = sealSrc;
   }
   if (foot.childElementCount) parts.push(foot);
 
@@ -11282,13 +11834,6 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const termsCell = el('td', 'ps-body ps-terms');
     termsCell.append(el('div', 'ps-terms-title', 'General Terms & Conditions'),
       renderQuotationTerms(termsText, { validity, currency: currencyName ? `${currencyName} (${currencyCode})` : currencyCode }));
-    if (sealSrc) {                         // Attach Seal: on a quotation, only here (not on the first page as well)
-      const termsSeal = el('img', 'ps-seal ps-terms-seal');
-      termsSeal.alt = 'Company seal';
-      loading.push(imageLoaded(termsSeal));
-      termsSeal.src = sealSrc;
-      termsCell.append(termsSeal);
-    }
     termsRow.append(termsCell);
     frameBody.append(termsRow);
   }
@@ -11297,6 +11842,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   sheet.classList.toggle('has-letterhead', Boolean(letterhead));
   sheet.classList.toggle('ps-po', procurement);   // the procurement look (bold capital values, totals box): PO and GRN
   sheet.classList.toggle('ps-grn', spec.key === 'grn');
+  sheet.classList.toggle('has-seal', Boolean(pageSeal));   // each page keeps room for the seal at its foot
+  sheet.classList.toggle('ps-pdoc', spec.key === 'po');   // the Purchase Order design
   sheet.style.setProperty('--ps-top', `${((letterhead?.top ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-bottom', `${((letterhead?.bottom ?? 0.05) * 297).toFixed(1)}mm`);
   sheet.style.setProperty('--ps-side', `${((letterhead?.side ?? 0.06) * 210).toFixed(1)}mm`);
@@ -11307,6 +11854,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     back.src = letterhead.src;
     sheetParts.unshift(back);
   }
+  if (pageSeal) sheetParts.push(pageSeal);
   sheet.replaceChildren(...sheetParts);
   await Promise.all(loading);
   if (screen) fitPreviewPages(sheet, letterhead);
@@ -11319,7 +11867,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
 // new page. Then the sheet is as tall as its whole pages, with the letterhead and a gap on each.
 function fitPreviewPages(sheet, letterhead) {
   sheet.style.minHeight = '';
-  for (const node of sheet.querySelectorAll('.pv-break, .pv-repeat-head, .pv-page-gap, .ps-letterhead[data-page]')) node.remove();
+  for (const node of sheet.querySelectorAll('.pv-break, .pv-repeat-head, .pv-page-gap, .ps-letterhead[data-page], .ps-page-seal[data-page]')) node.remove();
   const sheetTop = () => sheet.getBoundingClientRect().top;
   const pageHeight = sheet.getBoundingClientRect().width * 297 / 210;
   const topSpace = sheet.querySelector('.ps-space-top')?.offsetHeight || 0;
@@ -11393,6 +11941,14 @@ function fitPreviewPages(sheet, letterhead) {
     gap.style.top = `${page * 297}mm`;
     gap.setAttribute('aria-hidden', 'true');
     sheet.append(gap);
+  }
+  // The seal (Attach Seal) at the foot of every page.
+  const seal = sheet.querySelector('.ps-page-seal:not([data-page])');
+  for (let page = 1; seal && page < pages; page++) {
+    const copy = seal.cloneNode();
+    copy.dataset.page = String(page);
+    copy.style.setProperty('--ps-page', String(page));
+    seal.after(copy);
   }
   const first = sheet.querySelector('.ps-letterhead');
   if (!letterhead || !first) return;

@@ -1639,9 +1639,9 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-link:hover { text-decoration: underline; }
 .pb-link:disabled { color: var(--ink-400); cursor: default; text-decoration: none; }
 .pb-seal-name { font-size: 11px; color: var(--ink-500); }
-.pb-seal-preview { display: none; align-self: flex-start; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted); }
+.pb-seal-preview { display: none; align-self: flex-start; padding: 0; border: 0; background: transparent; }
 .pb-print-box:has([data-print-field="attachSeal"]:checked) .pb-seal-preview:not([hidden]) { display: block; }
-.pb-seal-preview img { display: block; width: 96px; height: 96px; object-fit: contain; }
+.pb-seal-preview img { display: block; width: 140px; height: 90px; object-fit: contain; }
 
 /* Remarks beside the Summary (Purchase Order, GRN) */
 .pb-pair-summary { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
@@ -1873,6 +1873,7 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-frame > thead > tr > td, .ps-frame > tfoot > tr > td { padding: 0; }
 .ps-space-top { height: var(--ps-top, 14mm); }
 .ps-space-bottom { height: var(--ps-bottom, 14mm); }
+.has-seal .ps-space-bottom { height: calc(var(--ps-bottom, 14mm) + 34mm); }   /* Attach Seal: room for it at each page's foot */
 .ps-body { padding: 0 var(--ps-side, 12mm); vertical-align: top; }
 
 .ps-brand { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 2px solid #0f172a; }
@@ -1946,7 +1947,12 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-terms-list p { margin: 0 0 7px; break-inside: avoid; }
 .ps-terms-list strong { font-weight: 700; color: #0f172a; }
 .ps-terms-list .ps-term-gap { margin-top: 16px; }
-.ps-terms-seal { display: block; margin: 24px 0 0 auto; }
+/* Attach Seal: on every page, bottom right above the letterhead's footer (transparent, over the page). */
+.ps-page-seal { width: 44mm; height: 30mm; margin: 0; object-fit: contain; pointer-events: none; z-index: 2; }
+.pv-sheet .ps-page-seal {
+  position: absolute; right: var(--ps-side, 12mm);
+  top: calc((var(--ps-page, 0) + 1) * 297mm - var(--ps-bottom, 14mm) - 32mm);
+}
 
 .print-sheet { display: none; }
 @media print {
@@ -1955,6 +1961,7 @@ dialog.pv::backdrop { background: #eef2f6; }
   body.is-printing > :not(#pb-print-sheet) { display: none !important; }
   body.is-printing .print-sheet { display: block; position: relative; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-sheet .ps-letterhead { position: fixed; top: 0; left: 0; z-index: 0; width: 210mm; height: 297mm; object-fit: fill; }
+  .print-sheet .ps-page-seal { position: fixed; right: var(--ps-side, 12mm); bottom: calc(var(--ps-bottom, 14mm) + 2mm); }
 }
 
 /* ---------- List page keyboard highlight (every Masters and Purchase Book list) ----------
@@ -2111,6 +2118,9 @@ body:is([data-page="ti"], [data-page="ti-list"], [data-page="pe"], [data-page="p
 .qi .fp-input { height: 40px; font-size: 13px; }
 .qi-error { grid-column: 1 / -1; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12px; font-weight: 600; }
 .qi-foot { justify-content: flex-end; }
+/* Create Item in the page's colour: Purchase Book green, Trade blue, Transaction Entry teal, Supply Management orange. */
+.qi .ml-btn-green { background: var(--accent, #16a34a); }
+.qi .ml-btn-green:hover { background: var(--accent-hover, #15803d); }
 .qi-keys { margin-right: auto; font-size: 11px; color: var(--ink-500); }
 .qi-keys kbd { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-muted); font-family: var(--font-mono); font-size: 10px; }
 @media (max-width: 520px) { .qi-body { grid-template-columns: minmax(0, 1fr); } .qi-keys { display: none; } }
@@ -2465,6 +2475,27 @@ input::-webkit-contacts-auto-fill-button {
 :is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .idp .ml-btn-green:hover { background: #0e7490; }
 :is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green { background: #0891b2; }
 :is(body[data-page="ti"], body[data-page="pe"], body[data-page="se"]) .qs .ml-btn-green:hover { background: #0e7490; }
+/* The same popups on the Supply Management pages (Stock Adjustment, Transfer, Reservation), in their orange. */
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp {
+  --tone-green-bg: #fff7ed; --tone-green-line: #fed7aa; --tone-green-ink: #9a3412;
+}
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-icon { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-card-title { border-left-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name:not([readonly]) { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .15); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mini:hover { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mini[aria-pressed="true"] { background: #ea580c; border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-mode > span { color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-editor { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .12); }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-tool:hover { border-color: #ea580c; background: #fff7ed; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-tool:focus { border-color: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-unit-input:focus { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, .2); background: #fff7ed; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp-rich:focus { background: #fffaf5; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp .ml-btn-green { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .idp .ml-btn-green:hover { background: #c2410c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .qs .ml-btn-green { background: #ea580c; }
+:is(body[data-page="sa"], body[data-page="st"], body[data-page="sr"]) .qs .ml-btn-green:hover { background: #c2410c; }
 
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }
@@ -2527,6 +2558,53 @@ input::-webkit-contacts-auto-fill-button {
 .ps-po-totals .ps-total-grand dd { font-size: 17px; font-weight: 800; color: #15803d; }
 /* Certification Required: a line under its title. */
 .ps-table-pdoc ~ .ps-bottom .ps-certification .ps-label { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+/* ---------- Purchase Order PDF (.ps-pdoc), the final design ----------
+   Buyer (46%) | Supplier; PO ID · PO Date | RFQ Ref · Payment Mode; Delivery Terms | Delivery To; the Item Name edge
+   continues the Buyer | Supplier line; Certification Required beside the totals, the same height. */
+.ps-pdoc .ps-docbox { border-color: #e2e8f0; background: rgba(255, 255, 255, .94); }
+.ps-pdoc .ps-parties { grid-template-columns: 46.2% minmax(0, 1fr); }
+.ps-pdoc .ps-party { padding: 12px 14px 14px; }
+.ps-pdoc .ps-party + .ps-party { border-left-color: #e2e8f0; }
+.ps-pdoc .ps-party > .ps-label { font-size: 9px; font-weight: 700; letter-spacing: .06em; color: #8a94a6; }
+.ps-pdoc .ps-party-name { margin: 6px 0 8px; font-size: 13.5px; font-weight: 800; color: #0f172a; }
+.ps-pdoc .ps-party-lines { grid-template-columns: 102px minmax(0, 1fr); column-gap: 0; font-size: 10.5px; font-weight: 400; line-height: 1.55; color: #1e293b; }
+.ps-pdoc .ps-party-text { margin-bottom: 4px; }
+.ps-pogrid { display: grid; grid-template-columns: 23.1% 23.1% minmax(0, 1fr) minmax(0, 1fr); margin: 0; border-top: 1px solid #e2e8f0; }
+.ps-pogrid-item { padding: 10px 14px 11px; border-left: 1px solid #e2e8f0; }
+.ps-pogrid-item:nth-child(1), .ps-pogrid-item:nth-child(5) { border-left: 0; }
+.ps-pogrid-item.is-wide { grid-column: span 2; border-top: 1px solid #e2e8f0; }
+.ps-pogrid-item dt { margin-bottom: 4px; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a94a6; }
+.ps-pogrid-item dd { margin: 0; overflow-wrap: anywhere; font-size: 11.5px; font-weight: 800; color: #0f172a; }
+.ps-pogrid-item.is-id dd { font-family: var(--ps-mono); font-weight: 700; }
+.ps-pogrid-item.is-wide dd { text-transform: none; }
+.ps-pogrid-item:nth-child(5) dd { text-transform: uppercase; }      /* Delivery Terms in capitals */
+.ps-pdoc .ps-section-title { margin: 22px 0 18px; font-size: 11px; font-weight: 800; letter-spacing: .03em; }
+.ps-pdoc .ps-table { border-color: #e2e8f0; }
+.ps-pdoc .ps-table th { padding: 9px 8px; border-color: #dbe4ef; background: #eaf2fc; font-size: 9px; font-weight: 800; letter-spacing: .06em; line-height: 1.3; color: #0f172a; white-space: nowrap; }
+.ps-pdoc .ps-table td { padding: 8px 8px; border-color: #e2e8f0; font-size: 10.5px; line-height: 1.3; color: #1e293b; }
+.ps-pdoc .ps-table td.ps-c-name { font-weight: 500; color: #0f172a; }
+.ps-pdoc .ps-table td.ps-c-sno { font-family: var(--font-ui); font-weight: 400; color: #1e293b; }
+.ps-pdoc .ps-table td.ps-c-total { font-weight: 800; color: #0f172a; }
+.ps-pdoc .ps-table th:nth-child(1) { width: 7%; text-align: center; }
+.ps-pdoc .ps-table th:nth-child(2) { width: 39.2%; }
+.ps-pdoc .ps-table th:nth-child(3) { width: 5.9%; }
+.ps-pdoc .ps-table th:nth-child(4) { width: 8.7%; }
+.ps-pdoc .ps-table th:nth-child(5) { width: 11.8%; }
+.ps-pdoc .ps-table th:nth-child(6) { width: 8%; }
+.ps-pdoc .ps-table th:nth-child(7) { width: 8.1%; }
+.ps-pdoc .ps-table th:nth-child(8) { width: 11.3%; }
+.ps-pdoc .ps-bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 19px; margin-top: 20px; align-items: stretch; }
+.ps-pdoc .ps-side { grid-template-rows: auto; align-content: stretch; }
+.ps-pdoc .ps-side > .ps-remarks { padding: 14px 16px; border-color: #e2e8f0; border-radius: 13px; background: rgba(255, 255, 255, .7); }
+.ps-pdoc .ps-side > .ps-remarks .ps-label { padding-bottom: 9px; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #475569; }
+.ps-pdoc .ps-side > .ps-remarks .ps-remarks-text { font-size: 10.5px; font-weight: 400; color: #1e293b; }
+.ps-pdoc .ps-po-totals { padding: 14px 16px !important; border-radius: 13px !important; }
+.ps-pdoc .ps-po-totals > div { padding: 4px 0 !important; }
+.ps-pdoc .ps-po-totals dt { font-size: 11.5px !important; font-weight: 400 !important; color: #334155 !important; }
+.ps-pdoc .ps-po-totals dd { font-size: 12px; color: #0f172a; }
+.ps-pdoc .ps-po-totals .ps-total-grand { margin-top: 10px; padding: 14px 14px !important; border-color: #a7e3c4 !important; border-radius: 10px; background: #edf9f2; }
+.ps-pdoc .ps-po-totals .ps-total-grand dt { font-size: 11px !important; font-weight: 800 !important; letter-spacing: .02em; color: #0f7a55 !important; }
+.ps-pdoc .ps-po-totals .ps-total-grand dd { font-size: 19.5px; letter-spacing: .02em; color: #0f7a55; }
 .ps-table-grn th:first-child, .ps-table-grn td:first-child { width: 5.3%; text-align: center; }
 .ps-table-grn th.ps-c-name { width: 39.7%; }
 .ps-table-grn th.ps-c-qty { width: 8.5% !important; }
@@ -2544,12 +2622,31 @@ input::-webkit-contacts-auto-fill-button {
 .ps-table-grn th.ps-c-center, .ps-table-grn td.ps-c-center { width: 56px; }
 .ps-table-grn td.ps-c-center { font-family: inherit; font-size: 10px; text-transform: uppercase; }
 .ps-table-grn td.ps-c-total { font-weight: 800; }
-.ps-transfers { display: inline-block; margin-top: 4px; padding-top: 3px; border-top: 1px solid #cbd5e1; text-align: left; }
-.ps-transfer {
-  display: flex; align-items: center; gap: 4px; margin-top: 2px; font-family: var(--ps-mono); font-size: 8.5px; font-weight: 800;
-  line-height: 1; letter-spacing: -.2px; color: #0f172a;
+/* GRN stock transfers: a blue line under the item name ("↳ Stock Transfer: 2 BOX to [SOHAR STORE (WH-2026-0002)]")
+   and a small tag per stock point under the accepted quantity; the Qty column is wider on such a GRN. */
+.ps-transfer-note { margin-top: 3px; font-size: 8.5px; font-weight: 600; line-height: 1.5; text-transform: none; color: #0284c7; }
+.ps-transfer-note b { font-weight: 800; color: #0f172a; }
+.ps-transfer-pill {
+  display: inline-block; margin-left: 3px; padding: 0 6px; border: 1px solid #93c5fd; border-radius: 5px; background: #eff6ff;
+  font-size: 8px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: #0369a1; white-space: nowrap;
 }
-.ps-transfer::before { content: ''; flex: none; width: 2.5px; height: 10px; border-radius: 1px; background: #0284c7; }
+.ps-qty-main { line-height: 1.2; }
+.ps-transfers { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; }
+.ps-transfer {
+  display: inline-block; padding: 1px 5px; border: 1px solid #93c5fd; border-radius: 4px; background: #eff6ff;
+  font-family: var(--ps-mono); font-size: 7px; font-weight: 800; line-height: 1.3; white-space: nowrap; color: #0369a1;
+}
+/* With transfers: # + Item Name stay 45% (the box's middle line continues down the Item Name edge); the Qty column
+   is wider for the tags, the others give way. */
+.ps-table-grn.has-transfers th.ps-c-name { width: 39.7% !important; }
+.ps-table-grn.has-transfers th.ps-c-qty { width: 12.5% !important; }
+.ps-table-grn.has-transfers th.ps-c-center { width: 7.5% !important; }
+.ps-table-grn.has-transfers th.ps-c-num:not(.ps-c-total) { width: 12%; }
+.ps-table-grn.has-transfers th.ps-c-num:not(.ps-c-total) + th.ps-c-num:not(.ps-c-total) { width: 8.5%; }
+.ps-table-grn.has-transfers th.ps-c-total { width: 14.5%; }
+.ps-table-grn.has-transfers.ps-table-noprices th.ps-c-name { width: 73.2% !important; }
+.ps-table-grn.has-transfers.ps-table-noprices th.ps-c-qty { width: 13% !important; }
+.ps-table-grn.has-transfers.ps-table-noprices th.ps-c-center { width: 8.5% !important; }
 .ps-grn .ps-meta-item.is-ref dd { font-family: var(--ps-mono); color: #0284c7; text-transform: none; }
 .ps-grn .ps-total-discount dt, .ps-grn .ps-total-discount dd { color: #be123c; }
 /* Inspection Mode: one full-width box, "TOTAL NUMBER OF ITEMS:" and the count. */
@@ -2691,3 +2788,59 @@ input::-webkit-contacts-auto-fill-button {
 .pb-table-dn .pb-col-unit { width: 7%; }
 .pb-table-dn .pb-col-pct { width: 6%; }
 .pb-table-dn .pb-col-total { width: 8%; }
+
+/* ---------- Supply Management (Stock Adjustment, Stock Transfer, Stock Reservation): the Purchase Book orange ----------
+   Grey read-only figures (System / Available Qty, Difference, Adj. Qty), the typed quantity and the Item Name tinted,
+   a quantity more than the stock in red. */
+.pb-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .pb-grid-3 { grid-template-columns: minmax(0, 1fr); } }
+.fp-theme-supply .sm-readonly { background: var(--surface-muted, #f1f5f9); color: var(--ink-700, #334155); cursor: default; }
+.fp-theme-supply .pb-cell-name, .fp-theme-supply .sm-cell-key { background: #fff7ed; border-color: #fdba74; }
+.fp-theme-supply .pb-cell-name::placeholder { color: #c2a48a; }
+.sm-ro {
+  display: flex; align-items: center; justify-content: flex-end; min-width: 64px; height: 34px; padding: 0 10px;
+  border-radius: 8px; background: var(--surface-muted, #f1f5f9); font-family: var(--font-mono); font-size: 13px; color: var(--ink-500, #64748b);
+}
+.sm-ro.is-up { color: #15803d; font-weight: 700; }
+.sm-ro.is-down { color: #dc2626; font-weight: 700; }
+.fp-theme-supply .fp-cell.sm-over { border-color: #f87171; background: #fef2f2; color: #b91c1c; }
+.sm-col-reason { min-width: 170px; }
+.pb-table-sa .pb-col-name { min-width: 200px; }
+.pb-table-st .pb-col-name { width: 46%; }
+.pb-table-sr .pb-col-name { min-width: 240px; }
+.sm-summary .pb-sum { flex: 1; }
+.sm-cur { font-size: 10px; font-weight: 700; color: var(--ink-500, #64748b); }
+.sm-summary-save { width: 100%; justify-content: center; margin-top: 18px; }
+/* Supply Management colours: orange (forms, lists and their popups). */
+.fp-theme-supply,
+body:is([data-page="sa"], [data-page="sa-list"], [data-page="st"], [data-page="st-list"], [data-page="sr"], [data-page="sr-list"]) {
+  --accent: #c2410c;
+  --accent-hover: #c2410c;
+  --accent-bar: #ea580c;
+  --accent-soft: #fff7ed;
+  --accent-soft-2: #ffedd5;
+  --accent-line: #fed7aa;
+  --accent-ink: #9a3412;
+  --accent-ink-deep: #7c2d12;
+  --entry-bg: #fdba74;
+  --entry-line: #c2410c;
+  --entry-ring: 0 0 0 3px rgba(234, 88, 12, .28);
+  --lk-search-glow: rgba(234, 88, 12, .15);
+}
+.fp-theme-supply .fp-req { color: #ea580c; }
+.fp-theme-supply .pb-sum-grand dd { color: #c2410c; }
+.fp-theme-supply .ml-btn-outline-green { border-color: #c2410c; color: #c2410c; }
+.fp-theme-supply .ml-btn-outline-green:hover { background: #fff7ed; }
+.fp-theme-supply .ml-table .ml-qty-ok { color: #c2410c; }
+.fp-theme-supply .pb-list-table .ml-act[data-action="view"] { color: #c2410c; border-color: #fed7aa; }
+.fp-theme-supply .pb-list-table .ml-act[data-action="view"]:hover { background: #fff7ed; }
+.pb-table-sa { min-width: 1280px; }
+.pb-table-st, .pb-table-sr { min-width: 900px; }
+
+/* Stock Adjustment: Stock In / Stock Out under Adj. Qty. */
+.sm-dir { margin-top: 2px; font-size: 9px; font-weight: 800; letter-spacing: .04em; line-height: 1; text-align: right; text-transform: uppercase; }
+.sm-dir.is-in { color: #15803d; }
+.sm-dir.is-out { color: #dc2626; }
+
+/* Stock Reservation: where the item's stock is when the chosen stock point has none ("1200 at WH-2026-0003"). */
+.sm-elsewhere { margin-top: 2px; font-size: 9px; font-weight: 700; line-height: 1.1; text-align: right; color: #0369a1; white-space: nowrap; }
