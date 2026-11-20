@@ -1828,7 +1828,7 @@ function plainLookupCard(config, row) {
 /* The item popups list each item as a card: the code, the name, the category; on the right the
    price and "Available Stock: 12 PIECES" (amber at none, green with stock). */
 // A line of a document to a customer (Quotation, Sales Order, Delivery Note): its prices are selling prices.
-const SALES_ROW_KINDS = ['qt', 'so', 'dn', 'ti', 'se', 'sr', 'sales'];
+const SALES_ROW_KINDS = ['qt', 'so', 'dn', 'ti', 'se', 'sr', 'rp', 'sales'];
 const isSalesLine = node => SALES_ROW_KINDS.includes(node?.closest?.('[data-pb-row]')?.dataset.pbRow);
 // The price an item is offered at on this line: the selling price to a customer, else the buying rate.
 const itemLinePrice = (item, node) => (isSalesLine(node) ? item.sellingPrice : item.buyingRate);
@@ -7706,7 +7706,7 @@ const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 // column has the Purchase Order's buttons, move up, move down and remove.
 function composePurchaseTemplates() {
   const cells = id => [...byId(id).content.cloneNode(true).children];
-  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr']) {
+  for (const id of ['pb-line-simple', 'pb-line-po', 'pb-line-grn', 'pb-line-sales', 'pb-line-so', 'pb-line-qt', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp']) {
     const row = byId(id).content.firstElementChild;
     row.prepend(...cells('pb-cell-item'));
     const hidden = () => Object.assign(document.createElement('input'), { type: 'hidden' });
@@ -7722,7 +7722,7 @@ function composePurchaseTemplates() {
       reason.setAttribute('aria-label', 'Rejection reason');
       nameCell.append(reason);
     }
-    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr'].includes(id)) {          // priced lines keep the brand in the item name cell
+    if (['pb-line-po', 'pb-line-sales', 'pb-line-dn', 'pb-line-ti', 'pb-line-pe', 'pb-line-se', 'pb-line-sr', 'pb-line-rp'].includes(id)) {          // priced lines keep the brand in the item name cell
       const brandCell = row.querySelector('[data-brand-cell]');
       const brandId = hidden(); brandId.dataset.field = 'brandId';
       const brandName = hidden(); brandName.dataset.field = 'brandName';
@@ -7885,7 +7885,11 @@ async function applyPurchaseItem(form, row, itemId) {
   // A quotation / sales order / delivery note line: the selling price; a purchase order line: its supplier's buying price.
   const offered = poSource ? poSource.cost : pbNum(itemLinePrice(item, row));
   const sales = isSalesLine(row) || !!poSource;       // a new pick replaces the old item's price
-  for (const field of ['price', 'unitCost']) {
+  // A sales replacement line: the returned item's price is the Old Price, and the New Price too while the same item
+  // goes back (a replacement item picked keeps its own price).
+  const priceFields = row.dataset.pbRow !== 'rp' ? ['price', 'unitCost']
+    : pbCell(row, 'replacementItemId').value ? ['oldPrice'] : ['oldPrice', 'price'];
+  for (const field of priceFields) {
     const cell = pbCell(row, field);
     // A sales line always takes the picked item's selling price (never a price left from the item it had before).
     if (cell && offered > 0 && (sales || pbNum(cell.value) === 0)) cell.value = pbMoney(offered);
@@ -8384,9 +8388,10 @@ function initItemDescription() {
   idpEl('unit-input').addEventListener('input', () => { idpEl('error').hidden = true; });
 }
 
-// A document's lines (from a purchase request, quotation request or purchase order) into the item table.
+// A document's lines (from a purchase request, quotation request or purchase order) into the item table. The
+// item name's bold / colour (Full Item Description) belongs to the document it was made on: copied lines show the plain name.
 async function loadPurchaseLines(form, lines, toRow) {
-  form.page.setRows('items', lines.map(toRow));
+  form.page.setRows('items', lines.map(line => ({ ...toRow(line), itemNameHtml: '' })));
   const rows = form.page.rowsOf('items');
   await Promise.all(rows.map(row => syncPurchaseRow(row, form.warehouseId?.())));
   form.page.record();
@@ -8991,6 +8996,10 @@ function purchaseLineValues(kind, line) {
   }
   if (line.soldQty !== undefined) values.soldQty = pbQty(pbNum(line.soldQty));       // a sales return line
   if (line.condition !== undefined) values.condition = line.condition;
+  if (line.oldPrice !== undefined) {                                                     // a sales replacement line
+    Object.assign(values, { oldPrice: pbMoney(pbNum(line.oldPrice)), replacementItemId: line.replacementItemId ? String(line.replacementItemId) : '',
+      replacementItemName: line.replacementItemName || '' });
+  }
   return values;
 }
 
@@ -10476,7 +10485,216 @@ const srForm = createPurchaseForm({
   },
 });
 
-const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm, srForm];
+/* ---------- Sales Replacement (Return & Replacement) ----------
+   Goods sent to a customer in place of goods they return. Ref ID picks the delivery note they went out on: its buyer,
+   PO number, contact, currency, stock point and lines are copied in, with the Sales Entry made against it, each line's quantity as Sold Qty (Replace Qty
+   starts at all of it and can be at most that) and its net unit price as Old Price and New Price. A Replacement Item
+   (none: the same item goes back) takes its selling price as the New Price. Each line's Difference = Replace Qty ×
+   (New − Old), its VAT % added on top (VAT Enabled; Disabled sets every line's VAT % to 0). Price Difference = Replacement − Returned
+   value (+ VAT on the difference when excluded) − Discount + Handling / Delivery Charge, as
+   backend/src/sales_replacement.php works it out: above 0 the buyer pays, below 0 it is owed to the buyer. */
+const rpCurrency = () => byId('rp-currency-id').value || 'OMR';
+function rpSetCurrency(code) {
+  const text = String(code || 'OMR').toUpperCase();
+  fillLookup(byId('rp-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
+}
+// The buyer's contact persons as suggestions for Buyer Contact Person; a new pick also sets the currency and, when the
+// buyer has one contact, fills it in.
+async function rpShowCustomer({ fresh = false } = {}) {
+  const id = byId('rp-customer-id').value;
+  const list = byId('rp-contact-list');
+  if (!id) { list.replaceChildren(); return; }
+  const customer = await pbCustomer(id).catch(() => null);
+  if (!customer || byId('rp-customer-id').value !== id) return;
+  const contacts = (customer.contacts || []).filter(contact => contact.name);
+  list.replaceChildren(...contacts.map(contact => new Option(contact.name)));
+  if (!fresh) return;
+  const code = String(customer.currency || '').toUpperCase();
+  if (PO_CURRENCIES.some(row => row.code === code)) rpSetCurrency(code);
+  if (contacts.length === 1) {
+    byId('rp-contact').value = contacts[0].name;
+    putPhone(byId('rp-contact-number'), salesCustomerPhone(contacts[0].number, customer));
+  }
+}
+// The Sales Entry made against the picked delivery note: shown, never picked.
+function rpSetSalesEntry(entry) {
+  byId('rp-se').value = entry ? entry.code : '';
+  byId('rp-se-id').value = entry ? String(entry.id) : '';
+}
+// The totals as the server works them out (srp_totals()): the lines' differences, the returned and replacement
+// values, the VAT on the difference and the Price Difference.
+function rpTotals(rows, vatMode) {
+  let returned = 0;
+  let replacement = 0;
+  let vat = 0;
+  const lineTotals = rows.map(row => {
+    const qty = pbNum(pbCell(row, 'quantity').value);
+    const old = qty * pbNum(pbCell(row, 'oldPrice').value);
+    const now = qty * pbNum(pbCell(row, 'price').value);
+    const diff = now - old;
+    const rate = pbNum(pbCell(row, 'vatRate').value);
+    returned += old;
+    replacement += now;
+    vat += vatMode === 'include' ? diff * rate / (100 + rate) : diff * rate / 100;
+    return vatMode === 'include' ? diff : diff * (1 + rate / 100);
+  });
+  const difference = replacement - returned + (vatMode === 'exclude' ? vat : 0);
+  const handling = pbNum(byId('rp-shipping').value);
+  const discount = Math.min(pbNum(byId('rp-discount').value), Math.max(0, difference + handling));
+  return { lineTotals, returned, replacement, vat, grand: difference - discount + handling };
+}
+
+const rpForm = createPurchaseForm({
+  key: 'rp', route: 'returns/sales-replacement/new', noun: 'Sales Replacement', api: 'api/sales-replacements.php', listRoute: 'returns/sales-replacement',
+  kind: 'po', template: 'pb-line-rp', lineExtras: ['soldQty', 'condition', 'oldPrice', 'replacementItemId'], lookups: ['returndn', 'salesentry'], vatDefault: 'exclude',
+  firstField: () => byId('rp-date'),
+  onShow: () => openLookup(byId('rp-customer')),          // a new replacement starts by picking the Buyer
+  fieldNodes: { replacementDate: 'rp-date', deliveryNoteId: 'rp-ref', salesEntryId: 'rp-se', customerId: 'rp-customer',
+    customerPo: 'rp-customer-po', currency: 'rp-currency', replacementReason: 'rp-reason', warehouseId: 'rp-warehouse', returnedGoods: 'rp-returned',
+    contactName: 'rp-contact', contactNumber: 'rp-contact-number', discountAmount: 'rp-discount', handlingCharge: 'rp-shipping',
+    shipping: 'rp-shipping', remarks: 'rp-remarks-editor' },
+  header: () => ({
+    replacementDate: byId('rp-date').value, deliveryNoteId: byId('rp-ref-id').value || null, salesEntryId: byId('rp-se-id').value || null,
+    customerId: byId('rp-customer-id').value || null, customerPo: byId('rp-customer-po').value.trim(), currency: rpCurrency(),
+    replacementReason: byId('rp-reason').value, warehouseId: byId('rp-warehouse').value || null, returnedGoods: byId('rp-returned').value,
+    contactName: byId('rp-contact').value.trim(), contactNumber: phoneOf(byId('rp-contact-number')),
+    handlingCharge: byId('rp-shipping').value.trim() || '0',
+  }),
+  check(form, errors) {
+    if (!byId('rp-date').value) errors.push({ node: byId('rp-date'), message: 'Enter the replacement date.' });
+    if (!byId('rp-customer-id').value) errors.push({ node: byId('rp-customer'), message: 'Select the buyer.' });
+    if (!byId('rp-reason').value) errors.push({ node: byId('rp-reason'), message: 'Select the replacement reason.' });
+    const money = /^\d{1,11}(\.\d{1,3})?$/;
+    const handling = byId('rp-shipping').value.trim();
+    if (handling !== '' && !money.test(handling)) errors.push({ node: byId('rp-shipping'), message: 'Enter an amount with up to 3 decimals.' });
+    form.page.rowsOf('items').forEach((row, index) => {
+      if (!pbCell(row, 'itemName').value.trim() && !pbCell(row, 'itemId').value) return;
+      const old = pbCell(row, 'oldPrice').value.trim();
+      if (old !== '' && !money.test(old)) errors.push({ node: pbCell(row, 'oldPrice'), message: `Row ${index + 1}: enter the old price with up to 3 decimals.` });
+      const sold = pbNum(pbCell(row, 'soldQty').value);
+      if (sold > 0 && pbNum(pbCell(row, 'quantity').value) > sold + 0.0005) {
+        errors.push({ node: pbCell(row, 'quantity'), message: `Row ${index + 1}: the replace quantity cannot be more than the quantity sold (${pbQty(sold)}).` });
+      }
+    });
+  },
+  // The replacement's own totals (the shared ones cannot go below 0): each line's Difference, the values and the
+  // Price Difference, with what it means for the buyer.
+  afterRefresh() {
+    const rows = rpForm.page.rowsOf('items');
+    const totals = rpTotals(rows, rpForm.vatMode());
+    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]); });
+    byId('rp-returned-value').textContent = pbMoney(totals.returned);
+    byId('rp-replacement-value').textContent = pbMoney(totals.replacement);
+    byId('rp-vat').textContent = pbMoney(totals.vat);
+    byId('rp-grand').textContent = pbMoney(totals.grand);
+    const grand = Math.round(totals.grand * 1000);
+    byId('rp-grand-note').textContent = grand > 0 ? 'The buyer pays the difference'
+      : grand < 0 ? 'Owed to the buyer (credit / refund)' : 'No difference – like-for-like replacement';
+    for (const label of byId('rp-form').querySelectorAll('[data-rp-base]')) label.textContent = rpCurrency();
+  },
+  fill(form, rp) {
+    byId('rp-date').value = rp.replacementDate;
+    fillLookup(byId('rp-ref'), rp.deliveryNoteId ? { id: rp.deliveryNoteId, code: rp.deliveryNoteCode } : null);
+    rpSetSalesEntry(rp.salesEntryId ? { id: rp.salesEntryId, code: rp.salesEntryCode } : null);
+    fillLookup(byId('rp-customer'), rp.customerId ? { id: rp.customerId, name: rp.customerName } : null);
+    byId('rp-customer-po').value = rp.customerPo || '';
+    rpSetCurrency(rp.currency);
+    setSelectValue(byId('rp-reason'), rp.replacementReason || '');
+    setSelectValue(byId('rp-warehouse'), rp.warehouseId ? String(rp.warehouseId) : '', [rp.warehouseCode, rp.warehouseName].filter(Boolean).join(' – '));
+    setSelectValue(byId('rp-returned'), rp.returnedGoods || 'Collected from Buyer');
+    byId('rp-contact').value = rp.contactName || '';
+    putPhone(byId('rp-contact-number'), rp.contactNumber);
+  },
+  afterFill: () => rpShowCustomer(),
+  // Undo / Clear All put the Sales Entry id back; its number is shown again from the cached list.
+  async afterRestore() {
+    const id = byId('rp-se-id').value;
+    if (!id) { byId('rp-se').value = ''; return; }
+    const entry = (await loadLookup('salesentry').catch(() => [])).find(row => String(row.id) === id);
+    if (byId('rp-se-id').value === id && entry) byId('rp-se').value = entry.code;
+  },
+  onReset() {
+    byId('rp-date').value = todayInputValue();
+    byId('rp-returned').value = 'Collected from Buyer';
+    rpSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    byId('rp-contact-list').replaceChildren();
+    forgetLookups('returndn', 'salesentry');
+    // Issue From: the stock points (the list is loaded before a saved replacement is filled in).
+    return purchaseOptions(byId('rp-warehouse'), 'api/warehouses.php', row => [row.code, row.name].filter(Boolean).join(' – '));
+  },
+  init(form) {
+    // A buyer picked: their contact persons, currency and (when they have one) contact; the other buyer's document goes.
+    byId('rp-customer').addEventListener('input', async () => {
+      if (byId('rp-ref-id').value) { fillLookup(byId('rp-ref'), null); rpSetSalesEntry(null); }   // the other buyer's delivery note
+      byId('rp-contact').value = '';
+      byId('rp-contact-number').value = '';
+      await rpShowCustomer({ fresh: true });
+      form.page.absorb();
+      form.refresh();
+    });
+    byId('rp-form').addEventListener('input', event => {
+      if (['rp-currency', 'rp-discount', 'rp-shipping'].includes(event.target.id)) form.refresh();
+    });
+    byId('rp-items').addEventListener('input', async event => {
+      const row = event.target.closest('tr');
+      const field = event.target.dataset.field;
+      // Another returned item: the quantity sold was for the item before, so there is none now.
+      if (['itemName', 'itemCode'].includes(field)) { pbCell(row, 'soldQty').value = '0'; return; }
+      if (field !== 'replacementItemName') return;
+      // A replacement item picked: its selling price is the New Price; cleared, the same item goes back at the old price.
+      const id = pbCell(row, 'replacementItemId').value;
+      if (!id) {
+        pbCell(row, 'replacementItemName').value = '';
+        pbCell(row, 'price').value = pbMoney(pbNum(pbCell(row, 'oldPrice').value));
+      } else {
+        const item = await pbItem(id).catch(() => null);
+        if (!item || pbCell(row, 'replacementItemId').value !== id) return;
+        if (pbNum(item.sellingPrice) > 0) pbCell(row, 'price').value = pbMoney(pbNum(item.sellingPrice));
+      }
+      form.page.absorb();
+      form.refresh();
+    });
+    // Ref ID (a delivery note) picked: its buyer, PO number, contact, currency, stock point, VAT and lines, and the
+    // Sales Entry made against it (only its number). Each line goes back at its net unit price (after its line
+    // discount), all of its quantity to begin with.
+    byId('rp-ref').addEventListener('input', async () => {
+      const value = byId('rp-ref-id').value;
+      if (!value) return;
+      try {
+        const doc = await apiRequest(`api/delivery-notes.php?id=${value}`);
+        if (byId('rp-ref-id').value !== value) return;          // another delivery note was picked meanwhile
+        const entry = (await loadLookup('salesentry').catch(() => [])).find(row => String(row.deliveryNoteId) === String(doc.id));   // newest first
+        if (byId('rp-ref-id').value !== value) return;
+        rpSetSalesEntry(entry ? { id: entry.id, code: entry.code } : null);
+        if (doc.customerId) {
+          fillLookup(byId('rp-customer'), { id: doc.customerId, name: doc.customerName });
+          await rpShowCustomer();
+        }
+        rpSetCurrency(doc.currency);
+        byId('rp-customer-po').value = doc.customerPo || byId('rp-customer-po').value;
+        if (doc.contactName !== undefined) {
+          byId('rp-contact').value = doc.contactName || '';
+          putPhone(byId('rp-contact-number'), doc.contactNumber);
+        }
+        if (doc.warehouseId) setSelectValue(byId('rp-warehouse'), String(doc.warehouseId), [doc.warehouseCode, doc.warehouseName].filter(Boolean).join(' – '));   // issued from where they went out
+        byId('rp-vat-mode').value = doc.vatMode === 'exclude' ? 'exclude' : 'include';
+        await loadPurchaseLines(form, doc.items, line => {
+          const quantity = pbNum(line.quantity);
+          const net = line.foc ? 0 : Math.max(0, quantity * pbNum(line.price) - pbNum(line.discountAmount));
+          const unit = pbMoney(quantity > 0 ? net / quantity : 0);
+          return { ...purchaseLineRow(line), soldQty: pbQty(quantity), quantity: pbQty(quantity), condition: 'Damaged',
+            replacementItemId: '', replacementItemName: '', oldPrice: unit, price: unit, vatRate: pbNum(line.vatRate).toFixed(2),
+            discountPct: '0.00', discountAmount: '0.000', foc: 'No' };
+        });
+        form.syncVatToggle();
+        form.refresh();
+        showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+      } catch (error) { showToast('The delivery note could not be loaded', error.message, true); }
+    });
+  },
+});
+
+const PURCHASE_FORMS = [prForm, rfqForm, poForm, grnForm, qtForm, soForm, dnForm, tiForm, peForm, seForm, srForm, rpForm];
 
 /* ---------- GRN line: rejection reason and Stock Transfer ----------
    Rejected is Received - Accepted; while it is more than 0 the line shows a Rejection Reason box under the item name.
@@ -11187,7 +11405,50 @@ const srList = purchaseList({
   importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: '0' }),
 });
 
-const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList, srList];
+const rpList = purchaseList({
+  key: 'rp', route: 'returns/sales-replacement', noun: 'Sales Replacement', nouns: 'Sales Replacements', api: 'api/sales-replacements.php',
+  kind: 'po', form: rpForm, lookups: ['returndn', 'salesentry'], dateOf: record => record.replacementDate,
+  columns: [
+    { key: 'code', label: 'SRP ID', type: 'code', group: 'Replacement' },
+    { key: 'date', label: 'Replacement Date', type: 'mono', group: 'Replacement' },
+    { key: 'name', label: 'Customer', type: 'name', group: 'Buyer' },
+    { key: 'referenceNo', label: 'DN / Sales Entry', type: 'mono', group: 'Replacement' },
+    { key: 'replacementReason', label: 'Replacement Reason', group: 'Replacement' },
+    { key: 'totalQty', label: 'Replace Qty', type: 'qty', group: 'Replacement' },
+    { key: 'grandTotal', label: 'Price Difference', type: 'qty-ok', group: 'Replacement' },
+    detail({ key: 'returnedGoods', label: 'Returned Goods', type: 'pill', group: 'Replacement' }),
+    detail({ key: 'warehouseName', label: 'Issue From (Stock Point)', group: 'Replacement' }),
+    detail({ key: 'customerPo', label: 'Customer PO Number', group: 'Buyer' }),
+    detail({ key: 'contactName', label: 'Contact Person', group: 'Buyer' }),
+    detail({ key: 'contactNumber', label: 'Contact Number', group: 'Buyer' }),
+    detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Buyer' }),
+    detail({ key: 'returnedValue', label: 'Returned Items Value', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'replacementValue', label: 'Replacement Items Value', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'discountAmount', label: 'Discount', type: 'mono', group: 'Replacement' }),
+    detail({ key: 'handlingCharge', label: 'Handling / Delivery Charge', type: 'mono', group: 'Replacement' }),
+  ],
+  fromApi: r => ({ ...r, date: r.replacementDate, grandTotal: pbAmount(r.grandTotal), discountAmount: pbAmount(r.discountAmount),
+    handlingCharge: pbAmount(r.handlingCharge), returnedValue: pbAmount(r.returnedValue), replacementValue: pbAmount(r.replacementValue) }),
+  importColumns: [{ key: 'replacementDate', label: 'Replacement Date', headers: ['date', 'replacement date'], read: readSheetDate('Replacement Date') },
+    { key: 'customer', label: 'Buyer', headers: ['buyer name', 'customer', 'customer name', 'client'] },
+    { key: 'customerPo', label: 'Customer PO Number', headers: ['customer po', 'po no', 'po number'] },
+    { key: 'replacementReason', label: 'Replacement Reason', headers: ['reason'] },
+    ...PB_IMPORT_ITEM, pbImportQty, pbImportUnit,
+    { key: 'oldPrice', label: 'Old Price', headers: ['old price', 'old rate'], read: readSheetNumber('Old Price') },
+    { key: 'price', label: 'New Price', headers: ['new price', 'price', 'rate'], read: readSheetNumber('New Price') },
+    { key: 'vatRate', label: 'VAT %', headers: ['vat rate', 'vat percent'], read: readSheetNumber('VAT %', 2) },
+    pbImportRemarks],
+  importSamples: [
+    { docNo: '1', replacementDate: '2026-11-20', customer: 'GULF BUILDERS GROUP', customerPo: 'PO-98765', replacementReason: 'Damaged in Transit', itemName: 'GATE VALVE 2"', quantity: '2', unit: 'Pieces', oldPrice: '12.500', price: '12.500', vatRate: '5' },
+    { docNo: '1', itemName: 'PTFE TAPE', quantity: '5', unit: 'Pieces', oldPrice: '0.350', price: '0.400', vatRate: '5' },
+  ],
+  importHeader: async g => ({ replacementDate: g.replacementDate, customerId: await importLookupId('customer', g.customer), customerPo: g.customerPo,
+    replacementReason: g.replacementReason || 'Other', vatMode: 'include' }),
+  importLine: line => ({ quantity: line.quantity || '1', oldPrice: line.oldPrice || line.price || '0', price: line.price || line.oldPrice || '0',
+    vatRate: line.vatRate || '5', discountPct: '0' }),
+});
+
+const PURCHASE_LISTS = [prList, rfqList, poList, grnList, qtList, soList, dnList, tiList, peList, seList, srList, rpList];
 
 /* ---------- The company letterhead behind every printed page ----------
    The letterhead given on Create a Company (uploaded as a PNG / JPG / PDF, or generated) is printed as the whole
@@ -11333,8 +11594,9 @@ function letterheadBands(source, width, height) {
    details in a grid, the item table, Remarks & Notes beside the totals, then the signatory slots and the seal.
    Ticked "Include Signatory Slots" prints the signatory slots (name and title each); "Attach Seal" prints the company seal. */
 const PB_TITLES = { pr: 'Purchase Request', rfq: 'Request for Quotation', po: 'Purchase Order', grn: 'Goods Received Note',
-  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice', sr: 'Sales Return' };
-const SALES_KEYS = ['qt', 'so', 'dn', 'ti', 'se', 'sr'];       // documents to a customer (Trade Management, Sales Entry)
+  qt: 'Quotation', so: 'Sales Order', dn: 'Delivery Note', ti: 'Tax Invoice', pe: 'Purchase Invoice', se: 'Sales Invoice', sr: 'Sales Return',
+  rp: 'Sales Replacement' };
+const SALES_KEYS = ['qt', 'so', 'dn', 'ti', 'se', 'sr', 'rp'];       // documents to a customer (Trade Management, Sales Entry)
 let companyProfilePromise = null;
 function companyProfile() {
   companyProfilePromise ||= apiRequest('api/company-profile.php').catch(() => null);
@@ -11464,6 +11726,12 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       meta: [['SR No', doc.code], ['Return Date', pbDate(doc.returnDate)], ['Delivery Note Ref', doc.deliveryNoteCode], ['Sales Entry Ref', doc.salesEntryCode], ['Customer PO No', doc.customerPo],
         ['Return Reason', doc.returnReason], ['Return To', doc.warehouseName], ['Refund Mode', doc.refundMode], ['Currency', doc.currency]],
     }),
+    rp: () => ({
+      party: buyer(),
+      meta: [['SRP No', doc.code], ['Replacement Date', pbDate(doc.replacementDate)], ['Delivery Note Ref', doc.deliveryNoteCode], ['Sales Entry Ref', doc.salesEntryCode],
+        ['Customer PO No', doc.customerPo], ['Replacement Reason', doc.replacementReason], ['Issue From', doc.warehouseName],
+        ['Returned Goods', doc.returnedGoods], ['Currency', doc.currency]],
+    }),
   }[spec.key]();
   // The item table's columns: [heading, kind of cell, value], the same structure on every document. Item Code is
   // printed on the Purchase Request only; the brand is not a column but "MAKE: …" under the item name.
@@ -11494,7 +11762,12 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     sr: [['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
       [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
-    }[spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.key === 'sr' ? 'sr' : spec.kind],
+    // A sales replacement: what goes back in place of each returned item, at the old and the new price.
+    rp: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
+      ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
+      ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference${doc.currency ? ` (${doc.currency})` : ''}`, 'num total', l => pbAmount(l.lineTotal)]],
+    }[spec.key === 'so' || spec.key === 'ti' ? 'so' : spec.key === 'pe' || spec.key === 'se' ? 'pe' : spec.key === 'sr' || spec.key === 'rp' ? spec.key : spec.kind],
   ];
   const cellClass = kind => kind.split(' ').map(part => `ps-c-${part}`).join(' ');
 
@@ -11664,6 +11937,20 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const grand = el('div', 'ps-grn-grand');
     grand.append(el('dt', '', `Grand Total${currency ? ` (${currency})` : ''}`), el('dd', '', grnMoney(doc.grandTotal)));
     totals.append(grand);
+    bottom.append(totals);
+  } else if (spec.key === 'rp') {
+    // A sales replacement: the returned and replacement values, the VAT on the difference, then the Price Difference
+    // (below 0: owed to the buyer). A zero discount or charge is left out.
+    const totals = el('dl', 'ps-totals');
+    const currency = doc.currency ? ` ${doc.currency}` : '';
+    for (const [label, value, kind] of [['Returned Items Value', doc.returnedValue], ['Replacement Items Value', doc.replacementValue],
+      [doc.vatMode === 'exclude' ? 'VAT on Difference' : 'VAT on Difference (included)', doc.vatAmount],
+      ['Discount', doc.discountAmount, 'discount'], ['Handling / Delivery Charge', doc.handlingCharge], ['Price Difference', doc.grandTotal, 'grand']]) {
+      if (!kind?.startsWith('grand') && (label === 'Discount' || label.startsWith('Handling')) && !pbNum(value)) continue;
+      const row = el('div', kind === 'grand' ? 'ps-total-grand' : kind === 'discount' ? 'ps-total-discount' : '');
+      row.append(el('dt', '', `${label}:`), el('dd', '', `${kind === 'discount' ? '-' : ''}${pbAmount(value)}${currency}`));
+      totals.append(row);
+    }
     bottom.append(totals);
   } else if (spec.kind !== 'simple') {
     const totals = el('dl', spec.key === 'po' ? 'ps-totals ps-po-totals' : 'ps-totals');   // the PO: Grand Total in a green box

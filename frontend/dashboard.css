@@ -2126,7 +2126,7 @@ body:is([data-page="ti"], [data-page="ti-list"], [data-page="pe"], [data-page="p
 /* ---------- Return & Replacement pages (Sales Return; form and list) ----------
    The Trade Management layout in the Return & Replacement crimson. */
 .fp-theme-return,
-body:is([data-page="sr"], [data-page="sr-list"]) {
+body:is([data-page="sr"], [data-page="sr-list"], [data-page="rp"], [data-page="rp-list"]) {
   --accent: #be123c;
   --accent-hover: #9f1239;
   --accent-bar: #be123c;
@@ -2152,11 +2152,15 @@ body:is([data-page="sr"], [data-page="sr-list"]) {
 .fp-theme-return .pb-list-table .ml-act[data-action="view"]:hover { background: #fff1f2; }
 .fp-theme-return .pb-btn { text-transform: uppercase; letter-spacing: .02em; }
 /* The search icon before the text in the lookups (Ref ID, Buyer Name, the line's item code and name); a chevron after Currency. */
-#sr-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron) { left: 12px; right: auto; }
-#sr-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)) { padding-left: 34px; padding-right: 12px; }
-#sr-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron) { left: 10px; }
-#sr-page .fp-lookup-wrap .fp-cell.fp-lookup { padding-left: 28px; padding-right: 8px; }
-#sr-page .sr-chevron { color: var(--ink-600); }
+#sr-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron),
+#rp-page .fp-lookup-wrap .fp-lookup-icon:not(.sr-chevron) { left: 12px; right: auto; }
+#sr-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)),
+#rp-page .fp-lookup-wrap .fp-lookup:has(+ input + .fp-lookup-icon:not(.sr-chevron)) { padding-left: 34px; padding-right: 12px; }
+#sr-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron),
+#rp-page .fp-lookup-wrap:has(.fp-cell) .fp-lookup-icon:not(.sr-chevron) { left: 10px; }
+#sr-page .fp-lookup-wrap .fp-cell.fp-lookup,
+#rp-page .fp-lookup-wrap .fp-cell.fp-lookup { padding-left: 28px; padding-right: 8px; }
+#sr-page .sr-chevron, #rp-page .sr-chevron { color: var(--ink-600); }
 .pb-table-sr { min-width: 1240px; }
 .pb-table-sr .pb-col-code { width: 136px; }
 .pb-table-sr .sr-col-brand { width: 126px; }
@@ -2167,6 +2171,17 @@ body:is([data-page="sr"], [data-page="sr-list"]) {
 .sr-input-auto { background: var(--surface-muted); border-color: var(--line); color: var(--ink-900); font-family: var(--font-mono); font-weight: 700; cursor: default; }
 .sr-sum > div:not(.pb-sum-grand) { min-height: 46px; }
 .sr-sum .pb-sum-input { width: 182px; height: 44px !important; }
+
+/* Sales Replacement: the line columns, and the Price Difference with what it means for the buyer. */
+.pb-table-rp { min-width: 1360px; }
+.pb-table-rp .pb-col-code { width: 136px; }
+.pb-table-rp .pb-col-name { width: 190px; }
+.pb-table-rp .rp-col-cond { width: 124px; }
+.pb-table-rp .rp-col-repl { width: 200px; }
+.pb-table-rp .pb-col-total { width: 130px; }
+.rp-sum .rp-sum-grand dt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.rp-grand-label { white-space: nowrap; }
+.rp-grand-note { font-size: 11px; font-weight: 500; color: var(--ink-500); text-transform: none; letter-spacing: 0; }
 
 /* ---------- Quick item popup (Purchase Book › Create Item) ---------- */
 .qi { width: min(560px, calc(100vw - 32px)); }

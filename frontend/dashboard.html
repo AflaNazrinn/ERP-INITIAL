@@ -3898,6 +3898,231 @@
   </form>
 </section>
 
+<!-- SALES REPLACEMENT list  (#/returns/sales-replacement) -->
+<section id="rp-list-page" class="form-page form-page-auto fp-theme-purchase fp-theme-return" aria-labelledby="rp-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg></div>
+      <h1 id="rp-list-title" class="fp-title pb-list-title">Sales Replacement</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Replacement</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="rp-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Sales Replacements</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="rp-list-search" type="search" placeholder="Search SRP ID, buyer, customer PO..." autocomplete="off" aria-label="Search sales replacements" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="rp-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="rp-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/returns/sales-replacement/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Replacement</span>
+        </a>
+        <button type="button" id="rp-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="rp-list-head"></tr></thead>
+        <tbody id="rp-list-body"></tbody>
+      </table>
+      <div id="rp-list-empty" class="table-state" hidden>No sales replacements match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="rp-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SALES REPLACEMENT  (#/returns/sales-replacement/new · Quick Menu › Return & Replacement). The Return & Replacement crimson. -->
+<section id="rp-page" class="form-page form-page-auto fp-theme-purchase fp-theme-return" aria-labelledby="rp-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg></div>
+      <h1 id="rp-title" class="fp-title">Sales Replacement</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="rp-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="rp-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Document Details</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <div class="fp-label-row"><label class="fp-label" for="rp-code">SRP ID <span class="fp-req" aria-hidden="true">*</span></label><span class="fp-auto-badge">Auto</span></div>
+          <div class="fp-input-wrap"><input id="rp-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the replacement is saved"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-date">Replacement Date <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="rp-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-customer">Buyer Name <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="rp-customer" class="fp-input fp-lookup" type="text" data-lookup="customer" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select buyer..."><input id="rp-customer-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-ref">Ref ID (Click to select Delivery Note)</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="rp-ref" class="fp-input fp-lookup" type="text" data-lookup="returndn" data-lookup-party="rp-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select delivery note..."><input id="rp-ref-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-se">Sales Entry</label>
+          <div class="fp-input-wrap"><input id="rp-se" class="fp-input sr-input-auto" type="text" readonly tabindex="-1" placeholder="Auto from delivery note" title="The sales entry made against the delivery note picked in Ref ID"><input id="rp-se-id" type="hidden"></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-customer-po">Customer PO Number</label>
+          <input id="rp-customer-po" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="E.g. PO-98765">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-currency">Currency (Base) <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="rp-currency" class="fp-input fp-lookup" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="rp-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon sr-chevron" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-reason">Replacement Reason <span class="fp-req" aria-hidden="true">*</span></label>
+          <select id="rp-reason" class="fp-input fp-select" data-enter-opens="true" required>
+            <option value="" selected>Select reason</option>
+            <option>Damaged in Transit</option><option>Defective / Faulty</option><option>Wrong Item Supplied</option><option>Size / Spec Mismatch</option>
+            <option>Quality Not as Expected</option><option>Expired / Near Expiry</option><option>Warranty Claim</option><option>Upgrade Requested</option><option>Other</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-warehouse">Issue From (Stock Point)</label>
+          <select id="rp-warehouse" class="fp-input fp-select" data-enter-opens="true">
+            <option value="" selected>No stock point selected</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-returned">Returned Goods</label>
+          <select id="rp-returned" class="fp-input fp-select" data-enter-opens="true">
+            <option selected>Collected from Buyer</option><option>To Be Collected</option><option>Retained by Buyer</option><option>Disposed at Site</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-contact">Buyer Contact Person</label>
+          <input id="rp-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="rp-contact-list" placeholder="E.g. Mr. John Doe"><datalist id="rp-contact-list"></datalist>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="rp-contact-number">Buyer Contact Number</label>
+          <div class="fp-phone"><select id="rp-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="rp-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. Replacement Items</h2>
+        <div class="pb-head-actions">
+          <input id="rp-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-vat-switch" data-vat-switch aria-pressed="true" title="VAT Enabled: VAT % is added on top of the prices.">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+            <span data-vat-label>VAT Enabled</span>
+          </button>
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Master Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-rp">
+          <thead><tr><th class="pb-col-sno">#</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Returned Item</th><th class="pb-col-num">Sold Qty</th><th class="pb-col-num">Replace Qty</th><th class="pb-col-unit">Unit</th><th class="rp-col-cond">Condition</th><th class="rp-col-repl">Replacement Item</th><th class="pb-col-num">Old Price</th><th class="pb-col-num">New Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-total">Difference (<span data-rp-base>OMR</span>)</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="rp-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="pb-pair-summary pb-pair-po">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; Notes &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" id="rp-remarks-label" for="rp-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="rp-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks &amp; Notes formatting" aria-controls="rp-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0284c7" style="--swatch: #0284c7" title="Sky" aria-label="Sky blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#16a34a" style="--swatch: #16a34a" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#9333ea" style="--swatch: #9333ea" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-enter-skip data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="rp-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="rp-remarks-label" tabindex="0" spellcheck="true" data-placeholder="Enter transaction remarks or additional internal notes..."></div>
+          </div>
+        </div>
+        <div class="pb-print" data-print="rp"></div>
+      </section>
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">4. Financial Summary</h2>
+        <dl class="pb-sum pb-sum-po sr-sum rp-sum">
+          <div><dt>Returned Items Value (<span data-rp-base>OMR</span>)</dt><dd id="rp-returned-value">0.000</dd></div>
+          <div><dt>Replacement Items Value (<span data-rp-base>OMR</span>)</dt><dd id="rp-replacement-value">0.000</dd></div>
+          <div><dt>VAT on Difference (<span data-rp-base>OMR</span>)</dt><dd id="rp-vat">0.000</dd></div>
+          <div><dt><label for="rp-discount">Discount (<span data-rp-base>OMR</span>)</label></dt><dd><input id="rp-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt><label for="rp-shipping">Handling / Delivery Charge (<span data-rp-base>OMR</span>)</label></dt><dd><input id="rp-shipping" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand rp-sum-grand"><dt><span class="rp-grand-label">Price Difference (<span id="rp-grand-currency">OMR</span>)</span><small id="rp-grand-note" class="rp-grand-note">No difference – like-for-like replacement</small></dt><dd id="rp-grand">0.000</dd></div>
+          <!-- The shared totals write these; the replacement shows its own (Returned / Replacement value). -->
+          <span id="rp-vat-label" hidden></span><span id="rp-subtotal" hidden></span>
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="rp-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="rp-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="rp-save-label">Save Sales Replacement</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
 <!-- Purchase Book row templates. Cells shared by every document come first. -->
 <template id="pb-cell-item">
   <td class="pb-col-sno" data-row-label></td>
@@ -4019,6 +4244,19 @@
   <td data-unit-cell></td>
   <td><select class="fp-cell fp-select pb-cell-select" data-field="condition" aria-label="Condition"><option selected>Good – Restock</option><option>Opened – Inspect</option><option>Damaged – Scrap</option><option>Defective – Return to Supplier</option></select></td>
   <td><input class="fp-cell fp-cell-num" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Unit price"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
+  <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
+</tr></template>
+
+<!-- Sales Replacement line: Sold Qty (from the delivery note), Replace Qty, Unit, Condition, Replacement Item (none: the same item), Old Price, New Price, VAT %, Difference -->
+<template id="pb-line-rp"><tr class="fp-row" data-pb-row="rp">
+  <td><input class="fp-cell fp-cell-num sr-cell-auto" data-field="soldQty" type="text" readonly tabindex="-1" value="0" aria-label="Sold quantity" title="The quantity on the delivery note the line was copied from"></td>
+  <td><input class="fp-cell fp-cell-num sr-cell-return" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Replace quantity"></td>
+  <td data-unit-cell></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-field="condition" aria-label="Condition"><option selected>Damaged</option><option>Defective</option><option>Wrong Item</option><option>Expired</option><option>Unused</option><option>Other</option></select></td>
+  <td><div class="fp-input-wrap fp-lookup-wrap"><input class="fp-cell fp-lookup rp-cell-repl" data-field="replacementItemName" type="text" data-lookup="item" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Same item (or select)..." aria-label="Replacement item"><input type="hidden" data-field="replacementItemId"><span class="fp-lookup-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div></td>
+  <td><input class="fp-cell fp-cell-num" data-field="oldPrice" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Old price"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="New price"></td>
   <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
   <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
 </tr></template>
@@ -5071,7 +5309,7 @@
         <kbd class="qm-kbd">S</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <a class="qm-item qm-item-sm" href="#/returns/sales-replacement/new" data-key="e" aria-keyshortcuts="Alt+E E">
+      <a class="qm-item qm-item-sm" href="#/returns/sales-replacement" data-key="e" aria-keyshortcuts="E">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg></span>
         <span class="qm-text"><span class="qm-name">Sal<span class="qm-key">e</span>s Replacement</span><span class="qm-desc">Replacements sent to customers</span></span>
         <kbd class="qm-kbd">E</kbd>
