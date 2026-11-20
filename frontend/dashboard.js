@@ -7780,11 +7780,44 @@ async function applyPurchaseItem(form, row, itemId) {
     // A sales line always takes the picked item's selling price (never a price left from the item it had before).
     if (cell && offered > 0 && (sales || pbNum(cell.value) === 0)) cell.value = pbMoney(offered);
   }
-  // The sales order's Buying Cost: the item's buying rate, until a supplier's price is chosen for the line.
-  const buying = pbCell(row, 'buyingCost');
-  if (buying && pbNum(buying.value) === 0 && pbNum(item.buyingRate) > 0) buying.value = pbMoney(pbNum(item.buyingRate));
+  // The sales order's Buying Cost: what the item was last bought for (soBuyingPrice), the item's buying rate when it
+  // was never bought.
+  if (pbCell(row, 'buyingCost')) await soFillBuyingCost(row, item);
+  if (row.dataset.itemApplied !== itemId || !row.isConnected) return;
   form.page.absorb();
   form.refresh();
+}
+
+/* The Sales Order line's Buying Cost when an item is picked: the price it was last bought for from a supplier
+   (api/item-purchase-price.php: the newest Purchase Entry bill, else GRN unit cost, else purchase order price), from
+   the order's supplier (one supplier) or the line's supplier (multi supplier) first, any supplier's otherwise. A
+   multi-supplier line with no supplier yet takes the supplier it was bought from. The price is put in the line's
+   supplier currency; an item never bought keeps the Item master's buying rate. */
+async function soFillBuyingCost(row, item) {
+  const multi = typeof soIsMulti === 'function' && soIsMulti();
+  const supplierId = multi ? pbCell(row, 'supplierId')?.value : byId('so-supplier-id')?.value;
+  const itemId = String(item.id);
+  let bought = null;
+  try {
+    bought = await apiRequest(`api/item-purchase-price.php?itemId=${encodeURIComponent(itemId)}${supplierId ? `&supplierId=${encodeURIComponent(supplierId)}` : ''}`);
+  } catch { /* the Item master's rate below */ }
+  if (pbCell(row, 'itemId').value !== itemId || !row.isConnected) return;
+  const buying = pbCell(row, 'buyingCost');
+  if (!bought) {
+    if (pbNum(item.buyingRate) > 0) buying.value = pbMoney(pbNum(item.buyingRate));
+    return;
+  }
+  let target;
+  if (multi) {
+    if (!pbCell(row, 'supplierId').value) {
+      fillLookup(pbCell(row, 'supplierName'), { id: bought.supplierId, name: bought.supplierName });
+      pbCell(row, 'supplierCurrency').value = bought.currency;
+    }
+    target = pbCell(row, 'supplierCurrency').value || soBase();
+  } else {
+    target = byId('so-supplier-currency').value || soBase();
+  }
+  buying.value = pbMoney(pbNum(bought.rate) * soRate(bought.currency || target, target));
 }
 
 /* ---------- Full Item Description popup (#item-desc; design/masters/item_description.png) ----------
