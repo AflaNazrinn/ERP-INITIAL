@@ -200,6 +200,16 @@
     </div>
   </header>
   <section class="audit audit-full">
+    <div class="audit-filter" role="group" aria-label="Filter by date">
+      <label class="audit-filter-field"><span>From</span><input id="audit-from" class="fp-input" type="date" aria-label="From date"></label>
+      <label class="audit-filter-field"><span>To</span><input id="audit-to" class="fp-input" type="date" aria-label="To date"></label>
+      <div class="audit-filter-presets">
+        <button type="button" class="audit-preset" data-audit-range="today">Today</button>
+        <button type="button" class="audit-preset" data-audit-range="week">Last 7 Days</button>
+        <button type="button" class="audit-preset" data-audit-range="month">This Month</button>
+        <button type="button" id="audit-clear" class="audit-preset audit-preset-clear" data-audit-range="clear" hidden>Clear</button>
+      </div>
+    </div>
     <div class="table-scroll">
       <table class="audit-table">
         <thead>
@@ -2092,12 +2102,12 @@
           <input id="po-date" class="fp-input" type="date" required>
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="po-pr">PR Number <span class="fp-optional">(optional)</span></label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-pr" class="fp-input fp-lookup" type="text" data-lookup="purchaserequest" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Fetch items from a PR..." title="Pick a Purchase Request: its items fill the order's lines"><input id="po-pr-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <label class="fp-label" for="po-ref">PR / RFQ Number</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-ref" class="fp-input fp-lookup" type="text" data-lookup="poref" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select PR or Quotation Request"><input id="po-ref-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-quotation-no">Quotation Number</label>
-          <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="e.g. QT-2026-001 (optional)">
+          <input id="po-quotation-no" class="fp-input" type="text" maxlength="60" autocomplete="off" placeholder="The supplier's quotation number">
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-salesman">Salesman / Created By <span class="fp-req" aria-hidden="true">*</span></label>
@@ -2149,7 +2159,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="po-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="po-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="po-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
       </div>
       <div class="fp-field pb-cert">
@@ -2886,7 +2896,7 @@
           <div class="so-advance-row"><dt><label for="so-advance">Advance Payment (<span data-so-base>OMR</span>)</label></dt><dd><input id="so-advance" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
           <div class="pb-sum-grand so-grand-row"><dt>Grand Total (<span id="so-grand-currency">OMR</span>)</dt><dd id="so-grand">0.000</dd></div>
           <div class="so-buy-row so-sum-strong"><dt>Total Buying Cost (<span data-so-base>OMR</span>)</dt><dd id="so-total-buying">0.000</dd></div>
-          <div class="so-buy-row"><dt>Total Buying Cost (AED)</dt><dd id="so-buying-aed">0.000</dd></div>
+          <!-- Total Buying Cost in each foreign supplier currency (AED, USD …; never OMR): rows added by soRefreshCosts(). -->
           <div class="so-buy-row so-sum-strong"><dt>Total Profit (<span data-so-base>OMR</span>)</dt><dd id="so-profit" class="so-profit">0.000</dd></div>
           <div class="so-buy-row"><dt>Total Profit (%)</dt><dd id="so-profit-pct" class="so-profit">0.00%</dd></div>
         </dl>
@@ -2940,7 +2950,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-contact">Buyer Contact</label>
-          <input id="dn-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="dn-contact-list" placeholder="Enter Contact Person"><datalist id="dn-contact-list"></datalist>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="dn-contact" class="fp-input fp-lookup" type="text" maxlength="100" data-lookup="buyercontact" data-lookup-cards data-lookup-customer="dn-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select contact person..."><input id="dn-contact-id" type="hidden"><datalist id="dn-contact-list"></datalist><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-contact-number">Buyer Contact Number</label>
@@ -2948,11 +2958,11 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-currency">Customer Currency<span class="fp-req" aria-hidden="true">*</span></label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="dn-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="dn-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="dn-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="dn-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-reference">Ref Num (SO / Quote)</label>
-          <div class="fp-input-wrap fp-suggest-wrap"><input id="dn-reference" class="fp-input" type="text" maxlength="60" data-suggest="salesref" role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="Type or select Ref No (SO / Quote)"><input id="dn-reference-id" type="hidden"><ul class="fp-suggest" role="listbox" aria-label="Sales orders and quotations" hidden></ul></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="dn-reference" class="fp-input fp-lookup" type="text" data-lookup="dnref" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select Quotation or Sales Order"><input id="dn-reference-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="dn-location">Delivery Location</label>
@@ -3037,10 +3047,10 @@
         <h2 class="fp-section-title">4. Financial Summary</h2>
         <dl class="pb-sum pb-sum-po">
           <div><dt>Items Total Amount</dt><dd id="dn-items-total">0.000</dd></div>
-          <div><dt>Total Quantity</dt><dd id="dn-total-qty">0</dd></div>
           <div><dt id="dn-vat-label">Total VAT Amount</dt><dd id="dn-vat">0.000</dd></div>
           <div><dt>Line Discounts Total</dt><dd id="dn-line-discounts">0.000</dd></div>
           <div class="pb-sum-grand"><dt>Grand Total (<span id="dn-grand-currency">OMR</span>)</dt><dd id="dn-grand">0.000</dd></div>
+          <div class="pb-sum-omr" id="dn-grand-omr-row" hidden><dt>Grand Total (OMR)</dt><dd id="dn-grand-omr">0.000</dd></div>
           <dd id="dn-subtotal" hidden>0.000</dd>
           <input id="dn-discount" type="hidden" value="0.000"><input id="dn-shipping" type="hidden" value="0.000">
         </dl>
@@ -3161,7 +3171,7 @@
           <input id="ti-contact" type="hidden"><datalist id="ti-contact-list"></datalist><input id="ti-contact-number" type="hidden">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="ti-reference">Ref ID (Click to Select Quotation, Sales Order, or Delivery Note)</label>
+          <label class="fp-label" for="ti-reference">Ref ID <span class="fp-optional">(Quotation / SO / DN)</span></label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="ti-reference" class="fp-input fp-lookup" type="text" data-lookup="invoiceref" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select Quotation, Sales Order, or Delivery Note"><input id="ti-reference-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></span></div>
         </div>
         <div class="fp-field">
@@ -3178,7 +3188,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="ti-payment">Payment Terms</label>
-          <input id="ti-payment" class="fp-input" type="text" maxlength="100" autocomplete="off" list="ti-payment-list" placeholder="E.g. Cash / 30 Days Net"><datalist id="ti-payment-list"><option value="Cash"></option><option value="As usual"></option><option value="Credit"></option><option value="100% Advance"></option><option value="50% Advance, 50% on Delivery"></option><option value="30 Days Net"></option><option value="60 Days Net"></option></datalist>
+          <select id="ti-payment" class="fp-input fp-select" data-enter-opens="true" data-payment-keep><option selected>As usual</option><option>Cash</option><option>Credit</option><option>100% Advance</option><option>50% Advance, 50% on Delivery</option><option>30 Days Net</option><option>60 Days Net</option></select>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="ti-location">Delivery Location</label>
@@ -3368,7 +3378,7 @@
           <input id="pe-invoice-no" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="e.g. INV-98234 (Optional)">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="pe-po">PO Number <span class="fp-optional">(optional)</span></label>
+          <label class="fp-label" for="pe-po">PO Number</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="pe-po" class="fp-input fp-lookup" type="text" data-lookup="purchaseorder" data-lookup-party="pe-supplier-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select PO..."><input id="pe-po-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
@@ -3562,12 +3572,12 @@
           <input id="se-ref-no" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="e.g. PO-4471 (Optional)">
         </div>
         <div class="fp-field">
-          <label class="fp-label" for="se-ti">Tax Invoice <span class="fp-optional">(optional)</span></label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-ti" class="fp-input fp-lookup" type="text" data-lookup="taxinvoice" data-lookup-party="se-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select invoice..."><input id="se-ti-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
-        </div>
-        <div class="fp-field">
           <label class="fp-label" for="se-dn">Delivery Note</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="se-dn" class="fp-input fp-lookup" type="text" data-lookup="deliverynote" data-lookup-party="se-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select delivery note..."><input id="se-dn-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="se-ti">Tax Invoice</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="se-ti" class="fp-input fp-lookup" type="text" data-lookup="taxinvoice" data-lookup-party="se-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select invoice..."><input id="se-ti-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="se-currency">Currency <span class="fp-req" aria-hidden="true">*</span></label>
@@ -3645,6 +3655,224 @@
       <div class="fp-actions">
         <button type="button" id="se-back" class="fp-btn fp-btn-secondary">Cancel</button>
         <button type="button" id="se-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg><span id="se-save-label">Save Sale</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- SALES RETURN list  (#/returns/sales-return) -->
+<section id="sr-list-page" class="form-page form-page-auto fp-theme-purchase fp-theme-return" aria-labelledby="sr-list-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg></div>
+      <h1 id="sr-list-title" class="fp-title pb-list-title">Sales Return</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> New Return</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="sr-list-back" class="fp-undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+        <span>Back</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fp-card ml-card">
+    <div class="ml-toolbar">
+      <h2 class="ml-heading">All Sales Returns</h2>
+      <div class="ml-tools">
+        <label class="ml-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input id="sr-list-search" type="search" placeholder="Search SR ID, buyer, customer PO..." autocomplete="off" aria-label="Search sales returns" aria-keyshortcuts="/">
+        </label>
+        <button type="button" id="sr-list-filter" class="ml-btn ml-btn-soft" aria-haspopup="dialog" aria-keyshortcuts="F">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+          <span id="sr-list-filter-label">Filter</span>
+        </button>
+        <a class="ml-btn ml-btn-primary" href="#/returns/sales-return/new" aria-keyshortcuts="Shift+N">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>New Return</span>
+        </a>
+        <button type="button" id="sr-list-import" class="ml-btn ml-btn-outline-green" aria-haspopup="dialog" aria-keyshortcuts="I">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5"></path><path d="M12 3v12"></path></svg>
+          <span>Import</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ml-table-wrap">
+      <table class="ml-table pb-list-table">
+        <thead><tr id="sr-list-head"></tr></thead>
+        <tbody id="sr-list-body"></tbody>
+      </table>
+      <div id="sr-list-empty" class="table-state" hidden>No sales returns match your search.</div>
+    </div>
+
+    <div class="ml-foot">
+      <span id="sr-list-count"></span>
+      <div class="ml-pager">
+        <button type="button" class="ml-page" disabled>Previous</button>
+        <button type="button" class="ml-page ml-page-current" aria-current="page">1</button>
+        <button type="button" class="ml-page" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SALES RETURN  (#/returns/sales-return/new · Quick Menu › Return & Replacement). The Return & Replacement crimson. -->
+<section id="sr-page" class="form-page form-page-auto fp-theme-purchase fp-theme-return" aria-labelledby="sr-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg></div>
+      <h1 id="sr-title" class="fp-title">New Sales Return</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Ctrl+S</kbd> Save</span><span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Dashboard</span>
+      </div>
+      <button type="button" id="sr-undo" class="fp-undo" title="Clear all fields" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+        <span>Clear All</span>
+      </button>
+    </div>
+  </header>
+
+  <form id="sr-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Document Details</h2>
+      <div class="pb-grid pb-grid-4">
+        <div class="fp-field">
+          <div class="fp-label-row"><label class="fp-label" for="sr-code">SR ID <span class="fp-req" aria-hidden="true">*</span></label><span class="fp-auto-badge">Auto</span></div>
+          <div class="fp-input-wrap"><input id="sr-code" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the return is saved"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-date">Return Date <span class="fp-req" aria-hidden="true">*</span></label>
+          <input id="sr-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-customer">Customer Name <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="sr-customer" class="fp-input fp-lookup" type="text" data-lookup="customer" data-lookup-cards autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select customer..."><input id="sr-customer-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-ref">Ref ID (Click to select Delivery Note)</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="sr-ref" class="fp-input fp-lookup" type="text" data-lookup="returndn" data-lookup-party="sr-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select delivery note..."><input id="sr-ref-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-se">Sales Entry</label>
+          <div class="fp-input-wrap"><input id="sr-se" class="fp-input sr-input-auto" type="text" readonly tabindex="-1" placeholder="Auto from delivery note" title="The sales entry made against the delivery note picked in Ref ID"><input id="sr-se-id" type="hidden"></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-customer-po">Customer PO Number</label>
+          <input id="sr-customer-po" class="fp-input" type="text" maxlength="60" autocomplete="off" data-upper placeholder="E.g. PO-98765">
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-currency">Currency (Base) <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="sr-currency" class="fp-input fp-lookup" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="sr-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon sr-chevron" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-reason">Return Reason</label>
+          <select id="sr-reason" class="fp-input fp-select" data-enter-opens="true">
+            <option value="" selected>Select reason</option>
+            <option>Damaged in Transit</option><option>Defective / Faulty</option><option>Wrong Item Supplied</option><option>Excess Quantity</option>
+            <option>Quality Not as Expected</option><option>Customer Changed Mind</option><option>Expired / Near Expiry</option><option>Other</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-warehouse">Return To (Stock Point)</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="sr-warehouse" class="fp-input fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select stock point..."><input id="sr-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-refund-mode">Refund Mode</label>
+          <select id="sr-refund-mode" class="fp-input fp-select" data-enter-opens="true">
+            <option selected>Credit Note</option><option>Cash Refund</option><option>Bank Transfer</option><option>Adjust Against Invoice</option><option>Replacement</option>
+          </select>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-contact">Buyer Contact Person</label>
+          <input id="sr-contact" class="fp-input" type="text" maxlength="100" autocomplete="off" list="sr-contact-list" placeholder="E.g. Mr. John Doe"><datalist id="sr-contact-list"></datalist>
+        </div>
+        <div class="fp-field">
+          <label class="fp-label" for="sr-contact-number">Buyer Contact Number</label>
+          <div class="fp-phone"><select id="sr-contact-number-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Country code" title="To change the code: Enter or Space opens the list"></select><input id="sr-contact-number" class="fp-input" type="text" inputmode="tel" maxlength="30" autocomplete="off" data-check="phone" placeholder="9XXX XXXX"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="fp-card pb-card-items">
+      <div class="fp-section-head">
+        <h2 class="fp-section-title">2. Returned Items</h2>
+        <div class="pb-head-actions">
+          <input id="sr-vat-mode" type="hidden" value="exclude">
+          <button type="button" class="pb-btn pb-btn-outline" data-create-item title="Create a new item in the Item master (Alt+I)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create Master Item</button>
+          <button type="button" class="pb-btn pb-btn-solid" data-add-row="items" title="Add an item row (Alt+A)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Item</button>
+        </div>
+      </div>
+      <div class="fp-table-wrap pb-table-wrap">
+        <table class="fp-table pb-table pb-table-priced pb-table-po pb-table-sr">
+          <thead><tr><th class="pb-col-sno">#</th><th class="pb-col-code">Item Code</th><th class="pb-col-name">Item Name</th><th class="sr-col-brand">Brand</th><th class="pb-col-num">Sold Qty</th><th class="pb-col-num">Return Qty</th><th class="pb-col-unit">Unit</th><th class="sr-col-cond">Condition</th><th class="pb-col-num">Unit Price</th><th class="pb-col-pct">VAT %</th><th class="pb-col-total">Total Price (<span data-sr-base>OMR</span>)</th><th class="pb-col-act">Action</th></tr></thead>
+          <tbody id="sr-items"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="pb-pair-summary pb-pair-po">
+      <section class="fp-card">
+        <h2 class="fp-section-title">3. Remarks &amp; Notes &amp; PDF Print Configuration</h2>
+        <div class="fp-field">
+          <div class="pb-label-row">
+            <label class="fp-label" id="sr-remarks-label" for="sr-remarks-editor">Remarks &amp; Notes</label>
+            <span class="pb-editor-hint"><span aria-hidden="true">●</span> Select text to make Bold or change Color</span>
+          </div>
+          <input id="sr-remarks" type="hidden">
+          <div class="pb-editor">
+            <div class="pb-editor-bar" role="toolbar" aria-label="Remarks &amp; Notes formatting" aria-controls="sr-remarks-editor">
+              <button type="button" class="pb-tool" data-cmd="bold" title="Bold (Ctrl+B)" tabindex="-1"><b>B</b> Bold</button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" tabindex="-1"><i>I</i></button>
+              <button type="button" class="pb-tool pb-tool-sq" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline" tabindex="-1"><u>U</u></button>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <span class="pb-tool-label">Color:</span>
+              <button type="button" class="pb-swatch" data-colour="#0f172a" style="--swatch: #0f172a" title="Black" aria-label="Black text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#0284c7" style="--swatch: #0284c7" title="Sky" aria-label="Sky blue text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#16a34a" style="--swatch: #16a34a" title="Green" aria-label="Green text" tabindex="-1"></button>
+              <button type="button" class="pb-swatch" data-colour="#9333ea" style="--swatch: #9333ea" title="Purple" aria-label="Purple text" tabindex="-1"></button>
+              <label class="pb-tool" title="Pick any colour">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"></path></svg>
+                Custom<input type="color" class="pb-colour-input" data-custom-colour data-enter-skip data-transient="true" value="#dc2626" tabindex="-1" aria-label="Custom text colour">
+              </label>
+              <span class="pb-tool-sep" aria-hidden="true"></span>
+              <button type="button" class="pb-tool" data-cmd="insertUnorderedList" title="Bulleted list" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>List</button>
+              <button type="button" class="pb-tool" data-cmd="removeFormat" title="Clear formatting of the selected text" tabindex="-1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16M3 21 21 3"></path></svg>Clear</button>
+            </div>
+            <div id="sr-remarks-editor" class="pb-editor-area" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="sr-remarks-label" tabindex="0" spellcheck="true" data-placeholder="Enter transaction remarks or additional internal notes..."></div>
+          </div>
+        </div>
+        <div class="pb-print" data-print="sr"></div>
+      </section>
+      <section class="fp-card pb-summary pb-summary-po" aria-live="polite">
+        <h2 class="fp-section-title">4. Financial Summary</h2>
+        <dl class="pb-sum pb-sum-po sr-sum">
+          <div><dt>Total Return Value (<span data-sr-base>OMR</span>)</dt><dd id="sr-subtotal">0.000</dd></div>
+          <div><dt>Total VAT Amount (<span data-sr-base>OMR</span>)</dt><dd id="sr-vat">0.000</dd></div>
+          <div><dt><label for="sr-discount">Discount (<span data-sr-base>OMR</span>)</label></dt><dd><input id="sr-discount" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div><dt><label for="sr-restocking">Restocking Fee (<span data-sr-base>OMR</span>)</label></dt><dd><input id="sr-restocking" class="fp-input pb-sum-input" type="text" inputmode="decimal" autocomplete="off" value="0.000"></dd></div>
+          <div class="pb-sum-grand"><dt>Total Refund (<span id="sr-grand-currency">OMR</span>)</dt><dd id="sr-grand">0.000</dd></div>
+          <!-- No shipping on a return: kept at 0 for the shared totals. The VAT note is not shown here. -->
+          <span id="sr-vat-label" hidden></span><input id="sr-shipping" type="hidden" value="0.000">
+        </dl>
+      </section>
+    </div>
+
+    <div class="fp-footer">
+      <div class="fp-actions">
+        <button type="button" id="sr-back" class="fp-btn fp-btn-secondary">Cancel</button>
+        <button type="button" id="sr-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="sr-save-label">Save Sales Return</span></button>
       </div>
     </div>
   </form>
@@ -4337,6 +4565,18 @@
   <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="vatRate" value="0.00"><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
 </tr></template>
 
+<!-- Sales Return line: Brand (shown from the item), Sold Qty (from the sales order / invoice), Return Qty, Unit, Condition, Unit Price, VAT %, Total -->
+<template id="pb-line-sr"><tr class="fp-row" data-pb-row="sr">
+  <td><input class="fp-cell sr-cell-auto" data-brand-show type="text" readonly tabindex="-1" placeholder="Auto from item" aria-label="Brand"></td>
+  <td><input class="fp-cell fp-cell-num sr-cell-auto" data-field="soldQty" type="text" readonly tabindex="-1" value="0" aria-label="Sold quantity" title="The quantity on the delivery note or sales entry the line was copied from"></td>
+  <td><input class="fp-cell fp-cell-num sr-cell-return" data-field="quantity" type="text" inputmode="decimal" autocomplete="off" value="1" aria-label="Return quantity"></td>
+  <td data-unit-cell></td>
+  <td><select class="fp-cell fp-select pb-cell-select" data-field="condition" aria-label="Condition"><option selected>Good – Restock</option><option>Opened – Inspect</option><option>Damaged – Scrap</option><option>Defective – Return to Supplier</option></select></td>
+  <td><input class="fp-cell fp-cell-num" data-field="price" type="text" inputmode="decimal" autocomplete="off" value="0.000" aria-label="Unit price"></td>
+  <td><input class="fp-cell fp-cell-num" data-field="vatRate" type="text" inputmode="decimal" autocomplete="off" value="5" aria-label="VAT %"></td>
+  <td><output class="pb-line-total" data-total>0.000</output><input type="hidden" data-field="foc" value="No"><input type="hidden" data-field="discountPct" value="0.00"><input type="hidden" data-field="discountAmount" value="0.000"></td>
+</tr></template>
+
 <!-- Stock Adjustment line: Brand, System Qty (the stock point's stock), Physical Qty (counted), Difference, Adj. Qty, Unit Cost, Adj. Value, Reason (no Unit column) -->
 <template id="pb-line-sa"><tr class="fp-row" data-pb-row="sa" data-no-unit>
   <td><output class="sm-ro" data-system>—</output><input type="hidden" data-field="systemQty" value=""></td>
@@ -4956,7 +5196,7 @@
       </button>
       <button type="button" class="qm-item" data-qm-open="entry" data-key="e" aria-keyshortcuts="E">
         <span class="qm-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg></span>
-        <span class="qm-text"><span class="qm-name">Transaction <span class="qm-key">E</span>ntry</span><span class="qm-desc">Purchase and sales entries, tax invoices</span></span>
+        <span class="qm-text"><span class="qm-name">Transaction <span class="qm-key">E</span>ntry</span><span class="qm-desc">Tax invoices, purchase and sales entries</span></span>
         <kbd class="qm-kbd">E</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
@@ -5319,6 +5559,12 @@
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
       <h3 class="qm-section">Transaction Entry</h3>
+      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice" data-key="t" aria-keyshortcuts="T">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">All VAT invoices issued to customers</span></span>
+        <kbd class="qm-kbd">T</kbd>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
       <a class="qm-item qm-item-sm" href="#/entry/purchase-entry" data-key="p" aria-keyshortcuts="P">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">P</span>urchase Entry</span><span class="qm-desc">All supplier bills recorded in the books</span></span>
@@ -5329,12 +5575,6 @@
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Entry</span><span class="qm-desc">All customer sales recorded in the books</span></span>
         <kbd class="qm-kbd">S</kbd>
-        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-      </a>
-      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice" data-key="t" aria-keyshortcuts="T">
-        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">All VAT invoices issued to customers</span></span>
-        <kbd class="qm-kbd">T</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
     </nav>
@@ -5358,6 +5598,12 @@
       </button>
     </div>
     <nav class="qm-list qm-list-sm qm-list-fixed" aria-label="Create Transaction Entry">
+      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice/new" data-key="t" aria-keyshortcuts="Alt+T T">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">Issue a VAT invoice</span></span>
+        <kbd class="qm-kbd">T</kbd>
+        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+      </a>
       <a class="qm-item qm-item-sm" href="#/entry/purchase-entry/new" data-key="p" aria-keyshortcuts="Alt+P P">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">P</span>urchase Entry</span><span class="qm-desc">Record a supplier bill</span></span>
@@ -5368,12 +5614,6 @@
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Entry</span><span class="qm-desc">Record a sale</span></span>
         <kbd class="qm-kbd">S</kbd>
-        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-      </a>
-      <a class="qm-item qm-item-sm" href="#/entry/tax-invoice/new" data-key="t" aria-keyshortcuts="Alt+T T">
-        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"></path><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">T</span>ax Invoice</span><span class="qm-desc">Issue a VAT invoice</span></span>
-        <kbd class="qm-kbd">T</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
     </nav>
@@ -5404,10 +5644,10 @@
         <kbd class="qm-kbd">Alt</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </button>
-      <h3 class="qm-section">Create (Alt)</h3>
-      <a class="qm-item qm-item-sm" href="#/returns/sales-return/new" data-key="s" aria-keyshortcuts="Alt+S S">
+      <h3 class="qm-section">Return &amp; Replacement</h3>
+      <a class="qm-item qm-item-sm" href="#/returns/sales-return" data-key="s" aria-keyshortcuts="S">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Return</span><span class="qm-desc">Goods returned by customers</span></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">S</span>ales Return</span><span class="qm-desc">All goods returned by customers</span></span>
         <kbd class="qm-kbd">S</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
@@ -5643,7 +5883,7 @@
       <!-- Quotation Request: the supplier this copy is addressed to (one PDF per supplier). -->
       <label class="pv-supplier" hidden>
         <span class="pv-supplier-label">Supplier</span>
-        <select id="pv-supplier" aria-label="Show the request for supplier"></select>
+        <select id="pv-supplier" aria-label="Show the copy for supplier"></select>
       </label>
       <!-- GRN: the PDF without prices (Inspection Mode), or with them (Commercial Mode). -->
       <button type="button" id="pv-prices" class="pv-prices" data-pv="prices" aria-pressed="false" hidden>

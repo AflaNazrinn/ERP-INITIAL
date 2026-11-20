@@ -13,8 +13,9 @@ declare(strict_types=1);
  *   Debtors          how many customers there are (Party › Debtors)
  *   Total Employees  user accounts
  *   Chart            purchase orders per week of the chosen month
+ *   Sales Return     sales returns dated in the chosen month, their Total Refund
  *   Activities       the latest records created or changed (Purchase Book documents and masters)
- * Sales, returns and quotations have no screens yet, so they stay 0.
+ * Sales, purchase returns and quotations are not counted yet, so they stay 0.
  */
 
 require_once __DIR__ . '/../../src/api_bootstrap.php';
@@ -35,6 +36,11 @@ $scalar = static fn (string $sql, array $params = []) => query($sql, $params)->f
 
 $totalPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE po_date BETWEEN ? AND ? AND status <> 'Cancelled'", [$from, $to]);
 $pendingPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE status NOT IN ('Received', 'Cancelled')");
+try {
+    $salesReturn = $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM sales_returns WHERE sr_date BETWEEN ? AND ?', [$from, $to]);
+} catch (PDOException) {
+    $salesReturn = 0;                              // the sales returns migration is not applied yet
+}
 
 // Purchase per week of the month: days 1–7 are W1, 8–14 W2 …
 $weeks = (int) ceil((int) date('t', strtotime($from)) / 7);
@@ -103,7 +109,7 @@ json_out([
         'sales' => $money(0), 'purchase' => $money(array_sum($perWeek)),
         'weeks' => array_map(static fn ($week) => ['label' => "W$week", 'sales' => $money(0), 'purchase' => $money($perWeek[$week])], array_keys($perWeek)),
     ],
-    'returns' => ['purchaseReturn' => $money(0), 'salesReturn' => $money(0), 'rmaCount' => 0, 'resolvedCount' => 0],
+    'returns' => ['purchaseReturn' => $money(0), 'salesReturn' => $money($salesReturn), 'rmaCount' => 0, 'resolvedCount' => 0],
     'quotations' => ['total' => 0, 'totalValue' => $money(0), 'pending' => 0, 'approved' => 0, 'rejected' => 0],
     'activities' => array_slice($activities, 0, 5),
     'activityTotal' => $activityTotal,
