@@ -136,7 +136,7 @@ function company_create(array $post, array $files): array
 
             // A new database has only the user the person creating it chose (the admin seeded by a migration goes).
             $pdo->exec('DELETE FROM users');
-            $pdo->prepare('INSERT INTO users (username, full_name, password_hash) VALUES (?, ?, ?)')
+            $pdo->prepare('INSERT INTO users (username, full_name, password_hash, is_admin) VALUES (?, ?, ?, 1)')
                 ->execute([$account['username'], 'Administrator', password_hash($account['password'], PASSWORD_DEFAULT)]);
 
             $folder = 'companies/' . $code;

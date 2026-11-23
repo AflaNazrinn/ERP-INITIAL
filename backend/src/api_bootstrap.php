@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/master_validation.php';   // ValidationError, NotFound
+require_once __DIR__ . '/permissions.php';         // who may do what (User Setting)
 
 function json_out(mixed $data, int $status = 200): never
 {
@@ -184,6 +185,8 @@ const MASTER_UNIQUE = [
     'purchase-returns'   => ['purchase_returns', 'prt_code', null, null, 'purchase return'],
     'purchase-replacements' => ['purchase_replacements', 'prp_code', null, null, 'purchase replacement'],
     'sales-replacements' => ['sales_replacements', 'srp_code', null, null, 'sales replacement'],
+    'employees'          => ['employees', 'emp_code', null, null, 'employee'],      // two people may share a name
+    'users'              => ['users', 'username', null, null, 'user'],
 ];
 
 /* The saved record (other than $exceptId) with this code or name, as [id, code]; null when there is none. */
@@ -376,6 +379,12 @@ if (!defined('PUBLIC_ENDPOINT') && $pageCompany !== '' && $pageCompany !== ($_SE
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)
     && !csrf_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
     json_error('Your session has expired. Reload the page and try again.', 403);
+}
+
+// What this user may do (User Setting): a write this user is not allowed answers 403 with the reason; a user turned
+// off or removed is signed out.
+if (!defined('PUBLIC_ENDPOINT')) {
+    permission_enforce(data_version_name(), $_SERVER['REQUEST_METHOD'] ?? 'GET');
 }
 
 // Reads never change the session: release its file lock now, so one user's requests (a list, its lookups,
