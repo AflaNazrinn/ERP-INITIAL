@@ -38,6 +38,24 @@
     </div>
   </header>
 
+  <!-- No Dashboard › Overview permission (User Setting): this note instead of the figures. -->
+  <div id="dashboard-locked" class="dash-locked" hidden>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+    <div><strong>You don't have permission to see the dashboard figures.</strong><span>Please contact your manager or admin. The Quick Menu still opens the pages you may use.</span></div>
+  </div>
+
+  <!-- MODULE CARDS (#/home for staff, #/modules/<module> for anyone): the modules this user may open, and inside one its
+       pages as cards. Staff open here instead of on the dashboard (User Setting › Role). Built from the Quick Menu. -->
+  <section id="module-home" class="mh" aria-label="Modules" hidden>
+    <div id="module-home-head" class="mh-head" hidden></div>
+    <div id="module-home-grid" class="mh-grid"></div>
+    <div id="module-home-empty" class="mh-empty" hidden>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      <strong>No modules have been assigned to you yet.</strong>
+      <span>Please contact your manager or admin.</span>
+    </div>
+  </section>
+
   <!-- ROW 1: KPI TILES -->
   <div id="dashboard-kpis" class="kpi-grid"></div>
 
@@ -1578,6 +1596,460 @@
       </div>
     </div>
   </form>
+</section>
+
+<!-- EMPLOYEES  (#/employee/employee · Quick Menu › Employee Management › Employee): the staff as cards. -->
+<section id="employee-list-page" class="form-page form-page-auto emp-theme" aria-labelledby="employee-list-title" hidden>
+  <header class="emp-head">
+    <div class="emp-brand">
+      <div class="emp-brand-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></div>
+      <div>
+        <p class="emp-kicker">Employee</p>
+        <h1 id="employee-list-title" class="emp-title">Employees</h1>
+        <p class="emp-subtitle">Staff records and details</p>
+      </div>
+    </div>
+    <div class="emp-tools">
+      <div class="fp-keys emp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>F</kbd> Filter</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> Add</span>
+        <span class="fp-key"><kbd>Enter</kbd> View</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <label class="emp-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="employee-list-search" type="search" placeholder="Search name, role or ID" autocomplete="off" aria-label="Search employees" aria-keyshortcuts="/">
+      </label>
+      <button type="button" id="employee-list-filter" class="emp-btn emp-btn-plain" aria-haspopup="dialog" aria-keyshortcuts="F">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
+        <span id="employee-list-filter-label">Filter</span>
+      </button>
+      <a class="emp-btn emp-btn-primary" href="#/employee/employee/new" aria-keyshortcuts="Shift+N">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        <span>Add employee</span>
+      </a>
+    </div>
+  </header>
+  <p class="emp-count" id="employee-list-count" aria-live="polite"></p>
+  <div id="employee-list-grid" class="emp-grid"></div>
+  <div id="employee-list-empty" class="emp-empty" hidden></div>
+</section>
+
+<!-- EMPLOYEE CREATION  (#/employee/employee/new · Add employee; #/employee/employee/edit/ID · the card's edit button).
+     Laid out like the other creation pages (numbered fp-card sections) in the Employees violet. The photo and the
+     documents upload once the employee is saved. -->
+<section id="employee-page" class="form-page form-page-auto emp-theme" aria-labelledby="employee-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></div>
+      <h1 id="employee-title" class="fp-title">Employee Creation</h1>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Shift+Enter</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="employee-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
+    </div>
+  </header>
+
+  <form id="employee-form" class="fp-form" novalidate>
+    <section class="fp-card">
+      <h2 class="fp-section-title">1. Identity &amp; Photo</h2>
+      <div class="fp-grid-12 ef-identity">
+        <div class="fp-field fp-span-3 ef-photo-field">
+          <span class="fp-label">Profile Photo</span>
+          <button type="button" id="employee-photo-btn" class="ef-photo" title="A photo of the employee: JPG or PNG, up to 10 MB">
+            <img id="employee-photo-preview" alt="" hidden>
+            <span class="ef-photo-empty"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"></path><circle cx="12" cy="13" r="3"></circle></svg><span>Upload Photo</span></span>
+          </button>
+          <button type="button" id="employee-photo-remove" class="ef-photo-remove" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg><span>Remove photo</span></button>
+          <input id="employee-photo-input" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-transient="true" hidden>
+        </div>
+        <div class="fp-field fp-span-3">
+          <div class="fp-label-row"><label class="fp-label" for="employee-no">Employee ID</label><span class="fp-auto-badge">Auto</span></div>
+          <div class="fp-input-wrap"><input id="employee-no" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="Assigned automatically when the employee is saved"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-code">Employee Code</label>
+          <input id="employee-code" class="fp-input fp-mono" type="text" maxlength="20" autocomplete="off" spellcheck="false" data-upper placeholder="EMP-0001" title="The next code is filled in; type another to use it">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-gender">Gender</label>
+          <select id="employee-gender" class="fp-input fp-select"><option value="" selected>Select Gender</option><option>Male</option><option>Female</option><option>Others</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-first-name">First Name <span class="fp-req">*</span></label>
+          <input id="employee-first-name" class="fp-input" type="text" maxlength="60" autocomplete="off" data-letters required placeholder="John">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-last-name">Last Name</label>
+          <input id="employee-last-name" class="fp-input" type="text" maxlength="60" autocomplete="off" data-letters placeholder="Doe">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-dob">Date of Birth</label>
+          <input id="employee-dob" class="fp-input" type="date">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-marital">Marital Status</label>
+          <select id="employee-marital" class="fp-input fp-select"><option value="" selected>Select Status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-nationality">Nationality</label>
+          <input id="employee-nationality" class="fp-input" type="text" maxlength="80" autocomplete="off" data-letters placeholder="Nationality">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">2. Contact Details</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-email">Email Address <span class="fp-req">*</span></label>
+          <input id="employee-email" class="fp-input" type="text" inputmode="email" maxlength="150" autocomplete="off" data-check="email" required placeholder="john.doe@company.com">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-country">Country <span class="fp-req">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="employee-country" class="fp-input fp-lookup" type="text" data-lookup="country" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" required placeholder="Select country..." value="India"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-city">City <span class="fp-req">*</span></label>
+          <input id="employee-city" class="fp-input" type="text" maxlength="80" autocomplete="off" data-letters required placeholder="City">
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-phone">Phone Number <span class="fp-req">*</span></label>
+          <div class="fp-phone"><select id="employee-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Phone number country code" title="Set from the country. To change it: Enter or Space opens the list"></select><input id="employee-phone" class="fp-input" type="text" inputmode="tel" autocomplete="off" data-check="phone" required placeholder="98765 43210"></div>
+        </div>
+        <div class="fp-field fp-span-9">
+          <label class="fp-label" for="employee-address">Address <span class="fp-req">*</span></label>
+          <input id="employee-address" class="fp-input" type="text" maxlength="255" autocomplete="off" required placeholder="Street Address">
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">3. Employment Details</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-4">
+          <div class="fp-label-row"><label class="fp-label" for="employee-company">Company</label><span class="fp-auto-badge">Signed in</span></div>
+          <div class="fp-input-wrap"><input id="employee-company" class="fp-input fp-input-code" type="text" readonly tabindex="-1" title="The company you are signed in to"><span class="fp-input-icon-right" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-department">Department Name <span class="fp-req">*</span></label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="employee-department" class="fp-input" type="text" maxlength="80" data-suggest="empDepartment" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" required placeholder="Type to search, e.g. Operations"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Departments" hidden></ul></div>
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-warehouse">Stock Point</label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="employee-warehouse" class="fp-input fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select stock point..."><input id="employee-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-designation">Designation Name <span class="fp-req">*</span></label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="employee-designation" class="fp-input" type="text" maxlength="100" data-suggest="empDesignation" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" required placeholder="Type to search, e.g. Manager"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Designations" hidden></ul></div>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-join-date">Date of Joining <span class="fp-req">*</span></label>
+          <input id="employee-join-date" class="fp-input" type="date" required>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-status">Status</label>
+          <select id="employee-status" class="fp-input fp-select"><option selected>Active</option><option>On Leave</option><option>Resigned</option><option>Inactive</option></select>
+        </div>
+        <div class="fp-field fp-span-3">
+          <label class="fp-label" for="employee-type">Employment Type <span class="fp-req">*</span></label>
+          <select id="employee-type" class="fp-input fp-select" required><option selected>Full-time</option><option>Part-time</option><option>Contract</option><option>Intern</option><option>Temporary</option></select>
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-work-location">Work Location <span class="fp-req">*</span></label>
+          <input id="employee-work-location" class="fp-input" type="text" maxlength="100" autocomplete="off" required placeholder="Head Office / Remote">
+        </div>
+        <div class="fp-field fp-span-4 ef-check-field">
+          <label class="ef-check"><input id="employee-board" type="checkbox"><span>Board Team Member</span></label>
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <h2 class="fp-section-title">4. Finance &amp; Identity</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-salary">Basic Salary</label>
+          <input id="employee-salary" class="fp-input fp-input-num fp-mono" type="text" inputmode="decimal" autocomplete="off" placeholder="5000.000">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-hra">HRA</label>
+          <input id="employee-hra" class="fp-input fp-input-num fp-mono" type="text" inputmode="decimal" autocomplete="off" placeholder="1000.000">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-allowance">Other Allowance</label>
+          <input id="employee-allowance" class="fp-input fp-input-num fp-mono" type="text" inputmode="decimal" autocomplete="off" placeholder="500.000">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-bank">Bank Name</label>
+          <input id="employee-bank" class="fp-input" type="text" maxlength="120" autocomplete="off" placeholder="International Bank">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-account">Bank Account Number</label>
+          <input id="employee-account" class="fp-input fp-mono" type="text" maxlength="40" autocomplete="off" data-upper placeholder="ACC-XXXXXX">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-iban">IBAN Number</label>
+          <input id="employee-iban" class="fp-input fp-mono" type="text" maxlength="40" autocomplete="off" data-upper placeholder="OM000000000000000000000">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-national-id">National ID Number</label>
+          <input id="employee-national-id" class="fp-input fp-mono" type="text" maxlength="40" autocomplete="off" data-upper placeholder="NID-XXXXXX">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-passport">Passport Number</label>
+          <input id="employee-passport" class="fp-input fp-mono" type="text" maxlength="40" autocomplete="off" data-upper placeholder="Passport No">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-passport-expiry">Passport Expiry Date</label>
+          <input id="employee-passport-expiry" class="fp-input" type="date">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-visa">Visa Number</label>
+          <input id="employee-visa" class="fp-input fp-mono" type="text" maxlength="40" autocomplete="off" data-upper placeholder="Visa No">
+        </div>
+        <div class="fp-field fp-span-4">
+          <label class="fp-label" for="employee-visa-expiry">Visa Expiry Date</label>
+          <input id="employee-visa-expiry" class="fp-input" type="date">
+        </div>
+      </div>
+    </section>
+    <div class="fp-pair">
+    <section class="fp-card">
+      <h2 class="fp-section-title">5. Emergency Contact &amp; Remarks</h2>
+      <div class="fp-grid-12">
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="employee-em-name">Contact Name</label>
+          <input id="employee-em-name" class="fp-input" type="text" maxlength="120" autocomplete="off" data-letters placeholder="Emergency Name">
+        </div>
+        <div class="fp-field fp-span-6">
+          <label class="fp-label" for="employee-em-relationship">Relationship</label>
+          <input id="employee-em-relationship" class="fp-input" type="text" maxlength="60" autocomplete="off" data-letters placeholder="Spouse / Parent">
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="employee-em-phone">Contact Phone</label>
+          <div class="fp-phone"><select id="employee-em-phone-code" class="fp-input fp-select fp-select-list fp-phone-code" data-phone-code data-enter-skip data-enter-opens="true" aria-label="Contact phone country code" title="To change the code: Enter or Space opens the list"></select><input id="employee-em-phone" class="fp-input" type="text" inputmode="tel" autocomplete="off" data-check="phone" placeholder="98765 43210"></div>
+        </div>
+        <div class="fp-field fp-span-12">
+          <label class="fp-label" for="employee-remarks">Remarks</label>
+          <textarea id="employee-remarks" class="fp-input fp-textarea" rows="3" autocomplete="off" placeholder="Remarks..."></textarea>
+        </div>
+      </div>
+    </section>
+    <section class="fp-card">
+      <div class="ef-docs-head">
+        <h2 class="fp-section-title">6. Documents</h2>
+        <button type="button" id="employee-doc-add" class="ef-add-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Row</button>
+      </div>
+      <ul id="employee-docs-stored" class="ef-doc-list"></ul>
+      <div id="employee-doc-rows" class="ef-doc-rows"></div>
+      <p class="ef-note">PDF, Word, Excel or an image, up to 10 MB each. They upload when the employee is saved.</p>
+    </section>
+    </div>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="employee-back" class="fp-btn fp-btn-secondary">Back to Dashboard</button>
+        <button type="button" id="employee-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="employee-save-label">Save Employee Record</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- USER ACCOUNTS (#/employee/user-setting · Employee Management › User Setting): every login, with search, Create User,
+     and Edit / Delete on each one. Admin accounts are listed but not changed here. -->
+<section id="user-list-page" class="form-page form-page-auto emp-theme" aria-labelledby="user-list-title" hidden>
+  <header class="emp-head">
+    <div class="emp-brand">
+      <div class="emp-brand-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="4"></circle><path d="M2 21a8 8 0 0 1 11.5-7.2"></path><path d="M18 15v.01M18 12l.6 1.4 1.5.2-1.1 1 .3 1.5-1.3-.8-1.3.8.3-1.5-1.1-1 1.5-.2z"></path></svg></div>
+      <div>
+        <p class="emp-kicker">User Setting</p>
+        <h1 id="user-list-title" class="emp-title">User Accounts</h1>
+        <p class="emp-subtitle">Logins and what each user may open</p>
+      </div>
+    </div>
+    <div class="emp-tools">
+      <div class="fp-keys emp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>/</kbd> Search</span>
+        <span class="fp-key"><kbd>Shift+N</kbd> Create</span>
+        <span class="fp-key"><kbd>Enter</kbd> Edit</span>
+        <span class="fp-key"><kbd>Del</kbd> Delete</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <label class="emp-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="user-list-search" type="search" placeholder="Search name, username or code" autocomplete="off" aria-label="Search user accounts" aria-keyshortcuts="/">
+      </label>
+      <a id="user-list-create" class="emp-btn emp-btn-primary" href="#/employee/user-setting/new" aria-keyshortcuts="Shift+N">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        <span>Create User</span>
+      </a>
+    </div>
+  </header>
+
+  <section class="fp-card ul-card">
+    <div class="ul-table-wrap">
+      <table class="ul-table">
+        <thead>
+          <tr>
+            <th scope="col">User</th>
+            <th scope="col">Username</th>
+            <th scope="col">Password</th>
+            <th scope="col">Role</th>
+            <th scope="col">Status</th>
+            <th scope="col">Access</th>
+            <th scope="col">Updated</th>
+            <th scope="col" class="ul-col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="user-list-body"></tbody>
+      </table>
+      <div id="user-list-empty" class="ul-empty" hidden></div>
+    </div>
+    <div class="ul-foot">
+      <span id="user-list-count"></span>
+      <span class="ul-note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Passwords are hidden here. Open Edit to see or change a user's password.</span>
+    </div>
+  </section>
+</section>
+
+<!-- USER SETTING (#/employee/user-setting · Employee Management › User Setting): a sign-in for an employee and the
+     modules that user may open. The User popup lists the employees; their details come from the employee record. -->
+<section id="user-page" class="form-page form-page-auto emp-theme" aria-labelledby="user-heading" hidden>
+  <header class="emp-head">
+    <div class="emp-brand">
+      <div class="emp-brand-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="4"></circle><path d="M2 21a8 8 0 0 1 11.5-7.2"></path><path d="M18 15v.01M18 12l.6 1.4 1.5.2-1.1 1 .3 1.5-1.3-.8-1.3.8.3-1.5-1.1-1 1.5-.2z"></path></svg></div>
+      <div>
+        <p id="user-title" class="emp-kicker">Create User</p>
+        <h1 id="user-heading" class="emp-title">User Setting</h1>
+        <p class="emp-subtitle">User accounts and access</p>
+      </div>
+    </div>
+    <div class="fp-header-side">
+      <div class="fp-keys" aria-label="Keyboard shortcuts">
+        <span class="fp-key"><kbd>Enter</kbd> Next Field</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Space</kbd> Tick</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Shift+Enter</kbd> Save</span>
+        <span class="fp-key-sep" aria-hidden="true">·</span>
+        <span class="fp-key"><kbd>Esc</kbd> Back</span>
+      </div>
+      <button type="button" id="user-undo" class="fp-undo" title="Clear all fields" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg><span>Clear All</span></button>
+    </div>
+  </header>
+
+  <form id="user-form" class="fp-form" novalidate>
+    <section class="fp-card us-card">
+      <div class="us-profile">
+        <div id="user-avatar" class="us-avatar" aria-hidden="true">?</div>
+        <div class="us-who">
+          <strong id="user-who-name" class="us-who-name">No user selected</strong>
+          <span id="user-who-meta" class="us-who-meta">Pick a user below to set their login and access</span>
+        </div>
+        <label class="us-active">
+          <span id="user-active-label" class="us-active-label">Active</span>
+          <input id="user-active" type="checkbox" class="us-switch" role="switch" checked data-transient="true" data-enter-skip aria-label="Active: this user may sign in">
+        </label>
+      </div>
+
+      <div class="us-body">
+        <section class="us-box" aria-labelledby="user-details-title">
+          <h2 id="user-details-title" class="us-box-title">User details</h2>
+          <p class="us-box-sub">Pick a user, set their login, and fill in their work details.</p>
+          <div class="fp-grid-12">
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-employee">User <span class="fp-req">*</span></label>
+              <div class="fp-input-wrap fp-lookup-wrap"><input id="user-employee" class="fp-input fp-lookup" type="text" data-lookup="user" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" required placeholder="Click to select user..."><input id="user-employee-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-username">Username <span class="fp-req">*</span></label>
+              <input id="user-username" class="fp-input" type="text" maxlength="50" autocomplete="off" spellcheck="false" required placeholder="karan.patel" title="Used to sign in: 3 to 50 letters, digits and . _ @ -">
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-password">Password <span id="user-password-req" class="fp-req">*</span></label>
+              <div class="fp-input-wrap us-pass"><input id="user-password" class="fp-input" type="password" maxlength="200" autocomplete="new-password" spellcheck="false" placeholder="At least 6 characters"><button type="button" id="user-password-eye" class="us-eye" tabindex="-1" aria-label="Show password" title="Show password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-gender">Gender</label>
+              <select id="user-gender" class="fp-input fp-select"><option value="" selected>Select Gender</option><option>Male</option><option>Female</option><option>Others</option></select>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-department">Department name <span class="fp-req">*</span></label>
+              <div class="fp-input-wrap fp-suggest-wrap"><input id="user-department" class="fp-input" type="text" maxlength="80" data-suggest="empDepartment" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" required placeholder="Type to search, e.g. Purchase"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Departments" hidden></ul></div>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-designation">Designation name <span class="fp-req">*</span></label>
+              <div class="fp-input-wrap fp-suggest-wrap"><input id="user-designation" class="fp-input" type="text" maxlength="100" data-suggest="empDesignation" data-suggest-typed data-suggest-free role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" required placeholder="Type to search, e.g. Officer"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Designations" hidden></ul></div>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-type">Employment type</label>
+              <select id="user-type" class="fp-input fp-select"><option selected>Full-time</option><option>Part-time</option><option>Contract</option><option>Intern</option><option>Temporary</option></select>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-warehouse">Stock point</label>
+              <div class="fp-input-wrap fp-lookup-wrap"><input id="user-warehouse" class="fp-input fp-lookup" type="text" data-lookup="warehouse" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Click to select stock point..."><input id="user-warehouse-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-work-location">Work location <span class="fp-req">*</span></label>
+              <input id="user-work-location" class="fp-input" type="text" maxlength="100" autocomplete="off" required placeholder="Head Office / Remote">
+            </div>
+            <div class="fp-field fp-span-3">
+              <label class="fp-label" for="user-role">Role</label>
+              <select id="user-role" class="fp-input fp-select" title="Staff open on their module cards (no dashboard); managers open on the dashboard"><option value="staff" selected>Staff</option><option value="manager">Manager</option></select>
+            </div>
+          </div>
+        </section>
+
+        <section class="us-perms" aria-labelledby="user-perms-title">
+          <div class="us-perms-head">
+            <div>
+              <h2 id="user-perms-title" class="us-box-title">Module permissions</h2>
+              <p class="us-box-sub">Tick the modules this user can open. Access gives full permission; click a module to set access for each of its submodules.</p>
+            </div>
+            <span class="us-count"><strong id="user-perm-count">0</strong> of <span id="user-perm-total">0</span> modules allowed</span>
+          </div>
+          <div class="us-table-wrap">
+            <table class="us-table">
+              <thead>
+                <tr>
+                  <th class="us-col-module" scope="col">Module</th>
+                  <th scope="col"><span>Access</span><input type="checkbox" class="us-check" data-perm-all="access" data-transient="true" data-enter-skip aria-label="Access to every module"></th>
+                  <th scope="col"><span>View</span><input type="checkbox" class="us-check" data-perm-all="view" data-transient="true" data-enter-skip aria-label="View in every module"></th>
+                  <th scope="col"><span>Create</span><input type="checkbox" class="us-check" data-perm-all="create" data-transient="true" data-enter-skip aria-label="Create in every module"></th>
+                  <th scope="col"><span>Edit</span><input type="checkbox" class="us-check" data-perm-all="edit" data-transient="true" data-enter-skip aria-label="Edit in every module"></th>
+                  <th scope="col"><span>Delete</span><input type="checkbox" class="us-check" data-perm-all="delete" data-transient="true" data-enter-skip aria-label="Delete in every module"></th>
+                </tr>
+              </thead>
+              <tbody id="user-perm-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <div class="fp-footer fp-footer-end">
+      <div class="fp-actions">
+        <button type="button" id="user-remove" class="fp-btn fp-btn-danger" hidden>Remove Login</button>
+        <button type="button" id="user-back" class="fp-btn fp-btn-secondary">Back to Users</button>
+        <button type="button" id="user-save" class="fp-btn fp-btn-primary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg><span id="user-save-label">Save User</span></button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- NO PERMISSION: shown instead of a page the signed-in user may not open (User Setting). -->
+<section id="no-access-page" class="form-page form-page-auto" aria-labelledby="no-access-title" hidden>
+  <div class="na-box">
+    <div class="na-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
+    <h1 id="no-access-title" class="na-title">You don't have permission</h1>
+    <p id="no-access-text" class="na-text">You don't have permission to open this page. Please contact your manager or admin.</p>
+    <button type="button" id="no-access-back" class="fp-btn fp-btn-primary">Back to Dashboard</button>
+  </div>
 </section>
 
 <!-- =====================================================================
@@ -4193,7 +4665,7 @@
           <label class="fp-label" for="prt-date">Return Date <span class="fp-req" aria-hidden="true">*</span></label>
           <input id="prt-date" class="fp-input" type="date" required>
         </div>
-        <div class="fp-field">
+        <div class="fp-field" id="prt-ref-field">
           <label class="fp-label" for="prt-ref">Ref ID (Click to select PO / GRN)</label>
           <div class="fp-input-wrap fp-lookup-wrap"><input id="prt-ref" class="fp-input fp-lookup" type="text" data-lookup="prtref" data-lookup-party="prt-supplier-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select PO / GRN..."><input id="prt-ref-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
@@ -4214,8 +4686,13 @@
           <select id="prt-reason" class="fp-input fp-select" data-enter-opens="true" required>
             <option value="" selected>Select reason</option>
             <option>Damaged on Receipt</option><option>Defective / Faulty</option><option>Wrong Item Supplied</option><option>Excess Quantity</option>
-            <option>Quality Not as Expected</option><option>Expired / Near Expiry</option><option>Short Shelf Life</option><option>Price Discrepancy</option><option>Other</option>
+            <option>Quality Not as Expected</option><option>Expired / Near Expiry</option><option>Short Shelf Life</option><option>Price Discrepancy</option><option>Sales Return</option><option>Other</option>
           </select>
+        </div>
+        <!-- Return Reason "Sales Return" only: the customer's sales return whose items go back to the supplier (instead of a PO / GRN). -->
+        <div class="fp-field" id="prt-sr-field" hidden>
+          <label class="fp-label" for="prt-sr">Sales Return ID <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="prt-sr" class="fp-input fp-lookup" type="text" data-lookup="prtsr" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select sales return..."><input id="prt-sr-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="prt-warehouse">Return From (Stock Point)</label>
@@ -6768,45 +7245,19 @@
       </button>
     </div>
     <nav class="qm-list qm-list-sm qm-list-fixed" aria-label="Employee Management">
-      <h3 class="qm-section">Create Employee Management</h3>
-      <button type="button" class="qm-item qm-item-sm" data-qm-open="employee-create" aria-keyshortcuts="Alt">
-        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg></span>
-        <span class="qm-text"><span class="qm-name qm-name-strong">Create</span><span class="qm-desc">Add a new employee record</span></span>
-        <kbd class="qm-kbd">Alt</kbd>
-        <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-      </button>
-      <h3 class="qm-section">Create (Alt)</h3>
-      <a class="qm-item qm-item-sm" href="#/employee/employee/new" data-key="e" aria-keyshortcuts="Alt+E E">
+      <h3 class="qm-section">Employee</h3>
+      <a class="qm-item qm-item-sm" href="#/employee/employee" data-key="e" aria-keyshortcuts="E">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
         <span class="qm-text"><span class="qm-name"><span class="qm-key">E</span>mployee</span><span class="qm-desc">Staff records and details</span></span>
         <kbd class="qm-kbd">E</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-    </nav>
-    <div class="qm-foot">
-      <button type="button" class="qm-quit" data-qm="close" data-key="q" aria-keyshortcuts="Q">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
-        <span>Quit</span>
-      </button>
-    </div>
-  </section>
-
-  <!-- Create Employee Management view (Employee Management › Create). ← / Esc return to Employee Management. -->
-  <section class="qm-view" data-view="employee-create" data-parent="employee" aria-labelledby="quick-menu-employee-create-title" hidden>
-    <div class="qm-head">
-      <button type="button" class="qm-back" data-qm="back" aria-label="Back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
-      </button>
-      <h2 id="quick-menu-employee-create-title" class="qm-title">Create Employee Management</h2>
-      <button type="button" class="qm-close" data-qm="close" aria-label="Close">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-      </button>
-    </div>
-    <nav class="qm-list qm-list-sm qm-list-fixed" aria-label="Create Employee Management">
-      <a class="qm-item qm-item-sm" href="#/employee/employee/new" data-key="e" aria-keyshortcuts="Alt+E E">
-        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>
-        <span class="qm-text"><span class="qm-name"><span class="qm-key">E</span>mployee</span><span class="qm-desc">Add an employee</span></span>
-        <kbd class="qm-kbd">E</kbd>
+      <h3 class="qm-section">User Setting</h3>
+      <!-- The page is not built yet: the route shows "Not built yet". -->
+      <a class="qm-item qm-item-sm" href="#/employee/user-setting" data-key="u" aria-keyshortcuts="U">
+        <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"></circle><path d="M2 21a7 7 0 0 1 11-5.7"></path><circle cx="18" cy="17" r="2.5"></circle><path d="M18 12.5v2M18 19.5v2M13.5 17h2M20.5 17h2"></path></svg></span>
+        <span class="qm-text"><span class="qm-name"><span class="qm-key">U</span>ser Setting</span><span class="qm-desc">User accounts and access</span></span>
+        <kbd class="qm-kbd">U</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
     </nav>
@@ -6817,6 +7268,76 @@
       </button>
     </div>
   </section>
+</dialog>
+<!-- Employees › Filter (F): Team, Date of Joining, Stock Point and Resigned; applied with Apply Filters, as the
+     master lists' Filter popup. Esc or Close leaves the list as it was. -->
+<dialog id="employee-filter" class="lookup sf emp-sf" aria-labelledby="employee-filter-title" aria-describedby="employee-filter-sub">
+  <div class="sf-head">
+    <span class="sf-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></span>
+    <div class="sf-heading">
+      <h2 id="employee-filter-title" class="sf-title">Filter Employees</h2>
+      <p id="employee-filter-sub" class="sf-sub">Choose the employees to show</p>
+    </div>
+    <button type="button" class="lk-close" data-ef="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="sf-body">
+    <div class="sf-label-row">
+      <h3 class="sf-label">Filter Records</h3>
+      <span id="employee-filter-badge" class="sf-badge" aria-live="polite"></span>
+    </div>
+    <div class="esf-grid">
+      <label class="esf-field"><span class="sf-label">Team</span><select id="employee-filter-department" class="fp-input fp-select"><option value="">All teams</option></select></label>
+      <label class="esf-field"><span class="sf-label">Stock Point</span><select id="employee-filter-warehouse" class="fp-input fp-select"><option value="">All stock points</option></select></label>
+      <div class="esf-field esf-wide" role="group" aria-labelledby="employee-filter-date-label">
+        <span id="employee-filter-date-label" class="sf-label">Date of Joining</span>
+        <div class="sf-date-fields">
+          <label class="sf-date-field"><span>From</span><input id="employee-filter-from" type="date" class="sf-date-input"></label>
+          <label class="sf-date-field"><span>To</span><input id="employee-filter-to" type="date" class="sf-date-input"></label>
+        </div>
+        <p id="employee-filter-date-error" class="sf-date-error" hidden>The From date must be on or before the To date.</p>
+      </div>
+      <div class="esf-field esf-wide" role="radiogroup" aria-labelledby="employee-filter-resigned-label">
+        <span id="employee-filter-resigned-label" class="sf-label">Resigned</span>
+        <div class="sf-bulk esf-options">
+          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="" class="sf-radio" checked><span>All employees</span></label>
+          <span class="sf-divider" aria-hidden="true"></span>
+          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="hide" class="sf-radio"><span>Hide resigned</span></label>
+          <span class="sf-divider" aria-hidden="true"></span>
+          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="only" class="sf-radio"><span>Resigned only</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sf-foot">
+    <span id="employee-filter-summary" class="sf-summary"></span>
+    <button type="button" class="ml-btn ml-btn-plain" data-ef="reset">Reset Filters</button>
+    <button type="button" class="ml-btn ml-btn-primary" data-ef="apply">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+      <span>Apply Filters</span>
+    </button>
+  </div>
+</dialog>
+<!-- Employee profile (Employees › View profile): every detail of one employee; Edit opens the form, Esc closes. -->
+<dialog id="emp-profile" class="emp-profile" aria-labelledby="emp-profile-name">
+  <div class="emp-profile-top">
+    <span id="emp-profile-avatar" class="emp-avatar emp-avatar-lg" aria-hidden="true"></span>
+    <div class="emp-profile-who">
+      <h2 id="emp-profile-name" class="emp-profile-name"></h2>
+      <p id="emp-profile-role" class="emp-profile-role"></p>
+      <div id="emp-profile-pills" class="emp-pills emp-pills-start"></div>
+    </div>
+    <button type="button" class="emp-icon-btn" data-emp-profile="close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <dl id="emp-profile-details" class="emp-profile-details"></dl>
+  <div class="emp-profile-docs-wrap"><h3 class="emp-detail-group">Documents</h3><ul id="emp-profile-docs" class="emp-profile-docs"></ul></div>
+  <div class="emp-profile-foot">
+    <button type="button" class="emp-btn emp-btn-danger" data-emp-profile="delete" aria-keyshortcuts="Delete">Delete</button>
+    <button type="button" class="emp-btn emp-btn-plain" data-emp-profile="close" aria-keyshortcuts="Escape">Close</button>
+    <button type="button" class="emp-btn emp-btn-primary" data-emp-profile="edit" aria-keyshortcuts="E">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      <span>Edit employee</span>
+    </button>
+  </div>
 </dialog>
 <!-- Purchase Book document preview (printPurchaseDocument): the A4 page with Print / Export PDF and Back. -->
 <dialog id="pb-preview" class="pv" aria-labelledby="pv-title">

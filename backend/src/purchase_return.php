@@ -10,10 +10,16 @@ require_once __DIR__ . '/purchase_book.php';
  * contact and the currency. Lines are priced as a purchase order's ('po' lines: quantity × price, VAT % included or
  * added on top) with the quantity received and the condition of the goods. Total Return Amount = the lines' total less
  * the discount and the supplier deduction (never below 0).
+ *
+ * Return Reason "Sales Return": goods a customer returned (a sales return, Sales Return ID) go back to the supplier.
+ * The lines come from that sales return, not from a PO or GRN, so the return has no PO / GRN Ref. Those goods were
+ * never put back into stock, so such a return must take nothing out of stock. (Stock on hand, sm_stock_on_hand() in
+ * supply.php, does not count purchase returns at all yet; when it does, it must leave these out.)
  */
 
 const PRT_REASONS = ['Damaged on Receipt', 'Defective / Faulty', 'Wrong Item Supplied', 'Excess Quantity', 'Quality Not as Expected',
-    'Expired / Near Expiry', 'Short Shelf Life', 'Price Discrepancy', 'Other'];
+    'Expired / Near Expiry', 'Short Shelf Life', 'Price Discrepancy', 'Sales Return', 'Other'];
+const PRT_SALES_RETURN = 'Sales Return';
 const PRT_SETTLEMENT_MODES = ['Debit Note', 'Cash Refund', 'Bank Transfer', 'Adjust Against Invoice', 'Replacement'];
 const PRT_CONDITIONS = ['Damaged', 'Defective', 'Wrong Item', 'Excess', 'Expired', 'Good'];
 
@@ -23,6 +29,7 @@ function prt_format(array $row): array
     $supplier = $row['supplier_id'] === null ? null : query('SELECT supplier_code, supplier_name FROM suppliers WHERE id = ?', [$row['supplier_id']])->fetch();
     $po = $row['purchase_order_id'] === null ? '' : (string) query('SELECT po_code FROM purchase_orders WHERE id = ?', [$row['purchase_order_id']])->fetchColumn();
     $grn = $row['grn_id'] === null ? '' : (string) query('SELECT grn_code FROM grns WHERE id = ?', [$row['grn_id']])->fetchColumn();
+    $sr = $row['sales_return_id'] === null ? '' : (string) query('SELECT sr_code FROM sales_returns WHERE id = ?', [$row['sales_return_id']])->fetchColumn();
     $warehouse = $row['warehouse_id'] === null ? null
         : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();
     return pb_common($row) + [
@@ -32,7 +39,8 @@ function prt_format(array $row): array
         'supplierName' => $supplier ? $supplier['supplier_name'] : '',
         'purchaseOrderId' => $row['purchase_order_id'] === null ? null : (int) $row['purchase_order_id'], 'purchaseOrderCode' => $po,
         'grnId' => $row['grn_id'] === null ? null : (int) $row['grn_id'], 'grnCode' => $grn,
-        'referenceNo' => implode(' / ', array_filter([$po, $grn], static fn ($code) => $code !== '')),
+        'salesReturnId' => $row['sales_return_id'] === null ? null : (int) $row['sales_return_id'], 'salesReturnCode' => $sr,
+        'referenceNo' => implode(' / ', array_filter([$po, $grn, $sr], static fn ($code) => $code !== '')),
         'createdBy' => $row['created_by'], 'createdByContact' => $row['created_by_contact'],
         'supplierInvoiceNo' => $row['supplier_invoice_no'], 'returnReason' => $row['return_reason'],
         'warehouseId' => $warehouse ? (int) $row['warehouse_id'] : null, 'warehouseCode' => $warehouse ? $warehouse['warehouse_code'] : '',
@@ -80,7 +88,7 @@ function purchase_return_next_code(): string
 function purchase_return_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
-        $data = array_replace(pb_as_input(purchase_return_find($id), ['returnDate', 'purchaseOrderId', 'grnId', 'createdBy',
+        $data = array_replace(pb_as_input(purchase_return_find($id), ['returnDate', 'purchaseOrderId', 'grnId', 'salesReturnId', 'createdBy',
             'createdByContact', 'supplierInvoiceNo', 'returnReason', 'warehouseId', 'settlementMode', 'supplierId', 'contactName',
             'contactNumber', 'currency', 'vatMode', 'discountAmount', 'supplierDeduction']), $data);
     }
@@ -90,6 +98,7 @@ function purchase_return_save(array $data, ?int $id = null): array
         'prt_date' => $in->date('returnDate', 'Return date') ?? date('Y-m-d'),
         'purchase_order_id' => $in->id('purchaseOrderId', 'purchase order', 'purchase_orders'),
         'grn_id' => $in->id('grnId', 'GRN', 'grns'),
+        'sales_return_id' => $in->id('salesReturnId', 'sales return', 'sales_returns'),
         'created_by' => $in->text('createdBy', 'Created by', 100),
         'created_by_contact' => $in->text('createdByContact', 'Created by contact', 40),
         'supplier_invoice_no' => $in->text('supplierInvoiceNo', 'Supplier invoice number', 60),
@@ -110,6 +119,16 @@ function purchase_return_save(array $data, ?int $id = null): array
     }
     if ($v['return_reason'] === '') {
         $in->fail('returnReason', 'Select the return reason.');
+    }
+    // A customer's returned goods: the sales return they came back on, and no PO / GRN (the lines are the sales return's).
+    if ($v['return_reason'] === PRT_SALES_RETURN) {
+        if ($v['sales_return_id'] === null) {
+            $in->fail('salesReturnId', 'Select the sales return.');
+        }
+        $v['purchase_order_id'] = null;
+        $v['grn_id'] = null;
+    } else {
+        $v['sales_return_id'] = null;
     }
     if ($supplierId === null) {
         $in->fail('supplierId', 'Select the supplier.');

@@ -48,6 +48,10 @@ async function fetchDashboard({ year, month }) {
   const lastMonth = shiftMonth(today.getFullYear(), today.getMonth() + 1, -1);
   try {
     const data = await apiRequest(`api/dashboard.php?year=${year}&month=${month}`);
+    // A manager's figures have no profit & loss or activities (the admins'): empty ones keep the page drawing.
+    data.profitLoss ??= { overall: { margin: '0.0' }, lastMonth: { margin: '0.0' } };
+    data.activities ??= [];
+    data.activityTotal ??= 0;
     data.profitLoss.lastMonth = { ...lastMonth, ...data.profitLoss.lastMonth };
     return data;
   } catch (error) {
@@ -108,14 +112,15 @@ const KPI_TILES = [
   { key: 'totalPurchase', label: 'Total Purchase', money: true, tone: 'purchase', icon: 'purchase' },
   { key: 'pendingPurchase', label: 'Pending Purchase', money: true, tone: 'purchase', icon: 'pending' },
   { key: 'totalItems', label: 'Total Items', money: false, tone: 'masters', icon: 'items' },
-  { key: 'creditors', label: 'Creditors', money: false, tone: 'masters', icon: 'creditors' },
-  { key: 'debtors', label: 'Debtors', money: false, tone: 'masters', icon: 'debtors' },
-  { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees' },
+  { key: 'creditors', label: 'Creditors', money: false, tone: 'masters', icon: 'creditors', admin: true },
+  { key: 'debtors', label: 'Debtors', money: false, tone: 'masters', icon: 'debtors', admin: true },
+  { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees', admin: true },
 ];
 
 function renderKpis(kpis) {
   const grid = byId('dashboard-kpis');
-  grid.replaceChildren(...KPI_TILES.map(tile => {
+  // A manager's dashboard has the first four tiles; creditors, debtors and employees are the admins'.
+  grid.replaceChildren(...KPI_TILES.filter(tile => userAccess.admin || !tile.admin).map(tile => {
     const card = el('div', `metric-card kpi-card tone-${tile.tone}`);
     const head = el('div', 'card-head');
     const icon = el('div', 'card-icon');
@@ -1487,7 +1492,7 @@ async function checkSignedIn() {
   try {
     const session = await apiRequest('api/session.php');
     csrfToken = session.csrfToken;
-    if (session.user) { pageCompany = session.user.company?.code ?? null; return session.user; }
+    if (session.user) { pageCompany = session.user.company?.code ?? null; setUserAccess(session.user); return session.user; }
   } catch { /* server down: the sign-in page says so */ }
   goToSignIn();
   return null;
@@ -1976,6 +1981,13 @@ const LOOKUPS = {
         name: row.name, supplierId: row.supplierId, total: pbAmount(row.grandTotal) }));
       return [...rows(grns, 'grn', row => row.grnDate), ...rows(orders, 'po', row => row.poDate)];
     }, narrow: narrowToParty('supplierId') },
+  // The Purchase Return's Sales Return ID (Return Reason "Sales Return"): the customer's returned goods, whose items are
+  // copied into the return to go back to the supplier.
+  prtsr: { title: 'Select Sales Return', letter: 'S', list: 'Sales Returns', plural: 'sales returns',
+    subtitle: 'Its items are copied into the purchase return.', search: 'Search sales returns by number or customer...',
+    rows: async () => (await apiRequest('api/sales-returns.php')).map(row => ({ ...row, date: pbDate(row.returnDate),
+      items: String(row.itemCount ?? 0) })),
+    columns: [['code', 'SR ID'], ['date', 'Date'], ['name', 'Customer'], ['items', 'Items']], display: row => row.code, meta: row => row.name },
   salesorder: { title: 'Select Sales Order', letter: 'S', list: 'Sales Orders', plural: 'sales orders', api: 'api/sales-orders.php',
     columns: [['code', 'SO ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
   // On a Purchase Entry (data-lookup-party): the selected supplier's purchase orders, all of them when it has none.
@@ -2028,6 +2040,16 @@ const LOOKUPS = {
   currency: { title: 'Select Currency', letter: '$', list: 'Currency List', plural: 'currencies', rows: () => PO_CURRENCIES,
     columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}`,
     subtitle: 'Choose the currency of this order.', search: 'Search currency by code or name...', cardName: row => row.name, cardMeta: row => row.code },
+  // User Setting's User: every employee, with the login they already have (picking one opens it).
+  user: { title: 'Select User', letter: 'U', list: 'Employees', plural: 'employees',
+    subtitle: 'Choose an employee to set their login and access.', search: 'Search employee by name, code or username...',
+    rows: async () => (await apiRequest('api/users.php?employees=1')).map(row => ({ ...row,
+      login: row.username ? `${row.username}${row.active === false ? ' (inactive)' : ''}` : 'No login yet' })),
+    columns: [['code', 'Code'], ['name', 'Employee Name'], ['designation', 'Designation'], ['login', 'Login']],
+    display: row => (row.designation ? `${row.name} (${row.designation})` : row.name) },
+  // Employee Creation's Department and Designation (free text kept as typed): the usual ones, then those already used.
+  empDepartment: { plural: 'departments', rows: () => employeeTextRows('department', EMP_DEPARTMENTS), display: row => row.name, meta: () => '' },
+  empDesignation: { plural: 'designations', rows: () => employeeTextRows('designation', EMP_DESIGNATIONS), display: row => row.name, meta: () => '' },
   // Purchase Order type-to-search text (free text kept as typed): the usual values, then those used on saved orders.
   poLocation: { plural: 'locations', rows: () => poTextRows('deliveryLocation', PO_LOCATIONS), display: row => row.name, meta: () => '' },
   poTerms: { plural: 'delivery terms', rows: () => poTextRows('deliveryTerms', PO_TERMS), display: row => row.name, meta: () => '' },
@@ -2074,6 +2096,17 @@ const PO_CREDIT_PERIODS = ['7 Days', '15 Days', '30 Days', '45 Days', '60 Days',
 // The saved orders are read again when the list opens (at most every few seconds), so a value another user has
 // just saved is suggested straight away.
 let poSavedOrders = { at: 0, rows: null };
+const EMP_DEPARTMENTS = ['Management', 'Sales', 'Purchase', 'Operations', 'Finance', 'Accounts', 'Human Resources', 'Logistics', 'Engineering'];
+const EMP_DESIGNATIONS = ['Manager', 'Assistant Manager', 'Accountant', 'Sales Executive', 'Purchase Officer', 'Store Keeper', 'Driver', 'Technician'];
+// The presets, then the values saved employees use (each once, ignoring case).
+async function employeeTextRows(key, presets) {
+  let used = [];
+  try { used = (await apiRequest('api/employees.php')).map(row => String(row[key] ?? '').trim()).filter(Boolean); } catch { /* presets only */ }
+  const seen = new Set();
+  return [...presets, ...used].filter(text => !seen.has(text.toLowerCase()) && seen.add(text.toLowerCase()))
+    .map(text => ({ id: text, code: '', name: text }));
+}
+
 async function poTextRows(key, presets) {
   let used = [];
   try {
@@ -3661,7 +3694,7 @@ function createFormPage(config) {
     config.init?.();
   }
 
-  const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, setRows, edit, el, isEditing: () => editing !== null };
+  const page = { reset, init, record, absorb, addRow, rowsOf, appendRow, readRow, setRows, edit, el, isEditing: () => editing !== null, editingId: () => editing?.id ?? null };
   FORM_KEY_HANDLERS[config.key] = handleKeys;
   FORM_PAGES[config.route] = { page: config.key, reset, firstField: config.firstField, isEditing: page.isEditing, opened: config.opened, onShow: config.onShow };
   return page;
@@ -3864,6 +3897,1677 @@ const warehouseForm = createFormPage({
     });
   },
 });
+
+/* ---------- Employees  (#/employee/employee · Employee Management › Employee) ----------
+   The staff as cards: search (name, role, department, ID or email), Filter (department, status), Add employee
+   (#/employee/employee/new), View profile (a popup with every detail) and the card's edit button
+   (#/employee/employee/edit/ID). Keys: / search, F filter, Shift+N add, Esc back; in the profile E edits, Esc closes. */
+
+const EMPLOYEE_LIST_ROUTE = 'employee/employee';
+const EMP_NO_FILTERS = { department: '', from: '', to: '', warehouse: '', resigned: '' };
+const employeeList = { rows: [], loaded: false, returnTo: null, seq: 0, filters: { ...EMP_NO_FILTERS } };
+const EMP_TONES = ['violet', 'indigo', 'teal', 'blue', 'amber', 'rose', 'green'];
+const EMP_STATUS_CLASS = { Active: 'active', 'On Leave': 'leave', Resigned: 'resigned', Inactive: 'inactive' };
+const EMP_ICONS = {
+  id: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 10h4M7 14h10"></path>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path>',
+  pin: '<path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"></path><circle cx="12" cy="10" r="2.5"></circle>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>',
+  edit: '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>',
+};
+
+// A small element: tag with class names and text (never HTML, so names and emails are shown as typed).
+function empEl(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function empIcon(name, size = 14) {
+  const span = empEl('span', 'emp-fact-icon');
+  span.setAttribute('aria-hidden', 'true');
+  span.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EMP_ICONS[name]}</svg>`;
+  return span;
+}
+// "Aarav Mehta" → "AM": the first letters of the first and the last word.
+function empInitials(name) {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return ((words[0]?.[0] || '?') + (words.length > 1 ? words.at(-1)[0] : '')).toUpperCase();
+}
+// The same colour for the same person every time.
+function empTone(name) {
+  let hash = 0;
+  for (const char of String(name)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return EMP_TONES[hash % EMP_TONES.length];
+}
+const empDate = (value, options) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', options) : '');
+const empJoined = value => (value ? `Joined ${new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : 'Joining date not set');
+
+function empAvatar(employee, large = false) {
+  const avatar = empEl('span', `emp-avatar emp-tone-${empTone(employee.name)}${large ? ' emp-avatar-lg' : ''}`, empInitials(employee.name));
+  avatar.setAttribute('aria-hidden', 'true');
+  if (employee.hasPhoto) {
+    const img = empEl('img', 'emp-avatar-img');
+    img.alt = '';
+    img.src = employeePhotoUrl(employee.id, employee.photoVersion);
+    img.addEventListener('error', () => img.remove());         // the initials show through
+    avatar.append(img);
+  }
+  avatar.append(empEl('i', `emp-dot emp-dot-${EMP_STATUS_CLASS[employee.status] || 'active'}`));
+  return avatar;
+}
+function empPills(employee) {
+  const pills = [];
+  if (employee.department) pills.push(empEl('span', 'emp-pill emp-pill-dept', employee.department));
+  pills.push(empEl('span', `emp-pill emp-pill-${EMP_STATUS_CLASS[employee.status] || 'active'}`, employee.status));
+  return pills;
+}
+
+function empCard(employee) {
+  // A resigned employee's card is in black and white (and the list puts them last, api/employees.php).
+  const card = empEl('article', `emp-card${employee.status === 'Resigned' ? ' emp-card-resigned' : ''}`);
+  card.tabIndex = 0;                                     // a stop of its own, like a list row: arrows move, Enter views
+  card.setAttribute('aria-label', `${employee.name}, ${employee.designation || 'no designation'}, ${employee.code}`);
+  card.dataset.id = employee.id;
+  card.dataset.code = employee.code;
+  const pills = empEl('div', 'emp-pills');
+  pills.append(...empPills(employee));
+  const facts = empEl('ul', 'emp-facts');
+  for (const [icon, text, empty] of [['id', employee.code], ['mail', employee.email, 'No email'], ['pin', employee.city, 'No city'],
+    ['calendar', empJoined(employee.joinDate)]]) {
+    const li = empEl('li', text ? '' : 'emp-fact-empty');
+    li.append(empIcon(icon), empEl('span', 'emp-fact-text', text || empty));
+    facts.append(li);
+  }
+  const actions = empEl('div', 'emp-actions');
+  const view = empEl('button', 'emp-btn emp-btn-primary emp-view', 'View profile');
+  view.type = 'button';
+  view.dataset.empView = employee.id;
+  const edit = empEl('a', 'emp-icon-btn');
+  edit.href = `#/${EMPLOYEE_LIST_ROUTE}/edit/${employee.id}`;
+  edit.setAttribute('aria-label', `Edit ${employee.name}`);
+  edit.title = 'Edit';
+  edit.append(empIcon('edit', 15));
+  actions.append(view, edit);
+  card.append(empAvatar(employee), empEl('h3', 'emp-name', employee.name), empEl('p', 'emp-role', employee.designation || 'No designation'),
+    pills, empEl('hr', 'emp-rule'), facts, actions);
+  return card;
+}
+
+// The rows the filters keep (the applied ones, or the popup's while it is open, for its count).
+function empFilterRows(rows, { department, from, to, warehouse, resigned }) {
+  return rows.filter(row => (!department || row.department === department)
+    && (!from || (row.joinDate && row.joinDate >= from)) && (!to || (row.joinDate && row.joinDate <= to))
+    && (!warehouse || String(row.warehouseId ?? '') === warehouse)
+    && (!resigned || (resigned === 'only') === (row.status === 'Resigned')));
+}
+const empFilterCount = f => [f.department, f.from || f.to, f.warehouse, f.resigned].filter(Boolean).length;
+
+function empShownRows() {
+  const search = byId('employee-list-search').value.trim().toLowerCase();
+  return empFilterRows(employeeList.rows, employeeList.filters).filter(row => (!search || [row.name, row.designation, row.department, row.code, row.email, row.city, String(row.number)].some(value => String(value || '').toLowerCase().includes(search))));
+}
+
+function renderEmployeeList() {
+  const shown = empShownRows();
+  const total = employeeList.rows.length;
+  byId('employee-list-grid').replaceChildren(...shown.map(empCard));
+  const count = byId('employee-list-count');
+  count.replaceChildren('Showing ', empEl('strong', '', String(shown.length)), ` of ${total} employee${total === 1 ? '' : 's'}`);
+  count.hidden = !employeeList.loaded;
+  const empty = byId('employee-list-empty');
+  empty.hidden = !employeeList.loaded || shown.length > 0;
+  empty.textContent = total === 0 ? 'No employees yet. Add employee creates the first one.' : 'No employees match your search or filters.';
+  const filters = empFilterCount(employeeList.filters);
+  byId('employee-list-filter-label').textContent = filters ? `Filter (${filters})` : 'Filter';
+  byId('employee-list-filter').classList.toggle('is-on', filters > 0);
+}
+
+// The department filter offers the departments in use.
+function empFillDepartments() {
+  const select = byId('employee-filter-department');
+  const current = select.value;
+  const departments = [...new Set(employeeList.rows.map(row => row.department).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  select.replaceChildren(new Option('All teams', ''), ...departments.map(name => new Option(name, name)));
+  select.value = departments.includes(current) ? current : '';
+}
+
+// The Stock Point filter: the stock points in the Stock Point master.
+async function empFillStockPoints() {
+  try {
+    const rows = await apiRequest('api/warehouses.php');
+    fillSelect(byId('employee-filter-warehouse'), rows.map(row => ({ value: row.id, label: [row.code, row.name].filter(Boolean).join(' – ') })), 'All stock points');
+  } catch { /* the employees' own stock points are still filtered by id */ }
+}
+
+/* ---------- Filter popup (F), as the master lists' Filter: the choices apply with Apply Filters; Reset Filters
+   clears them (and the list) at once; Esc or Close leaves the list as it was. ---------- */
+const efEl = suffix => byId(`employee-filter-${suffix}`);
+const efResigned = () => byId('employee-filter').querySelector('input[name="employee-filter-resigned"]:checked')?.value ?? '';
+const efPicked = () => ({ department: efEl('department').value, from: efEl('from').value, to: efEl('to').value,
+  warehouse: efEl('warehouse').value, resigned: efResigned() });
+
+function efPreview() {
+  const picked = efPicked();
+  const badDates = Boolean(picked.from && picked.to && picked.from > picked.to);
+  efEl('date-error').hidden = !badDates;
+  const total = employeeList.rows.length;
+  const shown = empFilterRows(employeeList.rows, picked).length;
+  const count = empFilterCount(picked);
+  efEl('badge').textContent = count ? `${count} active` : '';
+  efEl('badge').hidden = !count;
+  efEl('summary').textContent = `${shown} of ${total} employee${total === 1 ? '' : 's'}`;
+  return !badDates;
+}
+
+function openEmployeeFilter() {
+  const f = employeeList.filters;
+  empFillDepartments();
+  setSelectValue(efEl('department'), f.department, f.department);
+  setSelectValue(efEl('warehouse'), f.warehouse, f.warehouse);
+  efEl('from').value = f.from;
+  efEl('to').value = f.to;
+  for (const radio of byId('employee-filter').querySelectorAll('input[name="employee-filter-resigned"]')) radio.checked = radio.value === f.resigned;
+  efPreview();
+  document.documentElement.classList.add('has-modal');
+  byId('employee-filter').showModal();
+  efEl('department').focus();
+}
+
+function closeEmployeeFilter() {
+  const dialog = byId('employee-filter');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  byId('employee-list-filter').focus();
+}
+
+function applyEmployeeFilter() {
+  if (!efPreview()) { efEl('from').focus(); return; }
+  employeeList.filters = efPicked();
+  renderEmployeeList();
+  closeEmployeeFilter();
+  const shown = empShownRows().length;
+  showToast('Filter applied', empFilterCount(employeeList.filters) ? `Showing ${shown} employee${shown === 1 ? '' : 's'}.` : 'Showing all employees.');
+}
+
+function resetEmployeeFilter() {
+  employeeList.filters = { ...EMP_NO_FILTERS };
+  efEl('department').value = '';
+  efEl('warehouse').value = '';
+  efEl('from').value = '';
+  efEl('to').value = '';
+  byId('employee-filter').querySelector('input[name="employee-filter-resigned"][value=""]').checked = true;
+  efPreview();
+  renderEmployeeList();
+  efEl('department').focus();
+}
+
+// Esc closes; Enter moves Team → Stock Point → From → To → the Resigned choice → Apply Filters (Enter on a choice
+// picks it first); Ctrl+Enter applies from anywhere.
+function handleEmployeeFilterKeys(event) {
+  const { key, target } = event;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeEmployeeFilter(); return true; }
+  if (key !== 'Enter' || event.altKey || event.shiftKey) return false;
+  const dialog = byId('employee-filter');
+  if (event.ctrlKey || event.metaKey) { event.preventDefault(); if (!event.repeat) applyEmployeeFilter(); return true; }
+  if (target.matches('button')) return false;                     // the button's own click
+  event.preventDefault();
+  if (event.repeat) return true;
+  if (target.type === 'radio') { target.checked = true; efPreview(); dialog.querySelector('[data-ef="apply"]').focus(); return true; }
+  const stops = [efEl('department'), efEl('warehouse'), efEl('from'), efEl('to'),
+    dialog.querySelector('input[name="employee-filter-resigned"]:checked'), dialog.querySelector('[data-ef="apply"]')];
+  stops[Math.min(stops.indexOf(target) + 1, stops.length - 1)].focus();
+  return true;
+}
+
+async function loadEmployeeList() {
+  const seq = ++employeeList.seq;
+  try {
+    const rows = await apiRequest('api/employees.php');
+    if (seq !== employeeList.seq) return;
+    employeeList.rows = rows;
+  } catch (error) {
+    if (seq !== employeeList.seq) return;
+    employeeList.rows = [];
+    showToast('The employees could not be loaded', error.message, true);
+  }
+  employeeList.loaded = true;
+  empFillDepartments();
+  renderEmployeeList();
+}
+
+const empCardOf = id => byId('employee-list-grid').querySelector(`.emp-card[data-id="${CSS.escape(String(id))}"]`);
+const employeeListFocus = () => {
+  const code = employeeList.returnTo;
+  const card = code ? byId('employee-list-grid').querySelector(`.emp-card[data-code="${CSS.escape(code)}"]`) : null;
+  if (card) employeeList.returnTo = null;
+  return card || byId('employee-list-grid').querySelector('.emp-card') || byId('employee-list-search');
+};
+
+/* The profile popup. */
+let empProfileId = null;
+function openEmployeeProfile(id) {
+  const employee = employeeList.rows.find(row => String(row.id) === String(id));
+  if (!employee) return;
+  empProfileId = employee.id;
+  byId('emp-profile-avatar').replaceWith(Object.assign(empAvatar(employee, true), { id: 'emp-profile-avatar' }));
+  byId('emp-profile-name').textContent = employee.name;
+  byId('emp-profile-role').textContent = employee.designation || 'No designation';
+  byId('emp-profile-pills').replaceChildren(...empPills(employee));
+  const long = { day: 'numeric', month: 'short', year: 'numeric' };
+  const money = value => (value === null || value === '' ? '' : pbMoney(pbNum(value)));
+  const groups = [
+    ['Identity', [['Employee ID', `${employee.number} · ${employee.code}`], ['Gender', employee.gender],
+      ['Date of Birth', empDate(employee.dateOfBirth, long)], ['Marital Status', employee.maritalStatus], ['Nationality', employee.nationality]]],
+    ['Contact & Employment', [['Email', employee.email], ['Phone', employee.phone], ['Address', employee.address, true],
+      ['City', employee.city], ['Country', employee.country], ['Company', employee.companyName || employee.companyCode],
+      ['Department', employee.department], ['Designation', employee.designation], ['Date of Joining', empDate(employee.joinDate, long)],
+      ['Employment Type', employee.employmentType], ['Work Location', employee.workLocation], ['Stock Point', [employee.warehouseCode, employee.warehouseName].filter(Boolean).join(' · ')],
+      ['Board Team Member', employee.boardMember ? 'Yes' : 'No']]],
+    ['Finance & Identity', [['Basic Salary', money(employee.basicSalary)], ['HRA', money(employee.hra)],
+      ['Other Allowance', money(employee.otherAllowance)], ['Bank Name', employee.bankName], ['Bank Account Number', employee.bankAccountNo],
+      ['IBAN Number', employee.iban], ['National ID Number', employee.nationalId], ['Passport Number', employee.passportNo],
+      ['Passport Expiry', empDate(employee.passportExpiry, long)], ['Visa Number', employee.visaNo], ['Visa Expiry', empDate(employee.visaExpiry, long)]]],
+    ['Emergency Contact', [['Contact Name', employee.emergencyName], ['Relationship', employee.emergencyRelationship],
+      ['Contact Phone', employee.emergencyPhone], ['Remarks', employee.remarks, true]]],
+  ];
+  byId('emp-profile-details').replaceChildren(...groups.flatMap(([title, rows]) => [empEl('h3', 'emp-detail-group', title),
+    ...rows.map(([label, value, wide]) => {
+      const wrap = empEl('div', `emp-detail${wide ? ' emp-detail-wide' : ''}`);
+      wrap.append(empEl('dt', '', label), empEl('dd', value ? '' : 'emp-fact-empty', value || '—'));
+      return wrap;
+    })]));
+  byId('emp-profile-docs').replaceChildren(empEl('li', 'emp-fact-empty', 'Loading documents…'));
+  byId('emp-profile').showModal();
+  // The documents come with the full record.
+  apiRequest(`api/employees.php?id=${employee.id}`).then(full => {
+    if (empProfileId !== employee.id) return;
+    const docs = full.documents || [];
+    byId('emp-profile-docs').replaceChildren(...(docs.length ? docs.map(doc => {
+      const li = empEl('li');
+      const link = empEl('a', '', doc.originalName);
+      link.href = `api/employee-files.php?id=${doc.id}&inline=1`;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      li.append(empEl('span', 'ef-doc-type', doc.docType || 'Document'), link);
+      return li;
+    }) : [empEl('li', 'emp-fact-empty', 'No documents uploaded.')]));
+  }).catch(() => byId('emp-profile-docs').replaceChildren(empEl('li', 'emp-fact-empty', 'The documents could not be loaded.')));
+  byId('emp-profile').querySelector('[data-emp-profile="edit"]').focus();
+}
+function closeEmployeeProfile() {
+  const dialog = byId('emp-profile');
+  if (!dialog.open) return;
+  dialog.close();
+  empCardOf(empProfileId)?.focus();
+}
+function editEmployeeFromProfile() {
+  const id = empProfileId;
+  byId('emp-profile').close();
+  location.hash = `#/${EMPLOYEE_LIST_ROUTE}/edit/${id}`;
+}
+
+// The profile popup, as a list's View: ← → move along the footer buttons, ↑ ↓ PageUp PageDown scroll,
+// E edits, Delete deletes (after a confirm), Esc closes.
+function handleEmployeeProfileKeys(event) {
+  const { key, target } = event;
+  const dialog = byId('emp-profile');
+  const footer = [...dialog.querySelectorAll('.emp-profile-foot button')];
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    event.preventDefault();
+    const at = footer.indexOf(target);
+    const step = key === 'ArrowRight' ? 1 : -1;
+    (at === -1 ? footer.at(-1) : footer[Math.max(0, Math.min(footer.length - 1, at + step))]).focus();
+    return true;
+  }
+  const scroll = { ArrowUp: -60, ArrowDown: 60, PageUp: -300, PageDown: 300 }[key];
+  if (scroll) { event.preventDefault(); dialog.scrollBy({ top: scroll }); return true; }
+  if (key === 'Enter' && footer.includes(target)) return false;          // the button's own click
+  const action = key === 'Escape' ? 'close' : key === 'Delete' ? 'delete' : key.toLowerCase() === 'e' && !event.shiftKey ? 'edit' : null;
+  if (!action) return false;
+  event.preventDefault();
+  if (!event.repeat) employeeProfileAction(action);
+  return true;
+}
+
+function employeeProfileAction(action) {
+  if (action === 'close') closeEmployeeProfile();
+  else if (action === 'edit') editEmployeeFromProfile();
+  else if (action === 'delete') deleteEmployeeFromProfile();
+}
+
+async function deleteEmployeeFromProfile() {
+  const employee = employeeList.rows.find(row => row.id === empProfileId);
+  if (!employee) return;
+  const ok = await confirmAction({ title: 'Delete this employee?', message: `${employee.code} · ${employee.name} will be deleted, with the photo and documents.`, confirm: 'Delete Employee' });
+  if (!ok) { byId('emp-profile').querySelector('[data-emp-profile="delete"]').focus(); return; }
+  try {
+    await apiRequest(`api/employees.php?id=${employee.id}`, { method: 'DELETE' });
+  } catch (error) { showToast('The employee was not deleted', error.message, true); return; }
+  const index = empShownRows().findIndex(row => row.id === employee.id);
+  byId('emp-profile').close();
+  employeeList.rows = employeeList.rows.filter(row => row.id !== employee.id);
+  empFillDepartments();
+  renderEmployeeList();
+  showToast('Employee deleted', `${employee.code} · ${employee.name}`);
+  const cards = [...byId('employee-list-grid').querySelectorAll('.emp-card')];
+  (cards[Math.min(index, cards.length - 1)] || byId('employee-list-search')).focus();
+}
+
+// The cards move like a list's rows, in two directions: ← → the previous / next card, ↑ ↓ the card above / below,
+// Home End the first / last, PageUp PageDown a screen; ↑ from the top row goes to the search, ↓ from the search to
+// the first card. Enter views the card's employee (its own buttons keep their click).
+function handleEmployeeCardKeys(event) {
+  const { key, target } = event;
+  if (event.shiftKey || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Enter'].includes(key)) return false;
+  const grid = byId('employee-list-grid');
+  const cards = [...grid.querySelectorAll('.emp-card')];
+  const card = target.closest?.('.emp-card');
+  if (!card || !grid.contains(card)) {
+    const outside = target === byId('employee-list-search') || target === byId('app') || target === document.body;
+    if (!outside || !cards.length || !['ArrowDown', 'PageDown'].includes(key)) return false;
+    event.preventDefault();
+    cards[0].focus();
+    return true;
+  }
+  if (target !== card) {                                 // a button on the card: ← → between them, Enter clicks
+    if (key === 'Enter') return false;
+    const buttons = [...card.querySelectorAll('.emp-view, .emp-icon-btn')];
+    const at = buttons.indexOf(target);
+    if (key === 'ArrowRight' && at < buttons.length - 1) { event.preventDefault(); buttons[at + 1].focus(); return true; }
+    if (key === 'ArrowLeft') { event.preventDefault(); (at > 0 ? buttons[at - 1] : card).focus(); return true; }
+    if (key === 'ArrowUp' || key === 'ArrowDown') { event.preventDefault(); card.focus(); return true; }
+    return false;
+  }
+  event.preventDefault();
+  if (key === 'Enter') { if (!event.repeat) openEmployeeProfile(card.dataset.id); return true; }
+  const index = cards.indexOf(card);
+  const columns = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
+  const perScreen = columns * Math.max(1, Math.floor(window.innerHeight / Math.max(card.offsetHeight, 1)));
+  const go = i => cards[Math.max(0, Math.min(cards.length - 1, i))].focus();
+  switch (key) {
+    case 'ArrowRight': go(index + 1); break;
+    case 'ArrowLeft': go(index - 1); break;
+    case 'ArrowDown': if (index + columns < cards.length) go(index + columns); else if (Math.floor(index / columns) < Math.floor((cards.length - 1) / columns)) go(cards.length - 1); break;
+    case 'ArrowUp': if (index - columns >= 0) go(index - columns); else byId('employee-list-search').focus(); break;
+    case 'Home': go(0); break;
+    case 'End': go(cards.length - 1); break;
+    case 'PageDown': go(index + perScreen); break;
+    case 'PageUp': go(index - perScreen); break;
+  }
+  return true;
+}
+
+// "/" search, F filter, Shift+N add, Esc back (Esc in a filled search clears it first; in the Filter popup closes it).
+function handleEmployeeListKeys(event) {
+  if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  if (byId('employee-filter').open) return handleEmployeeFilterKeys(event);
+  if (byId('emp-profile').open) return handleEmployeeProfileKeys(event);
+  const { key, target } = event;
+  const search = byId('employee-list-search');
+  if (key === 'Escape') {
+    event.preventDefault();
+    if (event.repeat) return true;
+    if (target === search && search.value) { search.value = ''; renderEmployeeList(); return true; }
+    goBack();
+    return true;
+  }
+  if (handleEmployeeCardKeys(event)) return true;
+  // Shift+N also works from an empty search box.
+  const newKey = key === 'N' && event.shiftKey;
+  if ((isTextEntry(target) || target.tagName === 'SELECT') && !(newKey && target === search && !search.value)) return false;
+  if (key === '/') { event.preventDefault(); search.focus(); return true; }
+  if (newKey) { event.preventDefault(); location.hash = `#/${EMPLOYEE_LIST_ROUTE}/new`; return true; }
+  if (key.toLowerCase() === 'f' && !event.shiftKey) { event.preventDefault(); if (!event.repeat) openEmployeeFilter(); return true; }
+  return false;
+}
+
+function initEmployeesPage() {
+  initEmployeeDropdowns();
+  // On the form, a confirm (Remove this document?) takes Esc before the page does. Otherwise Esc always goes to the
+  // Employees list (with the employee just saved or edited focused), never to the menu.
+  const formKeys = FORM_KEY_HANDLERS.employee;
+  FORM_KEY_HANDLERS.employee = event => {
+    if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+    if (event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      if (!event.repeat) leaveEmployeeForm();
+      return true;
+    }
+    return formKeys(event);
+  };
+  FORM_PAGES[EMPLOYEE_LIST_ROUTE] = {
+    page: 'employee-list',
+    alwaysReset: true,                     // back from the form: the list is read afresh
+    reset() {
+      byId('employee-list-search').value = '';
+      if (!employeeList.returnTo) employeeList.filters = { ...EMP_NO_FILTERS };   // a fresh visit starts unfiltered
+      empFillStockPoints();
+      employeeList.loaded = false;
+      renderEmployeeList();
+      loadEmployeeList().then(() => {
+        const active = document.activeElement;
+        const idle = active === byId('app') || active === document.body || (active === byId('employee-list-search') && !active.value);
+        if (currentPage === 'employee-list' && idle) employeeListFocus().focus();
+      });
+    },
+    firstField: () => employeeListFocus(),
+  };
+  FORM_KEY_HANDLERS['employee-list'] = handleEmployeeListKeys;
+  byId('employee-list-search').addEventListener('input', renderEmployeeList);
+  byId('employee-list-filter').addEventListener('click', openEmployeeFilter);
+  const filter = byId('employee-filter');
+  filter.addEventListener('input', efPreview);
+  filter.addEventListener('change', efPreview);
+  filter.addEventListener('cancel', event => { event.preventDefault(); closeEmployeeFilter(); });
+  filter.addEventListener('click', event => {
+    if (event.target === filter) { closeEmployeeFilter(); return; }      // the backdrop
+    const action = event.target.closest('[data-ef]')?.dataset.ef;
+    if (action === 'close') closeEmployeeFilter();
+    else if (action === 'reset') resetEmployeeFilter();
+    else if (action === 'apply') applyEmployeeFilter();
+  });
+  byId('employee-list-grid').addEventListener('click', event => {
+    const view = event.target.closest('[data-emp-view]');
+    if (view) openEmployeeProfile(view.dataset.empView);
+    else if (!event.target.closest('a, button')) event.target.closest('.emp-card')?.focus();
+  });
+  byId('employee-list-grid').addEventListener('dblclick', event => {
+    const card = event.target.closest('.emp-card');
+    if (card && !event.target.closest('a, button')) openEmployeeProfile(card.dataset.id);
+  });
+  const dialog = byId('emp-profile');
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) { closeEmployeeProfile(); return; }      // the backdrop
+    const action = event.target.closest('[data-emp-profile]')?.dataset.empProfile;
+    if (action) employeeProfileAction(action);
+  });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeEmployeeProfile(); });
+}
+
+// The Employee pages' dropdowns (the form's and the Filter popup's; the phone codes keep theirs): a click opens the
+// app's own list under the field, the one Enter opens, so every browser shows the same list in the Employees violet.
+// The current choice is ticked; a click on the field again closes it.
+function initEmployeeDropdowns() {
+  const selects = [...byId('employee-form').querySelectorAll('select'), ...byId('employee-filter').querySelectorAll('select'),
+    ...byId('user-form').querySelectorAll('select')]
+    .filter(select => select.dataset.phoneCode === undefined);
+  for (const select of selects) {
+    // Whether this list was open when the click began (the page closes an open list on any mousedown first).
+    let wasOpen = false;
+    select.addEventListener('pointerdown', () => { wasOpen = selectMenu.select === select; });
+    select.addEventListener('mousedown', event => {
+      if (event.button !== 0 || select.disabled) return;
+      event.preventDefault();                          // not the browser's own picker
+      if (document.activeElement !== select) select.focus();
+      if (wasOpen || selectMenu.select === select) { wasOpen = false; closeSelectMenu(); return; }
+      if (openSelectMenu(select)) selectMenu.node.children[selectMenu.active]?.classList.add('is-current');
+    });
+    select.addEventListener('keydown', () => {
+      // Enter opens the same list (the form's own keys): tick the current choice there too.
+      setTimeout(() => { if (selectMenu.select === select) selectMenu.node.children[selectMenu.active]?.classList.add('is-current'); }, 0);
+    });
+  }
+}
+
+// Esc on the Employee form: back to the Employees list. Opened from the list, that is a step back (the list keeps its
+// filters); otherwise the list opens in the form's place.
+function leaveEmployeeForm() {
+  if (routeTrail.at(-1) === EMPLOYEE_LIST_ROUTE) { goBack(); return; }
+  routeGoingBack = true;                       // the form is not kept as a step to come back to
+  location.hash = `#/${EMPLOYEE_LIST_ROUTE}`;
+}
+
+// #/employee/employee/edit/ID: the form with that employee.
+function employeeEditPage(route) {
+  const match = new RegExp(`^${EMPLOYEE_LIST_ROUTE}/edit/(\\d+)$`).exec(route);
+  if (!match) return null;
+  return { page: 'employee', alwaysReset: true, reset: () => employeeForm.edit(Number(match[1])), firstField: () => byId('employee-photo-btn') };
+}
+
+const employeeEl = suffix => byId(`employee-${suffix}`);
+// The form's fields and the payload key each one fills (text, selects and dates; phones and the checkbox apart).
+const EMPLOYEE_FORM_FIELDS = [
+  ['firstName', 'first-name'], ['lastName', 'last-name'], ['gender', 'gender'], ['dateOfBirth', 'dob'], ['maritalStatus', 'marital'],
+  ['nationality', 'nationality'], ['email', 'email'], ['address', 'address'], ['city', 'city'], ['country', 'country'],
+  ['department', 'department'], ['designation', 'designation'], ['joinDate', 'join-date'], ['status', 'status'],
+  ['employmentType', 'type'], ['workLocation', 'work-location'], ['warehouseId', 'warehouse-id'], ['basicSalary', 'salary'], ['hra', 'hra'],
+  ['otherAllowance', 'allowance'], ['bankName', 'bank'], ['bankAccountNo', 'account'], ['iban', 'iban'], ['nationalId', 'national-id'],
+  ['passportNo', 'passport'], ['passportExpiry', 'passport-expiry'], ['visaNo', 'visa'], ['visaExpiry', 'visa-expiry'],
+  ['emergencyName', 'em-name'], ['emergencyRelationship', 'em-relationship'], ['remarks', 'remarks'],
+];
+const EMPLOYEE_REQUIRED = [['first-name', 'First name'], ['email', 'Email address'], ['phone', 'Phone number'], ['address', 'Address'],
+  ['city', 'City'], ['country', 'Country'], ['department', 'Department'], ['designation', 'Designation'],
+  ['join-date', 'Date of joining'], ['type', 'Employment type'], ['work-location', 'Work location']];
+const MONEY_3 = /^\d{1,11}(\.\d{1,3})?$/;
+const EMP_PHOTO_TYPES = ['jpg', 'jpeg', 'png'];
+const EMP_DOC_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
+
+// The photo and documents of the open form: chosen files wait here until the employee is saved.
+const employeeFiles = { photo: null, photoUrl: null, removePhoto: false, storedPhoto: null, stored: [], editingId: null };
+const employeePhotoUrl = (id, version) => `api/employee-files.php?photo=${id}&v=${encodeURIComponent(version || '')}`;
+
+function showEmployeePhoto() {
+  const preview = employeeEl('photo-preview');
+  const url = employeeFiles.photoUrl || (!employeeFiles.removePhoto && employeeFiles.storedPhoto) || '';
+  preview.hidden = !url;
+  if (url) preview.src = url; else preview.removeAttribute('src');
+  employeeEl('photo-btn').classList.toggle('has-photo', Boolean(url));
+  employeeEl('photo-btn').setAttribute('aria-label', url ? 'Change photo' : 'Upload photo');
+  employeeEl('photo-remove').hidden = !url;
+}
+// A photo chosen (picker or drop): kept when it is a JPG or PNG of up to 10 MB. Returns whether it was kept (the
+// caller then moves on to Gender).
+function setEmployeePhoto(file) {
+  const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+  if (!EMP_PHOTO_TYPES.includes(extension)) { showToast('The photo was not added', `${file.name} is not a JPG or PNG.`, true); return false; }
+  if (file.size > DOC_MAX_BYTES) { showToast('The photo was not added', `${file.name} is over 10 MB.`, true); return false; }
+  if (employeeFiles.photoUrl) URL.revokeObjectURL(employeeFiles.photoUrl);
+  employeeFiles.photo = file;
+  employeeFiles.photoUrl = URL.createObjectURL(file);
+  employeeFiles.removePhoto = false;
+  showEmployeePhoto();
+  return true;
+}
+
+// One documents row: the type, the file and its delete button.
+function addEmployeeDocRow(focus = false) {
+  const row = empEl('div', 'ef-doc-row');
+  const type = empEl('input', 'fp-input');
+  Object.assign(type, { type: 'text', maxLength: 60, autocomplete: 'off', placeholder: 'Document Type (e.g. Visa, Degree)' });
+  type.dataset.docType = '';
+  type.setAttribute('aria-label', 'Document type');
+  const file = empEl('input', 'ef-doc-file');
+  file.type = 'file';
+  file.accept = EMP_DOC_TYPES.map(ext => `.${ext}`).join(',');
+  file.dataset.transient = 'true';
+  file.setAttribute('aria-label', 'Document file');
+  const del = empEl('button', 'ef-doc-del');
+  del.type = 'button';
+  del.setAttribute('aria-label', 'Delete this row');
+  del.title = 'Delete row';
+  del.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg>';
+  row.append(type, file, del);
+  employeeEl('doc-rows').append(row);
+  if (focus) type.focus();
+  return row;
+}
+function resetEmployeeDocRows() {
+  employeeEl('doc-rows').replaceChildren();
+  addEmployeeDocRow();
+}
+
+function renderEmployeeStoredDocs() {
+  employeeEl('docs-stored').replaceChildren(...employeeFiles.stored.map(doc => {
+    const li = empEl('li', 'ef-doc');
+    const link = empEl('a', '', doc.originalName);
+    link.href = `api/employee-files.php?id=${doc.id}&inline=1`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    const remove = empEl('button', 'ef-doc-del');
+    remove.type = 'button';
+    remove.dataset.storedDoc = doc.id;
+    remove.setAttribute('aria-label', `Remove ${doc.originalName}`);
+    remove.title = 'Remove';
+    remove.textContent = '×';
+    li.append(empEl('span', 'ef-doc-type', doc.docType || 'Document'), link, remove);
+    return li;
+  }));
+}
+
+// The chosen files, checked here as the server checks them: [{ type, file }] and the rows' problems.
+function employeeDocRowsRead() {
+  const docs = [];
+  const errors = [];
+  for (const row of employeeEl('doc-rows').children) {
+    const type = row.querySelector('[data-doc-type]');
+    const file = row.querySelector('input[type="file"]').files[0];
+    if (!file) continue;
+    const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+    if (!EMP_DOC_TYPES.includes(extension)) errors.push({ node: type, message: `${file.name} is not a PDF, Word, Excel or image file.` });
+    else if (file.size > DOC_MAX_BYTES) errors.push({ node: type, message: `${file.name} is larger than 10 MB.` });
+    else docs.push({ type: type.value.trim(), file });
+  }
+  return { docs, errors };
+}
+
+// After a save: the photo (new or removed) and the new documents. Returns a message when something failed.
+async function uploadEmployeeFiles(record) {
+  const problems = [];
+  if (employeeFiles.photo) {
+    const body = new FormData();
+    body.append('employeeId', String(record.id));
+    body.append('photo', employeeFiles.photo, employeeFiles.photo.name);
+    try { await apiRequest('api/employee-files.php', { method: 'POST', body }); } catch (error) { problems.push(`Photo: ${error.message}`); }
+  } else if (employeeFiles.removePhoto && record.hasPhoto) {
+    try { await apiRequest(`api/employee-files.php?photo=${record.id}`, { method: 'DELETE' }); } catch (error) { problems.push(`Photo: ${error.message}`); }
+  }
+  const { docs } = employeeDocRowsRead();
+  if (docs.length) {
+    const body = new FormData();
+    body.append('employeeId', String(record.id));
+    for (const { type, file } of docs) { body.append('files[]', file, file.name); body.append('types[]', type); }
+    try { await apiRequest('api/employee-files.php', { method: 'POST', body }); } catch (error) { problems.push(`Documents: ${error.message}`); }
+  }
+  return problems.length ? problems.join(' ') : null;
+}
+
+function resetEmployeeFiles() {
+  if (employeeFiles.photoUrl) URL.revokeObjectURL(employeeFiles.photoUrl);
+  Object.assign(employeeFiles, { photo: null, photoUrl: null, removePhoto: false, storedPhoto: null, stored: [], editingId: null });
+  employeeEl('photo-input').value = '';
+  showEmployeePhoto();
+  renderEmployeeStoredDocs();
+  resetEmployeeDocRows();
+}
+
+// Company: always the signed-in one, shown locked (read once; the server saves it whatever the page sends).
+let employeeCompany = null;
+async function showEmployeeCompany() {
+  employeeCompany ??= apiRequest('api/employees.php?company=1').catch(() => { employeeCompany = null; return null; });
+  const company = await employeeCompany;
+  employeeEl('company').value = company ? `${company.code} – ${company.name}` : (pageCompany || '');
+}
+
+const employeeForm = createFormPage({
+  key: 'employee', route: `${EMPLOYEE_LIST_ROUTE}/new`, listRoute: EMPLOYEE_LIST_ROUTE, noun: 'Employee', api: 'api/employees.php', lookups: [],
+  // The page starts on Upload Photo (Enter or Space opens the file picker); once a photo is picked, or the picker is
+  // closed without one, it goes on to Employee Code, then Gender, First Name and the rest in page order.
+  firstField: () => employeeEl('photo-btn'),
+  // The next code is filled in (it can be typed over); the Employee ID is always automatic.
+  setCode: async () => {
+    showNextCode(employeeEl('code'), 'api/employees.php');
+    try {
+      const { number } = await apiRequest('api/employees.php?nextNumber=1');
+      if (employeeEl('code').dataset.recordCode === undefined && !employeeFiles.editingId) employeeEl('no').value = String(number);
+    } catch { /* shown once saved */ }
+  },
+  fieldNodes: Object.fromEntries([...EMPLOYEE_FORM_FIELDS, ['code', 'code'], ['warehouseId', 'warehouse'], ['phone', 'phone'],
+    ['emergencyPhone', 'em-phone'], ['photo', 'photo-btn'], ['files', 'doc-add']].map(([key, suffix]) => [key, () => employeeEl(suffix)])),
+  read() {
+    const check = formChecks(employeeEl);
+    for (const [suffix, label] of EMPLOYEE_REQUIRED) check.required(suffix, label);
+    for (const suffix of ['salary', 'hra', 'allowance']) check.matches(suffix, MONEY_3, 'Enter an amount with up to 3 decimals.');
+    const join = check.text('join-date');
+    const dob = check.text('dob');
+    if (join && dob && dob >= join) check.fail(employeeEl('dob'), 'The date of birth must be before the date of joining.');
+    check.matches('code', /^[A-Za-z0-9][A-Za-z0-9/_.-]*$/, 'Use letters, digits and - / _ . only.');
+    check.errors.push(...employeeDocRowsRead().errors);
+    const payload = Object.fromEntries(EMPLOYEE_FORM_FIELDS.map(([key, suffix]) => [key, check.text(suffix)]));
+    for (const key of ['dateOfBirth', 'joinDate', 'passportExpiry', 'visaExpiry', 'warehouseId', 'basicSalary', 'hra', 'otherAllowance']) {
+      if (payload[key] === '') payload[key] = null;
+    }
+    return {
+      errors: check.errors,
+      payload: { ...payload, code: check.text('code').toUpperCase(), phone: readPhoneField(employeeEl('phone')), emergencyPhone: readPhoneField(employeeEl('em-phone')),
+        boardMember: employeeEl('board').checked },
+    };
+  },
+  fill(employee) {
+    showRecordCode(employeeEl('code'), employee.code);
+    employeeEl('no').value = String(employee.number || '');
+    for (const [key, suffix] of EMPLOYEE_FORM_FIELDS) {
+      if (key === 'warehouseId') continue;
+      const value = employee[key] ?? '';
+      employeeEl(suffix).value = ['basicSalary', 'hra', 'otherAllowance'].includes(key) && value !== '' && value !== null ? pbMoney(pbNum(value)) : value ?? '';
+    }
+    fillLookup(employeeEl('warehouse'), employee.warehouseId ? { id: employee.warehouseId, code: employee.warehouseCode, name: employee.warehouseName } : null);
+    const dial = countryNamed(employee.country)?.dial || '+91';
+    setPhoneField(employeeEl('phone'), employee.phone, dial);
+    setPhoneField(employeeEl('em-phone'), employee.emergencyPhone, dial);
+    employeeEl('board').checked = Boolean(employee.boardMember);
+    employeeFiles.editingId = employee.id;
+    employeeFiles.storedPhoto = employee.hasPhoto ? employeePhotoUrl(employee.id, employee.photoVersion) : null;
+    employeeFiles.stored = employee.documents || [];
+    showEmployeePhoto();
+    renderEmployeeStoredDocs();
+  },
+  onReset() {
+    resetEmployeeFiles();
+    employeeEl('no').value = '';
+    // A new employee starts in India (this page only): the phone codes follow the country.
+    const dial = countryNamed(employeeEl('country').value)?.dial;
+    if (dial) { employeeEl('phone-code').value = dial; employeeEl('em-phone-code').value = dial; }
+    showEmployeeCompany();
+  },
+  // Documents rows: Enter goes from the type to its file (Space opens the file picker) and on to the next row's type
+  // (the last row: Save).
+  onEnter(event) {
+    const { target } = event;
+    const row = target.closest?.('.ef-doc-row');
+    if (!row) return false;
+    if (target.dataset.docType !== undefined) { row.querySelector('input[type="file"]').focus(); return true; }
+    const next = row.nextElementSibling?.querySelector('[data-doc-type]');
+    (next || employeeEl('save')).focus();
+    return true;
+  },
+  // Alt+A, or Shift+X outside a text field, adds a documents row (as on the pages with item lines).
+  onKey(event) {
+    const typing = isTextEntry(event.target) && !isDateField(event.target);
+    const shiftX = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'x' && !typing;
+    if (!shiftX && !(event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyA')) return false;
+    event.preventDefault();
+    if (!event.repeat) addEmployeeDocRow(true);
+    return true;
+  },
+  // The photo and documents go up once the employee is saved; back on the list, its card has the focus.
+  async afterSave(record) {
+    employeeList.returnTo = record.code;
+    return uploadEmployeeFiles(record);
+  },
+  init() {
+    employeeEl('country').addEventListener('input', () => {
+      const dial = countryNamed(employeeEl('country').value)?.dial;
+      if (dial) { employeeEl('phone-code').value = dial; employeeEl('em-phone-code').value = dial; }
+    });
+    employeeEl('photo-btn').addEventListener('click', () => employeeEl('photo-input').click());
+    // A photo kept: on to Employee Code. One turned down (type or size): back on Upload Photo to choose another.
+    const takePhoto = file => {
+      const kept = setEmployeePhoto(file);
+      if (currentPage === 'employee') (kept ? employeeEl('code') : employeeEl('photo-btn')).focus();
+    };
+    employeeEl('photo-input').addEventListener('change', () => {
+      const file = employeeEl('photo-input').files[0];
+      employeeEl('photo-input').value = '';
+      if (file) takePhoto(file); else employeeEl('code').focus();
+    });
+    employeeEl('photo-input').addEventListener('cancel', () => employeeEl('code').focus());   // closed without a photo
+    enableFileDrop(employeeEl('photo-btn'), files => { if (files[0]) takePhoto(files[0]); });
+    employeeEl('photo-remove').addEventListener('click', () => {
+      if (employeeFiles.photoUrl) URL.revokeObjectURL(employeeFiles.photoUrl);
+      Object.assign(employeeFiles, { photo: null, photoUrl: null, removePhoto: true });
+      showEmployeePhoto();
+      employeeEl('photo-btn').focus();
+    });
+    employeeEl('doc-add').addEventListener('click', () => addEmployeeDocRow(true));
+    employeeEl('doc-rows').addEventListener('click', event => {
+      const del = event.target.closest('.ef-doc-del');
+      if (!del) return;
+      const row = del.closest('.ef-doc-row');
+      if (employeeEl('doc-rows').children.length > 1) row.remove();
+      else { row.querySelector('[data-doc-type]').value = ''; row.querySelector('input[type="file"]').value = ''; }
+      employeeEl('doc-add').focus();
+    });
+    // A stored document: removed from the server now (after a confirm).
+    employeeEl('docs-stored').addEventListener('click', async event => {
+      const remove = event.target.closest('[data-stored-doc]');
+      if (!remove) return;
+      const id = Number(remove.dataset.storedDoc);
+      const doc = employeeFiles.stored.find(entry => entry.id === id);
+      const ok = await confirmAction({ title: 'Remove this document?', message: `${doc?.originalName ?? 'The document'} will be deleted from this employee now.`, confirm: 'Remove Document' });
+      if (!ok) return;
+      try {
+        await apiRequest(`api/employee-files.php?id=${id}`, { method: 'DELETE' });
+      } catch (error) { showToast('The document was not removed', error.message, true); return; }
+      employeeFiles.stored = employeeFiles.stored.filter(entry => entry.id !== id);
+      renderEmployeeStoredDocs();
+      employeeEl('doc-add').focus();
+    });
+  },
+});
+
+/* =====================================================================
+   Access (Employee Management › User Setting): what the signed-in user may open and do.
+   api/session.php sends admin, permissions ({ "module/submodule": { view, create, edit, delete } }) and the modules.
+   A page the user may not open shows #no-access-page instead; the Quick Menu dims its entries; the server refuses
+   the writes too (backend/src/permissions.php), so this only spares the user a page they cannot use.
+   ===================================================================== */
+
+const PERM_ACTIONS = ['view', 'create', 'edit', 'delete'];
+let userAccess = { admin: true, landing: 'dashboard', permissions: {}, modules: [], keys: new Set() };
+
+function setUserAccess(user) {
+  const modules = user.modules || [];
+  userAccess = {
+    admin: user.admin !== false,
+    userId: user.id ?? null,
+    landing: user.landing || 'dashboard',
+    permissions: user.permissions || {},
+    modules,
+    keys: new Set(modules.flatMap(module => module.subs.map(sub => `${module.key}/${sub.key}`))),
+  };
+}
+// User Setting is the admins' alone (hidden from everyone else, never granted). Dashboard and Employee Management are
+// for managers only: staff never see them.
+const ADMIN_ONLY_PAGES = ['employee/user-setting'];
+const MANAGER_ONLY_MODULES = ['dashboard', 'employee'];
+const adminOnlyRoute = route => ADMIN_ONLY_PAGES.some(page => route === page || route.startsWith(`${page}/`));
+const managerOnlyRoute = route => MANAGER_ONLY_MODULES.includes(route.split('/')[0]) && userAccess.landing === 'modules';
+const canDo = (key, action = 'view') => userAccess.admin
+  || (!adminOnlyRoute(key) && !managerOnlyRoute(key) && Boolean(userAccess.permissions[key]?.[action]));
+
+// The permission a route needs: { keys, action }, or null for pages anyone signed in may open (the home page).
+function routePermission(route) {
+  if (route === 'audit') return { keys: ['dashboard/audit'], action: 'view' };
+  if (route === 'masters/party/new') return { keys: ['masters/supplier', 'masters/customer'], action: 'create' };
+  const match = /^([a-z-]+)\/([a-z-]+)(?:\/(.*))?$/.exec(route);
+  if (!match) return null;
+  const key = `${match[1]}/${match[2]}`;
+  if (!userAccess.keys.has(key)) return null;
+  const rest = match[3] || '';
+  return { keys: [key], action: rest === 'new' ? 'create' : rest.startsWith('edit') ? 'edit' : 'view' };
+}
+function routeAllowed(route) {
+  if (userAccess.admin) return true;
+  if (adminOnlyRoute(route) || managerOnlyRoute(route)) return false;
+  const need = routePermission(route);
+  return !need || need.keys.some(key => canDo(key, need.action));
+}
+
+const NO_ACCESS_TEXT = {
+  view: "You don't have permission to open this page.",
+  create: "You don't have permission to create records here.",
+  edit: "You don't have permission to edit records here.",
+};
+function showNoAccess(route) {
+  const action = routePermission(route)?.action || 'view';
+  byId('no-access-text').textContent = `${NO_ACCESS_TEXT[action] || NO_ACCESS_TEXT.view} Please contact your manager or admin.`;
+  showPage('no-access');
+  byId('no-access-back').focus();
+}
+
+function initNoAccessPage() {
+  byId('no-access-back').addEventListener('click', () => { location.hash = '#/home'; });
+  FORM_KEY_HANDLERS['no-access'] = event => {
+    if (event.key !== 'Escape' && !(event.key === 'Enter' && event.target === byId('no-access-back'))) return false;
+    event.preventDefault();
+    if (!event.repeat) { if (event.key === 'Escape') goBack(); else location.hash = '#/home'; }
+    return true;
+  };
+}
+
+// The Quick Menu: entries this user may not open are dimmed (they still open the "no permission" page), and so is a
+// module none of whose pages is allowed. The dashboard's figures hide without Dashboard › Overview.
+function applyUserAccess() {
+  const menu = byId('quick-menu');
+  // Not an admin: User Setting leaves the menu (with its heading); staff also lose Employee Management altogether, so no
+  // entry, letter or arrow stop reaches them.
+  if (!userAccess.admin) {
+    for (const page of ADMIN_ONLY_PAGES) {
+      for (const link of menu.querySelectorAll(`a.qm-item[href="#/${page}"], a.qm-item[href^="#/${page}/"]`)) {
+        const heading = link.previousElementSibling;
+        if (heading?.classList.contains('qm-section') && !(link.nextElementSibling && !link.nextElementSibling.classList.contains('qm-section'))) heading.remove();
+        link.remove();
+      }
+    }
+    if (userAccess.landing === 'modules') {
+      menu.querySelector('.qm-view[data-view="main"] [data-qm-open="employee"]')?.remove();
+      for (const view of menu.querySelectorAll('.qm-view[data-view="employee"], .qm-view[data-view^="employee-"]')) view.remove();
+    }
+  }
+  for (const link of menu.querySelectorAll('a.qm-item[href^="#/"]')) {
+    const locked = !routeAllowed(link.getAttribute('href').replace(/^#\//, ''));
+    link.classList.toggle('qm-locked', locked);
+    if (locked) link.title = "You don't have permission. Please contact your manager or admin."; else link.removeAttribute('title');
+  }
+  const viewOpen = view => {
+    const section = menu.querySelector(`.qm-view[data-view="${view}"]`);
+    if (!section) return true;
+    const links = [...section.querySelectorAll('a.qm-item[href^="#/"]')];
+    const subs = [...section.querySelectorAll('[data-qm-open]')].map(button => button.dataset.qmOpen);
+    return links.some(link => !link.classList.contains('qm-locked')) || subs.some(viewOpen);
+  };
+  for (const button of menu.querySelectorAll('[data-qm-open]')) button.classList.toggle('qm-locked', !viewOpen(button.dataset.qmOpen));
+  const figures = canDo('dashboard/overview');
+  byId('dashboard-view').classList.toggle('dash-no-figures', !figures);
+  byId('dashboard-view').classList.toggle('mh-staff', isModuleLanding());
+  // A manager: no audit trail or profit & loss (the full dashboard is the admins').
+  byId('dashboard-view').classList.toggle('dash-manager', !userAccess.admin);
+  byId('dashboard-locked').hidden = figures || isModuleLanding();
+  // Staff come back to their module cards, not a dashboard.
+  if (isModuleLanding()) {
+    for (const button of document.querySelectorAll('.fp-btn-secondary')) {
+      if (button.textContent.trim() === 'Back to Dashboard') button.textContent = 'Back to Modules';
+    }
+  }
+  FORM_KEY_HANDLERS.dashboard = handleModuleHomeKeys;
+  byId('audit-view-all').hidden = !canDo('dashboard/audit');
+}
+
+/* ---------- Module cards (#/home for staff, #/modules/<module>) ----------
+   Staff (User Setting › Role) have no dashboard: they open on cards of the modules they may use, and a module's card
+   opens cards of its pages (only those they may view or create in). Managers and admins open on the dashboard and can
+   still reach these pages at #/modules/<module>. The cards are built from the Quick Menu (names, icons, letters).
+   Keys: the card's letter opens it, arrows move between cards, Enter opens, Shift+N starts a new record on a page card
+   that allows it, Esc goes back to the modules. */
+const isModuleLanding = () => !userAccess.admin && userAccess.landing === 'modules';
+let moduleHomeShown = null;                 // null: the modules; a module key: its pages
+let moduleCatalogCache = null;
+
+function moduleCatalog() {
+  if (moduleCatalogCache) return moduleCatalogCache;
+  const menu = byId('quick-menu');
+  // The name with its shortcut letter marked; a letter inside a word reads in small letters ("EmpLoyee" → "Employee").
+  const nameHtml = node => {
+    const name = node.querySelector('.qm-name').cloneNode(true);
+    for (const letter of name.querySelectorAll('.qm-key')) {
+      if (letter.previousSibling && /\S$/.test(letter.previousSibling.textContent)) letter.textContent = letter.textContent.toLowerCase();
+    }
+    return name;
+  };
+  const read = node => ({
+    nameHtml: nameHtml(node).innerHTML, name: nameHtml(node).textContent.trim(),
+    desc: node.querySelector('.qm-desc')?.textContent.trim() || '', icon: node.querySelector('.qm-icon').innerHTML,
+    letter: (node.dataset.key || node.querySelector('.qm-kbd')?.textContent || '').trim().toLowerCase(),
+  });
+  moduleCatalogCache = [...menu.querySelectorAll('.qm-view[data-view="main"] [data-qm-open]')].map(button => {
+    const key = button.dataset.qmOpen;
+    const view = menu.querySelector(`.qm-view[data-view="${key}"]`);
+    const subs = view ? [...view.querySelectorAll('a.qm-item[href^="#/"]')].map(link => ({ ...read(link), route: link.getAttribute('href').slice(2) })) : [];
+    return { ...read(button), key, subs };
+  });
+  return moduleCatalogCache;
+}
+const subNewRoute = route => (FORM_PAGES[`${route}/new`] ? `${route}/new`
+  : ['masters/supplier', 'masters/customer'].includes(route) ? 'masters/party/new' : null);
+const subCanOpen = sub => canDo(sub.route, 'view') || (canDo(sub.route, 'create') && Boolean(subNewRoute(sub.route)));
+const allowedModules = () => moduleCatalog().filter(module => module.subs.some(subCanOpen));
+
+const MH_ARROW = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>';
+const MH_PLUS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>';
+
+function moduleCard({ href, letter, icon, nameHtml, name, desc, foot, module, newHref }) {
+  const card = el('div', 'mh-card');
+  card.dataset.module = module;
+  const link = el('a', 'mh-card-link');
+  link.href = href;
+  link.dataset.key = letter;
+  link.setAttribute('aria-label', `${name}: ${desc}`);
+  if (letter) link.setAttribute('aria-keyshortcuts', letter.toUpperCase());
+  const top = el('div', 'mh-card-top');
+  const iconBox = el('span', 'mh-icon');
+  iconBox.innerHTML = icon;
+  top.append(iconBox);
+  if (letter) top.append(el('kbd', 'mh-kbd', letter.toUpperCase()));
+  const title = el('h2', 'mh-name');
+  title.innerHTML = nameHtml;
+  const bottom = el('div', 'mh-card-foot');
+  const arrow = el('span', 'mh-arrow');
+  arrow.innerHTML = MH_ARROW;
+  bottom.append(el('span', 'mh-open', foot), arrow);
+  link.append(top, title, el('p', 'mh-desc', desc), bottom);
+  card.append(link);
+  if (newHref) {
+    const add = el('a', 'mh-new');
+    add.href = newHref;
+    add.title = `New ${name} (Shift+N)`;
+    add.tabIndex = -1;
+    add.innerHTML = `${MH_PLUS}<span>New</span>`;
+    card.append(add);
+  }
+  return card;
+}
+
+function renderModuleHome(moduleKey) {
+  const grid = byId('module-home-grid');
+  const head = byId('module-home-head');
+  const module = moduleKey ? moduleCatalog().find(entry => entry.key === moduleKey) : null;
+  moduleHomeShown = module ? module.key : null;
+  byId('module-home').dataset.module = module?.key || '';
+  if (!module) {
+    const modules = allowedModules();
+    head.hidden = true;
+    grid.className = 'mh-grid';
+    grid.replaceChildren(...modules.map(entry => moduleCard({
+      href: `#/modules/${entry.key}`, letter: entry.letter, icon: entry.icon, nameHtml: entry.nameHtml, name: entry.name, desc: entry.desc,
+      foot: 'Open module', module: entry.key,
+    })));
+    byId('module-home-empty').hidden = modules.length > 0;
+    return;
+  }
+  const subs = module.subs.filter(subCanOpen);
+  const back = el('button', 'mh-back');
+  back.type = 'button';
+  back.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg><span>All modules</span>';
+  back.title = 'Back to the modules (Esc)';
+  back.addEventListener('click', () => { location.hash = '#/home'; });
+  const iconBox = el('span', 'mh-icon');
+  iconBox.innerHTML = module.icon;
+  const titles = el('div', 'mh-head-text');
+  titles.append(el('h1', 'mh-head-title', module.name), el('p', 'mh-head-desc', `${module.desc} · ${subs.length} ${subs.length === 1 ? 'page' : 'pages'}`));
+  const brand = el('div', 'mh-head-brand');
+  brand.dataset.module = module.key;
+  brand.append(iconBox, titles);
+  head.replaceChildren(back, brand);
+  head.hidden = false;
+  grid.className = 'mh-grid mh-grid-subs';
+  grid.replaceChildren(...subs.map(sub => {
+    const newRoute = canDo(sub.route, 'create') ? subNewRoute(sub.route) : null;
+    const viewable = canDo(sub.route, 'view');
+    return moduleCard({
+      href: `#/${viewable ? sub.route : newRoute}`, letter: sub.letter, icon: sub.icon, nameHtml: sub.nameHtml, name: sub.name, desc: sub.desc,
+      foot: viewable ? 'Open' : 'Create new', module: module.key, newHref: viewable && newRoute ? `#/${newRoute}` : null,
+    });
+  }));
+  byId('module-home-empty').hidden = subs.length > 0;
+}
+
+// Focus on the card just come back from (a module, or a page of this module), else the first.
+function focusModuleHome(previousRoute) {
+  const links = [...byId('module-home-grid').querySelectorAll('.mh-card-link')];
+  const from = String(previousRoute || '');
+  const match = links.find(link => {
+    const target = link.getAttribute('href').slice(2);
+    return from === target || from.startsWith(`${target}/`) || (target.startsWith('modules/') && from === target);
+  }) || links.find(link => from.startsWith(link.getAttribute('href').slice(2).replace(/\/new$/, '')));
+  (match || links[0] || byId('app')).focus({ preventScroll: false });
+}
+
+function handleModuleHomeKeys(event) {
+  if (byId('module-home').hidden || currentPage !== 'dashboard') return false;
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  const { key, target } = event;
+  const links = [...byId('module-home-grid').querySelectorAll('.mh-card-link')];
+  if (key === 'Escape' || (key === 'Backspace' && !isTextEntry(target))) {
+    if (!moduleHomeShown) return false;
+    event.preventDefault();
+    if (!event.repeat) location.hash = '#/home';
+    return true;
+  }
+  if (key === 'Enter' && target.classList?.contains('mh-card-link')) {
+    event.preventDefault();
+    if (!event.repeat) location.hash = target.getAttribute('href');
+    return true;
+  }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) {
+    if (!links.length) return false;
+    event.preventDefault();
+    const index = links.indexOf(target);
+    if (index < 0) { links[0].focus(); return true; }
+    const top = links[0].getBoundingClientRect().top;
+    const columns = Math.max(1, links.filter(link => Math.abs(link.getBoundingClientRect().top - top) < 4).length);
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -columns, ArrowDown: columns }[key];
+    links[Math.min(links.length - 1, Math.max(0, index + step))].focus();
+    return true;
+  }
+  if (event.shiftKey && key.toLowerCase() === 'n') {
+    const add = target.closest?.('.mh-card')?.querySelector('.mh-new');
+    if (!add) return false;
+    event.preventDefault();
+    if (!event.repeat) location.hash = add.getAttribute('href');
+    return true;
+  }
+  if (key.length === 1 && !event.shiftKey && /[a-z]/i.test(key)) {
+    const link = links.find(entry => entry.dataset.key === key.toLowerCase());
+    if (!link) return false;
+    event.preventDefault();
+    if (!event.repeat) location.hash = link.getAttribute('href');
+    return true;
+  }
+  return false;
+}
+
+/* =====================================================================
+   User Setting  (#/employee/user-setting · Employee Management › User Setting)
+   The User popup lists the employees; picking one opens their login (when they have one) or starts a new one with
+   their details. Username and password are their sign-in. Gender, department, designation, employment type, stock
+   point and work location are the employee's own (saved back to the employee record).
+   Module permissions: Access gives the whole module or submodule (view, create, edit, delete); each action can then be
+   taken away. Create, edit or delete give view; taking view away takes the others. The head row sets a column for
+   every module; a module row sets its submodules. Arrow keys move around the ticks, Space ticks.
+   ===================================================================== */
+
+const USER_ROUTE = 'employee/user-setting';
+const userEl = suffix => byId(`user-${suffix}`);
+const userState = { perms: {}, open: new Set(), modules: [], employee: null };
+
+// Permissions as saved: only the submodules with something allowed.
+const userPermsClean = () => Object.fromEntries(Object.entries(userState.perms)
+  .filter(([, flags]) => PERM_ACTIONS.some(action => flags[action]))
+  .map(([key, flags]) => [key, Object.fromEntries(PERM_ACTIONS.map(action => [action, Boolean(flags[action])]))]));
+
+function userSetFlag(key, action, on) {
+  const flags = { ...(userState.perms[key] || {}) };
+  if (action === 'access') for (const a of PERM_ACTIONS) flags[a] = on;
+  else {
+    flags[action] = on;
+    if (on && action !== 'view') flags.view = true;
+    if (!on && action === 'view') for (const a of PERM_ACTIONS) flags[a] = false;
+  }
+  userState.perms[key] = flags;
+}
+// A group's tick: all on, some on (indeterminate) or none.
+function userGroupState(keys, action) {
+  const on = keys.filter(key => {
+    const flags = userState.perms[key] || {};
+    return action === 'access' ? PERM_ACTIONS.every(a => flags[a]) : Boolean(flags[action]);
+  }).length;
+  const some = action === 'access' ? keys.some(key => PERM_ACTIONS.some(a => userState.perms[key]?.[a])) : on > 0;
+  return { checked: on === keys.length && keys.length > 0, mixed: some && on < keys.length };
+}
+const userModuleKeys = module => module.subs.map(sub => `${module.key}/${sub.key}`);
+
+function userPermCheck(attrs, label) {
+  const box = empEl('input', 'us-check');
+  box.type = 'checkbox';
+  box.dataset.transient = 'true';
+  box.dataset.enterSkip = '';
+  Object.assign(box.dataset, attrs);
+  box.setAttribute('aria-label', label);
+  return box;
+}
+
+function renderUserPerms() {
+  const body = userEl('perm-body');
+  const focused = document.activeElement;
+  const focusKey = body.contains(focused) ? [focused.dataset.permKey, focused.dataset.permModule, focused.dataset.permAction, focused.dataset.permToggle].join('|') : null;
+  const rows = [];
+  for (const module of userState.modules) {
+    const keys = userModuleKeys(module);
+    const allowed = keys.filter(key => userState.perms[key]?.view).length;
+    const open = userState.open.has(module.key);
+    const row = empEl('tr', `us-mod${open ? ' is-open' : ''}${allowed ? ' is-on' : ''}`);
+    const cell = empEl('td', 'us-col-module');
+    const toggle = empEl('button', 'us-toggle');
+    toggle.type = 'button';
+    toggle.dataset.permToggle = module.key;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', `${open ? 'Hide' : 'Show'} the submodules of ${module.name}`);
+    toggle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
+    const badge = empEl('span', 'us-badge', module.name.charAt(0));
+    const text = empEl('span', 'us-mod-text');
+    text.append(empEl('strong', 'us-mod-name', module.name), empEl('span', 'us-mod-sub', `${allowed} of ${keys.length} submodules allowed`));
+    const name = empEl('span', 'us-mod-label');
+    name.dataset.permToggle = module.key;
+    name.append(badge, text);
+    cell.append(toggle, name);
+    row.append(cell);
+    const managersOnly = MANAGER_ONLY_MODULES.includes(module.key) && userEl('role').value !== 'manager';
+    if (managersOnly) { row.classList.add('is-locked'); text.lastChild.textContent = 'Managers only: not for staff'; }
+    for (const action of ['access', ...PERM_ACTIONS]) {
+      const td = empEl('td', 'us-col-check');
+      const box = userPermCheck({ permModule: module.key, permAction: action }, `${module.name}: ${action}`);
+      box.disabled = managersOnly;
+      const state = userGroupState(keys, action);
+      box.checked = state.checked;
+      box.indeterminate = state.mixed;
+      td.append(box);
+      row.append(td);
+    }
+    rows.push(row);
+    if (!open) continue;
+    module.subs.forEach((sub, index) => {
+      const key = `${module.key}/${sub.key}`;
+      const flags = userState.perms[key] || {};
+      const subRow = empEl('tr', `us-sub${index === 0 ? ' is-first' : ''}${index === module.subs.length - 1 ? ' is-last' : ''}`);
+      const subCell = empEl('td', 'us-col-module');
+      subCell.append(empEl('span', 'us-dot'), empEl('span', 'us-sub-name', sub.name));
+      subRow.append(subCell);
+      for (const action of ['access', ...PERM_ACTIONS]) {
+        const td = empEl('td', 'us-col-check');
+        const box = userPermCheck({ permKey: key, permAction: action }, `${sub.name}: ${action}`);
+        box.disabled = managersOnly;
+        if (action === 'access') {
+          box.checked = PERM_ACTIONS.every(a => flags[a]);
+          box.indeterminate = !box.checked && PERM_ACTIONS.some(a => flags[a]);
+        } else box.checked = Boolean(flags[action]);
+        td.append(box);
+        subRow.append(td);
+      }
+      rows.push(subRow);
+    });
+  }
+  body.replaceChildren(...rows);
+  const allKeys = userState.modules.flatMap(userModuleKeys);
+  for (const box of userEl('form').querySelectorAll('[data-perm-all]')) {
+    const state = userGroupState(allKeys, box.dataset.permAll);
+    box.checked = state.checked;
+    box.indeterminate = state.mixed;
+  }
+  userEl('perm-count').textContent = String(userState.modules.filter(module => userModuleKeys(module).some(key => userState.perms[key]?.view)).length);
+  userEl('perm-total').textContent = String(userState.modules.length);
+  if (focusKey) {
+    const again = [...body.querySelectorAll('input, button')].find(node =>
+      [node.dataset.permKey, node.dataset.permModule, node.dataset.permAction, node.dataset.permToggle].join('|') === focusKey);
+    again?.focus();
+  }
+}
+
+// The card at the top: who is picked, their initials, email and role.
+function renderUserWho() {
+  const employee = userState.employee;
+  const name = employee?.name || '';
+  userEl('avatar').textContent = name ? name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join('') : '?';
+  userEl('avatar').classList.toggle('is-empty', !name);
+  userEl('who-name').textContent = name || 'No user selected';
+  userEl('who-meta').textContent = employee
+    ? [employee.email, employee.designation || 'Staff'].filter(Boolean).join(' · ')
+    : 'Pick a user below to set their login and access';
+  if (employee) userEl('who-meta').textContent = [employee.email, userEl('role').value === 'manager' ? 'Manager' : 'Staff'].filter(Boolean).join(' · ');
+  const active = userEl('active').checked;
+  userEl('active-label').textContent = active ? 'Active' : 'Inactive';
+  userEl('active-label').classList.toggle('is-off', !active);
+}
+
+function userFillDetails(employee) {
+  userState.employee = employee ? { name: employee.name, email: employee.email, designation: employee.designation } : null;
+  userEl('gender').value = employee?.gender || '';
+  userEl('department').value = employee?.department || '';
+  userEl('designation').value = employee?.designation || '';
+  userEl('type').value = employee?.employmentType || 'Full-time';
+  userEl('work-location').value = employee?.workLocation || '';
+  fillLookup(userEl('warehouse'), employee?.warehouseId ? { id: employee.warehouseId, code: employee.warehouseCode, name: employee.warehouseName } : null);
+  renderUserWho();
+}
+
+// The password shown as text (Edit opens with it showing) or hidden; the eye button follows.
+function setUserPasswordShown(show) {
+  userEl('password').type = show ? 'text' : 'password';
+  userEl('password-eye').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  userEl('password-eye').title = show ? 'Hide password' : 'Show password';
+}
+
+function userShowMode() {
+  const editing = userForm.isEditing();
+  userEl('password-req').hidden = editing;
+  // A password set before passwords were kept for Edit (or by another way) cannot be shown: a new one can be typed.
+  userEl('password').placeholder = !editing ? 'At least 6 characters'
+    : userState.passwordStored ? 'Leave blank to keep the current password' : 'Not saved here yet: type a new password';
+  userEl('remove').hidden = !editing || !canDo(USER_ROUTE, 'delete');
+}
+
+// A user picked in the popup: their login, or a new one with their details.
+let userPickSeq = 0;
+async function userPicked() {
+  const id = userEl('employee-id').value;
+  const seq = ++userPickSeq;
+  if (!id) return;
+  const row = (await loadLookup('user')).find(entry => String(entry.id) === id);
+  if (seq !== userPickSeq) return;
+  if (row?.userId) {
+    await userForm.edit(row.userId);
+    userShowMode();
+    return;
+  }
+  userForm.reset();
+  fillLookup(userEl('employee'), row || { id, name: userEl('employee').value });
+  let employee = null;
+  try { employee = await apiRequest(`api/employees.php?id=${id}`); } catch (error) { showToast('The employee could not be read', error.message, true); }
+  if (seq !== userPickSeq) return;
+  userFillDetails(employee);
+  userEl('username').value = employee ? suggestUsername(employee) : '';
+  userForm.absorb();
+  userShowMode();
+}
+const suggestUsername = employee => [employee.firstName, employee.lastName].filter(Boolean).join('.').toLowerCase().replace(/[^a-z0-9._-]/g, '');
+
+/* ---------- User Accounts  (#/employee/user-setting): every login, search, Create User, Edit and Delete ----------
+   Admin accounts and your own are listed without Edit / Delete (they are not changed here). Passwords are kept only
+   as a one-way hash plus an encrypted copy that only the Edit page shows (to users allowed to edit logins), so the
+   list shows that one is set, never the password. Keys: / search, Shift+N create,
+   ↑/↓ move between rows, Enter edit, Delete removes the login (after a confirm), Esc back. */
+const USER_LIST_ROUTE = 'employee/user-setting';
+const userList = { rows: [], loaded: false, returnTo: null, seq: 0 };
+
+async function loadUserList() {
+  const seq = ++userList.seq;
+  try {
+    const rows = await apiRequest('api/users.php');
+    if (seq !== userList.seq) return;
+    userList.rows = rows;
+  } catch (error) {
+    if (seq !== userList.seq) return;
+    userList.rows = [];
+    showToast('The user accounts could not be loaded', error.message, true);
+  }
+  userList.loaded = true;
+  renderUserList();
+}
+
+const userModulesAllowed = user => (user.admin ? null
+  : userAccess.modules.filter(module => module.subs.some(sub => user.permissions?.[`${module.key}/${sub.key}`]?.view)).length);
+const userInitials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join('') || '?';
+const userIsLocked = user => user.admin || user.id === userAccess.userId;
+
+function userListShown() {
+  const q = byId('user-list-search').value.trim().toLowerCase();
+  if (!q) return userList.rows;
+  return userList.rows.filter(user => [user.name, user.username, user.employee?.code, user.employee?.email, user.role]
+    .some(value => String(value || '').toLowerCase().includes(q)));
+}
+
+function renderUserList() {
+  const body = byId('user-list-body');
+  const focused = document.activeElement?.closest?.('#user-list-body tr')?.dataset.userId;
+  const rows = userListShown();
+  const canEdit = canDo(USER_LIST_ROUTE, 'edit');
+  const canDelete = canDo(USER_LIST_ROUTE, 'delete');
+  body.replaceChildren(...rows.map(user => {
+    const tr = el('tr', `ul-row${user.active ? '' : ' is-inactive'}`);
+    tr.dataset.userId = String(user.id);
+    tr.dataset.code = user.username;
+    tr.tabIndex = 0;
+    const who = el('td', 'ul-who');
+    const avatar = el('span', `ul-avatar${user.admin ? ' is-admin' : ''}`, userInitials(user.name));
+    avatar.setAttribute('aria-hidden', 'true');
+    const text = el('span', 'ul-who-text');
+    text.append(el('strong', 'ul-name', user.name || user.username),
+      el('span', 'ul-sub', user.admin ? 'Company sign-in' : [user.employee?.code, user.employee?.email].filter(Boolean).join(' · ')));
+    who.append(avatar, text);
+    const pass = el('td', 'ul-pass');
+    pass.append(el('span', 'ul-dots', '••••••••'));
+    pass.title = 'Hidden here: open Edit to see or change it.';
+    const role = el('td');
+    role.append(el('span', `ul-role ul-role-${user.admin ? 'admin' : user.role}`, user.admin ? 'Admin' : user.role === 'manager' ? 'Manager' : 'Staff'));
+    const status = el('td');
+    status.append(el('span', `ul-status${user.active ? '' : ' is-off'}`, user.active ? 'Active' : 'Inactive'));
+    const allowed = userModulesAllowed(user);
+    const access = el('td', 'ul-access', allowed === null ? 'Full access' : `${allowed} of ${userAccess.modules.length} modules`);
+    const actions = el('td', 'ul-col-actions');
+    if (userIsLocked(user)) {
+      actions.append(el('span', 'ul-locked', user.admin ? 'Full access' : 'You'));
+    } else {
+      const edit = el('button', 'ul-act ul-act-edit');
+      edit.type = 'button';
+      edit.dataset.userAction = 'edit';
+      edit.tabIndex = -1;
+      edit.disabled = !canEdit;
+      edit.title = canEdit ? 'Edit (Enter)' : "You don't have permission to edit users";
+      edit.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg><span>Edit</span>';
+      const del = el('button', 'ul-act ul-act-delete');
+      del.type = 'button';
+      del.dataset.userAction = 'delete';
+      del.tabIndex = -1;
+      del.disabled = !canDelete;
+      del.title = canDelete ? 'Delete the login (Del)' : "You don't have permission to delete users";
+      del.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg><span>Delete</span>';
+      actions.append(edit, del);
+    }
+    tr.append(who, el('td', 'ul-username', user.username), pass, role, status, access, el('td', 'ul-date', viewDate(user.updatedAt)), actions);
+    return tr;
+  }));
+  const empty = byId('user-list-empty');
+  empty.hidden = rows.length > 0 || !userList.loaded;
+  empty.textContent = userList.rows.length ? 'No user matches your search.' : 'No user accounts yet. Create one with Create User.';
+  const total = userList.rows.length;
+  byId('user-list-count').textContent = userList.loaded ? `Showing ${rows.length} of ${total} ${total === 1 ? 'account' : 'accounts'}` : 'Loading…';
+  byId('user-list-create').hidden = !canDo(USER_LIST_ROUTE, 'create');
+  const again = focused && body.querySelector(`tr[data-user-id="${focused}"]`);
+  if (again) again.focus();
+}
+
+function userListEdit(row) {
+  const user = userList.rows.find(entry => String(entry.id) === row?.dataset.userId);
+  if (!user || userIsLocked(user)) return;
+  if (!canDo(USER_LIST_ROUTE, 'edit')) { showToast('Action denied', "You don't have permission to edit users. Please contact your manager or admin.", true); return; }
+  location.hash = `#/${USER_LIST_ROUTE}/edit/${user.id}`;
+}
+
+async function userListDelete(row) {
+  const user = userList.rows.find(entry => String(entry.id) === row?.dataset.userId);
+  if (!user || userIsLocked(user)) return;
+  if (!canDo(USER_LIST_ROUTE, 'delete')) { showToast('Action denied', "You don't have permission to delete users. Please contact your manager or admin.", true); return; }
+  const ok = await confirmAction({ title: 'Delete this login?', message: `${user.name} (${user.username}) will no longer be able to sign in. The employee record stays.`, confirm: 'Delete Login' });
+  if (!ok) { row.focus(); return; }
+  const next = row.nextElementSibling || row.previousElementSibling;
+  try { await apiRequest(`api/users.php?id=${user.id}`, { method: 'DELETE' }); }
+  catch (error) { showToast('The login was not deleted', error.message, true); row.focus(); return; }
+  forgetLookups('user');
+  showToast('Login deleted', `${user.username} · ${user.name}`);
+  userList.rows = userList.rows.filter(entry => entry.id !== user.id);
+  renderUserList();
+  (next && byId('user-list-body').querySelector(`tr[data-user-id="${next.dataset.userId}"]`) || byId('user-list-search')).focus();
+}
+
+const userListFocus = () => {
+  const rows = [...byId('user-list-body').rows];
+  return (userList.returnTo && rows.find(row => row.dataset.code === userList.returnTo)) || rows[0] || byId('user-list-search');
+};
+
+function handleUserListKeys(event) {
+  if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  const { key, target } = event;
+  const search = byId('user-list-search');
+  const row = target.closest?.('#user-list-body tr');
+  if (key === 'Escape') {
+    event.preventDefault();
+    if (event.repeat) return true;
+    if (target === search && search.value) { search.value = ''; renderUserList(); return true; }
+    goBack();
+    return true;
+  }
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    const rows = [...byId('user-list-body').rows];
+    if (!rows.length) return false;
+    event.preventDefault();
+    const index = rows.indexOf(row);
+    if (index < 0) { if (key === 'ArrowDown') rows[0].focus(); return true; }
+    if (key === 'ArrowUp' && index === 0) { search.focus(); return true; }
+    rows[Math.min(rows.length - 1, Math.max(0, index + (key === 'ArrowDown' ? 1 : -1)))].focus();
+    return true;
+  }
+  if (row && key === 'Enter') { event.preventDefault(); if (!event.repeat) userListEdit(row); return true; }
+  if (row && key === 'Delete') { event.preventDefault(); if (!event.repeat) userListDelete(row); return true; }
+  const newKey = key === 'N' && event.shiftKey;
+  if (target === search && key === 'Enter') { event.preventDefault(); userListFocus().focus(); return true; }
+  if (isTextEntry(target) && !(newKey && target === search && !search.value)) return false;
+  if (key === '/') { event.preventDefault(); search.focus(); return true; }
+  if (newKey) {
+    event.preventDefault();
+    if (canDo(USER_LIST_ROUTE, 'create')) location.hash = `#/${USER_LIST_ROUTE}/new`;
+    return true;
+  }
+  return false;
+}
+
+// #/employee/user-setting/edit/ID: the form with that login.
+function userEditPage(route) {
+  const match = new RegExp(`^${USER_LIST_ROUTE}/edit/(\\d+)$`).exec(route);
+  if (!match) return null;
+  return { page: 'user', alwaysReset: true, reset: () => userForm.edit(Number(match[1])).then(userShowMode), firstField: () => userEl('username') };
+}
+function leaveUserForm() {
+  if (userForm.isEditing()) userList.returnTo = userEl('username').value.trim() || null;   // back on its row
+  if (routeTrail.at(-1) === USER_LIST_ROUTE) { goBack(); return; }
+  routeGoingBack = true;
+  location.hash = `#/${USER_LIST_ROUTE}`;
+}
+
+function initUserListPage() {
+  FORM_PAGES[USER_LIST_ROUTE] = {
+    page: 'user-list',
+    alwaysReset: true,
+    reset() {
+      byId('user-list-search').value = '';
+      userList.loaded = false;
+      renderUserList();
+      loadUserList().then(() => {
+        const active = document.activeElement;
+        const idle = active === byId('app') || active === document.body || (active === byId('user-list-search') && !active.value);
+        if (currentPage === 'user-list' && idle) userListFocus().focus();
+        userList.returnTo = null;
+      });
+    },
+    firstField: () => userListFocus(),
+  };
+  FORM_KEY_HANDLERS['user-list'] = handleUserListKeys;
+  byId('user-list-search').addEventListener('input', renderUserList);
+  byId('user-list-body').addEventListener('click', event => {
+    const row = event.target.closest('tr');
+    const action = event.target.closest('[data-user-action]')?.dataset.userAction;
+    if (action === 'edit') userListEdit(row);
+    else if (action === 'delete') userListDelete(row);
+  });
+  byId('user-list-body').addEventListener('dblclick', event => { if (!event.target.closest('button')) userListEdit(event.target.closest('tr')); });
+}
+
+const userForm = createFormPage({
+  key: 'user', route: `${USER_ROUTE}/new`, listRoute: USER_ROUTE, noun: 'User', api: 'api/users.php', lookups: ['user'],
+  firstField: () => userEl('employee'),
+  fieldNodes: {
+    employeeId: () => userEl('employee'), username: () => userEl('username'), password: () => userEl('password'),
+    gender: () => userEl('gender'), department: () => userEl('department'), designation: () => userEl('designation'),
+    employmentType: () => userEl('type'), warehouseId: () => userEl('warehouse'), workLocation: () => userEl('work-location'),
+  },
+  read() {
+    const check = formChecks(userEl);
+    if (!userEl('employee-id').value) check.fail(userEl('employee'), 'Pick a user.');
+    check.required('username', 'Username');
+    check.matches('username', /^[A-Za-z0-9][A-Za-z0-9._@-]{2,49}$/, 'Use 3 to 50 letters, digits and . _ @ - (starting with a letter or digit).');
+    const password = userEl('password').value;
+    if (!password && !userForm.isEditing()) check.fail(userEl('password'), 'Password is required.');
+    else if (password && password.length < 6) check.fail(userEl('password'), 'Use at least 6 characters.');
+    check.required('department', 'Department');
+    check.required('designation', 'Designation');
+    check.required('work-location', 'Work location');
+    return {
+      errors: check.errors,
+      payload: {
+        employeeId: Number(userEl('employee-id').value) || null, username: check.text('username'), password,
+        gender: userEl('gender').value, department: check.text('department'), designation: check.text('designation'),
+        employmentType: userEl('type').value, warehouseId: userEl('warehouse-id').value || null, workLocation: check.text('work-location'),
+        active: userEl('active').checked, role: userEl('role').value, permissions: userPermsClean(),
+      },
+    };
+  },
+  fill(user) {
+    const employee = user.employee;
+    fillLookup(userEl('employee'), employee ? { id: employee.id, name: employee.name, designation: employee.designation } : null);
+    userEl('username').value = user.username;
+    userEl('password').value = user.password ?? '';
+    userState.passwordStored = user.password != null;
+    setUserPasswordShown(true);
+    userEl('active').checked = user.active;
+    userEl('role').value = user.role || 'staff';
+    userState.perms = JSON.parse(JSON.stringify(user.permissions || {}));
+    userState.open = new Set(userState.modules.filter(module => userModuleKeys(module).some(key => userState.perms[key]?.view)).map(module => module.key));
+    userFillDetails(employee);
+    renderUserPerms();
+  },
+  extra: {
+    read: () => ({ perms: JSON.stringify(userPermsClean()), active: userEl('active').checked, employee: userState.employee }),
+    write(state) {
+      userState.perms = JSON.parse(state.perms);
+      userEl('active').checked = state.active;
+      userState.employee = state.employee;
+      renderUserPerms();
+      renderUserWho();
+    },
+    reset() {
+      userState.perms = {};
+      userState.open = new Set();
+      userState.employee = null;
+      userEl('active').checked = true;
+      userState.passwordStored = false;
+      setUserPasswordShown(false);
+      renderUserPerms();
+      renderUserWho();
+    },
+  },
+  onReset: () => { if (userState.modules.length === 0) loadUserModules(); setTimeout(userShowMode, 0); },
+  // Back on the list, the account just saved has the focus.
+  afterSave: record => { forgetLookups('user'); userList.returnTo = record.code; },
+  init() {
+    userEl('employee').addEventListener('input', userPicked);
+    userEl('active').addEventListener('change', () => { renderUserWho(); userForm.record(); });
+    // A manager gets the dashboard figures and Employee (view); staff have neither, so their ticks are cleared and locked.
+    userEl('role').addEventListener('change', () => {
+      for (const module of userState.modules.filter(entry => MANAGER_ONLY_MODULES.includes(entry.key))) {
+        const manager = userEl('role').value === 'manager';
+        for (const key of userModuleKeys(module)) userSetFlag(key, manager ? 'view' : 'access', manager);
+      }
+      renderUserPerms();
+      renderUserWho();
+      userForm.absorb();
+    });
+    userEl('password-eye').addEventListener('click', () => {
+      setUserPasswordShown(userEl('password').type === 'password');
+      userEl('password').focus();
+    });
+    userEl('form').addEventListener('click', event => {
+      const toggle = event.target.closest('[data-perm-toggle]');
+      if (!toggle) return;
+      const key = toggle.dataset.permToggle;
+      if (userState.open.has(key)) userState.open.delete(key); else userState.open.add(key);
+      renderUserPerms();
+    });
+    userEl('form').addEventListener('change', event => {
+      const box = event.target;
+      if (!box.classList?.contains('us-check')) return;
+      const on = box.checked;
+      if (box.dataset.permAll) for (const key of userState.modules.flatMap(userModuleKeys)) userSetFlag(key, box.dataset.permAll, on);
+      else if (box.dataset.permModule) {
+        const module = userState.modules.find(entry => entry.key === box.dataset.permModule);
+        for (const key of userModuleKeys(module)) userSetFlag(key, box.dataset.permAction, on);
+      } else userSetFlag(box.dataset.permKey, box.dataset.permAction, on);
+      renderUserPerms();
+      userForm.record();
+    });
+    // Arrow keys move around the permission ticks (and the module names); → opens a module, ← closes it.
+    userEl('form').querySelector('.us-table').addEventListener('keydown', event => {
+      const { key, target } = event;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key) || event.altKey || event.ctrlKey || event.metaKey) return;
+      const cell = target.closest('th, td');
+      const row = target.closest('tr');
+      if (!cell || !row) return;
+      event.preventDefault();
+      const column = [...row.children].indexOf(cell);
+      if (target.dataset.permToggle && (key === 'ArrowRight' || key === 'ArrowLeft')) {
+        const open = userState.open.has(target.dataset.permToggle);
+        if ((key === 'ArrowRight') !== open) { target.click(); return; }
+        if (key === 'ArrowRight') { row.children[1]?.querySelector('input')?.focus(); return; }
+        return;
+      }
+      const rows = [...userEl('form').querySelectorAll('.us-table tr')];
+      const focusable = (r, c) => r?.children[c]?.querySelector('input, button.us-toggle');
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        const next = focusable(row, column + (key === 'ArrowRight' ? 1 : -1));
+        next?.focus();
+        return;
+      }
+      let index = rows.indexOf(row);
+      for (;;) {
+        index += key === 'ArrowDown' ? 1 : -1;
+        if (index < 0 || index >= rows.length) return;
+        const next = focusable(rows[index], column) || focusable(rows[index], column === 0 ? 1 : column);
+        if (next) { next.focus(); return; }
+      }
+    });
+    userEl('remove').addEventListener('click', async () => {
+      const id = userForm.editingId?.();
+      if (!id) return;
+      const ok = await confirmAction({ title: 'Remove this login?', message: `${userState.employee?.name || 'This user'} will no longer be able to sign in. The employee record stays.`, confirm: 'Remove Login' });
+      if (!ok) return;
+      try { await apiRequest(`api/users.php?id=${id}`, { method: 'DELETE' }); }
+      catch (error) { showToast('The login was not removed', error.message, true); return; }
+      forgetLookups('user');
+      showToast('Login removed', userState.employee?.name || '');
+      leaveUserForm();
+    });
+  },
+});
+
+async function loadUserModules() {
+  if (userAccess.modules.length) userState.modules = userAccess.modules;
+  else {
+    try { userState.modules = await apiRequest('api/users.php?modules=1'); } catch { userState.modules = []; }
+  }
+  renderUserPerms();
+}
+
+function initUserSettingPage() {
+  const formKeys = FORM_KEY_HANDLERS.user;
+  // Esc (and Back to Users) go to the User Accounts list; a confirm takes Esc first.
+  FORM_KEY_HANDLERS.user = event => {
+    if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
+    if (event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      if (!event.repeat) leaveUserForm();
+      return true;
+    }
+    return formKeys(event);
+  };
+  const back = userEl('back');
+  const fresh = back.cloneNode(true);            // without the form's own "back to the dashboard" click
+  back.replaceWith(fresh);
+  fresh.addEventListener('click', leaveUserForm);
+  initUserListPage();
+  userState.modules = userAccess.modules;
+  renderUserPerms();
+}
 
 /* ---------- Party Creation  (#/masters/party/new): Creditors (supplier) or Debtors (customer) ---------- */
 
@@ -7663,6 +9367,12 @@ function leavePageToMenu() {
   const href = `#/${location.hash.replace(/^#\/?/, '').replace(/\/+$/, '')}`;
   const selector = `a.qm-item[href="${CSS.escape(href)}"]`;
   const view = pageOriginView || byId('quick-menu').querySelector(selector)?.closest('.qm-view').dataset.view || 'main';
+  // Staff: back to the cards of the page's module (no dashboard, no menu popup).
+  if (isModuleLanding()) {
+    const module = view.replace(/-create$/, '');
+    location.hash = module && module !== 'main' ? `#/modules/${module}` : '#/home';
+    return;
+  }
   pendingMenuReturn = { view, focusSelector: selector };
   location.hash = '#/home';
 }
@@ -7676,6 +9386,7 @@ function showPage(page) {
 
 function renderRoute() {
   const route = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+  const cameFrom = currentRoute;
   if (routeGoingBack) routeGoingBack = false;
   else if (currentRoute !== null && currentRoute !== route) {
     routeTrail.push(currentRoute);
@@ -7683,7 +9394,8 @@ function renderRoute() {
   }
   currentRoute = route;
   closeSuggest();
-  const formPage = FORM_PAGES[route] || masterEditPage(route);
+  if (!routeAllowed(route)) { showNoAccess(route); return; }   // User Setting: not allowed for this user
+  const formPage = FORM_PAGES[route] || masterEditPage(route) || employeeEditPage(route) || userEditPage(route);
   if (formPage) {
     // A form left open in edit mode starts over as a new record.
     if (currentPage !== formPage.page || formPage.alwaysReset || formPage.isEditing?.()) {
@@ -7700,6 +9412,19 @@ function renderRoute() {
   }
   const wasElsewhere = currentPage !== 'dashboard';
   showPage('dashboard');
+  // The module cards: staff's home page, and #/modules/<module> (a module's pages) for anyone.
+  const moduleRoute = /^modules\/([a-z-]+)$/.exec(route);
+  const cards = isModuleLanding() || Boolean(moduleRoute);
+  byId('module-home').hidden = !cards;
+  byId('dashboard-view').classList.toggle('mh-on', cards);
+  byId('dashboard-view').classList.toggle('mh-sub', Boolean(moduleRoute));   // a module's pages: no header
+  if (cards) {
+    renderModuleHome(moduleRoute?.[1] || null);
+    focusModuleHome(cameFrom);
+    pageOriginView = null;
+    pendingMenuReturn = null;
+    return;
+  }
   if (wasElsewhere && state.data) loadDashboard();      // back from a form or list: the figures may have changed
   if (route !== '' && route !== 'home') {
     history.replaceState(null, '', '#/home');
@@ -11664,19 +13389,66 @@ function prtRefLine(line, grn) {
   return { received: pbQty(received), unit: pbMoney(net) };
 }
 
+// Return Reason "Sales Return": goods a customer returned go back to the supplier. Their lines come from the sales
+// return (Sales Return ID, shown beside the reason) instead of a PO / GRN (Ref ID, hidden), and such a return takes
+// nothing out of stock: the goods never went back into it.
+const PRT_SALES_RETURN = 'Sales Return';
+const prtFromSalesReturn = () => byId('prt-reason').value === PRT_SALES_RETURN;
+
+// Shows the Sales Return ID or the Ref ID, as the reason says. Changing over drops the document picked in the other
+// one and the lines it brought (returns whether lines were dropped).
+function prtShowReason(form) {
+  const fromSr = prtFromSalesReturn();
+  byId('prt-sr-field').hidden = !fromSr;
+  byId('prt-ref-field').hidden = fromSr;
+  const other = fromSr ? byId('prt-ref') : byId('prt-sr');
+  if (!lookupIdInput(other).value) return false;
+  fillLookup(other, null);
+  form.page.setRows('items', []);
+  form.refresh();
+  return true;
+}
+
+// A sales return line as a purchase return row: the quantity the customer sent back is received and returned in full,
+// at what the item was last bought for (the selected supplier's purchases first, api/item-purchase-price.php), else
+// the Item master's buying rate. With no supplier yet, the one the first item was bought from is taken.
+async function prtSalesReturnRows(form, doc) {
+  const conditions = { 'Good – Restock': 'Good', 'Opened – Inspect': 'Good', 'Damaged – Scrap': 'Damaged', 'Defective – Return to Supplier': 'Defective' };
+  const rows = [];
+  for (const line of doc.items) {
+    let price = 0;
+    if (line.itemId) {
+      const supplierId = byId('prt-supplier-id').value;
+      const bought = await apiRequest(`api/item-purchase-price.php?itemId=${encodeURIComponent(line.itemId)}${supplierId ? `&supplierId=${encodeURIComponent(supplierId)}` : ''}`).catch(() => null);
+      if (bought && !supplierId && bought.supplierId) {
+        fillLookup(byId('prt-supplier'), { id: bought.supplierId, name: bought.supplierName });
+        await prtShowSupplier();
+      }
+      if (bought) price = pbNum(bought.rate) * soRate(bought.currency || prtCurrency(), prtCurrency());
+      else price = pbNum((await pbItem(String(line.itemId)).catch(() => null))?.buyingRate);
+    }
+    const qty = pbQty(pbNum(line.quantity));
+    rows.push({ ...purchaseLineRow(line), receivedQty: qty, quantity: qty, condition: conditions[line.condition] || 'Defective',
+      price: pbMoney(price), vatRate: pbNum(line.vatRate).toFixed(2), discountPct: '0.00', discountAmount: '0.000', foc: 'No' });
+  }
+  return rows;
+}
+
 const prtForm = createPurchaseForm({
   key: 'prt', route: 'returns/purchase-return/new', noun: 'Purchase Return', api: 'api/purchase-returns.php', listRoute: 'returns/purchase-return',
   kind: 'po', template: 'pb-line-prt', lineExtras: ['receivedQty', 'condition'], lookups: ['prtref'], vatDefault: 'exclude',
   firstField: () => byId('prt-date'),
   onShow: () => openLookup(byId('prt-ref')),          // a new return starts by picking the PO / GRN
   fieldNodes: { returnDate: 'prt-date', purchaseOrderId: 'prt-ref', grnId: 'prt-ref', createdBy: 'prt-created-by',
-    createdByContact: 'prt-created-by-contact', supplierInvoiceNo: 'prt-supplier-invoice', returnReason: 'prt-reason',
+    salesReturnId: 'prt-sr', createdByContact: 'prt-created-by-contact', supplierInvoiceNo: 'prt-supplier-invoice', returnReason: 'prt-reason',
     warehouseId: 'prt-warehouse', settlementMode: 'prt-settlement', supplierId: 'prt-supplier', contactName: 'prt-contact',
     contactNumber: 'prt-contact-number', currency: 'prt-currency', discountAmount: 'prt-discount', supplierDeduction: 'prt-deduction',
     remarks: 'prt-remarks-editor' },
   header: () => ({
     returnDate: byId('prt-date').value,
-    purchaseOrderId: prtRef().kind === 'po' ? prtRef().id : null, grnId: prtRef().kind === 'grn' ? prtRef().id : null,
+    purchaseOrderId: !prtFromSalesReturn() && prtRef().kind === 'po' ? prtRef().id : null,
+    grnId: !prtFromSalesReturn() && prtRef().kind === 'grn' ? prtRef().id : null,
+    salesReturnId: prtFromSalesReturn() ? byId('prt-sr-id').value || null : null,
     createdBy: byId('prt-created-by').value.trim(), createdByContact: phoneOf(byId('prt-created-by-contact')),
     supplierInvoiceNo: byId('prt-supplier-invoice').value.trim(), returnReason: byId('prt-reason').value,
     warehouseId: byId('prt-warehouse').value || null, settlementMode: byId('prt-settlement').value,
@@ -11688,6 +13460,7 @@ const prtForm = createPurchaseForm({
     if (!byId('prt-date').value) errors.push({ node: byId('prt-date'), message: 'Enter the return date.' });
     if (!byId('prt-created-by').value.trim()) errors.push({ node: byId('prt-created-by'), message: 'Enter who created the return.' });
     if (!byId('prt-reason').value) errors.push({ node: byId('prt-reason'), message: 'Select the return reason.' });
+    if (prtFromSalesReturn() && !byId('prt-sr-id').value) errors.push({ node: byId('prt-sr'), message: 'Select the sales return.' });
     if (!byId('prt-supplier-id').value) errors.push({ node: byId('prt-supplier'), message: 'Select the supplier.' });
     const deduction = byId('prt-deduction').value.trim();
     if (deduction !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(deduction)) errors.push({ node: byId('prt-deduction'), message: 'Enter an amount with up to 3 decimals.' });
@@ -11716,6 +13489,9 @@ const prtForm = createPurchaseForm({
     putPhone(byId('prt-created-by-contact'), prt.createdByContact);
     byId('prt-supplier-invoice').value = prt.supplierInvoiceNo || '';
     byId('prt-reason').value = prt.returnReason || '';
+    fillLookup(byId('prt-sr'), prt.salesReturnId ? { id: prt.salesReturnId, code: prt.salesReturnCode } : null);
+    byId('prt-sr-field').hidden = !prtFromSalesReturn();
+    byId('prt-ref-field').hidden = prtFromSalesReturn();
     setSelectValue(byId('prt-warehouse'), prt.warehouseId ? String(prt.warehouseId) : '', prtWarehouseLabel(prt));
     byId('prt-settlement').value = prt.settlementMode || 'Debit Note';
     fillLookup(byId('prt-supplier'), prt.supplierId ? { id: prt.supplierId, name: prt.supplierName } : null);
@@ -11728,7 +13504,9 @@ const prtForm = createPurchaseForm({
     byId('prt-date').value = todayInputValue();
     prtSetCurrency('OMR');                          // hidden ids were cleared by the reset
     byId('prt-deduction').value = '0.000';
-    forgetLookups('prtref');
+    forgetLookups('prtref', 'prtsr');
+    byId('prt-sr-field').hidden = true;             // the reason starts blank: the Ref ID (PO / GRN) shows
+    byId('prt-ref-field').hidden = false;
     // Return From: the stock points (the list is loaded before a saved return is filled in).
     return purchaseOptions(byId('prt-warehouse'), 'api/warehouses.php', row => [row.code, row.name].filter(Boolean).join(' – '));
   },
@@ -11743,6 +13521,29 @@ const prtForm = createPurchaseForm({
       form.refresh();
     });
     byId('prt-contact').addEventListener('input', () => prtShowContact(form));
+    // Return Reason: "Sales Return" shows the Sales Return ID in place of the Ref ID, and opens its list.
+    byId('prt-reason').addEventListener('change', () => {
+      prtShowReason(form);
+      if (prtFromSalesReturn() && !byId('prt-sr-id').value) openLookup(byId('prt-sr'));
+    });
+    // Sales Return ID picked: its items become the lines (not a PO's or GRN's), with its stock point and VAT.
+    byId('prt-sr').addEventListener('input', async () => {
+      const value = byId('prt-sr-id').value;
+      if (!value) return;
+      try {
+        const doc = await apiRequest(`api/sales-returns.php?id=${value}`);
+        if (byId('prt-sr-id').value !== value) return;          // another sales return was picked meanwhile
+        if (doc.warehouseId) setSelectValue(byId('prt-warehouse'), String(doc.warehouseId), prtWarehouseLabel(doc));
+        byId('prt-vat-mode').value = doc.vatMode === 'exclude' ? 'exclude' : 'include';
+        const rows = await prtSalesReturnRows(form, doc);
+        if (byId('prt-sr-id').value !== value) return;
+        await loadPurchaseLines(form, rows, row => row);
+        form.page.absorb();
+        form.syncVatToggle();
+        form.refresh();
+        showToast('Items fetched', `${doc.items.length} item${doc.items.length === 1 ? '' : 's'} from ${doc.code}.`);
+      } catch (error) { showToast('The sales return could not be loaded', error.message, true); }
+    });
     byId('prt-form').addEventListener('input', event => {
       if (['prt-currency', 'prt-discount', 'prt-deduction'].includes(event.target.id)) form.refresh();
     });
@@ -12915,7 +14716,7 @@ const prtList = purchaseList({
     { key: 'code', label: 'PRT ID', type: 'code', group: 'Return' },
     { key: 'date', label: 'Return Date', type: 'mono', group: 'Return' },
     { key: 'name', label: 'Supplier', type: 'name', group: 'Supplier' },
-    { key: 'referenceNo', label: 'PO / GRN', type: 'mono', group: 'Return' },
+    { key: 'referenceNo', label: 'PO / GRN / SR', type: 'mono', group: 'Return' },
     { key: 'returnReason', label: 'Return Reason', group: 'Return' },
     { key: 'totalQty', label: 'Return Qty', type: 'qty', group: 'Return' },
     { key: 'grandTotal', label: 'Total Return Amount', type: 'qty-ok', group: 'Return' },
@@ -13344,7 +15145,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // where from and how it is settled.
     prt: () => ({
       party: { label: 'Supplier', name: doc.supplierName, lines: supplierLines(supplier, doc.contactName, doc.contactNumber) },
-      meta: [['PRT No', doc.code], ['Return Date', pbDate(doc.returnDate)], ['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode],
+      meta: [['PRT No', doc.code], ['Return Date', pbDate(doc.returnDate)],
+        ...(doc.salesReturnCode ? [['Sales Return Ref', doc.salesReturnCode]] : [['PO Ref', doc.purchaseOrderCode], ['GRN Ref', doc.grnCode]]),
         ['Supplier Inv No', doc.supplierInvoiceNo], ['Return Reason', doc.returnReason], ['Return From', doc.warehouseName],
         ['Settlement Mode', doc.settlementMode], ['Currency', doc.currency], ['Created By', doc.createdBy], ['Created By Contact', doc.createdByContact]],
     }),
@@ -14091,6 +15893,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   initQuickContact();
   initItemDescription();
   initAuditPage();
+  employeeForm.init();
+  initEmployeesPage();
+  userForm.init();
+  initUserSettingPage();
+  initNoAccessPage();
+  applyUserAccess();
   for (const list of MASTER_LISTS) list.init();
   window.addEventListener('hashchange', renderRoute);
   renderRoute();

@@ -102,6 +102,23 @@ foreach ($sources as [$table]) {
     }
 }
 
+// A manager (not an admin) sees the sales, purchase, items, chart, returns and quotations: no audit trail, profit & loss,
+// creditors, debtors or employees, which are the admins' alone.
+if (!(current_access()['admin'] ?? false)) {
+    json_out([
+        'kpis' => [
+            'totalSales' => $money(0), 'totalPurchase' => $money($totalPurchase), 'pendingPurchase' => $money($pendingPurchase),
+            'totalItems' => (int) $scalar('SELECT COUNT(*) FROM items'),
+        ],
+        'chart' => [
+            'sales' => $money(0), 'purchase' => $money(array_sum($perWeek)),
+            'weeks' => array_map(static fn ($week) => ['label' => "W$week", 'sales' => $money(0), 'purchase' => $money($perWeek[$week])], array_keys($perWeek)),
+        ],
+        'returns' => ['purchaseReturn' => $money($purchaseReturn), 'salesReturn' => $money($salesReturn), 'rmaCount' => 0, 'resolvedCount' => 0],
+        'quotations' => ['total' => 0, 'totalValue' => $money(0), 'pending' => 0, 'approved' => 0, 'rejected' => 0],
+    ]);
+}
+
 json_out([
     'kpis' => [
         'totalSales' => $money(0), 'totalPurchase' => $money($totalPurchase), 'pendingPurchase' => $money($pendingPurchase),

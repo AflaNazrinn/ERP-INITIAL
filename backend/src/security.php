@@ -83,7 +83,7 @@ function attempt_login(string $username, string $password): ?array
         }
         try {
             use_company($company['code']);
-            $row = query('SELECT id, username, full_name, password_hash FROM users WHERE username = ?', [$username])->fetch();
+            $row = query('SELECT * FROM users WHERE username = ?', [$username])->fetch();
         } catch (PDOException | RuntimeException $e) {   // one company's database down: the others still sign in
             error_log("Sign-in: cannot read the users of company {$company['code']}: " . $e->getMessage());
             continue;
@@ -107,6 +107,10 @@ function attempt_login(string $username, string $password): ?array
     }
     [$company, $row] = $found;
     use_company($company['code']);
+    // Turned off on User Setting: the right password still does not sign in (said only after it matched).
+    if (isset($row['active']) && !(int) $row['active']) {
+        throw new Conflict('This account is turned off. Please contact your manager or admin.');
+    }
     if (password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {
         query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash_for($password), $row['id']]);
     }
