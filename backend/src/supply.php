@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/stock_report.php';
 
 /*
  * Supply Management: Stock Adjustment (ADJ000001), Stock Transfer (ST-0001) and Stock Reservation (SR000001).
@@ -23,68 +24,34 @@ const SM_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
 
 /* ---------- Stock levels ---------- */
 
-/* [itemId => quantity] at one stock point, or across every stock point when $warehouseId is null. */
+/* [itemId => quantity] at one stock point, or across every stock point when $warehouseId is null. The figures come
+   from the stock ledger (src/stock_report.php), the same as the Stock Report's. */
 function sm_stock_on_hand(?int $warehouseId, int $exceptAdjustment = 0, int $exceptTransfer = 0): array
 {
+    $matrix = stock_on_hand_matrix(['adjustment' => $exceptAdjustment, 'transfer' => $exceptTransfer]);
     $stock = [];
-    $add = static function (mixed $itemId, mixed $warehouse, float $qty) use (&$stock, $warehouseId): void {
-        if ($itemId === null || $qty == 0.0) {
-            return;
+    foreach ($matrix as $w => $byItem) {
+        if ($warehouseId !== null && (int) $w !== $warehouseId) {
+            continue;
         }
-        if ($warehouseId !== null && (int) $warehouse !== $warehouseId) {
-            return;
-        }
-        $stock[(int) $itemId] = ($stock[(int) $itemId] ?? 0.0) + $qty;
-    };
-    // Opening stock: per sourcing line; items saved before that keep their total on the first line's stock point.
-    foreach (query('SELECT item_id, warehouse_id, opening_stock FROM item_brands WHERE opening_stock IS NOT NULL')->fetchAll() as $r) {
-        $add($r['item_id'], $r['warehouse_id'], (float) $r['opening_stock']);
-    }
-    $older = query(
-        "SELECT i.id AS item_id, COALESCE(f.warehouse_id, i.warehouse_id) AS warehouse_id, NULLIF(i.available_stock, '') AS qty
-         FROM items i
-         LEFT JOIN item_brands f ON f.id = (SELECT id FROM item_brands WHERE item_id = i.id ORDER BY sort_order, id LIMIT 1)
-         WHERE NOT EXISTS (SELECT 1 FROM item_brands ib WHERE ib.item_id = i.id AND ib.opening_stock IS NOT NULL)"
-    )->fetchAll();
-    foreach ($older as $r) {
-        if ($r['qty'] !== null && is_numeric($r['qty'])) {
-            $add($r['item_id'], $r['warehouse_id'], (float) $r['qty']);
+        foreach ($byItem as $itemId => $qty) {
+            $stock[$itemId] = ($stock[$itemId] ?? 0.0) + $qty;
         }
     }
-    // GRNs: the accepted quantity at the GRN's stock point, less the line's transfers, which arrive at theirs.
-    foreach (query('SELECT gi.item_id, g.warehouse_id, gi.accepted_qty, gi.transfers FROM grn_items gi JOIN grns g ON g.id = gi.grn_id')->fetchAll() as $r) {
-        $sent = 0.0;
-        foreach (grn_find_transfers($r['transfers'] ?? null) as $t) {
-            $add($r['item_id'], $t['warehouseId'], (float) $t['quantity']);
-            $sent += (float) $t['quantity'];
-        }
-        $add($r['item_id'], $r['warehouse_id'], (float) $r['accepted_qty'] - $sent);
-    }
-    // Delivery notes: out of the line's stock point, else the note's.
-    foreach (query('SELECT di.item_id, COALESCE(di.warehouse_id, d.warehouse_id) AS warehouse_id, di.quantity
-                    FROM delivery_note_items di JOIN delivery_notes d ON d.id = di.delivery_note_id')->fetchAll() as $r) {
-        $add($r['item_id'], $r['warehouse_id'], -(float) $r['quantity']);
-    }
-    foreach (query('SELECT ti.item_id, t.from_warehouse_id, t.to_warehouse_id, ti.quantity FROM stock_transfer_items ti
-                    JOIN stock_transfers t ON t.id = ti.stock_transfer_id WHERE t.id <> ?', [$exceptTransfer])->fetchAll() as $r) {
-        $add($r['item_id'], $r['from_warehouse_id'], -(float) $r['quantity']);
-        $add($r['item_id'], $r['to_warehouse_id'], (float) $r['quantity']);
-    }
-    foreach (query("SELECT ai.item_id, a.warehouse_id, ai.quantity - ai.system_qty AS diff FROM stock_adjustment_items ai
-                    JOIN stock_adjustments a ON a.id = ai.stock_adjustment_id WHERE a.status = 'Approved' AND a.id <> ?", [$exceptAdjustment])->fetchAll() as $r) {
-        $add($r['item_id'], $r['warehouse_id'], (float) $r['diff']);
-    }
+    $stock = array_filter($stock, static fn (float $q) => abs($q) > 0.0005);
     return array_map(static fn (float $q) => pb_qty(number_format($q, 3, '.', '')), $stock);
 }
 
 /* Where one item's stock is: [{ warehouseId, code, name, qty }] for each stock point holding some (not 0). */
 function sm_item_stock_points(int $itemId): array
 {
+    $matrix = stock_on_hand_matrix();
     $out = [];
     foreach (query('SELECT id, warehouse_code, warehouse_name FROM warehouses ORDER BY warehouse_code')->fetchAll() as $w) {
-        $qty = sm_stock_on_hand((int) $w['id'])[$itemId] ?? '0';
-        if ((float) $qty != 0.0) {
-            $out[] = ['warehouseId' => (int) $w['id'], 'code' => $w['warehouse_code'], 'name' => $w['warehouse_name'], 'qty' => $qty];
+        $qty = $matrix[(int) $w['id']][$itemId] ?? 0.0;
+        if (abs($qty) > 0.0005) {
+            $out[] = ['warehouseId' => (int) $w['id'], 'code' => $w['warehouse_code'], 'name' => $w['warehouse_name'],
+                'qty' => pb_qty(number_format($qty, 3, '.', ''))];
         }
     }
     return $out;

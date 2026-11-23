@@ -5133,6 +5133,227 @@
   </form>
 </section>
 
+<!-- STOCK LEDGER  (#/supply/stock-report · Quick Menu › Supply Management). Stock on hand worked out from the documents
+     (api/stock-report.php): Stock Levels & Valuation, the Stock Movement Ledger and Damaged Stock; History per item. -->
+<section id="stkr-page" class="form-page form-page-auto fp-theme-purchase fp-theme-supply stk" aria-labelledby="stkr-title" hidden>
+  <header class="fp-header">
+    <div class="fp-brand">
+      <div class="fp-brand-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m7 15 4-4 3 3 5-6"></path></svg></div>
+      <div>
+        <h1 id="stkr-title" class="fp-title">Stock Ledger</h1>
+        <p class="stk-sub">Stock on hand, GRN / purchase stock in and invoice / delivery stock out</p>
+      </div>
+    </div>
+    <div class="fp-header-side">
+      <span class="stk-synced" id="stkr-synced">Not synced yet</span>
+      <button type="button" class="ml-btn stk-btn-plain" data-stk="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path></svg>Refresh</button>
+      <button type="button" class="ml-btn ml-btn-soft" data-stk="sync"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 21v-5h5M21 3v5h-5"></path></svg>Sync Stocks</button>
+      <button type="button" class="ml-btn stk-btn-plain" data-stk="back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>Back</button>
+    </div>
+  </header>
+
+  <div class="stk-kpis">
+    <div class="stk-kpi"><div><span class="stk-kpi-label">Total Stock on Hand</span><strong id="stkr-kpi-hand">0</strong><span class="stk-kpi-note">Net available units</span></div><span class="stk-kpi-icon is-blue" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="M3 8l9 5 9-5M12 13v8"></path></svg></span></div>
+    <div class="stk-kpi"><div><span class="stk-kpi-label">Stock In (Inward)</span><strong id="stkr-kpi-in" class="is-in">0</strong><span class="stk-kpi-note" id="stkr-kpi-in-note">From GRN, purchases &amp; returns</span></div><span class="stk-kpi-icon is-green" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg></span></div>
+    <div class="stk-kpi"><div><span class="stk-kpi-label">Stock Out (Outward)</span><strong id="stkr-kpi-out" class="is-out">0</strong><span class="stk-kpi-note" id="stkr-kpi-out-note">From invoices, delivery notes &amp; returns</span></div><span class="stk-kpi-icon is-red" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"></path></svg></span></div>
+    <div class="stk-kpi"><div><span class="stk-kpi-label">Asset Valuation</span><strong id="stkr-kpi-value">0.000</strong><span class="stk-kpi-note">Stock on hand × average purchase cost</span></div><span class="stk-kpi-icon is-violet" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path></svg></span></div>
+  </div>
+
+  <div class="fp-card ml-card stk-card">
+    <div class="stk-tabbar">
+      <div class="stk-tabs" role="tablist" aria-label="Stock Ledger views">
+        <button type="button" class="stk-tab" role="tab" data-stk-tab="levels" aria-selected="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>Stock Levels &amp; Valuation</button>
+        <button type="button" class="stk-tab" role="tab" data-stk-tab="ledger" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>Stock Movement Ledger <span class="stk-count" id="stkr-count-ledger">0</span></button>
+        <button type="button" class="stk-tab" role="tab" data-stk-tab="damaged" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Damaged Stock <span class="stk-count" id="stkr-count-damaged">0</span></button>
+      </div>
+      <div class="stk-tab-tools">
+        <label class="stk-period" id="stkr-dmg-filter-wrap" hidden><span>Filter</span><select id="stkr-dmg-filter" class="fp-input fp-select" aria-label="Filter damaged stock"><option value="">All</option><option value="sales">Sales Return</option><option value="purchase">Purchase Return</option></select></label>
+        <label class="stk-period" id="stkr-levels-scope-wrap"><span>Filter</span><select id="stkr-levels-scope" class="fp-input fp-select" aria-label="Filter: all, sales or purchases"><option value="">All</option><option value="sales">All Sales</option><option value="purchase">All Purchases</option></select></label>
+        <label class="stk-period" id="stkr-point-wrap"><span>Stock Point</span><select id="stkr-point" class="fp-input fp-select" aria-label="Stock point"><option value="">All Stock Points</option></select></label>
+        <label class="stk-period"><span>Period</span><select id="stkr-period" class="fp-input fp-select" aria-label="Period"><option value="">All Months</option></select></label>
+        <button type="button" class="ml-btn ml-btn-primary" data-stk="export"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg><span id="stkr-export-label">Export Valuation</span></button>
+        <button type="button" class="ml-btn stk-btn-plain" data-stk="print" id="stkr-print"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>Print PDF</button>
+      </div>
+    </div>
+
+    <!-- Stock Levels & Valuation -->
+    <div class="stk-panel" data-stk-panel="levels">
+      <div class="stk-filters">
+        <div class="stk-heading"><h2>Stock Valuation Overview</h2><p id="stkr-levels-sub">Stock on hand from purchase inward and invoice / delivery note outward – all months.</p></div>
+        <label class="ml-search stk-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="stkr-levels-search" type="search" placeholder="Search item, SKU, brand..." autocomplete="off" aria-label="Search stock"></label>
+        <select id="stkr-levels-point" class="fp-input fp-select stk-select" aria-label="Stock point"><option value="">All Stock Points</option></select>
+        <select id="stkr-levels-status" class="fp-input fp-select stk-select stk-select-sm" aria-label="Stock status"><option value="">All Status</option><option value="in">In Stock</option><option value="low">Low Stock</option><option value="out">Out of Stock</option></select>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-table stk-table">
+          <thead><tr><th>Item Name &amp; Code</th><th>Brand</th><th>Stock Point</th><th class="num">Purchased</th><th class="num">Sold</th><th class="center">Stock Available</th><th class="num">Avg Buying Cost</th><th class="num">Selling Price</th><th class="num">Stock Value</th><th class="center">Actions</th></tr></thead>
+          <tbody id="stkr-levels-body"></tbody>
+        </table>
+        <div id="stkr-levels-empty" class="table-state" hidden>No stock to show.</div>
+      </div>
+      <div class="ml-foot"><span id="stkr-levels-count"></span><div class="ml-pager" id="stkr-levels-pager"></div></div>
+    </div>
+
+    <!-- Stock Movement Ledger -->
+    <div class="stk-panel" data-stk-panel="ledger" hidden>
+      <div class="stk-filters">
+        <label class="ml-search stk-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="stkr-ledger-search" type="search" placeholder="Search item, SKU, reference, name..." autocomplete="off" aria-label="Search movements"></label>
+        <select id="stkr-ledger-type" class="fp-input fp-select stk-select" aria-label="Movement type"><option value="">All Movement Types</option><option value="in">Stock In (All)</option><option value="out">Stock Out (All)</option><option value="grn">GRN (Inward)</option><option value="pe">Purchase Entry (Inward)</option><option value="dn">Delivery Note (Outward)</option><option value="ti">Invoice (Outward)</option><option value="transfer">Stock Transfer</option></select>
+        <input id="stkr-ledger-from" class="fp-input stk-date" type="date" aria-label="From date"><span class="stk-to">to</span><input id="stkr-ledger-to" class="fp-input stk-date" type="date" aria-label="To date">
+        <span class="stk-total">Total Movements: <strong id="stkr-ledger-total">0</strong></span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-table stk-table">
+          <thead><tr><th>Date</th><th>Reference</th><th>Movement Type</th><th>Item Name &amp; SKU</th><th>Name</th><th>Stock Point</th><th class="num">Inward (+)</th><th class="num">Outward (−)</th><th class="num">Rate</th><th class="num">Value</th><th>Remarks</th></tr></thead>
+          <tbody id="stkr-ledger-body"></tbody>
+        </table>
+        <div id="stkr-ledger-empty" class="table-state" hidden>No stock movements match.</div>
+      </div>
+      <div class="ml-foot"><span id="stkr-ledger-count"></span><div class="ml-pager" id="stkr-ledger-pager"></div></div>
+    </div>
+
+    <!-- Damaged Stock: every sales / purchase return line (returns never change the stock on hand), with a
+         replacement's returned goods. The bar's Filter (All / Sales Return / Purchase Return) and the stock point here. -->
+    <div class="stk-panel" data-stk-panel="damaged" hidden>
+      <div class="stk-filters">
+        <div class="stk-heading"><h2 id="stkr-damaged-title">Damaged Stock</h2><p id="stkr-damaged-sub">Damaged goods from sales returns and purchase returns – all months.</p></div>
+        <label class="ml-search stk-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="stkr-damaged-search" type="search" placeholder="Search item, SKU, return no, name..." autocomplete="off" aria-label="Search damaged stock"></label>
+        <select id="stkr-damaged-point" class="fp-input fp-select stk-select" aria-label="Stock point"><option value="">All Stock Points</option></select>
+      </div>
+      <div class="stk-dmg-kpis">
+        <div><span>Damaged Entries</span><strong id="stkr-dmg-entries">0</strong></div>
+        <div><span>Damaged Items</span><strong id="stkr-dmg-items">0</strong></div>
+        <div><span>Damaged Quantity</span><strong class="is-out" id="stkr-dmg-qty">0</strong></div>
+        <div><span>Damaged Value</span><strong class="is-out" id="stkr-dmg-value">0.000</strong></div>
+      </div>
+      <div class="ml-table-wrap stk-dmg-table">
+        <table class="ml-table stk-table">
+          <thead><tr><th>Date</th><th>Return No</th><th>Return Type</th><th>Item Name &amp; SKU</th><th>Name</th><th>Stock Point</th><th class="num">Damaged Qty</th><th class="num">Rate (OMR)</th><th class="num">Value (OMR)</th><th>Reason</th><th class="stk-act-col">Action</th></tr></thead>
+          <tbody id="stkr-damaged-body"></tbody>
+        </table>
+        <div id="stkr-damaged-empty" class="table-state" hidden>No damaged stock.</div>
+      </div>
+      <div class="ml-foot"><span id="stkr-damaged-count"></span><div class="ml-pager" id="stkr-damaged-pager"></div></div>
+    </div>
+  </div>
+
+  <!-- Edit Item (Stock Levels › Edit): the item's main details, prices and its stock point lines, saved to the Item
+       master without leaving the Stock Ledger. -->
+  <dialog id="stkr-itemedit" class="stk-hist stk-itemedit" aria-labelledby="stkr-ie-title">
+    <form method="dialog" id="stkr-ie-form" novalidate>
+      <div class="stk-hist-head">
+        <div>
+          <span class="stk-hist-kicker">Item Master</span>
+          <h2 id="stkr-ie-title">Edit Item</h2>
+          <p class="stk-hist-meta" id="stkr-ie-meta"></p>
+        </div>
+        <button type="button" class="lk-close" data-stk-ie="close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+      </div>
+      <div class="stk-hist-body stk-ie-body">
+        <div class="stk-ie-loading" id="stkr-ie-loading">Loading item…</div>
+        <div id="stkr-ie-fields" hidden>
+          <div class="stk-ie-grid">
+            <label class="stk-restock-field"><span>Item Code</span><input id="stkr-ie-code" class="fp-input" type="text" readonly tabindex="-1"></label>
+            <label class="stk-restock-field stk-ie-wide"><span>Item Name <b class="stk-req">*</b></span><input id="stkr-ie-name" class="fp-input" type="text" maxlength="200" autocomplete="off" data-field="itemName"></label>
+            <label class="stk-restock-field"><span>Unit</span><select id="stkr-ie-uom" class="fp-input fp-select" data-field="uomId"></select></label>
+            <label class="stk-restock-field"><span>Brand</span><select id="stkr-ie-brand" class="fp-input fp-select" data-field="brandId"></select></label>
+            <label class="stk-restock-field"><span>Status</span><select id="stkr-ie-status" class="fp-input fp-select" data-field="status">
+              <option>ACTIVE / RELEASED</option><option>QUALITY HOLD</option><option>OBSOLETE</option><option>DRAFT</option></select></label>
+            <label class="stk-restock-field"><span>Category</span><select id="stkr-ie-category" class="fp-input fp-select" data-field="categoryId"></select></label>
+            <label class="stk-restock-field"><span>Sub Category</span><select id="stkr-ie-subcategory" class="fp-input fp-select" data-field="subCategoryId"></select></label>
+            <label class="stk-restock-field"><span>Selling Price (OMR)</span><input id="stkr-ie-price" class="fp-input stk-ie-num" type="number" min="0" step="any" inputmode="decimal" data-field="sellingPrice"></label>
+          </div>
+          <div class="stk-ie-lines">
+            <h3>Stock Point Lines</h3>
+            <div class="ml-table-wrap stk-hist-table">
+              <table class="ml-table stk-table">
+                <thead><tr><th>Stock Point</th><th>Brand</th><th>Supplier</th><th class="num">Buying Cost (OMR)</th><th class="num">Opening Stock</th></tr></thead>
+                <tbody id="stkr-ie-lines"></tbody>
+              </table>
+              <div id="stkr-ie-nolines" class="table-state" hidden>No stock point lines. Add them on the Item page to set the buying cost and opening stock.</div>
+            </div>
+          </div>
+          <label class="stk-restock-field"><span>Comments</span><textarea id="stkr-ie-comments" class="fp-input stk-ie-comments" rows="2" data-field="comments"></textarea></label>
+          <p class="stk-restock-error" id="stkr-ie-error" role="alert" hidden></p>
+        </div>
+      </div>
+      <div class="stk-hist-foot stk-restock-foot">
+        <button type="button" class="ml-btn stk-btn-plain" data-stk-ie="close">Cancel</button>
+        <button type="submit" class="ml-btn ml-btn-primary" id="stkr-ie-save"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7"></path></svg>Save Changes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Move to Stock (Damaged Stock): a damaged line's quantity, or part of it, back into stock at its stock point.
+       History shows it as Damage Restock. -->
+  <dialog id="stkr-restock" class="stk-hist stk-restock" aria-labelledby="stkr-restock-title">
+    <form method="dialog" id="stkr-restock-form" novalidate>
+      <div class="stk-hist-head">
+        <div>
+          <span class="stk-hist-kicker">Damaged Stock</span>
+          <h2 id="stkr-restock-title">Move to Stock</h2>
+          <p class="stk-hist-meta" id="stkr-restock-from"></p>
+        </div>
+        <button type="button" class="lk-close" data-stk-restock="close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+      </div>
+      <div class="stk-hist-body stk-restock-body">
+        <label class="stk-restock-field"><span>Damaged Item <b class="stk-req">*</b></span>
+          <select id="stkr-restock-key" class="fp-input fp-select" required></select></label>
+        <div class="stk-restock-info">
+          <div><span>Item</span><strong id="stkr-restock-item"></strong></div>
+          <div><span>Damaged Available</span><strong id="stkr-restock-avail"></strong></div>
+          <div><span>Moves To</span><strong id="stkr-restock-to"></strong></div>
+        </div>
+        <div class="stk-restock-row">
+          <label class="stk-restock-field stk-restock-qty"><span>Quantity to Move <b class="stk-req">*</b></span>
+            <span class="stk-restock-qty-box"><input id="stkr-restock-qty" class="fp-input" type="number" min="0" step="any" inputmode="decimal" required><small id="stkr-restock-unit"></small></span></label>
+          <label class="stk-restock-field"><span>Transfer Description</span>
+            <input id="stkr-restock-desc" class="fp-input" type="text" maxlength="300" placeholder="e.g. Repaired and tested – fit for sale" autocomplete="off"></label>
+        </div>
+        <p class="stk-restock-error" id="stkr-restock-error" role="alert" hidden></p>
+        <p class="stk-restock-note">On <b>Yes</b>, this quantity leaves Damaged Stock and is added to Stock Levels &amp; Valuation. History shows it as <b>Damage Restock</b> with a stock adjustment remark.</p>
+      </div>
+      <div class="stk-hist-foot stk-restock-foot">
+        <button type="button" class="ml-btn stk-btn-plain" data-stk-restock="close">Cancel</button>
+        <button type="submit" class="ml-btn ml-btn-primary" id="stkr-restock-save"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7"></path></svg>Yes, Move to Stock</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Stock Movement History (an item's movements with the running balance) -->
+  <dialog id="stkr-history" class="stk-hist" aria-labelledby="stkr-hist-title">
+    <div class="stk-hist-head">
+      <div>
+        <span class="stk-hist-kicker">Stock Movement History</span>
+        <h2 id="stkr-hist-title"></h2>
+        <p class="stk-hist-meta" id="stkr-hist-meta"></p>
+      </div>
+      <button type="button" class="lk-close" data-stk-hist="close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+    </div>
+    <div class="stk-hist-body">
+      <div class="stk-hist-kpis">
+        <div><span>Total Inward</span><strong class="is-in" id="stkr-hist-in"></strong></div>
+        <div><span>Total Outward</span><strong class="is-out" id="stkr-hist-out"></strong></div>
+        <div><span>Current Available</span><strong id="stkr-hist-avail"></strong></div>
+        <div class="is-shaded"><span>Total Value</span><strong id="stkr-hist-value"></strong></div>
+      </div>
+      <div class="stk-hist-bar">
+        <h3>Movement History</h3>
+        <label class="ml-search stk-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input id="stkr-hist-search" type="search" placeholder="Search ref no, type, date..." autocomplete="off" aria-label="Search movements"></label>
+        <select id="stkr-hist-dir" class="fp-input fp-select stk-select stk-select-sm" aria-label="Inward or outward"><option value="">All</option><option value="in">Inward</option><option value="out">Outward</option></select>
+      </div>
+      <div class="ml-table-wrap stk-hist-table">
+        <table class="ml-table stk-table">
+          <thead><tr><th>Date</th><th>Ref No</th><th>Type</th><th>Stock Point</th><th class="num">Inward</th><th class="num">Outward</th><th class="num">Balance</th><th class="num">Rate</th><th class="num">Value</th><th>Remarks</th></tr></thead>
+          <tbody id="stkr-hist-body"></tbody>
+        </table>
+        <div id="stkr-hist-empty" class="table-state" hidden>No movements.</div>
+      </div>
+    </div>
+    <div class="stk-hist-foot"><button type="button" class="ml-btn stk-btn-plain" data-stk-hist="close">Close</button></div>
+  </dialog>
+</section>
+
 <!-- Purchase Book row templates. Cells shared by every document come first. -->
 <template id="pb-cell-item">
   <td class="pb-col-sno" data-row-label></td>
@@ -6480,12 +6701,11 @@
         <kbd class="qm-kbd">R</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
-      <h3 class="qm-section">Stock Report</h3>
-      <!-- The page is not built yet: the route shows "Not built yet". -->
-      <a class="qm-item qm-item-sm" href="#/supply/stock-report" data-key="p" aria-keyshortcuts="P">
+      <h3 class="qm-section">Stock Ledger</h3>
+      <a class="qm-item qm-item-sm" href="#/supply/stock-report" data-key="l" aria-keyshortcuts="L">
         <span class="qm-icon qm-icon-sm" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 16v-4M12 16V8M17 16v-7"></path></svg></span>
-        <span class="qm-text"><span class="qm-name">Stock Re<span class="qm-key">p</span>ort</span><span class="qm-desc">Stock on hand by item and stock point</span></span>
-        <kbd class="qm-kbd">P</kbd>
+        <span class="qm-text"><span class="qm-name">Stock <span class="qm-key">L</span>edger</span><span class="qm-desc">Stock on hand by item and stock point</span></span>
+        <kbd class="qm-kbd">L</kbd>
         <svg class="qm-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
       </a>
     </nav>

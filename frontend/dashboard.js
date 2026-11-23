@@ -10459,6 +10459,727 @@ const rsvForm = createPurchaseForm({
   },
 });
 
+/* ---------- Stock Ledger (Supply Management › Stock Ledger, #/supply/stock-report) ----------
+   api/stock-report.php sends every stock movement worked out from the documents (src/stock_report.php) and the
+   damaged stock; this page sums them per item and stock point.
+   - Stock Levels & Valuation: one row per item at a stock point. Purchased = GRN / purchase / replacement received,
+     Sold = invoice / delivery note / replacement given, Stock Available = everything in less everything out (as at
+     the end of the Period), Avg Buying Cost = the purchases' weighted rate (else the Item master's buying rate),
+     Selling Price = the sales' weighted rate (else the Item master's), Stock Value = Available × Avg Buying Cost.
+     Low Stock: at or under the item's minimum stock level (none set: a tenth of what was purchased).
+   - Stock Movement Ledger: every movement, newest first.
+   - Damaged Stock: every sales return and purchase return line (returns never change the stock on hand), with a
+     replacement's returned goods; Damaged Entries, Items, Quantity and Value. On this tab the bar shows Filter
+     (All / Sales Return / Purchase Return) in place of Stock Point, and the tab has its own stock point list.
+   - Stock Point (in the bar on the Movement Ledger, in the Stock Levels row; one choice) and Period are for the cards
+     and both tabs: that stock point (All Stock Points: every one) and that month (All Months: everything). Stock
+     Levels has Filter (All / All Sales / All Purchases) in the bar. History: one item's movements with the
+     balance. */
+const STK_PAGE_SIZE = 8;
+const STK_PURCHASE_IN = ['Stock In (GRN)', 'Stock In (Purchase)', 'Stock In (Replacement)'];
+const STK_SALES_OUT = ['Stock Out (Delivery Note)', 'Stock Out (Invoice)', 'Stock Out (Replacement)'];
+const STK_TYPE_TONE = {
+  'Opening Stock': 'grey', 'Stock In (GRN)': 'green', 'Stock In (Purchase)': 'green', 'Stock In (Replacement)': 'green', 'Stock In (Replacement Return)': 'green',
+  'Stock Out (Delivery Note)': 'red', 'Stock Out (Invoice)': 'red', 'Stock Out (Replacement)': 'red', 'Stock Out (Replacement Return)': 'red',
+  'Transfer In': 'blue', 'Transfer Out': 'blue', 'Adjustment (+)': 'grey', 'Adjustment (−)': 'grey', 'Damage Restock': 'green',
+};
+const stk = { data: null, tab: 'levels', page: { levels: 1, ledger: 1, damaged: 1 }, loading: null, historyItem: null };
+const STK_RETURN_TONE = { 'Sales Return': 'blue', 'Sales Replacement': 'blue', 'Purchase Return': 'amber', 'Purchase Replacement': 'amber' };
+const stkEl = suffix => byId(`stkr-${suffix}`);
+const stkQty = value => pbQty(pbNum(value));
+const stkMoney = value => pbNum(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const stkSigned = value => (value > 0.0005 ? `+${stkQty(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : value < -0.0005 ? `−${stkQty(-value).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : '0');
+const stkItem = id => stk.data?.items?.[id] || { code: '', name: `Item #${id}`, brand: '', unit: '' };
+const stkPoint = id => (id ? stk.data?.stockPoints?.[id] : null) || { code: '', name: id ? `Stock point #${id}` : 'No stock point' };
+const stkMonthEnd = period => { const [y, m] = period.split('-').map(Number); return `${period}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+const stkInPeriod = date => !stkEl('period').value || String(date).startsWith(stkEl('period').value);
+const stkUpTo = date => !stkEl('period').value || String(date) <= stkMonthEnd(stkEl('period').value);
+const stkAtPoint = warehouseId => !stkEl('point').value || String(warehouseId) === stkEl('point').value;
+const stkText = (...values) => values.join(' ').toLowerCase();
+// Goods moved back from Damaged Stock show on Stock Levels & Valuation (and the item's History), not in the
+// Stock Movement Ledger.
+const stkInLedger = m => m.type !== 'Damage Restock';
+
+async function stkLoad({ sync = false } = {}) {
+  if (stk.loading) return stk.loading;
+  stkEl('synced').textContent = sync ? 'Syncing stocks…' : 'Loading…';
+  stk.loading = (async () => {
+    try {
+      if (sync) forgetLookups('item', 'warehouse');       // new items and stock points show too
+      stk.data = await apiRequest('api/stock-report.php');
+      const at = new Date(stk.data.generatedAt);
+      stkEl('synced').textContent = `Last synced: ${at.toLocaleDateString('en-GB')} ${at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+      stkFillFilters();
+      stkRender();
+      if (sync) showToast('Stocks synced', `${stk.data.movements.length} stock movement${stk.data.movements.length === 1 ? '' : 's'} worked out from the documents.`);
+    } catch (error) {
+      stkEl('synced').textContent = 'Could not load';
+      showToast('The stock ledger could not be loaded', error.message, true);
+    } finally {
+      stk.loading = null;
+    }
+  })();
+  return stk.loading;
+}
+
+// The Period, Stock Point and Movement Type lists from the data (a choice already made is kept).
+function stkFillFilters() {
+  const keep = select => select.value;
+  const months = [...new Set(stk.data.movements.map(m => String(m.date).slice(0, 7)))].sort().reverse();
+  const period = stkEl('period'); const p = keep(period);
+  period.replaceChildren(new Option('All Months', ''), ...months.map(month => {
+    const [y, m] = month.split('-').map(Number);
+    return new Option(new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), month);
+  }));
+  period.value = months.includes(p) ? p : '';
+  const points = Object.entries(stk.data.stockPoints).map(([id, w]) => new Option(`${w.code} · ${w.name}`, id));
+  for (const id of ['point', 'levels-point', 'damaged-point']) {
+    const select = stkEl(id); const v = keep(select);
+    select.replaceChildren(new Option('All Stock Points', ''), ...points.map(option => option.cloneNode(true)));
+    select.value = v;
+  }
+}
+
+// The Movement Type list (fixed): every movement, all in, all out, GRN, purchase entry, delivery note, invoice,
+// stock transfers (in and out: GRN line transfers and Stock Transfers).
+const STK_MOVE_FILTER = {
+  in: m => m.dir === 'in', out: m => m.dir === 'out',
+  grn: m => m.type === 'Stock In (GRN)', pe: m => m.type === 'Stock In (Purchase)',
+  dn: m => m.type === 'Stock Out (Delivery Note)', ti: m => m.type === 'Stock Out (Invoice)',
+  transfer: m => m.type === 'Transfer In' || m.type === 'Transfer Out',
+};
+
+// Per item: the weighted purchase and sales rates (all stock points, all dates).
+function stkRates() {
+  const acc = {};
+  for (const m of stk.data.movements) {
+    const a = acc[m.itemId] ||= { buyQty: 0, buyValue: 0, sellQty: 0, sellValue: 0 };
+    if ((STK_PURCHASE_IN.includes(m.type) || m.type === 'Opening Stock') && m.rate > 0) { a.buyQty += m.qty; a.buyValue += m.qty * m.rate; }
+    if (STK_SALES_OUT.includes(m.type) && m.rate > 0) { a.sellQty += m.qty; a.sellValue += m.qty * m.rate; }
+  }
+  const out = {};
+  for (const id of Object.keys(stk.data.items)) {
+    const a = acc[id] || {}; const item = stkItem(id);
+    out[id] = { cost: a.buyQty ? a.buyValue / a.buyQty : pbNum(item.buyingRate), price: a.sellQty ? a.sellValue / a.sellQty : pbNum(item.sellingPrice) };
+  }
+  return out;
+}
+
+// One row per item and stock point, as at the end of the Period.
+function stkLevelRows() {
+  const rates = stkRates();
+  const rows = new Map();
+  for (const m of stk.data.movements) {
+    if (!stkUpTo(m.date)) continue;
+    const key = `${m.itemId}|${m.warehouseId ?? 0}`;
+    const row = rows.get(key) || { itemId: m.itemId, warehouseId: m.warehouseId, inQty: 0, outQty: 0, purchased: 0, sold: 0, restocked: 0,
+      restockedSales: 0, restockedPurchase: 0 };
+    if (m.dir === 'in') row.inQty += m.qty; else row.outQty += m.qty;
+    if (stkInPeriod(m.date)) {
+      if (STK_PURCHASE_IN.includes(m.type)) row.purchased += m.qty;
+      if (STK_SALES_OUT.includes(m.type)) row.sold += m.qty;
+      if (m.type === 'Damage Restock') {                            // moved back from Damaged Stock
+        row.restocked += m.qty;
+        if (m.side === 'sales') row.restockedSales += m.qty; else row.restockedPurchase += m.qty;
+      }
+    }
+    rows.set(key, row);
+  }
+  return [...rows.values()].map(row => {
+    const item = stkItem(row.itemId);
+    const available = row.inQty - row.outQty;
+    const min = item.minStock == null ? null : pbNum(item.minStock);
+    const status = available <= 0.0005 ? 'out'
+      : (min && min > 0 ? available <= min : row.purchased > 0 && available <= row.purchased * 0.1) ? 'low' : 'in';
+    const cost = rates[row.itemId]?.cost || 0;
+    return { ...row, item, point: stkPoint(row.warehouseId), available, status, cost, price: rates[row.itemId]?.price || 0,
+      value: Math.max(available, 0) * cost };
+  }).sort((a, b) => a.item.name.localeCompare(b.item.name) || a.point.code.localeCompare(b.point.code));
+}
+
+function stkFilteredLevels() {
+  const q = stkEl('levels-search').value.trim().toLowerCase();
+  const status = stkEl('levels-status').value;
+  const scope = stkEl('levels-scope').value;                // All / All Sales (items sold) / All Purchases (items purchased)
+  return stkLevelRows().filter(row => (!q || stkText(row.item.name, row.item.code, row.item.brand, row.point.name, row.point.code).includes(q))
+    && stkAtPoint(row.warehouseId) && (!status || row.status === status)
+    && (!scope || (scope === 'sales' ? row.sold > 0 || row.restockedSales > 0 : row.purchased > 0 || row.restockedPurchase > 0)));
+}
+
+function stkFilteredLedger() {
+  const q = stkEl('ledger-search').value.trim().toLowerCase();
+  const type = stkEl('ledger-type').value;
+  const from = stkEl('ledger-from').value; const to = stkEl('ledger-to').value;
+  return stk.data.movements.filter(m => stkInLedger(m) && stkInPeriod(m.date) && (!type || STK_MOVE_FILTER[type](m)) && stkAtPoint(m.warehouseId) && (!from || m.date >= from) && (!to || m.date <= to)
+    && (!q || stkText(m.ref, m.type, m.party, m.remarks, m.by, stkItem(m.itemId).name, stkItem(m.itemId).code, stkPoint(m.warehouseId).name).includes(q)))
+    .slice().reverse();
+}
+
+// Damaged stock within the Period at the tab's stock point.
+function stkDamagedInScope() {
+  const point = stkEl('damaged-point').value;
+  return stk.data.damaged.filter(d => stkInPeriod(d.date) && (!point || String(d.warehouseId) === point));
+}
+
+function stkFilteredDamaged() {
+  const q = stkEl('damaged-search').value.trim().toLowerCase();
+  const side = stkEl('dmg-filter').value;
+  return stkDamagedInScope().filter(d => (!side || d.side === side)
+    && (!q || stkText(d.ref, d.source, d.party, d.condition, d.remarks, stkItem(d.itemId).name, stkItem(d.itemId).code).includes(q)))
+    .slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+// Small cell builders.
+function stkItemCell(itemId) {
+  const td = el('td', 'stk-item'); const item = stkItem(itemId);
+  td.append(el('div', 'stk-item-name', item.name), el('div', 'stk-sku', `SKU: ${item.code}`));
+  return td;
+}
+function stkPointCell(warehouseId) {
+  const td = el('td', 'stk-point'); const point = stkPoint(warehouseId);
+  td.append(el('div', '', point.name), ...(point.code ? [el('div', 'stk-sku', point.code)] : []));
+  return td;
+}
+function stkUnitQty(value, unit, tone) {
+  const span = el('span', `stk-q${tone ? ` is-${tone}` : ''}`, value);
+  if (unit) span.append(el('small', '', ` ${String(unit).toUpperCase()}`));
+  return span;
+}
+const stkDate = value => poSlashDate(value);
+function stkPager(id, total, page, onPage) {
+  const pages = Math.max(1, Math.ceil(total / STK_PAGE_SIZE));
+  const pager = stkEl(id);
+  const button = (label, target, disabled, current) => {
+    const b = el('button', `ml-page${current ? ' ml-page-current' : ''}`, label);
+    b.type = 'button'; b.disabled = disabled;
+    if (current) b.setAttribute('aria-current', 'page');
+    b.addEventListener('click', () => onPage(target));
+    return b;
+  };
+  const numbers = auditPageNumbers(pages, page);
+  pager.replaceChildren(button('‹ Previous', page - 1, page <= 1),
+    ...numbers.flatMap((n, i) => [...(i && n - numbers[i - 1] > 1 ? [el('span', 'stk-gap', '…')] : []), button(String(n), n, false, n === page)]),
+    button('Next ›', page + 1, page >= pages));
+}
+function stkShowing(id, total, page) {
+  const start = total ? (page - 1) * STK_PAGE_SIZE + 1 : 0;
+  stkEl(id).textContent = `Showing ${start} to ${Math.min(total, page * STK_PAGE_SIZE)} of ${total}`;
+}
+const stkPageOf = (rows, key) => {
+  const pages = Math.max(1, Math.ceil(rows.length / STK_PAGE_SIZE));
+  stk.page[key] = Math.min(Math.max(1, stk.page[key]), pages);
+  return rows.slice((stk.page[key] - 1) * STK_PAGE_SIZE, stk.page[key] * STK_PAGE_SIZE);
+};
+
+function stkRender() {
+  if (!stk.data) return;
+  const period = stkEl('period');
+  const label = period.value ? period.selectedOptions[0].text : 'all months';
+  // The cards: on hand and value as at the end of the Period (and the chosen stock point); in / out within it
+  // (transfers between stock points are neither).
+  const levels = stkLevelRows().filter(row => stkAtPoint(row.warehouseId));
+  let inQty = 0; let outQty = 0;
+  for (const m of stk.data.movements) {
+    if (!stkInPeriod(m.date) || !stkAtPoint(m.warehouseId) || m.type.startsWith('Transfer')) continue;
+    if (m.dir === 'in') inQty += m.qty; else outQty += m.qty;
+  }
+  stkEl('kpi-hand').textContent = stkQty(levels.reduce((sum, row) => sum + Math.max(row.available, 0), 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  stkEl('kpi-in').textContent = stkSigned(inQty);
+  stkEl('kpi-out').textContent = outQty ? stkSigned(-outQty) : '0';
+  stkEl('kpi-value').replaceChildren(document.createTextNode(stkMoney(levels.reduce((sum, row) => sum + row.value, 0))), el('small', '', ' OMR'));
+  stkEl('kpi-in-note').textContent = `From GRN, purchases & returns · ${label}`;
+  stkEl('kpi-out-note').textContent = `From invoices, delivery notes & returns · ${label}`;
+  stkEl('levels-sub').textContent = `Stock on hand from purchase inward and invoice / delivery note outward – ${label}.`;
+
+  // Stock Levels & Valuation.
+  const levelRows = stkFilteredLevels();
+  stkEl('levels-body').replaceChildren(...stkPageOf(levelRows, 'levels').map(row => {
+    const tr = el('tr');
+    if (stk.flash && stk.flash === `${row.itemId}|${row.warehouseId ?? 0}`) tr.classList.add('stk-flash');
+    const unit = row.item.unit;
+    const statusText = `${stkQty(row.available)} ${String(unit || '').toUpperCase()}${row.status === 'low' ? ' (Low)' : row.status === 'out' ? ' (Out)' : ''}`.replace(/\s+/g, ' ');
+    const actions = el('td', 'center');
+    const act = (label, cls, handler) => { const b = el('button', `stk-act ${cls}`, label); b.type = 'button'; b.addEventListener('click', handler); return b; };
+    actions.append(el('div', 'stk-acts'));
+    actions.firstChild.append(act('History', 'is-history', () => stkOpenHistory(row.itemId)),
+      act('Edit', 'is-edit', () => stkOpenItemEdit(row.itemId, row.warehouseId)),
+      act('Delete', 'is-delete', () => stkDeleteItem(row.itemId)));
+    tr.append(stkItemCell(row.itemId), el('td', 'stk-brand', row.item.brand || '—'), stkPointCell(row.warehouseId),
+      el('td', 'num'), el('td', 'num'), el('td', 'center'), el('td', 'num stk-money'), el('td', 'num stk-money'), el('td', 'num stk-money stk-strong'), actions);
+    tr.children[3].append(row.purchased ? stkUnitQty(stkSigned(row.purchased), unit, 'in') : el('span', 'stk-dash', '–'));
+    tr.children[4].append(row.sold ? stkUnitQty(stkSigned(-row.sold), unit, 'out') : el('span', 'stk-dash', '–'));
+    tr.children[5].append(el('span', `stk-pill is-${row.status}`, statusText));
+    // Moved back from Damaged Stock: one line for sales returns, one for purchase returns.
+    for (const [qty, from] of [[row.restockedSales, 'Sales Return'], [row.restockedPurchase, 'Purchase Return']]) {
+      if (qty) tr.children[5].append(el('div', 'stk-restocked', `${stkSigned(qty)} ${String(unit || '').toUpperCase()} from ${from} (Damaged)`.replace(/\s+/g, ' ')));
+    }
+    tr.children[6].append(stkMoney(row.cost), el('small', '', ' OMR'));
+    tr.children[7].append(stkMoney(row.price), el('small', '', ' OMR'));
+    tr.children[8].append(stkMoney(row.value), el('small', '', ' OMR'));
+    return tr;
+  }));
+  stkEl('levels-empty').hidden = levelRows.length > 0;
+  stkShowing('levels-count', levelRows.length, stk.page.levels);
+  stkPager('levels-pager', levelRows.length, stk.page.levels, page => { stk.page.levels = page; stkRender(); });
+
+  // Stock Movement Ledger.
+  const moves = stkFilteredLedger();
+  stkEl('count-ledger').textContent = String(stk.data.movements.filter(m => stkInLedger(m) && stkInPeriod(m.date) && stkAtPoint(m.warehouseId)).length);
+  stkEl('ledger-total').textContent = String(moves.length);
+  stkEl('ledger-body').replaceChildren(...stkPageOf(moves, 'ledger').map(m => {
+    const tr = el('tr'); const unit = stkItem(m.itemId).unit;
+    const remarks = el('td', 'stk-remarks'); remarks.append(el('div', '', m.remarks || '—'));
+    if (m.by) remarks.append(el('div', 'stk-by', `By: ${m.by}`));
+    tr.append(el('td', 'stk-mono', stkDate(m.date)), el('td', 'stk-mono stk-strong', m.ref), el('td'), stkItemCell(m.itemId), el('td', 'stk-party', m.party || '—'),
+      stkPointCell(m.warehouseId), el('td', 'num'), el('td', 'num'), el('td', 'num stk-money', stkMoney(m.rate)), el('td', 'num stk-money stk-strong', stkMoney(m.qty * m.rate)), remarks);
+    tr.children[2].append(el('span', `stk-type is-${STK_TYPE_TONE[m.type] || 'grey'}`, m.type));
+    tr.children[6].append(m.dir === 'in' ? stkUnitQty(stkSigned(m.qty), unit, 'in') : el('span', 'stk-dash', '–'));
+    tr.children[7].append(m.dir === 'out' ? stkUnitQty(stkSigned(-m.qty), unit, 'out') : el('span', 'stk-dash', '–'));
+    return tr;
+  }));
+  stkEl('ledger-empty').hidden = moves.length > 0;
+  stkShowing('ledger-count', moves.length, stk.page.ledger);
+  stkPager('ledger-pager', moves.length, stk.page.ledger, page => { stk.page.ledger = page; stkRender(); });
+
+  // Damaged Stock.
+  const damaged = stkFilteredDamaged();
+  const inScope = stkDamagedInScope();
+  stkEl('count-damaged').textContent = String(inScope.length);
+  const side = stkEl('dmg-filter').value;
+  stkEl('damaged-title').textContent = side ? `Damaged Stock – ${side === 'sales' ? 'Sales Return' : 'Purchase Return'}` : 'Damaged Stock';
+  stkEl('damaged-sub').textContent = `Damaged goods from sales returns and purchase returns – ${label}.`;
+  stkEl('dmg-entries').textContent = String(damaged.length);
+  stkEl('dmg-items').textContent = String(new Set(damaged.map(d => String(d.itemId))).size);
+  stkEl('dmg-qty').textContent = stkQty(damaged.reduce((sum, d) => sum + pbNum(d.qty), 0));
+  stkEl('dmg-value').replaceChildren(document.createTextNode(stkMoney(damaged.reduce((sum, d) => sum + pbNum(d.qty) * pbNum(d.rate), 0))), el('small', '', ' OMR'));
+  stkEl('damaged-body').replaceChildren(...stkPageOf(damaged, 'damaged').map(d => {
+    const tr = el('tr'); const unit = stkItem(d.itemId).unit;
+    const reason = el('td', 'stk-remarks'); reason.append(el('div', '', d.remarks || d.condition || '—'));
+    if (d.by) reason.append(el('div', 'stk-by', `By: ${d.by}`));
+    const move = el('button', 'stk-move-btn', 'Move to Stock');
+    move.type = 'button'; move.dataset.stkMove = d.key;
+    move.prepend(stkMoveIcon());
+    const action = el('td', 'stk-act-col'); action.append(move);
+    tr.append(el('td', 'stk-mono', stkDate(d.date)), el('td', 'stk-mono stk-strong', d.ref), el('td'), stkItemCell(d.itemId), el('td', 'stk-party', d.party || '—'),
+      stkPointCell(d.warehouseId), el('td', 'num'), el('td', 'num stk-money', stkMoney(d.rate)), el('td', 'num stk-money stk-strong', stkMoney(pbNum(d.qty) * pbNum(d.rate))), reason, action);
+    tr.children[2].append(el('span', `stk-type is-${STK_RETURN_TONE[d.source] || 'grey'}`, d.source));
+    tr.children[6].append(stkUnitQty(stkQty(d.qty), unit, 'out'));
+    // Part of the line already moved to stock: "1 METER / of 4".
+    if (pbNum(d.origQty) > pbNum(d.qty)) tr.children[6].append(el('div', 'stk-of', `of ${stkQty(d.origQty)}`));
+    return tr;
+  }));
+  stkEl('damaged-empty').hidden = damaged.length > 0;
+  stkShowing('damaged-count', damaged.length, stk.page.damaged);
+  stkPager('damaged-pager', damaged.length, stk.page.damaged, page => { stk.page.damaged = page; stkRender(); });
+  if (byId('stkr-history').open) stkRenderHistory();
+}
+
+function stkShowTab(tab) {
+  stk.tab = tab;
+  for (const button of document.querySelectorAll('[data-stk-tab]')) button.setAttribute('aria-selected', String(button.dataset.stkTab === tab));
+  for (const panel of document.querySelectorAll('[data-stk-panel]')) panel.hidden = panel.dataset.stkPanel !== tab;
+  stkEl('export-label').textContent = { levels: 'Export Valuation', ledger: 'Export Movements', damaged: 'Export Damaged Stock' }[tab];
+  // Damaged Stock: Filter (All / Sales Return / Purchase Return) in the bar instead of Stock Point, and no Print PDF.
+  stkEl('dmg-filter-wrap').hidden = tab !== 'damaged';
+  // Stock Levels: Filter (All / All Sales / All Purchases) in the bar, Stock Point in the tab's own row.
+  stkEl('levels-scope-wrap').hidden = tab !== 'levels';
+  stkEl('point-wrap').hidden = tab !== 'ledger';
+  stkEl('print').hidden = tab === 'damaged';
+}
+
+// History: one item's movements at every stock point, oldest first for the balance, shown newest first.
+function stkOpenHistory(itemId) {
+  stk.historyItem = itemId;
+  stkEl('hist-search').value = '';
+  stkEl('hist-dir').value = '';
+  stkRenderHistory();
+  const dialog = byId('stkr-history');
+  if (!dialog.open) dialog.showModal();
+  stkEl('hist-search').focus();
+}
+function stkRenderHistory() {
+  const itemId = stk.historyItem;
+  const item = stkItem(itemId); const unit = String(item.unit || '').toUpperCase();
+  const all = stk.data.movements.filter(m => String(m.itemId) === String(itemId));
+  let balance = 0;
+  const withBalance = all.map(m => { balance += m.dir === 'in' ? m.qty : -m.qty; return { ...m, balance }; });
+  const inQty = all.filter(m => m.dir === 'in').reduce((s, m) => s + m.qty, 0);
+  const outQty = all.filter(m => m.dir === 'out').reduce((s, m) => s + m.qty, 0);
+  const cost = stkRates()[itemId]?.cost || 0;
+  stkEl('hist-title').textContent = item.name;
+  stkEl('hist-meta').replaceChildren(el('span', '', 'SKU: '), el('b', 'stk-mono', item.code), el('span', '', `  ·  Brand: ${item.brand || '—'}  ·  Unit: ${unit || '—'}`));
+  const withUnit = (node, value) => { node.replaceChildren(document.createTextNode(value), el('small', '', ` ${unit}`)); };
+  withUnit(stkEl('hist-in'), stkSigned(inQty));
+  withUnit(stkEl('hist-out'), outQty ? stkSigned(-outQty) : '0');
+  withUnit(stkEl('hist-avail'), stkQty(inQty - outQty));
+  stkEl('hist-value').replaceChildren(document.createTextNode(stkMoney(Math.max(inQty - outQty, 0) * cost)), el('small', '', ' OMR'));
+  const q = stkEl('hist-search').value.trim().toLowerCase(); const dir = stkEl('hist-dir').value;
+  const shown = withBalance.filter(m => (!dir || m.dir === dir)
+    && (!q || stkText(m.type, m.party, m.ref, stkDate(m.date), m.date, m.remarks, stkPoint(m.warehouseId).name).includes(q))).reverse();
+  stkEl('hist-body').replaceChildren(...shown.map(m => {
+    const tr = el('tr');
+    const remarks = el('td', 'stk-remarks'); remarks.append(el('div', '', m.remarks || '—'));
+    if (m.by) remarks.append(el('div', 'stk-by', `By: ${m.by}`));
+    // Ref No: the document's number (GRN, invoice, delivery note, transfer...); opening stock has none.
+    const ref = m.doc === 'opening' ? '—' : (m.ref || '—');
+    tr.append(el('td', 'stk-mono', stkDate(m.date)), el('td', 'stk-mono stk-ref', ref), el('td'), stkPointCell(m.warehouseId),
+      el('td', 'num'), el('td', 'num'), el('td', 'num'), el('td', 'num stk-money', m.rate ? stkMoney(m.rate) : '–'),
+      el('td', 'num stk-money stk-strong', m.rate ? stkMoney(m.qty * m.rate) : '–'), remarks);
+    tr.children[2].append(el('span', `stk-type is-${STK_TYPE_TONE[m.type] || 'grey'}`, m.type));
+    tr.children[4].append(m.dir === 'in' ? stkUnitQty(stkSigned(m.qty), '', 'in') : el('span', 'stk-dash', '–'));
+    tr.children[5].append(m.dir === 'out' ? stkUnitQty(stkSigned(-m.qty), '', 'out') : el('span', 'stk-dash', '–'));
+    tr.children[6].append(stkUnitQty(stkQty(m.balance), unit));
+    return tr;
+  }));
+  stkEl('hist-empty').hidden = shown.length > 0;
+}
+
+/* ---------- Move to Stock (Damaged Stock) ----------
+   A damaged line (or part of it) back into stock at its stock point: api/damage-restock.php takes it off the
+   damaged line and the ledger adds a Damage Restock (in). The list holds every damaged line still in Damaged Stock. */
+function stkMoveIcon() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  for (const [k, v] of Object.entries({ width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+  const circle = document.createElementNS(ns, 'circle'); circle.setAttribute('cx', 12); circle.setAttribute('cy', 12); circle.setAttribute('r', 9);
+  const path = document.createElementNS(ns, 'path'); path.setAttribute('d', 'M8 12h8M13 8.5 16.5 12 13 15.5');
+  svg.append(circle, path);
+  return svg;
+}
+// Damaged lines by key (a return's lines for one item together): { key: { first line, qty still damaged } }.
+function stkDamagedByKey() {
+  const byKey = new Map();
+  for (const d of stk.data.damaged) {
+    const entry = byKey.get(d.key);
+    if (entry) entry.qty += pbNum(d.qty);
+    else byKey.set(d.key, { line: d, qty: pbNum(d.qty) });
+  }
+  return byKey;
+}
+function stkOpenRestock(key) {
+  const byKey = stkDamagedByKey();
+  if (!byKey.has(key)) return;
+  const select = stkEl('restock-key');
+  select.replaceChildren(...[...byKey.entries()].map(([k, { line, qty }]) => {
+    const item = stkItem(line.itemId);
+    return new Option(`${line.ref} · ${item.name} · ${stkQty(qty)} ${String(item.unit || '').toUpperCase()}`.trim(), k);
+  }));
+  select.value = key;
+  stkFillRestock(true);
+  const dialog = byId('stkr-restock');
+  if (!dialog.open) dialog.showModal();
+  stkEl('restock-qty').focus();
+  stkEl('restock-qty').select();
+}
+// The chosen damaged line's details; fresh: the quantity is set to all of it and the description cleared.
+function stkFillRestock(fresh) {
+  const entry = stkDamagedByKey().get(stkEl('restock-key').value);
+  if (!entry) return;
+  const { line, qty } = entry; const item = stkItem(line.itemId); const unit = String(item.unit || '').toUpperCase();
+  stkEl('restock-from').textContent = `From ${line.source} ${line.ref}${line.party ? ` · ${line.party}` : ''}`;
+  stkEl('restock-item').textContent = item.name;
+  stkEl('restock-avail').textContent = `${stkQty(qty)} ${unit}`.trim();
+  stkEl('restock-to').textContent = stkPoint(line.warehouseId).name;
+  stkEl('restock-unit').textContent = unit;
+  stkEl('restock-qty').max = String(qty);
+  if (fresh) { stkEl('restock-qty').value = stkQty(qty); stkEl('restock-desc').value = ''; }
+  stkEl('restock-error').hidden = true;
+  stkEl('restock-qty').classList.remove('is-invalid');
+}
+async function stkSaveRestock() {
+  const key = stkEl('restock-key').value;
+  const entry = stkDamagedByKey().get(key);
+  const qty = pbNum(stkEl('restock-qty').value);
+  const fail = message => { const box = stkEl('restock-error'); box.textContent = message; box.hidden = false; stkEl('restock-qty').classList.add('is-invalid'); stkEl('restock-qty').focus(); };
+  if (!entry) return;
+  if (!(qty > 0)) return fail('Enter a quantity more than 0.');
+  if (qty > entry.qty + 0.0005) return fail(`Only ${stkQty(entry.qty)} ${String(stkItem(entry.line.itemId).unit || '').toUpperCase()} is in Damaged Stock.`.replace(' .', '.'));
+  const button = stkEl('restock-save'); button.disabled = true;
+  try {
+    await apiRequest('api/damage-restock.php', { method: 'POST', json: { key, qty, description: stkEl('restock-desc').value.trim() } });
+    byId('stkr-restock').close();
+    const item = stkItem(entry.line.itemId);
+    showToast('Moved to stock', `${stkQty(qty)} ${String(item.unit || '').toUpperCase()} ${item.name} from ${entry.line.ref} added to ${stkPoint(entry.line.warehouseId).name}.`);
+    forgetLookups('item');
+    await stkLoad();
+    stkShowRestocked(entry.line.itemId, entry.line.warehouseId);
+  } catch (error) {
+    fail(error.fields?.qty || error.fields?.key || error.fields?.description || error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Stock Levels & Valuation with the item's row at that stock point on screen and highlighted for a few seconds
+// (filters that would hide it are cleared).
+function stkShowRestocked(itemId, warehouseId) {
+  const key = `${itemId}|${warehouseId ?? 0}`;
+  const find = () => stkFilteredLevels().findIndex(row => `${row.itemId}|${row.warehouseId ?? 0}` === key);
+  stkShowTab('levels');
+  if (find() < 0) {
+    for (const id of ['levels-search', 'levels-status', 'levels-scope', 'period']) stkEl(id).value = '';
+    if (stkEl('point').value && stkEl('point').value !== String(warehouseId)) { stkEl('point').value = ''; stkEl('levels-point').value = ''; }
+  }
+  const index = find();
+  stk.page.levels = index < 0 ? 1 : Math.floor(index / STK_PAGE_SIZE) + 1;
+  stk.flash = key;
+  stkRender();
+  stkEl('levels-body').querySelector('.stk-flash')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  clearTimeout(stk.flashTimer);
+  stk.flashTimer = setTimeout(() => { stk.flash = null; stkEl('levels-body').querySelector('.stk-flash')?.classList.remove('stk-flash'); }, 4000);
+}
+
+/* ---------- Edit Item (Stock Levels › Edit) ----------
+   A popup on the Stock Ledger: the item's name, unit, brand, status, category, selling price, its stock point lines'
+   buying cost and opening stock, and comments. Saved with PUT api/items.php (only these keys; the rest of the item
+   stays as it is), then the Stock Ledger reloads and the row is highlighted. */
+const stkIe = { item: null, itemId: null, warehouseId: null, subs: [] };
+function stkIeOptions(select, rows, value, blank = '— None —') {
+  select.replaceChildren(new Option(blank, ''), ...rows.map(r => new Option(r.name + (r.code ? ` (${r.code})` : ''), String(r.id))));
+  select.value = value == null ? '' : String(value);
+  if (value != null && select.value !== String(value)) { select.append(new Option(`#${value}`, String(value))); select.value = String(value); }
+}
+function stkIeFillSubs(value) {
+  const category = stkEl('ie-category').value;
+  stkIeOptions(stkEl('ie-subcategory'), stkIe.subs.filter(r => String(r.categoryId) === category), value);
+  stkEl('ie-subcategory').disabled = !category;
+}
+async function stkOpenItemEdit(itemId, warehouseId) {
+  Object.assign(stkIe, { item: null, itemId, warehouseId });
+  const dialog = byId('stkr-itemedit');
+  stkEl('ie-loading').hidden = false; stkEl('ie-loading').textContent = 'Loading item…';
+  stkEl('ie-fields').hidden = true; stkEl('ie-save').disabled = true;
+  stkEl('ie-meta').textContent = `SKU: ${stkItem(itemId).code}`;
+  if (!dialog.open) dialog.showModal();
+  try {
+    const [item, uoms, brands, categories, subs] = await Promise.all([apiRequest(`api/items.php?id=${itemId}`), apiRequest('api/uoms.php'),
+      apiRequest('api/brands.php'), apiRequest('api/categories.php'), apiRequest('api/sub-categories.php')]);
+    if (stkIe.itemId !== itemId) return;                     // another item was opened meanwhile
+    stkIe.item = item; stkIe.subs = subs;
+    stkEl('ie-meta').textContent = `SKU: ${item.code}${item.warehouseName ? `  ·  ${item.warehouseName}` : ''}`;
+    stkEl('ie-code').value = item.code;
+    stkEl('ie-name').value = item.name || '';
+    stkIeOptions(stkEl('ie-uom'), uoms, item.uomId);
+    stkIeOptions(stkEl('ie-brand'), brands, item.brandId);
+    stkEl('ie-status').value = item.status || 'ACTIVE / RELEASED';
+    stkIeOptions(stkEl('ie-category'), categories, item.categoryId);
+    stkIeFillSubs(item.subCategoryId);
+    stkEl('ie-price').value = item.sellingPrice == null || item.sellingPrice === '' ? '' : pbQty(pbNum(item.sellingPrice));
+    stkEl('ie-comments').value = item.description || '';
+    stkEl('ie-lines').replaceChildren(...item.sourcing.map((line, index) => {
+      const tr = el('tr');
+      const point = el('td', 'stk-point'); point.append(el('div', '', line.warehouseName || '—'), ...(line.warehouseCode ? [el('div', 'stk-sku', line.warehouseCode)] : []));
+      const input = (key, value) => {
+        const td = el('td', 'num'); const box = el('input', 'fp-input stk-ie-num');
+        Object.assign(box, { type: 'number', min: '0', step: 'any', inputMode: 'decimal', value: value == null || value === '' ? '' : pbQty(pbNum(value)) });
+        box.dataset.line = String(index); box.dataset.key = key; box.setAttribute('aria-label', `${key === 'cost' ? 'Buying cost' : 'Opening stock'}, line ${index + 1}`);
+        td.append(box); return td;
+      };
+      tr.append(point, el('td', '', line.brandName || '—'), el('td', '', line.supplierName || '—'), input('cost', line.cost), input('openingStock', line.openingStock));
+      if (String(line.warehouseId ?? '') === String(stkIe.warehouseId ?? '')) tr.classList.add('stk-ie-here');
+      return tr;
+    }));
+    stkEl('ie-nolines').hidden = item.sourcing.length > 0;
+    stkIeClearErrors();
+    stkEl('ie-loading').hidden = true; stkEl('ie-fields').hidden = false; stkEl('ie-save').disabled = false;
+    stkEl('ie-name').focus();
+  } catch (error) {
+    stkEl('ie-loading').textContent = `The item could not be loaded: ${error.message}`;
+  }
+}
+function stkIeClearErrors() {
+  stkEl('ie-error').hidden = true;
+  for (const node of byId('stkr-itemedit').querySelectorAll('.is-invalid')) node.classList.remove('is-invalid');
+}
+function stkIeFail(message, field) {
+  const box = stkEl('ie-error'); box.textContent = message; box.hidden = false;
+  const target = field ? byId('stkr-itemedit').querySelector(`[data-field="${field}"]`) : null;
+  if (target) { target.classList.add('is-invalid'); target.focus(); }
+}
+async function stkSaveItemEdit() {
+  const item = stkIe.item;
+  if (!item) return;
+  stkIeClearErrors();
+  const name = stkEl('ie-name').value.trim();
+  if (!name) return stkIeFail('Enter the item name.', 'itemName');
+  const num = value => (String(value).trim() === '' ? null : String(value).trim());
+  for (const box of byId('stkr-itemedit').querySelectorAll('.stk-ie-num')) {
+    if (box.value.trim() !== '' && !(pbNum(box.value) >= 0)) { box.classList.add('is-invalid'); box.focus(); return stkIeFail('Enter a number of 0 or more.'); }
+  }
+  const lines = item.sourcing.map((line, index) => {
+    const get = key => byId('stkr-itemedit').querySelector(`input[data-line="${index}"][data-key="${key}"]`).value;
+    return { warehouseId: line.warehouseId, brandId: line.brandId, supplierId: line.supplierId, cost: num(get('cost')), openingStock: num(get('openingStock')) };
+  });
+  if (lines.length) lines[0].sellingPrice = num(stkEl('ie-price').value);
+  const payload = { itemName: name, uomId: stkEl('ie-uom').value ? Number(stkEl('ie-uom').value) : null,
+    brandId: stkEl('ie-brand').value ? Number(stkEl('ie-brand').value) : null, status: stkEl('ie-status').value,
+    categoryId: stkEl('ie-category').value ? Number(stkEl('ie-category').value) : null,
+    subCategoryId: stkEl('ie-subcategory').value ? Number(stkEl('ie-subcategory').value) : null,
+    comments: stkEl('ie-comments').value, sourcing: lines };
+  const button = stkEl('ie-save'); button.disabled = true;
+  try {
+    const saved = await apiRequest(`api/items.php?id=${item.id}`, { method: 'PUT', json: payload });
+    byId('stkr-itemedit').close();
+    showToast('Item updated', `${saved.name || name} (${saved.code || item.code}) saved.`);
+    forgetLookups('item');
+    await stkLoad();
+    stkShowRestocked(item.id, stkIe.warehouseId);           // back on the row, highlighted
+  } catch (error) {
+    const [field, message] = Object.entries(error.fields || {})[0] || [];
+    stkIeFail(message || error.message, field);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Refresh: the page as when first opened (every filter, search, date and page back to the start, popups closed,
+// Stock Levels & Valuation) with the stock worked out again from the documents.
+async function stkRefresh() {
+  const button = document.querySelector('#stkr-page [data-stk="refresh"]');
+  if (button.disabled) return;
+  for (const id of ['stkr-history', 'stkr-restock', 'stkr-itemedit']) if (byId(id).open) byId(id).close();
+  for (const id of ['levels-search', 'levels-scope', 'levels-point', 'levels-status', 'point', 'period', 'ledger-search', 'ledger-type',
+    'ledger-from', 'ledger-to', 'dmg-filter', 'damaged-search', 'damaged-point']) {
+    const field = stkEl(id); if (field) field.value = '';
+  }
+  stk.page = { levels: 1, ledger: 1, damaged: 1 };
+  stk.flash = null;
+  stkShowTab('levels');
+  button.disabled = true; button.classList.add('is-busy');
+  try {
+    forgetLookups('item', 'warehouse');
+    await stkLoad();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (stk.data) showToast('Refreshed', 'Stock Ledger reloaded with the latest stock.');
+  } finally {
+    button.disabled = false; button.classList.remove('is-busy');
+  }
+}
+
+async function stkDeleteItem(itemId) {
+  const item = stkItem(itemId);
+  if (!confirm(`Delete ${item.name} (${item.code}) from the Item master?\n\nAn item used on any document cannot be deleted.`)) return;
+  try {
+    await apiRequest(`api/items.php?id=${itemId}`, { method: 'DELETE' });
+    forgetLookups('item');
+    showToast('Item deleted', `${item.name} was deleted from the Item master.`);
+    await stkLoad();
+  } catch (error) {
+    showToast('The item could not be deleted', error.message, true);
+  }
+}
+
+// Export (CSV, the tab's rows with its filters, every page) and Print PDF (the same rows on a printable page).
+function stkTabTable() {
+  if (stk.tab === 'levels') {
+    return { title: 'Stock Valuation Overview', head: ['Item Code', 'Item Name', 'Brand', 'Stock Point', 'Purchased', 'Sold', 'Stock Available', 'Unit', 'Status', 'Avg Buying Cost', 'Selling Price', 'Stock Value'],
+      rows: stkFilteredLevels().map(r => [r.item.code, r.item.name, r.item.brand, [r.point.code, r.point.name].filter(Boolean).join(' · '), stkQty(r.purchased), stkQty(r.sold),
+        stkQty(r.available), r.item.unit, { in: 'In Stock', low: 'Low Stock', out: 'Out of Stock' }[r.status], pbMoney(r.cost), pbMoney(r.price), pbMoney(r.value)]) };
+  }
+  if (stk.tab === 'ledger') {
+    return { title: 'Stock Movement Ledger', head: ['Date', 'Reference', 'Movement Type', 'Item Code', 'Item Name', 'Name', 'Stock Point', 'Inward', 'Outward', 'Unit', 'Rate', 'Value', 'Remarks', 'By'],
+      rows: stkFilteredLedger().map(m => [stkDate(m.date), m.ref, m.type, stkItem(m.itemId).code, stkItem(m.itemId).name, m.party, stkPoint(m.warehouseId).name,
+        m.dir === 'in' ? stkQty(m.qty) : '', m.dir === 'out' ? stkQty(m.qty) : '', stkItem(m.itemId).unit, pbMoney(m.rate), pbMoney(m.qty * m.rate), m.remarks, m.by]) };
+  }
+  const side = stkEl('dmg-filter').value;
+  return { title: side ? `Damaged Stock - ${side === 'sales' ? 'Sales Return' : 'Purchase Return'}` : 'Damaged Stock',
+    head: ['Date', 'Return No', 'Return Type', 'Item Code', 'Item Name', 'Name', 'Stock Point', 'Damaged Qty', 'Returned Qty', 'Unit', 'Rate', 'Value', 'Condition', 'Reason', 'By'],
+    rows: stkFilteredDamaged().map(d => [stkDate(d.date), d.ref, d.source, stkItem(d.itemId).code, stkItem(d.itemId).name, d.party, stkPoint(d.warehouseId).name,
+      stkQty(d.qty), stkQty(d.origQty), stkItem(d.itemId).unit, pbMoney(pbNum(d.rate)), pbMoney(pbNum(d.qty) * pbNum(d.rate)), d.condition, d.remarks, d.by]) };
+}
+function stkExport() {
+  const { title, head, rows } = stkTabTable();
+  const cell = value => { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
+  const csv = [head, ...rows].map(row => row.map(cell).join(',')).join('\r\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  link.download = `${title.replace(/[^A-Za-z]+/g, '-')}-${todayInputValue()}.csv`;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+function stkPrint() {
+  const { title, head, rows } = stkTabTable();
+  const period = stkEl('period').value ? stkEl('period').selectedOptions[0].text : 'All months';
+  const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const company = byId('app')?.querySelector('.brand-name')?.textContent || '';
+  const win = window.open('', '_blank');
+  if (!win) { showToast('Print blocked', 'Allow pop-ups for this site to print the report.', true); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+    @page { size: A4 landscape; margin: 12mm; } body { font: 10px/1.4 Arial, sans-serif; color: #0f172a; }
+    h1 { margin: 0 0 2px; font-size: 16px; } p { margin: 0 0 10px; color: #475569; }
+    table { width: 100%; border-collapse: collapse; } th, td { padding: 4px 6px; border: 1px solid #cbd5e1; text-align: left; vertical-align: top; }
+    th { background: #fff7ed; font-size: 9px; text-transform: uppercase; } tr { break-inside: avoid; }</style></head><body>
+    <h1>${esc(company)} · Stock Ledger · ${esc(title)}</h1><p>${esc(period)} · ${rows.length} row${rows.length === 1 ? '' : 's'} · printed ${esc(new Date().toLocaleString('en-GB'))}</p>
+    <table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(row => `<tr>${row.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${head.length}">Nothing to show.</td></tr>`}</tbody></table>
+    <script>window.onload = () => { window.print(); };<\/script></body></html>`);
+  win.document.close();
+}
+
+function stkInit() {
+  const page = byId('stkr-page');
+  if (!page) return;
+  FORM_PAGES['supply/stock-report'] = { page: 'stkr', alwaysReset: true, isEditing: () => false,
+    reset: () => { stkShowTab(stk.tab); stkLoad(); }, firstField: () => stkEl(`${stk.tab === 'levels' ? 'levels' : stk.tab}-search`) };
+  FORM_KEY_HANDLERS.stkr = event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (byId('stkr-itemedit').open) byId('stkr-itemedit').close();
+      else if (byId('stkr-restock').open) byId('stkr-restock').close();
+      else if (byId('stkr-history').open) byId('stkr-history').close();
+      else if (!event.repeat) location.hash = '#/home';
+      return true;
+    }
+    if (event.key === '/' && !isTextEntry(event.target)) {
+      event.preventDefault();
+      stkEl(`${stk.tab}-search`).focus();
+      return true;
+    }
+    return false;
+  };
+  page.addEventListener('click', event => {
+    const action = event.target.closest('[data-stk]')?.dataset.stk;
+    if (action === 'refresh') stkRefresh();
+    else if (action === 'sync') stkLoad({ sync: true });
+    else if (action === 'back') location.hash = '#/home';
+    else if (action === 'export') stkExport();
+    else if (action === 'print') stkPrint();
+    const tab = event.target.closest('[data-stk-tab]')?.dataset.stkTab;
+    if (tab) stkShowTab(tab);
+    if (event.target.closest('[data-stk-hist="close"]')) byId('stkr-history').close();
+    const move = event.target.closest('[data-stk-move]')?.dataset.stkMove;
+    if (move) stkOpenRestock(move);
+  });
+  const itemEdit = byId('stkr-itemedit');
+  itemEdit.addEventListener('click', event => {
+    if (event.target === itemEdit || event.target.closest('[data-stk-ie="close"]')) itemEdit.close();
+  });
+  stkEl('ie-category').addEventListener('change', () => stkIeFillSubs(null));
+  stkEl('ie-form').addEventListener('input', event => { event.target.classList?.remove('is-invalid'); stkEl('ie-error').hidden = true; });
+  stkEl('ie-form').addEventListener('submit', event => { event.preventDefault(); stkSaveItemEdit(); });
+  const restock = byId('stkr-restock');
+  restock.addEventListener('click', event => {
+    if (event.target === restock || event.target.closest('[data-stk-restock="close"]')) restock.close();
+  });
+  stkEl('restock-key').addEventListener('change', () => { stkFillRestock(true); stkEl('restock-qty').focus(); });
+  stkEl('restock-qty').addEventListener('input', () => { stkEl('restock-error').hidden = true; stkEl('restock-qty').classList.remove('is-invalid'); });
+  stkEl('restock-form').addEventListener('submit', event => { event.preventDefault(); stkSaveRestock(); });
+  // Any filter: back to page 1 of its tab, and the cards follow the Period and the stock point.
+  const again = key => () => { if (key) stk.page[key] = 1; else stk.page = { levels: 1, ledger: 1, damaged: 1 }; stkRender(); };
+  stkEl('period').addEventListener('change', again(null));
+  // The bar's Stock Point (Movement Ledger) and the Stock Levels one are the same choice.
+  for (const [from, to] of [['point', 'levels-point'], ['levels-point', 'point']]) {
+    stkEl(from).addEventListener('change', () => { stkEl(to).value = stkEl(from).value; again(null)(); });
+  }
+  for (const id of ['levels-search', 'levels-scope', 'levels-status']) stkEl(id).addEventListener(id.endsWith('search') ? 'input' : 'change', again('levels'));
+  for (const id of ['ledger-search', 'ledger-type', 'ledger-from', 'ledger-to']) stkEl(id).addEventListener(id.endsWith('search') ? 'input' : 'change', again('ledger'));
+  stkEl('dmg-filter').addEventListener('change', again('damaged'));
+  for (const id of ['damaged-search', 'damaged-point']) stkEl(id).addEventListener(id.endsWith('search') ? 'input' : 'change', again('damaged'));
+  stkEl('hist-search').addEventListener('input', stkRenderHistory);
+  stkEl('hist-dir').addEventListener('change', stkRenderHistory);
+  byId('stkr-history').addEventListener('click', event => { if (event.target === byId('stkr-history')) byId('stkr-history').close(); });
+}
+
 /* ---------- Purchase Entry (Transaction Entry, PUR-0001) ----------
    A supplier's bill recorded in the books: Supplier (+ New makes one in the Supplier master), the supplier's own
    invoice number, the purchase order and / or GRN it is for (a pick fills the supplier, currency and lines), the
@@ -13282,6 +14003,7 @@ function initPurchaseBook() {
   composePurchaseTemplates();
   for (const form of PURCHASE_FORMS) form.page.init();
   for (const list of PURCHASE_LISTS) list.init();
+  stkInit();                                  // Supply Management › Stock Ledger
   initSealButtons();
   initPurchasePreview();
   loadPurchaseMasters();
