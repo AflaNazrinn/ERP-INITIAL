@@ -43,11 +43,11 @@ const byId = id => document.getElementById(id);
    ===================================================================== */
 
 // The figures come from the company's own records (api/dashboard.php); zeros if they could not be loaded.
-async function fetchDashboard({ chartYear, chartMonth }) {
-  const weeks = Math.ceil(new Date(chartYear, chartMonth, 0).getDate() / 7);
+async function fetchDashboard({ year, month }) {
+  const weeks = Math.ceil(new Date(year, month, 0).getDate() / 7);
   const lastMonth = shiftMonth(today.getFullYear(), today.getMonth() + 1, -1);
   try {
-    const data = await apiRequest(`api/dashboard.php?year=${chartYear}&month=${chartMonth}`);
+    const data = await apiRequest(`api/dashboard.php?year=${year}&month=${month}`);
     data.profitLoss.lastMonth = { ...lastMonth, ...data.profitLoss.lastMonth };
     return data;
   } catch (error) {
@@ -69,9 +69,11 @@ async function fetchDashboard({ chartYear, chartMonth }) {
    ===================================================================== */
 
 const today = new Date();
+// The cards show the current month; only the Monthly Purchase & Sales chart follows the month buttons.
+const currentPeriod = { year: today.getFullYear(), month: today.getMonth() + 1 };
 const state = {
-  chartYear: today.getFullYear(),
-  chartMonth: today.getMonth() + 1,        // 1..12
+  chartYear: currentPeriod.year,
+  chartMonth: currentPeriod.month,         // 1..12
   data: null,
 };
 const ACTIVITY_PAGE_SIZE = 5;                 // the dashboard shows the latest 5; View All shows the rest
@@ -81,8 +83,8 @@ const ACTIVITY_PAGE_SIZE = 5;                 // the dashboard shows the latest 
    ===================================================================== */
 
 function renderRange() {
-  const start = new Date(state.chartYear, state.chartMonth - 1, 1);
-  const end = new Date(state.chartYear, state.chartMonth, 0);
+  const start = new Date(currentPeriod.year, currentPeriod.month - 1, 1);
+  const end = new Date(currentPeriod.year, currentPeriod.month, 0);
   const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   byId('dashboard-range-text').textContent = `${fmt(start)} — ${fmt(end)}`;
 }
@@ -171,7 +173,7 @@ function renderChartMonths() {
       btn.addEventListener('click', () => {
         state.chartYear = year;
         state.chartMonth = month;
-        loadDashboard();
+        loadChart();
       });
     }
     return btn;
@@ -13302,21 +13304,33 @@ async function loadDashboard(pending) {
   const seq = ++loadSeq;
   renderRange();
   renderChartMonths();
-  const data = await (pending || fetchDashboard(state));
-  if (seq !== loadSeq) return;            // a newer selection is already loading
+  const data = await (pending || fetchDashboard(currentPeriod));
+  if (seq !== loadSeq) return;            // a newer load is already under way
   state.data = data;
   renderKpis(data.kpis);
   renderProfitLoss(data.profitLoss);
-  renderChart(data.chart);
   renderReturns(data.returns);
   renderQuotations(data.quotations);
   renderActivities(data.activities, data.activityTotal);
+  const chartIsCurrent = state.chartYear === currentPeriod.year && state.chartMonth === currentPeriod.month;
+  if (chartIsCurrent) { chartSeq++; renderChart(data.chart); }   // a month still loading must not overwrite it
+  else loadChart();
+}
+
+// A month button: only the chart card changes; the other cards keep the current month's figures.
+let chartSeq = 0;
+async function loadChart() {
+  const seq = ++chartSeq;
+  renderChartMonths();
+  const data = await fetchDashboard({ year: state.chartYear, month: state.chartMonth });
+  if (seq !== chartSeq) return;           // a newer month is already loading
+  renderChart(data.chart);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   // The figures are asked for at once, beside the sign-in check, so they arrive with the page instead of after
   // every screen below has been set up (a lag right after signing in).
-  const firstFigures = fetchDashboard(state);
+  const firstFigures = fetchDashboard(currentPeriod);
   const user = await checkSignedIn();
   if (!user) return;
   document.documentElement.classList.remove('auth-pending');
