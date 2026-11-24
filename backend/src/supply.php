@@ -13,12 +13,11 @@ require_once __DIR__ . '/stock_report.php';
  *   + GRN line stock transfers into it
  *   − delivery note quantities delivered from it (the line's stock point, else the note's)
  *   ± stock transfers out of / into it
- *   ± Approved stock adjustments there (physical − system quantity)
+ *   ± stock adjustments there (physical − system quantity)
  * Reserved stock (sm_reserved()) is the quantity on stock reservations whose required date has not passed;
  * available = on hand − reserved.
  */
 
-const SM_ADJ_STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Cancelled'];
 const SM_RES_TYPES = ['Sales Order', 'Quotation', 'Customer Request', 'Project', 'Internal Use', 'Other'];
 const SM_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
 
@@ -207,7 +206,7 @@ function sa_format(array $row): array
     return pb_common($row) + [
         'code' => $row['sa_code'], 'adjustmentDate' => $row['sa_date'], 'date' => $row['sa_date'],
         'warehouseId' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'], 'warehouseCode' => $w['code'], 'warehouseName' => $w['name'],
-        'name' => $w['name'], 'adjustmentType' => $row['adjustment_type'], 'status' => $row['status'], 'reason' => $row['reason'],
+        'name' => $w['name'], 'adjustmentType' => $row['adjustment_type'], 'reason' => $row['reason'],
         'requestedBy' => $row['requested_by'], 'approvedBy' => $row['approved_by'], 'itemCount' => $count,
         'netQuantity' => pb_qty((string) $row['net_quantity']), 'totalValue' => $row['total_value'], 'grandTotal' => $row['total_value'],
     ];
@@ -218,8 +217,8 @@ function stock_adjustments_list(string $search = '', bool $all = false): array
     $sql = 'SELECT * FROM stock_adjustments';
     $params = [];
     if ($search !== '') {
-        $sql .= ' WHERE sa_code LIKE ? OR reason LIKE ? OR status LIKE ? OR warehouse_id IN (SELECT id FROM warehouses WHERE warehouse_name LIKE ?)';
-        $params = [like($search), like($search), like($search), like($search)];
+        $sql .= ' WHERE sa_code LIKE ? OR reason LIKE ? OR warehouse_id IN (SELECT id FROM warehouses WHERE warehouse_name LIKE ?)';
+        $params = [like($search), like($search), like($search)];
     }
     return array_map('sa_format', query($sql . ' ORDER BY id DESC', $params)->fetchAll());
 }
@@ -241,22 +240,18 @@ function stock_adjustment_next_code(): string
 function stock_adjustment_save(array $data, ?int $id = null): array
 {
     if ($id !== null) {
-        $data = array_replace(pb_as_input(stock_adjustment_find($id), ['adjustmentDate', 'warehouseId', 'status', 'reason', 'requestedBy', 'approvedBy']), $data);
+        $data = array_replace(pb_as_input(stock_adjustment_find($id), ['adjustmentDate', 'warehouseId', 'reason', 'requestedBy', 'approvedBy']), $data);
     }
     $in = new Input($data);
     $v = [
         'sa_date' => $in->date('adjustmentDate', 'Adjustment date') ?? date('Y-m-d'),
         'warehouse_id' => $in->id('warehouseId', 'stock point', 'warehouses'),
-        'status' => $in->choice('status', 'Status', SM_ADJ_STATUSES, 'Draft'),
         'reason' => $in->text('reason', 'Reason', 150),
         'requested_by' => $in->text('requestedBy', 'Requested by', 120),
         'approved_by' => $in->text('approvedBy', 'Approved by', 120),
     ] + sm_header_common($in, $data);
     if ($v['warehouse_id'] === null) {
         $in->fail('warehouseId', 'Select the stock point.');
-    }
-    if ($v['status'] === 'Approved' && $v['approved_by'] === '') {
-        $in->fail('approvedBy', 'Enter who approved the adjustment.');
     }
     $lines = sm_read_lines($in, SA_EXTRAS, true, 'Physical quantity');
     $in->done();

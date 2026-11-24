@@ -9212,7 +9212,7 @@ const uomList = createMasterList({
     statusColumn(),
     detail({ key: 'description', label: 'Description', type: 'wrap', group: 'Other Details', headers: ['remarks', 'notes'] })],
   fromApi: record => ({ ...record, decimals: String(record.decimalAllowed), baseUnit: record.baseName, factor: record.conversionFactor }),
-  locked: row => Boolean(row.isSystem),   // the predefined units (PCS, BOX … PAIRS) cannot be deleted
+  locked: row => Boolean(row.isSystem),   // the predefined units (PCS, BOX … PAIRS, NOS) cannot be deleted
   async toPayload(row) {
     return {
       unitName: row.name, decimalAllowed: row.decimals, conversionFactor: row.factor, status: row.status, description: row.description,
@@ -11884,7 +11884,7 @@ const tiForm = createSalesForm({
 /* ---------- Supply Management: Stock Adjustment, Stock Transfer, Stock Reservation ----------
    Item lines from the Item master (Create Item adds one), Remarks, signatory slots and the seal, as the Purchase Book.
    Stock figures come from api/stock-levels.php (src/supply.php): on hand at a stock point (opening stock, GRNs,
-   delivery notes, transfers, Approved adjustments) and what running reservations hold. Shift+X adds a line. */
+   delivery notes, transfers, adjustments) and what running reservations hold. Shift+X adds a line. */
 const smLevels = { sa: null, st: null, rsv: null };          // the stock figures each page shows: { key, onHand, reserved }
 const smEditing = { sa: null, st: null, rsv: null };         // the id of the document open for editing
 const smSigned = value => (value > 0.0005 ? `+${pbQty(value)}` : pbQty(value));
@@ -11915,7 +11915,7 @@ function smUnitCost(row, item) {
 
 /* Stock Adjustment (ADJ000001): a stock point's counted quantities. System Qty is the stock there now (kept on the
    line when saved); Physical Qty what was counted (starts at the system quantity); Difference = Physical − System;
-   Adj. Qty its size; Adj. Value = Difference × Unit Cost. Only an Approved adjustment moves the stock. */
+   Adj. Qty its size; Adj. Value = Difference × Unit Cost. A saved adjustment moves the stock. */
 async function saSetSystem(form, rows) {
   const levels = await smLoadLevels('sa', byId('sa-warehouse-id').value, 'adjustment');
   for (const row of rows) {
@@ -11944,17 +11944,14 @@ const saForm = createPurchaseForm({
       if (document.activeElement === byId('sa-warehouse')) openLookup(byId('sa-warehouse'), { byKeyboard: true });
     }, 150);
   },
-  fieldNodes: { adjustmentDate: 'sa-date', warehouseId: 'sa-warehouse', status: 'sa-status', reason: 'sa-reason',
+  fieldNodes: { adjustmentDate: 'sa-date', warehouseId: 'sa-warehouse', reason: 'sa-reason',
     requestedBy: 'sa-requested', approvedBy: 'sa-approved', remarks: 'sa-remarks-editor' },
   header: () => ({
-    adjustmentDate: byId('sa-date').value, warehouseId: byId('sa-warehouse-id').value || null, status: byId('sa-status').value,
+    adjustmentDate: byId('sa-date').value, warehouseId: byId('sa-warehouse-id').value || null,
     reason: byId('sa-reason').value.trim(), requestedBy: byId('sa-requested').value.trim(), approvedBy: byId('sa-approved').value.trim(),
   }),
   check(form, errors) {
     if (!byId('sa-warehouse-id').value) errors.push({ node: byId('sa-warehouse'), message: 'Select the stock point.' });
-    if (byId('sa-status').value === 'Approved' && !byId('sa-approved').value.trim()) {
-      errors.push({ node: byId('sa-approved'), message: 'Enter who approved the adjustment.' });
-    }
     saForm.page.rowsOf('items').forEach((row, i) => {
       const cost = pbCell(row, 'unitCost').value.trim();
       if (smFilled(row) && cost !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(cost)) errors.push({ node: pbCell(row, 'unitCost'), message: `Row ${i + 1}: enter the unit cost with up to 3 decimals.` });
@@ -12003,7 +12000,6 @@ const saForm = createPurchaseForm({
     smLevels.sa = null;
     byId('sa-date').value = doc.adjustmentDate;
     fillLookup(byId('sa-warehouse'), doc.warehouseId ? { id: doc.warehouseId, code: doc.warehouseCode, name: doc.warehouseName } : null);
-    byId('sa-status').value = doc.status || 'Draft';
     byId('sa-reason').value = doc.reason || '';
     byId('sa-requested').value = doc.requestedBy || '';
     byId('sa-approved').value = doc.approvedBy || '';
@@ -12021,7 +12017,6 @@ const saForm = createPurchaseForm({
     smEditing.sa = null;
     smLevels.sa = null;
     byId('sa-date').value = todayInputValue();
-    byId('sa-status').value = 'Draft';
     byId('sa-reason').value = 'Physical Count Difference';
     byId('sa-requested').value = smUser();
   },

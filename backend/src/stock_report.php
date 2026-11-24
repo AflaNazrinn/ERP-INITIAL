@@ -15,7 +15,7 @@ require_once __DIR__ . '/purchase_book.php';
  *   Stock Out (Invoice)         a tax invoice not made from a delivery note (proforma invoices move nothing)
  *   Stock Out (Replacement)     a sales replacement's goods given to the buyer
  *   Stock In (Replacement)      a purchase replacement's goods received from the supplier
- *   Adjustment (+) / (−)        an Approved stock adjustment's counted difference
+ *   Adjustment (+) / (−)        a stock adjustment's counted difference
  *   Damage Restock              damaged goods moved back to stock (Damaged Stock › Move to Stock)
  *
  * Sales returns and purchase returns never change the stock on hand: every returned line is listed as damaged stock
@@ -200,11 +200,11 @@ function stock_ledger(array $except = []): array
             'party' => 'From ' . $r['from_name'], 'remarks' => $note]);
     }
 
-    // Approved stock adjustments.
+    // Stock adjustments.
     foreach (stk_rows("SELECT a.id, a.sa_code, a.sa_date, a.warehouse_id, a.reason, a.requested_by, ai.item_id, ai.quantity - ai.system_qty AS diff,
                               ai.unit_cost, ai.line_reason
                        FROM stock_adjustment_items ai JOIN stock_adjustments a ON a.id = ai.stock_adjustment_id
-                       WHERE a.status = 'Approved' AND a.id <> ?", [(int) ($except['adjustment'] ?? 0)]) as $r) {
+                       WHERE a.id <> ?", [(int) ($except['adjustment'] ?? 0)]) as $r) {
         $diff = (float) $r['diff'];
         $add(['date' => $r['sa_date'], 'ref' => $r['sa_code'], 'doc' => 'sa', 'docId' => (int) $r['id'],
             'type' => $diff >= 0 ? 'Adjustment (+)' : 'Adjustment (−)', 'dir' => $diff >= 0 ? 'in' : 'out',
