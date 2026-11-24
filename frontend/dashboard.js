@@ -8441,7 +8441,7 @@ function initQuickSupplier() {
 const quickContact = { field: null, saving: false };
 const qcEl = suffix => byId(`quick-contact-${suffix}`);
 const QUICK_CONTACT_FIELDS = ['name', 'designation', 'phone', 'email'];
-// The fields shown: a supplier's contact (Purchase Order) asks the name and number only.
+// The fields shown: every contact (Purchase Order, Quotation, Delivery Note) asks the name and number only.
 const quickContactFields = () => QUICK_CONTACT_FIELDS.filter(suffix => !qcEl(suffix).closest('.fp-field').hidden);
 
 // The party a contact field belongs to: the quotation's buyer (customer) or the purchase order's supplier.
@@ -8473,7 +8473,7 @@ function openQuickContact(field, name = '') {
     if (dial && !qcEl('phone').value.trim()) qcEl('phone-code').value = dial;
   }).catch(() => {});
   byId('quick-contact-title').textContent = party.supplier ? 'Create Contact' : 'New Contact';
-  for (const suffix of ['designation', 'email']) qcEl(suffix).closest('.fp-field').hidden = party.supplier;
+  for (const suffix of ['designation', 'email']) qcEl(suffix).closest('.fp-field').hidden = true;   // name and number only
   qcEl('sub').textContent = `Add a contact person to ${party.nameField?.value || `the ${party.noun}`}.`;
   document.documentElement.classList.add('has-modal');
   byId('quick-contact').showModal();
@@ -9704,8 +9704,8 @@ function dnAutoStockPoint(row, item, replace) {
 /* The Sales Order line's Buying Cost when an item is picked: the price it was last bought for from a supplier
    (api/item-purchase-price.php: the newest Purchase Entry bill, else GRN unit cost, else purchase order price), from
    the order's supplier (one supplier) or the line's supplier (multi supplier) first, any supplier's otherwise. A
-   multi-supplier line with no supplier yet takes the supplier it was bought from. The price is put in the line's
-   supplier currency; an item never bought keeps the Item master's buying rate. */
+   multi-supplier line with no supplier yet takes the supplier it was bought from. The price is in OMR, as every
+   purchase price; an item never bought keeps the Item master's buying rate. */
 async function soFillBuyingCost(row, item) {
   const multi = typeof soIsMulti === 'function' && soIsMulti();
   const supplierId = multi ? pbCell(row, 'supplierId')?.value : byId('so-supplier-id')?.value;
@@ -9720,17 +9720,24 @@ async function soFillBuyingCost(row, item) {
     if (pbNum(item.buyingRate) > 0) buying.value = pbMoney(pbNum(item.buyingRate));
     return;
   }
-  let target;
-  if (multi) {
-    if (!pbCell(row, 'supplierId').value) {
-      fillLookup(pbCell(row, 'supplierName'), { id: bought.supplierId, name: bought.supplierName });
-      pbCell(row, 'supplierCurrency').value = bought.currency;
-    }
-    target = pbCell(row, 'supplierCurrency').value || soBase();
-  } else {
-    target = byId('so-supplier-currency').value || soBase();
+  if (multi && !pbCell(row, 'supplierId').value) {
+    fillLookup(pbCell(row, 'supplierName'), { id: bought.supplierId, name: bought.supplierName });
+    pbCell(row, 'supplierCurrency').value = bought.currency;
   }
-  buying.value = pbMoney(pbNum(bought.rate) * soRate(bought.currency || target, target));
+  buying.value = pbMoney(pbNum(bought.rate));                 // purchase prices are in OMR (PRICES_IN_OMR), as the buying cost
+}
+
+// Lines copied into the sales order (from a quotation, or another document opened as a sales order) come without a
+// buying cost: each line with an item and none yet gets the one picking the item would give.
+async function soFillCopiedBuyingCosts(form) {
+  const rows = form.page.rowsOf('items').filter(row => pbCell(row, 'itemId')?.value && !pbNum(pbCell(row, 'buyingCost')?.value));
+  if (!rows.length) return;
+  await Promise.all(rows.map(async row => {
+    const item = await pbItem(pbCell(row, 'itemId').value).catch(() => null);
+    if (item) await soFillBuyingCost(row, item);
+  }));
+  form.refresh();
+  form.page.absorb();
 }
 
 /* ---------- Full Item Description popup (#item-desc; design/masters/item_description.png) ----------
@@ -10165,6 +10172,9 @@ async function loadPurchaseLines(form, lines, toRow) {
 }
 
 const PB_VAT_RATE = 5;                              // the VAT % a line gets when VAT is enabled
+// The documents whose line prices and totals are always in OMR; the Currency field is the party's (supplier's or
+// customer's) currency, and the summary (and the PDF) also gives the Grand Total in it at the fixed SO_RATES_TO_OMR.
+const PRICES_IN_OMR = ['po', 'pe', 'se', 'qt', 'so', 'dn', 'ti', 'sr', 'prt', 'rp', 'prp'];
 
 /* Line maths, the same as pb_totals() on the server. */
 function purchaseTotals(rows, kind, vatMode, discount, shipping) {
@@ -10195,11 +10205,14 @@ function purchaseTotals(rows, kind, vatMode, discount, shipping) {
  * extra (chips), lookups (dropped after a save).
  */
 /* Grand Total (OMR): under the Financial Summary's Grand Total while the document is in another currency, converted at
-   the fixed rates of SO_RATES_TO_OMR (the server's SB_RATES_TO_OMR). Not shown in OMR, nor for a currency without a rate. */
-function showGrandInOmr(el) {
+   the fixed rates of SO_RATES_TO_OMR (the server's SB_RATES_TO_OMR). Not shown in OMR, nor for a currency without a rate.
+   The documents in PRICES_IN_OMR the other way round: their prices and Grand Total are in OMR, and the row under it is
+   that Grand Total in the party's currency. */
+function showGrandInOmr(el, pricesInOmr = false) {
   const grand = el('grand');
   const currency = el('currency-id')?.value || 'OMR';
   if (!grand) return;
+  if (pricesInOmr) { showGrandInSupplierCurrency(grand, currency); return; }
   const grandRow = grand.closest('div');
   let row = grandRow.parentElement.querySelector('.pb-sum-omr');
   if (!row) {
@@ -10213,6 +10226,23 @@ function showGrandInOmr(el) {
   const rate = SO_RATES_TO_OMR[currency];
   row.hidden = currency === 'OMR' || !rate;
   row.querySelector('dd').textContent = pbMoney(pbNum(grand.textContent) * (rate || 0));
+  row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
+}
+
+function showGrandInSupplierCurrency(grand, currency) {
+  const grandRow = grand.closest('div');
+  let row = grandRow.parentElement.querySelector('.pb-sum-omr');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'pb-sum-omr';
+    row.append(document.createElement('dt'), document.createElement('dd'));
+    grandRow.after(row);
+  }
+  const rate = SO_RATES_TO_OMR[currency];
+  row.hidden = currency === 'OMR' || !rate;
+  const label = (grandRow.querySelector('.rp-grand-label') || grandRow.querySelector('dt')).textContent.replace(/\s*\([A-Z]{3}\)\s*$/, '');
+  row.querySelector('dt').textContent = `${label} (${currency})`;
+  row.querySelector('dd').textContent = pbMoney(rate ? pbNum(grand.textContent) / rate : 0);
   row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
 }
 
@@ -10256,7 +10286,7 @@ function createPurchaseForm(spec) {
     el('subtotal').textContent = pbMoney(totals.subtotal);
     el('vat').textContent = pbMoney(totals.vat);
     el('grand').textContent = pbMoney(totals.grand);
-    if (el('grand-currency')) el('grand-currency').textContent = el('currency-id')?.value || 'OMR';
+    if (el('grand-currency')) el('grand-currency').textContent = PRICES_IN_OMR.includes(spec.key) ? 'OMR' : el('currency-id')?.value || 'OMR';
     // The summary says what the VAT switch is set to: "VAT (5%)", "VAT (Disabled)", or the rates when lines differ.
     const filled = rows().filter(row => !isBlankRow(row));
     const rates = [...new Set((filled.length ? filled : rows()).map(row => pbNum(pbCell(row, 'vatRate').value)))];
@@ -10265,7 +10295,7 @@ function createPurchaseForm(spec) {
     const vatName = spec.kind === 'po' ? 'VAT' : 'Total VAT Amount';
     el('vat-label').textContent = `${vatName} (${vatNote}${vatMode() === 'include' && vatOn() ? ', included' : ''})`;
     spec.afterRefresh?.(totals);                      // the sales order's buying cost and profit
-    showGrandInOmr(el);
+    showGrandInOmr(el, PRICES_IN_OMR.includes(spec.key));
   };
 
   function syncVatToggle() {
@@ -11256,6 +11286,7 @@ function createSalesForm(cfg) {
     $('discount').value = pbMoney(pbNum(doc.discountAmount));
     $('shipping').value = pbMoney(pbNum(doc.shipping));
     if (doc.items.length) await loadPurchaseLines(form, doc.items, line => (cfg.copyLine || (values => values))(purchaseLineValues('po', line)));
+    if (k === 'so') await soFillCopiedBuyingCosts(form);   // the sales order's buying cost for each copied line
     form.syncVatToggle();
     form.refresh();
     showCustomer();
@@ -11268,16 +11299,8 @@ function createSalesForm(cfg) {
   const form = createPurchaseForm({
     key: k, route: `${cfg.route}/new`, noun: cfg.noun, api: cfg.api, listRoute: cfg.route,
     kind: 'po', template: cfg.template || 'pb-line-sales', lineExtras: cfg.lineExtras || ['deliveryTerm'], lookups: cfg.lookups, vatDefault: 'exclude',
-    afterRefresh(totals) {
-      cfg.afterRefresh?.(totals);
-      // Grand Total (OMR): the grand total at the fixed rates (SO_RATES_TO_OMR) when the document is in another
-      // currency; hidden in OMR, and for a currency without a rate. Only on pages with the row (the delivery note).
-      const row = $('grand-omr-row');
-      if (!row) return;
-      const code = currency();
-      row.hidden = code === 'OMR' || !SO_RATES_TO_OMR[code];
-      $('grand-omr').textContent = pbMoney(pbNum($('grand').textContent) * (SO_RATES_TO_OMR[code] || 1));
-    },
+    // The Grand Total in the customer's currency is the generic row under Grand Total (showGrandInOmr).
+    afterRefresh: totals => cfg.afterRefresh?.(totals),
     onShow: cfg.onShow,
     firstField: () => $('date'),
     fieldNodes: {
@@ -11446,11 +11469,12 @@ const qtForm = createSalesForm({
    line), a buying cost per line with the line's Total Buying and Profit %, and the Financial Summary: landing cost,
    custom duty (when a supplier currency is not the base currency), transportation, business promotion, total buying
    cost (and in AED), total profit. The same sums as sb_order_costs() on the server, with the same fixed rates. */
-const SO_RATES_TO_OMR = { OMR: 1, AED: 0.1055, USD: 0.385, SAR: 0.1026, INR: 0.0046, EUR: 0.42, GBP: 0.49, QAR: 0.1057, KWD: 1.25, BHD: 1.02 };
+const SO_RATES_TO_OMR = { OMR: 1, AED: 0.1055, USD: 0.385, SAR: 0.1026, INR: 1 / 241.3, EUR: 0.42, GBP: 0.49, QAR: 0.1057, KWD: 1.25, BHD: 1.02 };
 const soRate = (from, to) => (from === to || !SO_RATES_TO_OMR[from] || !SO_RATES_TO_OMR[to] ? 1 : SO_RATES_TO_OMR[from] / SO_RATES_TO_OMR[to]);
 const soIsInvoice = () => byId('so-doc-title').value === 'Proforma Invoice';
 const soIsMulti = () => byId('so-mode').value === 'multi';
-const soBase = () => byId('so-currency-id').value || 'OMR';
+const soBase = () => 'OMR';                          // prices, costs and profit are in OMR (PRICES_IN_OMR)
+const soCurrency = () => byId('so-currency-id').value || 'OMR';   // the customer's currency
 let soSales = null;                                    // createSalesForm's helpers for the sales order
 
 // Shows what the title and the mode allow (the CSS hides the rest) and the currency labels.
@@ -11459,7 +11483,7 @@ function soShowMode() {
   formNode.dataset.doc = soIsInvoice() ? 'invoice' : 'order';
   formNode.dataset.mode = soIsMulti() ? 'multi' : 'single';
   for (const label of formNode.querySelectorAll('[data-so-base]')) label.textContent = soBase();
-  for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = soIsMulti() ? '' : ` (${byId('so-supplier-currency').value})`;
+  for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = ' (OMR)';   // buying costs are in OMR too
   // An opened Sales Order is updated (as the other forms' Update … Record).
   byId('so-save-label').textContent = FORM_PAGES['trade/sales-order/new']?.isEditing?.() ? 'Update Sales Order Record' : 'Save Sales Order';
 }
@@ -11481,9 +11505,9 @@ function soRefreshCosts(totals) {
     const qty = value(row, 'quantity');
     const price = value(row, 'price');
     const buying = value(row, 'buyingCost');
-    const lineBuying = qty * buying * landing;                 // in the supplier's currency
-    const buyingBase = buying * landing * soRate(supplierCurrency, base);
-    items += lineBuying * soRate(supplierCurrency, base);
+    const lineBuying = qty * buying * landing;                 // in OMR, as the buying cost (the supplier's currency only sets the landing)
+    const buyingBase = buying * landing;
+    items += lineBuying;
     if (supplierCurrency !== base && buying > 0) foreign = true;
     row.querySelector('[data-buying-total]').textContent = pbMoney(lineBuying);
     const profit = price > 0 ? (price - buyingBase) / price * 100 : 0;
@@ -11560,7 +11584,7 @@ async function soAutoSelectSuppliers(form) {
       let bestCost = Infinity;
       for (const offer of latest.values()) {
         const currency = offer.currency || base;
-        const cost = pbNum(offer.rate) * (currency === 'AED' ? 1.1 : 1) * soRate(currency, base);
+        const cost = pbNum(offer.rate) * (currency === 'AED' ? 1.1 : 1);   // the prices are in OMR
         if (cost < bestCost) { bestCost = cost; best = offer; }
       }
       if (!best) continue;
@@ -11584,7 +11608,7 @@ const soForm = createSalesForm({
   key: 'so', route: 'trade/sales-order', noun: 'Sales Order', api: 'api/sales-orders.php', dateKey: 'orderDate', lookups: ['salesorder'],
   template: 'pb-line-so', lineExtras: ['deliveryTerm', 'buyingCost', 'supplierId'], defaultLocation: false,
   // A Sales Order has no VAT; a Proforma Invoice has VAT Enabled in OMR.
-  vatWanted: () => soIsInvoice() && soBase() === 'OMR',
+  vatWanted: () => soIsInvoice() && soCurrency() === 'OMR',
   copyLine: values => ({ ...values, discountPct: '0.00', discountAmount: '0.000', vatRate: soIsInvoice() ? values.vatRate : '0.00' }),
   afterRefresh: totals => soRefreshCosts(totals),
   fieldNodes: { documentTitle: 'so-doc-title', supplierMode: 'so-mode', supplierId: 'so-supplier', supplierCurrency: 'so-supplier-currency',
@@ -11634,7 +11658,8 @@ const soForm = createSalesForm({
   },
   init(form, sales) {
     soSales = sales;
-    // A quotation picked in Ref ID: its customer, terms and lines become the order's (buying costs to fill in).
+    // A quotation picked in Ref ID: its customer, terms and lines become the order's, each line with the buying cost
+    // an item picked on the line gets (soFillBuyingCost).
     byId('so-quotation').addEventListener('input', async () => {
       const id = byId('so-quotation-id').value;
       if (!id) return;
@@ -11658,7 +11683,7 @@ const soForm = createSalesForm({
         return;
       }
       soShowMode();
-      form.setVat(soIsInvoice() && soBase() === 'OMR');
+      form.setVat(soIsInvoice() && soCurrency() === 'OMR');
       form.page.absorb();
     });
     byId('so-mode').addEventListener('change', () => { soShowMode(); form.refresh(); form.page.absorb(); });
@@ -11758,7 +11783,7 @@ const dnForm = createSalesForm({
 /* Tax Invoice (Transaction Entry): a VAT invoice to a customer, in the Transaction Entry teal. Document Title
    (Invoice; Quotation / Sales Order / Delivery Note open that form with what is entered here), Ref ID (a quotation,
    sales order or delivery note picked in its popup: its buyer, terms and lines are copied in), Customer PO Number,
-   Purchase Category, Payment Terms (a list), Delivery Location; lines with Delivery Term, Qty, Unit, Unit Price,
+   Purchase Category, Delivery Location, Payment Terms (a list) and, for Credit, Credit Period; lines with Delivery Term, Qty, Unit, Unit Price,
    VAT % and Total Price (VAT Enabled in OMR); the summary: Total Selling Price, Transportation Charge, VAT / Tax
    Total, Discount, Advance Payment, Grand Total. Send For Approval saves it approved. */
 const tiBase = () => byId('ti-currency-id').value || 'OMR';
@@ -11778,7 +11803,7 @@ function tiAsDocument() {
   return {
     code: value('ti-code') || 'this invoice', customerId: value('ti-customer-id') || null, customerName: value('ti-customer'),
     contactName: value('ti-contact'), contactNumber: value('ti-contact-number'), currency: tiBase(), deliveryLocation: value('ti-location'),
-    paymentMode: value('ti-payment'), creditPeriod: '', vatMode: 'exclude', discountAmount: value('ti-discount'), shipping: value('ti-shipping'),
+    paymentMode: value('ti-payment'), creditPeriod: value('ti-payment') === 'Credit' ? value('ti-credit-period') : '', vatMode: 'exclude', discountAmount: value('ti-discount'), shipping: value('ti-shipping'),
     customerPo: value('ti-customer-po'), purchaseCategory: value('ti-category'), items,
   };
 }
@@ -11806,8 +11831,8 @@ const tiForm = createSalesForm({
     if (amount !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(amount)) errors.push({ node: byId('ti-advance'), message: 'Enter an amount with up to 3 decimals.' });
   },
   afterRefresh() {
-    for (const label of byId('ti-form').querySelectorAll('[data-ti-base]')) label.textContent = tiBase();
-    byId('ti-vat-label').textContent = `VAT / Tax Total (${tiBase()})`;
+    for (const label of byId('ti-form').querySelectorAll('[data-ti-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    byId('ti-vat-label').textContent = 'VAT / Tax Total (OMR)';
     byId('ti-save-label').textContent = FORM_PAGES['entry/tax-invoice/new']?.isEditing?.() ? 'Update Invoice' : 'Save Invoice';
   },
   fill(doc) {
@@ -12942,7 +12967,7 @@ const peForm = createPurchaseForm({
       row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('pe-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
-    for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = peCurrency();
+    for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
     byId('pe-save-label').textContent = FORM_PAGES['entry/purchase-entry/new']?.isEditing?.() ? 'Update Purchase' : 'Save Purchase';
   },
   listRoute: 'entry/purchase-entry',
@@ -13068,7 +13093,7 @@ const seForm = createPurchaseForm({
       row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('se-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
-    for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = seCurrency();
+    for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
     byId('se-save-label').textContent = FORM_PAGES['entry/sales-entry/new']?.isEditing?.() ? 'Update Sale' : 'Save Sale';
   },
   listRoute: 'entry/sales-entry',
@@ -13221,7 +13246,7 @@ const srForm = createPurchaseForm({
     });
     const fee = Math.min(pbNum(byId('sr-restocking').value), Math.max(0, totals.grand));
     byId('sr-grand').textContent = pbMoney(totals.grand - fee);
-    for (const label of byId('sr-form').querySelectorAll('[data-sr-base]')) label.textContent = srCurrency();
+    for (const label of byId('sr-form').querySelectorAll('[data-sr-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, sr) {
     byId('sr-date').value = sr.returnDate;
@@ -13424,7 +13449,7 @@ async function prtSalesReturnRows(form, doc) {
         fillLookup(byId('prt-supplier'), { id: bought.supplierId, name: bought.supplierName });
         await prtShowSupplier();
       }
-      if (bought) price = pbNum(bought.rate) * soRate(bought.currency || prtCurrency(), prtCurrency());
+      if (bought) price = pbNum(bought.rate);                 // purchase prices are in OMR (PRICES_IN_OMR)
       else price = pbNum((await pbItem(String(line.itemId)).catch(() => null))?.buyingRate);
     }
     const qty = pbQty(pbNum(line.quantity));
@@ -13479,7 +13504,7 @@ const prtForm = createPurchaseForm({
     });
     const deduction = Math.min(pbNum(byId('prt-deduction').value), Math.max(0, totals.grand));
     byId('prt-grand').textContent = pbMoney(totals.grand - deduction);
-    for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = prtCurrency();
+    for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, prt) {
     byId('prt-date').value = prt.returnDate;
@@ -13634,7 +13659,7 @@ const prpForm = createPurchaseForm({
     const grand = Math.round(totals.grand * 1000);
     byId('prp-grand-note').textContent = grand > 0 ? 'Payable to the supplier'
       : grand < 0 ? 'Owed by the supplier (debit note / refund)' : 'No difference – like-for-like replacement';
-    for (const label of byId('prp-form').querySelectorAll('[data-prp-base]')) label.textContent = prtCurrency('prp');
+    for (const label of byId('prp-form').querySelectorAll('[data-prp-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, prp) {
     byId('prp-date').value = prp.replacementDate;
@@ -13820,7 +13845,7 @@ const rpForm = createPurchaseForm({
     const grand = Math.round(totals.grand * 1000);
     byId('rp-grand-note').textContent = grand > 0 ? 'The buyer pays the difference'
       : grand < 0 ? 'Owed to the buyer (credit / refund)' : 'No difference – like-for-like replacement';
-    for (const label of byId('rp-form').querySelectorAll('[data-rp-base]')) label.textContent = rpCurrency();
+    for (const label of byId('rp-form').querySelectorAll('[data-rp-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, rp) {
     byId('rp-date').value = rp.replacementDate;
@@ -15181,36 +15206,36 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     ...{
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-        [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
+        [`Price${PRICES_IN_OMR.includes(spec.key) ? ' (OMR)' : doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`], ['Disc %', 'num', l => `${poDiscPct(l).toFixed(2)}%`], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
     // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
     so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
+      ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
       ...(proforma || spec.key === 'ti' ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase entry: quantity × rate, no VAT or line discount.
     pe: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      [`Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+      ['Price (OMR)', 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
     // A sales return: the quantity returned and the condition it came back in.
     sr: [['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
-      [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
+      ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase return: the quantity received and returned, and the condition of the goods.
     prt: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      ['Condition', 'center', l => l.condition], [`Unit Price${doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => pbAmount(l.price)],
+      ['Condition', 'center', l => l.condition], ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase replacement: what the supplier sends in place of each returned item, at the old and the new price.
     prp: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
       ['Condition', 'center', l => l.condition], ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
       ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
-      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference${doc.currency ? ` (${doc.currency})` : ''}`, 'num total', l => pbAmount(l.lineTotal)]],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Difference (OMR)', 'num total', l => pbAmount(l.lineTotal)]],
     // A sales replacement: what goes back in place of each returned item, at the old and the new price.
     rp: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
       ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
       ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
-      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference${doc.currency ? ` (${doc.currency})` : ''}`, 'num total', l => pbAmount(l.lineTotal)]],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Difference (OMR)', 'num total', l => pbAmount(l.lineTotal)]],
     // Supply Management.
     sa: [['System Qty', 'num', l => qty(l.systemQty)], ['Physical Qty', 'num', l => qty(l.quantity)],
       ['Difference', 'num', l => { const d = pbNum(l.quantity) - pbNum(l.systemQty); return d > 0.0005 ? `+${pbQty(d)}` : pbQty(d); }],
@@ -15428,7 +15453,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // A sales / purchase replacement: the returned and replacement values, the VAT on the difference, then the Price
     // Difference (below 0: owed to the buyer, or owed by the supplier). A zero discount or charge is left out.
     const totals = el('dl', 'ps-totals');
-    const currency = doc.currency ? ` ${doc.currency}` : '';
+    const currency = ' OMR';                              // PRICES_IN_OMR; the difference also in the party's currency below
+    const rate = doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
     for (const [label, value, kind] of [['Returned Items Value', doc.returnedValue], ['Replacement Items Value', doc.replacementValue],
       [doc.vatMode === 'exclude' ? 'VAT on Difference' : 'VAT on Difference (included)', doc.vatAmount],
       ['Discount', doc.discountAmount, 'discount'], ['Handling / Delivery Charge', doc.handlingCharge], ['Price Difference', doc.grandTotal, 'grand']]) {
@@ -15437,10 +15463,18 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       row.append(el('dt', '', `${label}:`), el('dd', '', `${kind === 'discount' ? '-' : ''}${pbAmount(value)}${currency}`));
       totals.append(row);
     }
+    if (rate) {
+      const row = el('div', 'ps-total-grand');
+      row.append(el('dt', '', `Price Difference (${doc.currency}):`), el('dd', '', `${pbAmount(pbNum(doc.grandTotal) / rate)} ${doc.currency}`));
+      totals.append(row);
+    }
     bottom.append(totals);
   } else if (spec.kind !== 'simple') {
     const totals = el('dl', spec.key === 'po' ? 'ps-totals ps-po-totals' : 'ps-totals');   // the PO: Grand Total in a green box
-    const currency = doc.currency ? ` ${doc.currency}` : '';
+    // PRICES_IN_OMR: the prices and totals are in OMR; the Grand Total is also given in the party's currency (fixed rates).
+    const inOmr = PRICES_IN_OMR.includes(spec.key);
+    const poRate = inOmr && doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
+    const currency = inOmr ? ' OMR' : doc.currency ? ` ${doc.currency}` : '';
     const grn = spec.key === 'grn';
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
       [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
@@ -15458,6 +15492,12 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       const entry = ['pe', 'se', 'sr', 'prt'].includes(spec.key);   // the old Purchase Invoice: "Special Discount: -1.000"
       const row = el('div', strong ? 'ps-total-grand' : discount && (grn || entry) ? 'ps-total-discount' : '');
       row.append(el('dt', '', `${label === 'Discount' && entry && !['sr', 'prt'].includes(spec.key) ? 'Special Discount' : label}:`), el('dd', '', `${discount && (grn || entry) ? '-' : ''}${pbAmount(value)}${currency}`));
+      totals.append(row);
+    }
+    if (poRate) {
+      const row = el('div', 'ps-total-grand');
+      const grandLabel = { sr: 'Total Refund', prt: 'Total Return Amount' }[spec.key] || 'Grand Total';
+      row.append(el('dt', '', `${grandLabel} (${doc.currency}):`), el('dd', '', `${pbAmount(pbNum(doc.grandTotal) / poRate)} ${doc.currency}`));
       totals.append(row);
     }
     bottom.append(totals);
@@ -15505,7 +15545,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
   if (termsText) {
-    const currencyCode = String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
+    const currencyCode = PRICES_IN_OMR.includes(spec.key) ? 'OMR' : String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
     const currencyName = PO_CURRENCIES.find(row => row.code === currencyCode)?.name;
     const validity = String(doc.offerValidity ?? '').trim().toLowerCase() || '30 days';   // "30 Days" → "30 days"
     const termsRow = el('tr', 'ps-terms-row');

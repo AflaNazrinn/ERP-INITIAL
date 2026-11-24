@@ -272,7 +272,7 @@ const SB_FREE_TERMS = ['qt' => false, 'so' => true, 'dn' => false, 'ti' => true]
 const SB_INVOICE_TITLES = ['Invoice'];
 
 /* Fixed rates to OMR for a sales order's buying costs (the order screen uses the same table). */
-const SB_RATES_TO_OMR = ['OMR' => 1.0, 'AED' => 0.1055, 'USD' => 0.385, 'SAR' => 0.1026, 'INR' => 0.0046, 'EUR' => 0.42,
+const SB_RATES_TO_OMR = ['OMR' => 1.0, 'AED' => 0.1055, 'USD' => 0.385, 'SAR' => 0.1026, 'INR' => 1 / 241.3, 'EUR' => 0.42,
     'GBP' => 0.49, 'QAR' => 0.1057, 'KWD' => 1.25, 'BHD' => 1.02];
 
 /* One unit of $from in $to (1 when either is not in the table). */
@@ -284,20 +284,19 @@ function sb_rate(string $from, string $to): float
 }
 
 /*
- * A sales order's buying side, in the order's (base) currency:
- *   item landing cost = Σ quantity × buying cost × landing (1.10 for an AED supplier: freight and clearing) × rate
+ * A sales order's buying side, in OMR (selling prices and buying costs are in OMR; the currencies are shown converted):
+ *   item landing cost = Σ quantity × buying cost × landing (1.10 for an AED supplier: freight and clearing)
  *   total buying      = item landing cost + custom duty + transportation + business promotion
  *   total profit      = total selling (subtotal) − item landing cost − custom duty − transportation − business promotion − discount
  * Each line's supplier currency is its supplier's in multi-supplier mode, else the order's supplier currency.
  */
 function sb_order_costs(array $v, array $lines): array
 {
-    $base = $v['currency'];
     $items = 0.0;
     foreach ($lines as $line) {
-        $supplierCurrency = $v['supplier_mode'] === 'multi' ? ($line['supplierCurrency'] ?: $base) : $v['supplier_currency'];
+        $supplierCurrency = $v['supplier_mode'] === 'multi' ? ($line['supplierCurrency'] ?: 'OMR') : $v['supplier_currency'];
         $landing = $supplierCurrency === 'AED' ? 1.10 : 1.0;
-        $items += (float) $line['quantity'] * (float) $line['buyingCost'] * $landing * sb_rate($supplierCurrency, $base);
+        $items += (float) $line['quantity'] * (float) $line['buyingCost'] * $landing;   // the buying cost is in OMR
     }
     $costs = (float) $v['custom_duty'] + (float) $v['shipping'] + (float) $v['business_promotion'];
     return [

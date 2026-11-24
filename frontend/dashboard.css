@@ -2788,6 +2788,7 @@ input::-webkit-contacts-auto-fill-button {
 #so-form:not([data-doc="invoice"]) .so-col-vat,
 #so-form:not([data-doc="invoice"]) .so-vat-row,
 #so-form:not([data-doc="invoice"]) .so-grand-row,
+#so-form:not([data-doc="invoice"]) .so-grand-row + .pb-sum-omr,
 #so-form:not([data-doc="invoice"]) [data-vat-switch],
 #so-form[data-doc="invoice"] .so-col-buy,
 #so-form[data-doc="invoice"] .so-buy-row,
@@ -3154,7 +3155,8 @@ body:is([data-page="employee"], [data-page="employee-list"], [data-page="user"],
 .emp-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink-900); }
 .emp-search input::-webkit-search-decoration { -webkit-appearance: none; }
 /* The search box shows the focus; the input inside it never gets the page's own focus ring or box. */
-#employee-list-page .emp-search input, #employee-list-page .emp-search input:focus, #employee-list-page .emp-search input:focus-visible {
+#employee-list-page .emp-search input, #employee-list-page .emp-search input:focus, #employee-list-page .emp-search input:focus-visible,
+#user-list-page .emp-search input, #user-list-page .emp-search input:focus, #user-list-page .emp-search input:focus-visible {
   appearance: none; -webkit-appearance: none; outline: none; box-shadow: none; border: 0; border-radius: 0; background: transparent;
 }
 

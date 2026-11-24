@@ -3659,12 +3659,16 @@
           <div class="fp-input-wrap fp-lookup-wrap"><input id="ti-currency" class="fp-input fp-lookup pb-input-strong" type="text" data-lookup="currency" data-lookup-cards data-enter-skip-filled autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" value="OMR – Omani Rial" placeholder="Select currency..."><input id="ti-currency-id" type="hidden" value="OMR"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
+          <label class="fp-label" for="ti-location">Delivery Location</label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="ti-location" class="fp-input" type="text" maxlength="200" data-suggest="poLocation" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="E.g. Muscat Warehouse / Site"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery locations" hidden></ul></div>
+        </div>
+        <div class="fp-field">
           <label class="fp-label" for="ti-payment">Payment Terms</label>
           <select id="ti-payment" class="fp-input fp-select" data-enter-opens="true" data-payment-keep><option selected>As usual</option><option>Cash</option><option>Credit</option><option>100% Advance</option><option>50% Advance, 50% on Delivery</option><option>30 Days Net</option><option>60 Days Net</option></select>
         </div>
-        <div class="fp-field">
-          <label class="fp-label" for="ti-location">Delivery Location</label>
-          <div class="fp-input-wrap fp-suggest-wrap"><input id="ti-location" class="fp-input" type="text" maxlength="200" data-suggest="poLocation" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="E.g. Muscat Warehouse / Site"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Delivery locations" hidden></ul></div>
+        <div class="fp-field" id="ti-credit-field" hidden>
+          <label class="fp-label" for="ti-credit-period">Credit Period <span class="fp-req" aria-hidden="true">*</span></label>
+          <div class="fp-input-wrap fp-suggest-wrap"><input id="ti-credit-period" class="fp-input" type="text" maxlength="40" data-suggest="poCredit" data-suggest-typed role="combobox" aria-autocomplete="list" aria-expanded="false" data-suggest-free autocomplete="off" spellcheck="false" placeholder="e.g. 30 Days"><input type="hidden" data-transient="true"><ul class="fp-suggest" role="listbox" aria-label="Credit periods" hidden></ul></div>
         </div>
       </div>
     </section>
