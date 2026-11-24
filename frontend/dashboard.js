@@ -4194,7 +4194,9 @@ function openEmployeeProfile(id) {
       return li;
     }) : [empEl('li', 'emp-fact-empty', 'No documents uploaded.')]));
   }).catch(() => byId('emp-profile-docs').replaceChildren(empEl('li', 'emp-fact-empty', 'The documents could not be loaded.')));
-  byId('emp-profile').querySelector('[data-emp-profile="edit"]').focus();
+  // Edit takes the keys (Enter edits) without scrolling to the footer: the profile opens at its top.
+  byId('emp-profile').querySelector('[data-emp-profile="edit"]').focus({ preventScroll: true });
+  byId('emp-profile').scrollTop = 0;
 }
 function closeEmployeeProfile() {
   const dialog = byId('emp-profile');
