@@ -40,10 +40,13 @@ function user_password_key(): string
         }
         return $key = $decoded;
     }
+    if (!function_exists('sodium_crypto_secretbox_keygen')) {
+        throw new RuntimeException('The PHP sodium extension is not enabled (hPanel › PHP Configuration › PHP extensions).');
+    }
     $file = rtrim(config()['storage'], '/') . '/password.key';
     if (!is_file($file)) {
-        if (!is_dir(dirname($file))) {
-            mkdir(dirname($file), 0750, true);
+        if (!is_dir(dirname($file)) && !@mkdir(dirname($file), 0750, true) && !is_dir(dirname($file))) {
+            throw new RuntimeException('The storage folder could not be created for the password key: ' . dirname($file));
         }
         $fresh = sodium_crypto_secretbox_keygen();
         // x: never overwrite a key another request has just written.
@@ -51,20 +54,32 @@ function user_password_key(): string
         if ($handle !== false) {
             fwrite($handle, base64_encode($fresh));
             fclose($handle);
-            chmod($file, 0600);
+            @chmod($file, 0600);
+        } elseif (!is_file($file)) {
+            throw new RuntimeException('The password key file could not be written: the storage folder is not writable (' . dirname($file) . ').');
         }
     }
-    $decoded = base64_decode(trim((string) file_get_contents($file)), true);
+    $decoded = base64_decode(trim((string) @file_get_contents($file)), true);
     if ($decoded === false || strlen($decoded) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
         throw new RuntimeException('The password key file in the storage folder is damaged.');
     }
     return $key = $decoded;
 }
 
-function user_password_encrypt(string $password): string
+/*
+ * The password encrypted for the Edit page, or null when the server cannot encrypt it (no sodium extension, or the
+ * storage folder is not writable for the key file). The login still saves: only showing the password on Edit is lost,
+ * and the reason goes to the PHP error log.
+ */
+function user_password_encrypt(string $password): ?string
 {
-    $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    return base64_encode($nonce . sodium_crypto_secretbox($password, $nonce, user_password_key()));
+    try {
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        return base64_encode($nonce . sodium_crypto_secretbox($password, $nonce, user_password_key()));
+    } catch (Throwable $e) {
+        error_log('User Setting: the password is saved but cannot be shown on Edit: ' . $e->getMessage());
+        return null;
+    }
 }
 
 /* The stored password, or null (none stored, or it cannot be opened with this key). */
@@ -73,11 +88,19 @@ function user_password_decrypt(?string $secret): ?string
     if ($secret === null || $secret === '') {
         return null;
     }
+    if (!function_exists('sodium_crypto_secretbox_open')) {
+        return null;
+    }
     $raw = base64_decode($secret, true);
     if ($raw === false || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
         return null;
     }
-    $plain = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), user_password_key());
+    try {
+        $plain = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), user_password_key());
+    } catch (Throwable $e) {
+        error_log('User Setting: a saved password cannot be shown: ' . $e->getMessage());
+        return null;
+    }
     return $plain === false ? null : $plain;
 }
 
