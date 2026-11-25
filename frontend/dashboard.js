@@ -15017,7 +15017,26 @@ function companyProfile() {
 
 // Lays the document out in `sheet` (the preview page or the print sheet); resolves once its images have loaded.
 // supplier may be a promise; stillWanted() false (another supplier or document was picked meanwhile) leaves the sheet alone.
+/* A Purchase Order's PDF is in the supplier's currency, a Quotation's, Delivery Note's and Tax Invoice's in the customer's: the document is priced in
+   OMR (PRICES_IN_OMR) and its prices, line totals and totals are converted at the fixed SO_RATES_TO_OMR, with no OMR
+   figures printed. The form's summary keeps the OMR Grand Total. A document in OMR, or in a currency without a rate,
+   prints as it is (in OMR). */
+const PARTY_CURRENCY_PDF = ['po', 'qt', 'dn', 'ti'];
+function inPartyCurrency(spec, doc) {
+  const currency = String(doc.currency || 'OMR').toUpperCase();
+  const rate = SO_RATES_TO_OMR[currency];
+  if (!PARTY_CURRENCY_PDF.includes(spec.key) || currency === 'OMR' || !rate) return doc;
+  const to = value => pbNum(value) / rate;
+  return {
+    ...doc, inPartyCurrency: true,
+    subtotal: to(doc.subtotal), vatAmount: to(doc.vatAmount), discountAmount: to(doc.discountAmount), shipping: to(doc.shipping),
+    roundOff: to(doc.roundOff), advancePayment: to(doc.advancePayment), grandTotal: to(doc.grandTotal),
+    items: (doc.items || []).map(l => ({ ...l, price: to(l.price), discountAmount: to(l.discountAmount), lineTotal: to(l.lineTotal) })),
+  };
+}
+
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false, stillWanted = () => true } = {}) {
+  doc = inPartyCurrency(spec, doc);
   // The GRN: the procurement document design (letterhead, supplier details, totals box). The Purchase Order keeps
   // Nathaneal's design.
   const procurement = spec.key === 'grn';
@@ -15203,14 +15222,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     ...{
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-        [`Price${PRICES_IN_OMR.includes(spec.key) ? ' (OMR)' : doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
+        [`Price${doc.inPartyCurrency ? ` (${doc.currency})` : PRICES_IN_OMR.includes(spec.key) ? ' (OMR)' : doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`], ['Disc %', 'num', l => `${poDiscPct(l).toFixed(2)}%`], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
     // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
     so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
+      [`Unit Price (${doc.inPartyCurrency ? doc.currency : 'OMR'})`, 'num', l => pbAmount(l.price)],
       ...(proforma || spec.key === 'ti' ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase entry: quantity × rate, no VAT or line discount.
     pe: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
@@ -15450,8 +15469,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // A sales / purchase replacement: the returned and replacement values, the VAT on the difference, then the Price
     // Difference (below 0: owed to the buyer, or owed by the supplier). A zero discount or charge is left out.
     const totals = el('dl', 'ps-totals');
-    const currency = ' OMR';                              // PRICES_IN_OMR; the difference also in the party's currency below
-    const rate = doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
+    const currency = ' OMR';                              // PRICES_IN_OMR: only the OMR difference is printed
     for (const [label, value, kind] of [['Returned Items Value', doc.returnedValue], ['Replacement Items Value', doc.replacementValue],
       [doc.vatMode === 'exclude' ? 'VAT on Difference' : 'VAT on Difference (included)', doc.vatAmount],
       ['Discount', doc.discountAmount, 'discount'], ['Handling / Delivery Charge', doc.handlingCharge], ['Price Difference', doc.grandTotal, 'grand']]) {
@@ -15460,17 +15478,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
       row.append(el('dt', '', `${label}:`), el('dd', '', `${kind === 'discount' ? '-' : ''}${pbAmount(value)}${currency}`));
       totals.append(row);
     }
-    if (rate) {
-      const row = el('div', 'ps-total-grand');
-      row.append(el('dt', '', `Price Difference (${doc.currency}):`), el('dd', '', `${pbAmount(pbNum(doc.grandTotal) / rate)} ${doc.currency}`));
-      totals.append(row);
-    }
     bottom.append(totals);
   } else if (spec.kind !== 'simple') {
     const totals = el('dl', spec.key === 'po' ? 'ps-totals ps-po-totals' : 'ps-totals');   // the PO: Grand Total in a green box
     // PRICES_IN_OMR: the prices and totals are in OMR; the Grand Total is also given in the party's currency (fixed rates).
-    const inOmr = PRICES_IN_OMR.includes(spec.key);
-    const poRate = inOmr && doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
+    const inOmr = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency;   // a PO / quotation / delivery note / tax invoice in another currency: already converted
+    // A sales order, purchase / sales entry and purchase / sales return print only the OMR totals (no Grand Total in
+    // the party's currency).
+    const poRate = inOmr && !['so', 'pe', 'se', 'sr', 'prt'].includes(spec.key) && doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
     const currency = inOmr ? ' OMR' : doc.currency ? ` ${doc.currency}` : '';
     const grn = spec.key === 'grn';
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
@@ -15542,7 +15557,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
   if (termsText) {
-    const currencyCode = PRICES_IN_OMR.includes(spec.key) ? 'OMR' : String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
+    const currencyCode = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency ? 'OMR' : String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
     const currencyName = PO_CURRENCIES.find(row => row.code === currencyCode)?.name;
     const validity = String(doc.offerValidity ?? '').trim().toLowerCase() || '30 days';   // "30 Days" → "30 days"
     const termsRow = el('tr', 'ps-terms-row');
