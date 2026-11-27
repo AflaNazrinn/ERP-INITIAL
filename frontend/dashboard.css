@@ -3921,12 +3921,23 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .rrf-btn-out { margin-left: 0; }
 }
 
-/* The four Return & Replacement lists: with a filter applied, Export (the rows the filter shows) under the list. */
+/* Under every list: what it shows and Export (the rows shown, as CSV); with a filter on, Clear Filter too.
+   In the page's own colours (--accent-*: masters amber, Purchase Book green, Trade blue, returns crimson …). */
 .rrf-export-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px 16px;
-  border: 1px solid #F5C2CC; border-radius: 10px; background: #FDF3F5; }
-.rrf-export-bar[hidden] { display: none; }
+  border: 1px solid var(--accent-line); border-radius: 10px; background: var(--accent-soft); }
+.rrf-export-bar[hidden], .rrf-export-clear[hidden], .rrf-export-text[hidden] { display: none; }
+.rrf-export-acts { margin-left: auto; }   /* Export stays at the right end, with nothing on the left */
 .rrf-export-text { font-size: 13px; color: #374151; }
-.rrf-export-text b { color: #9F1033; }
+.rrf-export-left { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; min-width: 0; }
+.rrf-export-totals { display: flex; align-items: stretch; gap: 10px; }
+.rrf-export-total {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 150px; padding: 6px 14px;
+  border: 1px solid var(--accent-line); border-radius: 8px; background: var(--surface);
+}
+.rrf-export-total span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); }
+.rrf-export-total b { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink-900); white-space: nowrap; }
+.rrf-export-total[data-total="grand"] b { color: var(--accent-ink); }
+.rrf-export-text b { color: var(--accent-ink); }
 .rrf-export-acts { display: flex; align-items: center; gap: 10px; }
 .rrf-export-clear { height: 38px; padding: 0 14px; border: 1px solid #D9DDE3; border-radius: 8px; background: #fff; font: inherit; font-size: 12.5px; font-weight: 700; color: #111827; cursor: pointer; }
 .rrf-export-clear:hover { background: #F9FAFB; }
@@ -3934,7 +3945,7 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
   font: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; cursor: pointer; }
 .rrf-export-btn:hover { background: #15803d; }
 .rrf-export-btn:focus-visible { outline: 3px solid rgba(22, 163, 74, .3); outline-offset: 2px; }
-.rrf-export-clear:focus-visible { outline: 3px solid rgba(192, 20, 60, .25); outline-offset: 2px; }
+.rrf-export-clear:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
 /* Filter popup, compact: a narrow icon rail and tighter spacing. */
 .rrf-hd { gap: 12px; padding: 12px 14px 11px 16px; }
 .rrf-ic { width: 40px; height: 40px; border-radius: 9px; }

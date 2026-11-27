@@ -6886,7 +6886,7 @@ function createMasterList(config) {
     const active = applied.size + (list.range.from || list.range.to ? 1 : 0) + (list.extraCount || 0) + (list.facets ? pbfActive(list.facets) : 0);
     $('filter-label').textContent = active ? `Filter (${active})` : 'Filter';
     $('filter').classList.toggle('is-on', active > 0);
-    config.afterRender?.(list);                    // Return & Replacement lists: Export under the list
+    syncListExport(list);                          // the Export bar under every list
   }
 
   // Previous, the page numbers (1 … 4 5 6 … 12 when there are many) and Next.
@@ -6945,7 +6945,7 @@ function createMasterList(config) {
     if (!pager.contains(target) || event.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) return false;
     event.preventDefault();
     if (key === 'ArrowUp') { const rows = [...$('body').rows]; if (rows.length) focusRow(rows.at(-1)); else $('search').focus(); return true; }
-    if (key === 'ArrowDown') { config.belowPager?.(list); return true; }   // the bottom (Return & Replacement: their Export)
+    if (key === 'ArrowDown') { list.$('page').querySelector('.rrf-export-btn')?.focus(); return true; }   // down to the Export bar
     const buttons = pagerButtons();
     const at = buttons.indexOf(target);
     buttons[Math.max(0, Math.min(buttons.length - 1, at + (key === 'ArrowRight' ? 1 : -1)))]?.focus();
@@ -7026,7 +7026,7 @@ function createMasterList(config) {
       }
       return true;
     }
-    if (config.extraKeys?.(event, list)) return true;   // Return & Replacement: the Export bar under the list
+    if (handleListExportKeys(event, list)) return true;   // the Export bar under the list (and E)
     if (handleRowKeys(event)) return true;
     // Shift+N also works from an empty search box (the search ignores case, so a lowercase n still searches).
     const newKey = event.key === 'N' && event.shiftKey;
@@ -7330,15 +7330,6 @@ function downloadCsv(fileName, lines) {
 
 const masterFileName = (list, suffix) => `${list.config.nouns.toLowerCase().replace(/\s+/g, '-')}-${suffix}.csv`;
 
-// CSV of the ticked records, or of every record when none is ticked.
-function exportMasterRows() {
-  const { list, picked } = masterFilter;
-  const { columns } = list.config;
-  const rows = list.rows.filter(row => (picked.size === 0 || picked.has(row.code)) && inDateRange(row, masterFilter.range));
-  downloadCsv(masterFileName(list, today.toISOString().slice(0, 10)),
-    [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
-  showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
-}
 
 /* Date panel inside the Filter popup: records created From ... To (either end may be left open). */
 const mfDatePop = () => mfEl('date-pop');
@@ -7428,12 +7419,12 @@ function handleMasterFilterKeys(event) {
     search.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
-  // →/← leave the record list for the footer: → Reset Filters, ← Export. Select All → goes to the Date button.
+  // → leaves the record list for the footer's Reset Filters (Export is under the list page). Select All → goes to the Date button.
   if (!ctrl && !event.altKey && (key === 'ArrowRight' || key === 'ArrowLeft')) {
     const dialog = byId('master-filter');
     let next = null;
     if (mfEl('list').contains(target) && target.type === 'checkbox') {
-      next = dialog.querySelector(key === 'ArrowRight' ? '[data-sf="reset"]' : '[data-sf="export"]');
+      next = key === 'ArrowRight' ? dialog.querySelector('[data-sf="reset"]') : null;
     } else if (target === mfEl('all') && key === 'ArrowRight') {
       next = mfEl('date');
     }
@@ -7459,7 +7450,6 @@ function initMasterFilter() {
     if (action === 'close') closeMasterFilter();
     else if (action === 'apply') applyMasterFilter();
     else if (action === 'reset') resetMasterFilter();
-    else if (action === 'export') exportMasterRows();
     else if (action === 'date') { if (mfDatePop().hidden) openMasterDate(); else closeMasterDate(); }
     else if (action === 'date-apply') setMasterDate();
     else if (action === 'date-clear') setMasterDate(true);
@@ -15517,13 +15507,6 @@ function filterHooks(settings) {
     openFilter: list => openRrFilter(list),
     filterOpen: () => byId('rr-filter')?.open,
     filterKeys: event => handleRrFilterKeys(event),
-    afterRender: list => syncRrExport(list),
-    belowPager: list => {
-      const exp = list.$('page').querySelector('.rrf-export-bar:not([hidden]) .rrf-export-btn');
-      if (exp) exp.focus();
-      return Boolean(exp);
-    },
-    extraKeys: (event, list) => handleRrExportKeys(event, list),
     onReset: list => { list.rrF = rrfBlank(); list.extra = null; list.extraKey = ''; list.extraCount = 0; },
   };
 }
@@ -15926,8 +15909,29 @@ function rrfTypeIntoSearch(event) {
   search.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// Under the list: with a filter on, what it shows and Export (those rows as CSV) and Clear Filter.
-function syncRrExport(list) {
+// Whether any Filter is on for a list: ticked records, dates, the Purchase Book Filter's or the Return & Replacement /
+// Supply Filter's conditions.
+const listFiltered = list => Boolean(list.applied.size || list.range.from || list.range.to || list.extraCount
+  || (list.facets && pbfActive(list.facets)));
+
+// Clear Filter: every list's filters off (the search box is left as it is).
+function clearListFilter(list) {
+  list.applied.clear();
+  list.range = { from: '', to: '' };
+  if (list.facets) list.facets = pbfEmpty();
+  list.config.onReset?.(list);
+  list.render();
+}
+
+/* The lists whose bar also shows Page Total and Grand Total (their grandTotal, in OMR: totals are kept in OMR): the
+   priced documents, returns and replacements (Total Refund / Price Difference are their grandTotal). */
+const LIST_TOTAL_KEYS = new Set(['po', 'grn', 'qt', 'so', 'dn', 'ti', 'pe', 'se', 'sr', 'rp', 'prt', 'prp']);
+const omrText = n => `${(Number.isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} OMR`;
+
+/* Under every list, always: Export (the rows the list shows, every page of them, as CSV); with a filter on,
+   "Filter applied: …" and Clear Filter too. The priced lists (LIST_TOTAL_KEYS) also show, at the left end,
+   Page Total (the rows on this page) and Grand Total (every row the list shows, on all its pages). */
+function syncListExport(list) {
   const page = list.$('page');
   if (!page) return;
   let bar = page.querySelector('.rrf-export-bar');
@@ -15939,7 +15943,7 @@ function syncRrExport(list) {
     const clear = el('button', 'rrf-export-clear', 'Clear Filter');
     clear.type = 'button';
     clear.addEventListener('click', () => {
-      list.applied.clear(); list.range = { from: '', to: '' }; RR_LIST_HOOKS.onReset(list); list.render();
+      clearListFilter(list);
       ([...list.$('body').rows][0] || list.$('filter')).focus();
       showToast('Filter cleared', `Showing all ${list.many}.`);
     });
@@ -15947,27 +15951,52 @@ function syncRrExport(list) {
     exp.type = 'button';
     exp.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>';
     exp.append(el('span', '', 'Export'));
-    exp.addEventListener('click', () => exportRrRows(list));
+    exp.addEventListener('click', () => exportListRows(list));
     acts.append(clear, exp);
-    bar.append(text, acts);
+    if (LIST_TOTAL_KEYS.has(list.config.key)) {
+      const totals = el('div', 'rrf-export-totals');
+      totals.setAttribute('aria-live', 'polite');
+      const part = (label, kind) => {
+        const node = el('div', 'rrf-export-total');
+        node.append(el('span', '', label), el('b', '', ''));
+        node.dataset.total = kind;
+        return node;
+      };
+      totals.append(part('Page Total', 'page'), part('Grand Total', 'grand'));
+      const left = el('div', 'rrf-export-left');
+      left.append(totals, text);
+      bar.append(left, acts);
+    } else {
+      bar.append(text, acts);
+    }
     bar.title = 'Keys: E export · left/right between Clear Filter and Export · up back to the list';
     page.querySelector('.ml-card').append(bar);
   }
-  const on = list.applied.size || list.range.from || list.range.to || list.extraCount;
-  bar.hidden = !on;
-  if (on) {
-    const text = bar.querySelector('.rrf-export-text');
-    text.replaceChildren('Filter applied: ', el('b', '', list.count(list.shown.length)), ` of ${list.rows.length} shown.`);
+  const on = listFiltered(list);
+  bar.hidden = false;
+  bar.classList.toggle('is-filtered', on);
+  bar.querySelector('.rrf-export-clear').hidden = !on;
+  const shown = list.shown.length;
+  const total = list.rows.length;
+  if (LIST_TOTAL_KEYS.has(list.config.key)) {
+    const sum = rows => rows.reduce((acc, row) => acc + pbNum(row.grandTotal), 0);
+    const start = (list.page - 1) * ML_PAGE_SIZE;
+    bar.querySelector('[data-total="page"] b').textContent = omrText(sum(list.shown.slice(start, start + ML_PAGE_SIZE)));
+    bar.querySelector('[data-total="grand"] b').textContent = omrText(sum(list.shown));
   }
+  // Text only with a filter on (beside Clear Filter); the count of what the list shows is above, by the pager.
+  const text = bar.querySelector('.rrf-export-text');
+  text.hidden = !on;
+  text.replaceChildren(...(on ? ['Filter applied: ', el('b', '', list.count(shown)), ` of ${total} shown.`] : []));
 }
 
 /* The Export bar's keys on the list page: left/right Clear Filter <-> Export, up back to the pager (or the last row);
-   E exports from anywhere on the list while a filter is on. Down from the pager comes here. */
-function handleRrExportKeys(event, list) {
+   E exports from anywhere on the list. Down from the pager comes here. */
+function handleListExportKeys(event, list) {
   const bar = list.$('page').querySelector('.rrf-export-bar');
   if (!bar || bar.hidden || event.ctrlKey || event.altKey || event.metaKey) return false;
   const { key, target } = event;
-  const buttons = [...bar.querySelectorAll('button')];
+  const buttons = [...bar.querySelectorAll('button:not([hidden])')];
   const at = buttons.indexOf(target);
   if (at >= 0) {
     if (key === 'ArrowRight' || key === 'ArrowLeft') {
@@ -15987,17 +16016,18 @@ function handleRrExportKeys(event, list) {
   }
   if ((key === 'e' || key === 'E') && !event.shiftKey && !isTextEntry(target)) {
     event.preventDefault();
-    if (!event.repeat) exportRrRows(list);
+    if (!event.repeat) exportListRows(list);
     return true;
   }
   return false;
 }
 
-function exportRrRows(list) {
+// The rows the list shows (search and filters, every page) as CSV.
+function exportListRows(list) {
   const { columns } = list.config;
   const rows = list.shown;
-  if (!rows.length) { showToast('Nothing to export', `No ${list.many} match the filter.`, true); return; }
-  downloadCsv(masterFileName(list, `filtered-${today.toISOString().slice(0, 10)}`),
+  if (!rows.length) { showToast('Nothing to export', `No ${list.many} to export.`, true); return; }
+  downloadCsv(masterFileName(list, `${listFiltered(list) ? 'filtered-' : ''}${today.toISOString().slice(0, 10)}`),
     [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
   showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
 }
