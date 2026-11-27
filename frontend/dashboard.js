@@ -6505,6 +6505,7 @@ function createMasterList(config) {
   const list = {
     config, rows: [], applied: new Set(), range: { from: '', to: '' }, $, render, loaded: false, selected: new Set(),
     page: 1, shown: [], filterKey: '',
+    facets: config.docFilter ? pbfEmpty() : null,      // the Purchase Book Filter's conditions (#pb-filter)
     one: caps ? config.noun : config.noun.toLowerCase(),
     many: caps ? config.nouns : config.nouns.toLowerCase(),
   };
@@ -6547,12 +6548,13 @@ function createMasterList(config) {
     const query = $('search').value.trim().toLowerCase();
     const { applied, rows: all } = list;
     const rows = all.filter(row => (applied.size === 0 || applied.has(row.code)) && inDateRange(row, list.range)
+      && (!list.facets || pbfPass(config.docFilter, list.facets, row))
       && (!query || config.columns.some(column => String(row[column.key] ?? '').toLowerCase().includes(query))));
     const known = new Set(all.map(row => row.code));
     for (const code of list.selected) if (!known.has(code)) list.selected.delete(code);   // deleted meanwhile
     // ML_PAGE_SIZE rows a page. A new search or filter starts again on page 1; coming back from a record's
     // Edit or View opens the page that holds it.
-    const filterKey = [query, [...applied].join(','), list.range.from, list.range.to].join('|');
+    const filterKey = [query, [...applied].join(','), list.range.from, list.range.to, list.facets ? pbfKey(list.facets) : ''].join('|');
     if (filterKey !== list.filterKey) { list.filterKey = filterKey; list.page = 1; }
     list.shown = rows;
     const back = list.returnTo && list.returnTo !== list.pagedFor ? rows.findIndex(row => row.code === list.returnTo) : -1;
@@ -6597,7 +6599,7 @@ function createMasterList(config) {
     $('count').textContent = rows.length
       ? `Showing ${start + 1} to ${start + visible.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
     renderPager(pages);
-    const active = applied.size + (list.range.from || list.range.to ? 1 : 0);
+    const active = applied.size + (list.range.from || list.range.to ? 1 : 0) + (list.facets ? pbfActive(list.facets) : 0);
     $('filter-label').textContent = active ? `Filter (${active})` : 'Filter';
     $('filter').classList.toggle('is-on', active > 0);
   }
@@ -6719,6 +6721,7 @@ function createMasterList(config) {
   // "/" search, F filter, I import, Shift+N new record, Esc back (Esc in a filled search clears it first).
   function handleKeys(event) {
     if (byId('master-filter').open) return handleMasterFilterKeys(event);
+    if (byId('pb-filter').open) return handlePbFilterKeys(event);
     if (byId('master-import').open) return handleMasterImportKeys(event);
     if (byId('master-view').open) return handleMasterViewKeys(event);
     if (byId('master-confirm').open) return handleMasterConfirmKeys(event);
@@ -6906,6 +6909,7 @@ function createMasterList(config) {
       list.applied.clear();
       list.selected.clear();
       list.range = { from: '', to: '' };
+      if (list.facets) list.facets = pbfEmpty();
       list.rows = [];
       list.pagedFor = null;
       if (!list.returnTo) list.page = 1;     // a fresh visit starts on page 1; back from a record keeps its page
@@ -6976,6 +6980,7 @@ function syncMasterFilterCounts() {
 }
 
 function openMasterFilter(list) {
+  if (list.config.docFilter) return openPbFilter(list);       // the Purchase Book lists have their own popup
   Object.assign(masterFilter, { list, picked: new Set(list.applied), range: { ...list.range }, opener: document.activeElement });
   closeMasterDate(false);
   syncMasterDateButton();
@@ -7180,6 +7185,522 @@ function initMasterFilter() {
     const { value, checked } = event.target;
     if (checked) masterFilter.picked.add(value); else masterFilter.picked.delete(value);
     syncMasterFilterCounts();
+  });
+}
+
+/* ---------- Purchase Book Filter popup (#pb-filter: the PR, RFQ, PO and GRN lists, the sales Quotation, Sales Order and Delivery Note lists, and the Tax Invoice, Purchase Entry and Sales Entry lists) ----------
+   The rail on the left holds the filters the list's documents have (config.docFilter.tabs):
+     All       search and tick the documents to show (none ticked: all of them), as the masters' Filter
+     Date      a From / To range, or a year (Whole year) or one month of it
+     VAT       a switch: on VAT In (VAT enabled on the document: a line with VAT %), off VAT Out (VAT disabled); Clear both
+     Value, Disc %, Qty   = < > each keep their own number (the box shows the one picked): = 20 with < 20 is ≤ 20,
+               > 20 with < 30 a range. Grand Total in OMR, the whole discount as a % of the gross, total quantity
+     Employee  who raised the document (Requested By / Created By)
+   The conditions add up, and nothing changes on the list until Apply Filters.
+   Keys: ↑/↓ on the rail change the filter and → goes into it; in a list ↑/↓ walk search → Select All → rows,
+   Space or Enter ticks, ← goes back to the rail, typing goes to the search; Ctrl+Enter applies, Esc closes. */
+
+const PBF_TABS = {
+  all: { label: 'All', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
+  date: { label: 'Date', icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  vat: { label: 'VAT', icon: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' },
+  value: { label: 'Value', icon: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2 0 0 0-5 0c0 2.5 5 1.5 5 4a2.5 2 0 0 1-5 0M12 6v1.5M12 16.5V18"/>' },
+  disc: { label: 'Disc %', icon: '<path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>' },
+  qty: { label: 'Qty', icon: '<path d="m21 8-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>' },
+  emp: { label: 'Employee', icon: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>' },
+};
+const PBF_SVG = paths => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const PBF_NUM = {
+  value: { unit: 'OMR', placeholder: 'e.g. 10000', name: 'value', of: row => pbNum(row.grandTotal), text: row => `${pbMoney(pbNum(row.grandTotal))} OMR` },
+  disc: { unit: '%', placeholder: 'e.g. 5', name: 'discount', of: row => pbNum(row.discountPct), text: row => `${pbNum(row.discountPct)}%` },
+  qty: { unit: '#', placeholder: 'e.g. 100', name: 'quantity', of: row => pbNum(row.totalQty),
+    text: row => `${row.totalQty || 0} ${pbNum(row.totalQty) === 1 ? 'unit' : 'units'}` },
+};
+const PBF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// A list's conditions (list.facets); from / to are also the list's date range (list.range).
+const pbfEmpty = () => ({ from: '', to: '', year: null, month: null, vat: '', emps: new Set(),
+  num: { value: pbfNumEmpty(), disc: pbfNumEmpty(), qty: pbfNumEmpty() } });
+const pbfClone = f => ({ ...f, emps: new Set(f.emps),
+  num: Object.fromEntries(Object.entries(f.num).map(([key, c]) => [key, { ...c }])) });
+// A number filter: the number typed for = (eq), < (lt) and > (gt); '' = not used.
+// Matches: equal to eq, or inside the < / > bounds; so = 20 with < 20 is ≤ 20, and > 20 with < 30 is a range.
+function pbfNumEmpty() { return { eq: '', lt: '', gt: '' }; }
+const pbfBound = text => (text !== '' && Number.isFinite(Number(text)) ? Number(text) : null);
+const pbfNumOn = c => [c.eq, c.gt, c.lt].some(text => pbfBound(text) !== null);
+function pbfNumMatch(c, value) {
+  const eq = pbfBound(c.eq), gt = pbfBound(c.gt), lt = pbfBound(c.lt);
+  const equal = eq !== null && Math.abs(value - eq) < 0.0005;
+  if (gt === null && lt === null) return equal;
+  const inside = (gt === null || value > gt + 0.0005) && (lt === null || value < lt - 0.0005);
+  return equal || inside;
+}
+// "Qty ≤ 20", "Qty ≥ 20 and < 30", "Qty = 50, or > 20 and < 30" for the toolbar.
+function pbfNumText(label, c) {
+  const eq = pbfBound(c.eq), gt = pbfBound(c.gt), lt = pbfBound(c.lt);
+  const parts = [];
+  if (gt !== null) parts.push(`${eq === gt ? '≥' : '>'} ${c.gt}`);
+  if (lt !== null) parts.push(`${eq === lt ? '≤' : '<'} ${c.lt}`);
+  const range = parts.join(' and ');
+  if (eq === null || eq === gt || eq === lt) return `${label} ${range}`;
+  return `${label} = ${c.eq}${range ? `, or ${range}` : ''}`;
+}
+
+// Every employee (api/purchase-requests.php?people=1), and their names and login usernames → the employee's key,
+// so a document's Requested By ("sanjay") or Created By ("SANJAY DUTT") counts as that employee.
+const pbfStaff = { list: [], alias: new Map() };
+const pbfEmpKey = name => {
+  const text = String(name ?? '').trim().toLowerCase();
+  return pbfStaff.alias.get(text) ?? text;
+};
+async function pbfLoadStaff() {
+  try {
+    pbfStaff.list = await apiRequest('api/purchase-requests.php?people=1');
+  } catch {
+    return;                               // the Employee list then shows the names on the documents only
+  }
+  pbfStaff.alias = new Map();
+  for (const person of pbfStaff.list) {
+    const key = `emp:${person.code}`;
+    for (const alias of [person.name, person.username]) if (alias) pbfStaff.alias.set(alias.trim().toLowerCase(), key);
+  }
+}
+// VAT In / VAT Out: the document's VAT Enabled / VAT Disabled switch (vatEnabled: a line with a VAT % above 0).
+const pbfVatOf = row => (row.vatEnabled ? 'in' : 'out');
+const pbfVatText = row => (row.vatEnabled ? 'VAT In' : 'VAT Out');
+const pbfPeopleOf = (spec, row) => {
+  const name = String(row[spec.employee.key] ?? '').trim();
+  return name ? [{ key: pbfEmpKey(name), name }] : [];
+};
+
+// Whether a document meets the conditions; skip leaves one out (a filter's own counts ignore its own choice).
+function pbfPass(spec, f, row, skip) {
+  if (skip !== 'date' && !inDateRange(row, f)) return false;
+  if (skip !== 'vat' && f.vat && pbfVatOf(row) !== f.vat) return false;
+  for (const [key, c] of Object.entries(f.num)) if (pbfNumOn(c) && !pbfNumMatch(c, PBF_NUM[key].of(row))) return false;
+  if (skip !== 'emp' && f.emps.size && !f.emps.has(pbfEmpKey(row[spec.employee.key]))) return false;
+  return true;
+}
+// The conditions besides the ticked documents and the dates (the list counts those itself), for "Filter (3)".
+const pbfActive = f => [f.vat, ...Object.values(f.num).map(pbfNumOn), f.emps.size].filter(Boolean).length;
+const pbfKey = f => JSON.stringify([f.vat, f.num, [...f.emps]]);
+
+const pbFilter = { list: null, spec: null, f: null, picked: new Set(), tab: 'all', year: 0, query: {}, opener: null, op: 'eq' };
+const pbfEl = suffix => byId(`pbf-${suffix}`);
+const pbfIsOn = (tab, f = pbFilter.f) => ({
+  all: pbFilter.picked.size > 0, date: Boolean(f.from || f.to), vat: Boolean(f.vat),
+  emp: f.emps.size > 0,
+}[tab] ?? pbfNumOn(f.num[tab]));
+
+function openPbFilter(list) {
+  const spec = list.config.docFilter;
+  const f = pbfClone(list.facets);
+  Object.assign(f, list.range);
+  Object.assign(pbFilter, { list, spec, f, picked: new Set(list.applied), tab: 'all', query: { all: '', emp: '' },
+    opener: document.activeElement, year: Number((f.from || dateInputValue(new Date())).slice(0, 4)) });
+  pbfEl('title').textContent = `Filter ${list.config.nouns}`;
+  pbfEl('sub').textContent = `Search and select the ${list.many} to show`;
+  const reset = el('button', 'pbf-ri pbf-ri-reset');
+  reset.type = 'button';
+  reset.dataset.pbf = 'reset';
+  reset.title = 'Reset all filters';
+  reset.innerHTML = PBF_SVG('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>');
+  reset.append('Reset');
+  pbfEl('rail').replaceChildren(...spec.tabs.flatMap((tab, index) => {
+    const button = el('button', 'pbf-ri');
+    button.type = 'button';
+    button.id = `pbf-tab-${tab}`;
+    button.dataset.tab = tab;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', 'pbf-main');
+    button.innerHTML = PBF_SVG(PBF_TABS[tab].icon);
+    button.append(PBF_TABS[tab].label);
+    const sep = el('div', 'pbf-sep');
+    sep.setAttribute('aria-hidden', 'true');
+    return index === 1 ? [sep, button] : [button];
+  }), reset);
+  pbfEl('search').value = '';
+  pbfRender();
+  document.documentElement.classList.add('has-modal');
+  byId('pb-filter').showModal();
+  pbfEl('search').focus();
+  // The Employee filter lists every employee, fetched fresh each time the popup opens.
+  if (spec.employee) pbfLoadStaff().then(() => { if (byId('pb-filter').open && pbFilter.tab === 'emp') pbfRender(); });
+}
+
+function closePbFilter() {
+  const dialog = byId('pb-filter');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  const back = pbFilter.opener;
+  (back && document.contains(back) && back !== document.body ? back : pbFilter.list.$('filter')).focus();
+}
+
+function applyPbFilter() {
+  const { list, f } = pbFilter;
+  list.applied = new Set(pbFilter.picked);
+  list.facets = pbfClone(f);
+  list.range = { from: f.from, to: f.to };
+  list.render();
+  closePbFilter();
+  const filtered = list.applied.size || f.from || f.to || pbfActive(f);
+  showToast('Filter applied', filtered ? `Showing ${list.count(list.shown.length)}.` : `Showing all ${list.many}.`);
+}
+
+function resetPbFilter() {
+  const { list } = pbFilter;
+  pbFilter.f = pbfEmpty();
+  pbFilter.picked.clear();
+  pbFilter.query = { all: '', emp: '' };
+  pbFilter.year = new Date().getFullYear();
+  list.applied.clear();
+  list.facets = pbfEmpty();
+  list.range = { from: '', to: '' };
+  list.render();
+  pbfEl('search').value = '';
+  pbfRender();
+  showToast('Filters reset', `Showing all ${list.many}.`);
+}
+
+function pbfRender() {
+  const { tab, spec } = pbFilter;
+  // Re-rendering replaces the rows: focus stays on the same tick box.
+  const active = document.activeElement;
+  const focusValue = active?.classList.contains('pbf-rb') ? (active.id || `v:${active.value}`) : null;
+  for (const button of pbfEl('rail').querySelectorAll('[data-tab]')) {
+    const on = button.dataset.tab === tab;
+    button.setAttribute('aria-selected', String(on));
+    button.tabIndex = on ? 0 : -1;
+    button.classList.toggle('is-on', pbfIsOn(button.dataset.tab));
+  }
+  pbfEl('main').setAttribute('aria-labelledby', `pbf-tab-${tab}`);
+  const searching = tab === 'all' || tab === 'emp';
+  pbfEl('search-wrap').hidden = !searching;
+  if (searching) {
+    const what = tab === 'emp' ? 'Search employee by name or code...'
+      : `Filter by ${spec.short} number, ${spec.searchHint}...`;
+    pbfEl('search').placeholder = what;
+    pbfEl('search').setAttribute('aria-label', what.replace(/\.\.\.$/, ''));
+    if (pbfEl('search').value !== pbFilter.query[tab]) pbfEl('search').value = pbFilter.query[tab];
+  }
+  pbfEl('tb').hidden = tab === 'all' || tab === 'date';
+  pbfEl('tb-num').hidden = !PBF_NUM[tab];
+  pbfEl('tb-vat').hidden = tab !== 'vat';
+  pbfEl('date').hidden = tab !== 'date';
+  pbfEl('table').hidden = tab === 'date';
+  if (tab === 'date') pbfRenderDate();
+  else if (tab === 'emp') pbfRenderPeople();
+  else pbfRenderDocs();
+  if (focusValue) {
+    const again = focusValue.startsWith('v:') ? [...pbfEl('rows').querySelectorAll('.pbf-rb')].find(box => `v:${box.value}` === focusValue) : byId(focusValue);
+    again?.focus({ preventScroll: true });
+  }
+}
+
+// The table of the right-hand side: tick column, code, details (two lines) and the filter's own value.
+function pbfTable(heads, items, isPicked, emptyText) {
+  const n = items.length;
+  const on = items.filter(item => isPicked(item.key)).length;
+  const all = el('input', 'sf-radio pbf-rb');
+  all.type = 'checkbox';
+  all.id = 'pbf-all';
+  all.checked = n > 0 && on === n;
+  all.indeterminate = on > 0 && on < n;
+  all.disabled = n === 0;
+  all.setAttribute('aria-label', 'Select all visible');
+  const allCell = el('div', 'pbf-c0');
+  allCell.append(all);
+  const last = el('div', 'pbf-last', heads[2]);
+  last.append(el('span', 'pbf-pill', `${on} of ${n} selected`));
+  pbfEl('th').replaceChildren(allCell, el('div', '', heads[0]), el('div', '', heads[1]), last);
+  pbfEl('rows').replaceChildren(...items.map(item => {
+    const row = el('label', 'pbf-tr');
+    const cell = el('div', 'pbf-c0');
+    const box = el('input', 'sf-radio pbf-rb');
+    box.type = 'checkbox';
+    box.value = item.key;
+    box.checked = isPicked(item.key);
+    box.setAttribute('aria-label', `Select ${item.code || item.title}`);
+    cell.append(box);
+    const det = el('div', 'pbf-det');
+    det.append(el('b', '', item.title), el('small', '', item.sub));
+    row.append(cell, el('div', 'pbf-code', item.code || '—'), det, el('div', 'pbf-val', item.value));
+    return row;
+  }));
+  pbfEl('empty').textContent = emptyText;
+  pbfEl('empty').hidden = n > 0;
+}
+
+function pbfRenderDocs() {
+  const { list, spec, f, tab, picked } = pbFilter;
+  const query = tab === 'all' ? pbFilter.query.all.trim().toLowerCase() : '';
+  const rows = list.rows.filter(row => pbfPass(spec, f, row)
+    && (!query || [row.code, ...spec.details(row)].join(' ').toLowerCase().includes(query)));
+  pbFilter.shown = rows;
+  let head = 'Date';
+  let value = row => (row.createdOn ? shortDate(row.createdOn) : '—');
+  let title = `All ${list.many}`;
+  if (tab === 'vat') {
+    pbfEl('vat').setAttribute('aria-checked', String(f.vat === 'in'));
+    byId('pb-filter').querySelector('[data-pbf="vat-clear"]').hidden = !f.vat;
+    title = f.vat ? `${f.vat === 'in' ? 'VAT In' : 'VAT Out'} ${list.many}` : title;
+    head = 'VAT';
+    value = pbfVatText;
+  } else if (PBF_NUM[tab]) {
+    const num = PBF_NUM[tab];
+    const c = f.num[tab];
+    const op = pbFilter.op;
+    pbfEl('num-unit').textContent = num.unit;
+    pbfEl('num').placeholder = num.placeholder;
+    pbfEl('num').setAttribute('aria-label', `${PBF_TABS[tab].label}: ${{ eq: 'equal to', lt: 'less than', gt: 'greater than' }[op]}`);
+    if (document.activeElement !== pbfEl('num')) pbfEl('num').value = c[op];
+    for (const button of pbfEl('ops').children) {
+      button.setAttribute('aria-pressed', String(button.dataset.op === op));
+      button.classList.toggle('is-set', pbfBound(c[button.dataset.op]) !== null);
+      const filled = c[button.dataset.op];
+      button.title = `${button.getAttribute('aria-label')}${filled ? `: ${filled}` : ''}`;
+    }
+    pbfEl('tb-num').querySelector('[data-pbf="num-clear"]').hidden = !pbfNumOn(c);
+    title = pbfNumOn(c) ? pbfNumText(PBF_TABS[tab].label, c) : title;
+    head = PBF_TABS[tab].label;
+    value = num.text;
+  }
+  const visible = el('span', '', ` · ${rows.length} visible`);
+  pbfEl('tb-title').replaceChildren(title, visible);
+  pbfTable([`${spec.short} No.`, 'Details', head], rows.map(row => {
+    const [first, second] = spec.details(row);
+    return { key: row.code, code: row.code, title: first, sub: second, value: value(row) };
+  }), code => picked.has(code), list.rows.length ? `No ${list.many} match these filters.` : `There are no ${list.many} yet.`);
+  const total = list.rows.length;
+  const meeting = list.rows.filter(row => pbfPass(spec, f, row)).length;
+  pbfEl('summary').replaceChildren(`${picked.size} of ${total} ${list.many} selected `, el('span', '', `(${meeting} visible)`));
+}
+
+// Party (the suppliers on the documents) or Employee (who raised them): one row a person, with how many of the
+// documents that meet the other conditions are theirs.
+function pbfRenderPeople() {
+  const { list, spec, f, tab } = pbFilter;
+  const people = new Map();
+  // Every employee first (with no documents yet, 0), then any other name on the documents ("admin").
+  for (const person of pbfStaff.list) {
+    people.set(`emp:${person.code}`, { key: `emp:${person.code}`, code: person.code, name: person.name,
+      sub: person.status === 'Resigned' ? 'Resigned' : spec.employee.label, count: 0 });
+  }
+  for (const row of list.rows) {
+    const counted = pbfPass(spec, f, row, 'emp');
+    for (const person of pbfPeopleOf(spec, row)) {
+      if (!people.has(person.key)) people.set(person.key, { ...person, count: 0 });
+      if (counted) people.get(person.key).count++;
+    }
+  }
+  const chosen = f.emps;
+  const query = pbFilter.query[tab].trim().toLowerCase();
+  const codeOf = person => person.code || '';
+  const all = [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const rows = all.filter(person => !query || `${person.name} ${codeOf(person)}`.toLowerCase().includes(query));
+  pbFilter.shown = rows;
+  pbfEl('tb-title').replaceChildren('Employees', el('span', '', ` · ${rows.length} visible`));
+  pbfTable(['Emp Code', 'Employee', list.config.nouns], rows.map(person => ({
+    key: person.key, code: codeOf(person), title: person.name,
+    sub: person.sub || spec.employee.label, value: list.count(person.count),
+  })), key => chosen.has(key), query ? `No employee matches “${pbFilter.query[tab].trim()}”.`
+    : `None of the ${list.many} has a ${spec.employee.label.toLowerCase()} yet.`);
+  pbfEl('summary').replaceChildren(`${chosen.size} of ${all.length} employees selected `, el('span', '', `(${rows.length} visible)`));
+}
+
+function pbfRenderDate() {
+  const { list, spec, f } = pbFilter;
+  if (document.activeElement !== pbfEl('from')) pbfEl('from').value = f.from;
+  if (document.activeElement !== pbfEl('to')) pbfEl('to').value = f.to;
+  pbfEl('to').min = f.from || '';
+  const now = new Date();
+  const years = list.rows.map(row => Number(String(row.createdOn || '').slice(0, 4))).filter(Boolean);
+  const first = Math.min(now.getFullYear(), ...years);
+  const last = Math.max(now.getFullYear(), ...years);
+  pbFilter.year = Math.min(last, Math.max(first, pbFilter.year));
+  const year = pbFilter.year;
+  pbfEl('year').textContent = String(year);
+  byId('pb-filter').querySelector('[data-pbf="year-prev"]').disabled = year <= first;
+  byId('pb-filter').querySelector('[data-pbf="year-next"]').disabled = year >= last;
+  const whole = f.year === year && f.month === null;
+  pbfEl('whole-year').setAttribute('aria-pressed', String(whole));
+  for (const button of pbfEl('months').children) {
+    const month = Number(button.dataset.month);
+    button.setAttribute('aria-pressed', String(f.year === year && f.month === month));
+    button.classList.toggle('is-year', whole);
+    button.classList.toggle('is-now', year === now.getFullYear() && month === now.getMonth());
+    button.setAttribute('aria-label', `${PBF_MONTHS[month]} ${year}`);
+  }
+  const count = list.rows.filter(row => pbfPass(spec, f, row)).length;
+  const included = `${list.count(count)} included`;
+  const ddmmyyyy = value => value.split('-').reverse().join('/');
+  let text = `No date filter set — all ${list.count(list.rows.length)} included`;
+  if (f.year) text = `${f.month !== null ? `${PBF_MONTHS[f.month]} ` : ''}${f.year} (${ddmmyyyy(f.from)} – ${ddmmyyyy(f.to)}) — ${included}`;
+  else if (f.from && f.to) text = `${ddmmyyyy(f.from)} – ${ddmmyyyy(f.to)} — ${included}`;
+  else if (f.from) text = `From ${ddmmyyyy(f.from)} — ${included}`;
+  else if (f.to) text = `Until ${ddmmyyyy(f.to)} — ${included}`;
+  pbfEl('date-note-text').textContent = text;
+  pbfEl('date-note').classList.toggle('is-on', Boolean(f.from || f.to));
+  const meeting = list.rows.filter(row => pbfPass(spec, f, row)).length;
+  pbfEl('summary').replaceChildren(`${pbFilter.picked.size} of ${list.rows.length} ${list.many} selected `, el('span', '', `(${meeting} visible)`));
+}
+
+// A year, or one month of it, sets From and To to its first and last day.
+function pbfSetYearMonth(year, month) {
+  const f = pbFilter.f;
+  Object.assign(f, { year, month });
+  if (!year) { f.from = ''; f.to = ''; return; }
+  const a = month ?? 0;
+  const b = month ?? 11;
+  f.from = `${year}-${String(a + 1).padStart(2, '0')}-01`;
+  f.to = `${year}-${String(b + 1).padStart(2, '0')}-${String(new Date(year, b + 1, 0).getDate()).padStart(2, '0')}`;
+}
+
+function pbfSetTab(tab, focusTab = false) {
+  pbFilter.tab = tab;
+  const c = pbFilter.f.num[tab];
+  if (c) pbFilter.op = ['eq', 'lt', 'gt'].find(op => pbfBound(c[op]) !== null) || 'eq';
+  pbfRender();
+  if (focusTab) pbfEl(`tab-${tab}`).focus();
+}
+
+// The first control of the open filter (→ from the rail).
+function pbfFirstStop() {
+  const { tab } = pbFilter;
+  if (!pbfEl('search-wrap').hidden) return pbfEl('search');
+  if (tab === 'date') return pbfEl('from');
+  if (PBF_NUM[tab]) return pbfEl('num');
+  return tab === 'vat' ? pbfEl('vat') : pbfEl('all');
+}
+
+function handlePbFilterKeys(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closePbFilter(); return true; }
+  if (key === 'Enter' && ctrl) { event.preventDefault(); if (!event.repeat) applyPbFilter(); return true; }
+  if (ctrl || event.altKey) return false;
+  const tabs = pbFilter.spec.tabs;
+  if (target.dataset?.tab) {                                   // on the rail
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault();
+      const at = tabs.indexOf(pbFilter.tab);
+      pbfSetTab(tabs[(at + (key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length], true);
+      return true;
+    }
+    if (key === 'ArrowRight') { event.preventDefault(); pbfFirstStop()?.focus(); return true; }
+    return false;
+  }
+  const box = target.classList?.contains('pbf-rb');
+  if (box && key === 'Enter') { event.preventDefault(); if (!event.repeat) target.click(); return true; }
+  if ((box || target === pbfEl('search')) && key === 'ArrowLeft' && (box || !target.selectionStart)) {
+    event.preventDefault();
+    pbfEl(`tab-${pbFilter.tab}`).focus();
+    return true;
+  }
+  if (key === 'Enter' && target === pbfEl('search')) {
+    event.preventDefault();
+    (pbfEl('rows').querySelector('.pbf-rb') || pbfEl('all')).focus();
+    return true;
+  }
+  // ↑/↓ walk search → Select All → each row.
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    const stops = [...(pbfEl('search-wrap').hidden ? [] : [pbfEl('search')]), ...pbfEl('table').querySelectorAll('.pbf-rb:not(:disabled)')];
+    const at = stops.indexOf(target);
+    if (at === -1) return false;
+    event.preventDefault();
+    const next = stops[Math.max(0, Math.min(stops.length - 1, at + (key === 'ArrowDown' ? 1 : -1)))];
+    next.focus();
+    next.closest('.pbf-tr:not(.pbf-th)')?.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  // Typing on a list goes into its search box (Space still ticks).
+  const search = pbfEl('search');
+  if (box && !pbfEl('search-wrap').hidden && ((key.length === 1 && key !== ' ') || key === 'Backspace')) {
+    event.preventDefault();
+    search.value = key === 'Backspace' ? search.value.slice(0, -1) : search.value + key;
+    search.focus();
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  return false;
+}
+
+function initPbFilter() {
+  const dialog = byId('pb-filter');
+  pbfEl('months').replaceChildren(...PBF_MONTHS.map((name, month) => {
+    const button = el('button', 'pbf-mo', name);
+    button.type = 'button';
+    button.dataset.month = String(month);
+    button.setAttribute('aria-pressed', 'false');
+    return button;
+  }));
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closePbFilter(); });
+  dialog.addEventListener('click', event => {        // a backdrop click does not close the popup
+    const { f } = pbFilter;
+    const tab = event.target.closest('[data-tab]')?.dataset.tab;
+    if (tab) return pbfSetTab(tab);
+    const month = event.target.closest('[data-month]');
+    if (month) {
+      const m = Number(month.dataset.month);
+      if (f.year === pbFilter.year && f.month === m) pbfSetYearMonth(null, null); else pbfSetYearMonth(pbFilter.year, m);
+      return pbfRender();
+    }
+    if (event.target.closest('#pbf-vat')) {               // on: VAT In, off: VAT Out (the first click turns it on)
+      f.vat = f.vat === 'in' ? 'out' : 'in';
+      return pbfRender();
+    }
+    const op = event.target.closest('#pbf-ops [data-op]');   // the box now shows (and takes) this sign's number
+    if (op) {
+      pbFilter.op = op.dataset.op;
+      pbfRender();
+      pbfEl('num').focus();
+      return pbfEl('num').select();
+    }
+    const action = event.target.closest('[data-pbf]')?.dataset.pbf;
+    if (action === 'close') closePbFilter();
+    else if (action === 'apply') applyPbFilter();
+    else if (action === 'reset') resetPbFilter();
+    else if (action === 'vat-clear') { f.vat = ''; pbfRender(); pbfEl('vat').focus(); }
+    else if (action === 'num-clear') { f.num[pbFilter.tab] = pbfNumEmpty(); pbFilter.op = 'eq'; pbfRender(); pbfEl('num').focus(); }
+    else if (action === 'date-clear') { pbfSetYearMonth(null, null); pbFilter.year = new Date().getFullYear(); pbfRender(); }
+    else if (action === 'year-prev' || action === 'year-next') { pbFilter.year += action === 'year-next' ? 1 : -1; pbfRender(); }
+    else if (action === 'whole-year') {
+      if (f.year === pbFilter.year && f.month === null) pbfSetYearMonth(null, null); else pbfSetYearMonth(pbFilter.year, null);
+      pbfRender();
+    }
+  });
+  pbfEl('search').addEventListener('input', event => {
+    pbFilter.query[pbFilter.tab] = event.target.value;
+    pbfRender();
+  });
+  pbfEl('num').addEventListener('input', event => {
+    pbFilter.f.num[pbFilter.tab][pbFilter.op] = event.target.value.trim();
+    pbfRender();
+  });
+  // A typed range replaces the year / month; a To before the From moves the From back to it.
+  pbfEl('from').addEventListener('input', event => {
+    const f = pbFilter.f;
+    Object.assign(f, { from: event.target.value, year: null, month: null });
+    if (f.from && f.to && f.to < f.from) f.to = f.from;
+    pbfRender();
+  });
+  pbfEl('to').addEventListener('input', event => {
+    const f = pbFilter.f;
+    Object.assign(f, { to: event.target.value, year: null, month: null });
+    if (f.from && f.to && f.to < f.from) f.from = f.to;
+    pbfRender();
+  });
+  // Ticks: All ticks documents; Employee picks people.
+  dialog.addEventListener('change', event => {
+    const box = event.target;
+    if (!box.classList.contains('pbf-rb')) return;
+    const { tab, f } = pbFilter;
+    const set = tab === 'emp' ? f.emps : pbFilter.picked;
+    const keys = box.id === 'pbf-all' ? pbFilter.shown.map(item => item.key ?? item.code) : [box.value];
+    const on = box.id === 'pbf-all' ? keys.some(k => !set.has(k)) : box.checked;
+    for (const k of keys) if (on) set.add(k); else set.delete(k);
+    pbfRender();
   });
 }
 
@@ -14282,12 +14803,80 @@ async function importItemLine(row) {
   };
 }
 
+/* The Purchase Book Filter (#pb-filter) of each list: its filters (rail), the No. column's prefix, what the search
+   finds besides the number, the two lines of a document's Details and who raised it (Employee). */
+const pbfItems = row => `${row.itemCount || 0} item${Number(row.itemCount) === 1 ? '' : 's'}`;
+const PB_DOC_FILTERS = {
+  pr: {
+    tabs: ['all', 'date', 'qty', 'emp'], short: 'PR', searchHint: 'type or requester',
+    details: row => [`${row.purchaseType} · ${pbfItems(row)}`, `Requested by ${row.requestedBy || '—'}${row.referenceNo ? ` · Ref ${row.referenceNo}` : ''}`],
+    employee: { key: 'requestedBy', label: 'Requested By' },
+  },
+  rfq: {
+    // As the Purchase Request's filter: Employee is the Requested By (of the PR this request came from).
+    tabs: ['all', 'date', 'qty', 'emp'], short: 'RFQ', searchHint: 'PR, supplier or requester',
+    details: row => [`${pbfItems(row)} · ${row.supplierCount} supplier${row.supplierCount === 1 ? '' : 's'}${row.purchaseRequestCode ? ` · ${row.purchaseRequestCode}` : ''}`,
+      `Requested by ${row.requestedBy || '—'} · ${row.name}`],
+    employee: { key: 'requestedBy', label: 'Requested By' },
+  },
+  po: {
+    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'PO', searchHint: 'supplier or reference',
+    details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.reference, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
+    employee: { key: 'salesman', label: 'Created By' },
+  },
+  grn: {
+    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty'], short: 'GRN', searchHint: 'supplier or PO',
+    details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.poNumber ? `PO ${row.poNumber}` : 'No PO', row.warehouseName].filter(Boolean).join(' · ')],
+  },
+  // Trade Management › Quotation (sales): the Quotation Request's filter, VAT, Value and Disc %; Employee is its Created By.
+  qt: {
+    // VAT: In when a line has a VAT % above 0 (the quotation has no VAT switch, only each line's VAT %).
+    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Quotation', searchHint: 'customer, reference or creator',
+    details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
+    employee: { key: 'salesman', label: 'Created By' },
+  },
+  // Trade Management › Sales Order: the Quotation's filter without VAT. Employee: the Created By of its quotation.
+  so: {
+    tabs: ['all', 'date', 'value', 'disc', 'qty', 'emp'], short: 'SO', searchHint: 'customer, quotation or creator',
+    details: row => [row.customerName || 'No customer', [pbfItems(row), row.quotationCode && `Quotation ${row.quotationCode}`, row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
+    employee: { key: 'createdBy', label: 'Created By' },
+  },
+  // Trade Management › Delivery Note: the Quotation's filter. Employee is the note's Created By (salesman).
+  dn: {
+    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'DN', searchHint: 'customer, reference or creator',
+    details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
+    employee: { key: 'salesman', label: 'Created By' },
+  },
+  // Transaction Entry › Tax Invoice: the Delivery Note's filter. Employee: the Created By of the document it came from.
+  ti: {
+    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Invoice', searchHint: 'customer, reference or creator',
+    details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
+    employee: { key: 'createdBy', label: 'Created By' },
+  },
+  // Transaction Entry › Purchase Entry: the Tax Invoice's filter without VAT and Disc %. Employee: the Created By of its
+  // purchase order (or its GRN's).
+  pe: {
+    tabs: ['all', 'date', 'value', 'qty', 'emp'], short: 'Purchase', searchHint: 'supplier, invoice, PO / GRN or creator',
+    details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.supplierInvoiceNo && `Inv ${row.supplierInvoiceNo}`, row.reference,
+      row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
+    employee: { key: 'createdBy', label: 'Created By' },
+  },
+  // Transaction Entry › Sales Entry: the Purchase Entry's filter. Employee: the Created By of its tax invoice (or delivery note).
+  se: {
+    tabs: ['all', 'date', 'value', 'qty', 'emp'], short: 'Sales', searchHint: 'customer, ref no, invoice / DN or creator',
+    details: row => [row.customerName || 'No customer', [pbfItems(row), row.customerRefNo && `Ref ${row.customerRefNo}`, row.reference,
+      row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
+    employee: { key: 'createdBy', label: 'Created By' },
+  },
+};
+
 function purchaseList(spec) {
   return createMasterList({
     key: spec.key, route: spec.route, newRoute: `#/${spec.route}/new`, noun: spec.noun, nouns: spec.nouns,
     api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
     dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind), viewTitle: () => spec.noun,
     noView: true,      // only the Masters lists have View; documents: Edit, PDF, Delete (Enter on a row edits it)
+    docFilter: PB_DOC_FILTERS[spec.key],
     columns: spec.columns, fromApi: spec.fromApi, sample: {},
     importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
     importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
@@ -15936,6 +16525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   for (const form of MASTER_FORMS) form.init();
   initPurchaseBook();
   initMasterFilter();
+  initPbFilter();
   initMasterImport();
   initMasterView();
   initMasterConfirm();

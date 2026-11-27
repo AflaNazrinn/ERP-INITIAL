@@ -6191,6 +6191,88 @@
   </div>
 </dialog>
 
+<!-- Filter popup of the Purchase Book lists (Purchase Request, Quotation Request, Purchase Order, GRN): Filter button, or F.
+     The rail on the left holds the filters each list's documents have; the panels are filled by dashboard.js (pbFilter). -->
+<dialog id="pb-filter" class="lookup pbf" aria-labelledby="pbf-title" aria-describedby="pbf-sub">
+  <div class="pbf-head">
+    <span class="pbf-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></span>
+    <div class="pbf-heading">
+      <h2 id="pbf-title" class="pbf-title"></h2>
+      <p id="pbf-sub" class="pbf-sub"></p>
+    </div>
+    <button type="button" class="pbf-close" data-pbf="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div class="pbf-body">
+    <nav id="pbf-rail" class="pbf-rail" role="tablist" aria-orientation="vertical" aria-label="Filters"></nav>
+    <div id="pbf-main" class="pbf-main" role="tabpanel">
+      <label id="pbf-search-wrap" class="pbf-search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="pbf-search" type="text" autocomplete="off" spellcheck="false" aria-controls="pbf-rows">
+      </label>
+
+      <div id="pbf-tb" class="pbf-tb">
+        <div id="pbf-tb-title" class="pbf-tb-title" aria-live="polite"></div>
+        <!-- Qty, Value, Disc %: = < > each keep their own number (the box shows the one picked). = with < is ≤, = with > is ≥,
+             > with < a range. -->
+        <div id="pbf-tb-num" class="pbf-tb-tools">
+          <button type="button" class="pbf-link" data-pbf="num-clear">Clear</button>
+          <div id="pbf-ops" class="pbf-ops" role="group" aria-label="Condition">
+            <button type="button" data-op="eq" aria-pressed="false" title="Equal to" aria-label="Equal to">=</button><button type="button" data-op="lt" aria-pressed="false" title="Less than" aria-label="Less than">&lt;</button><button type="button" data-op="gt" aria-pressed="false" title="Greater than" aria-label="Greater than">&gt;</button>
+          </div>
+          <label class="pbf-num"><b id="pbf-num-unit"></b><input id="pbf-num" type="text" inputmode="decimal" autocomplete="off" aria-label="Value"></label>
+        </div>
+        <!-- VAT: the switch on shows VAT In (VAT enabled on the document), off VAT Out (VAT disabled); Clear shows all again. -->
+        <div id="pbf-tb-vat" class="pbf-tb-tools">
+          <button type="button" class="pbf-link" data-pbf="vat-clear">Clear</button>
+          <button type="button" id="pbf-vat" class="pbf-tg" role="switch" aria-checked="false">VAT In<span class="pbf-sw" aria-hidden="true"><i></i></span></button>
+        </div>
+      </div>
+
+      <section id="pbf-date" class="pbf-date" aria-labelledby="pbf-date-title">
+        <div class="pbf-date-head">
+          <div><h3 id="pbf-date-title" class="pbf-date-h">Date</h3><p class="pbf-date-p">Set a date range, or pick a year and month</p></div>
+          <button type="button" class="pbf-btn-sm" data-pbf="date-clear">Clear dates</button>
+        </div>
+        <div class="pbf-date-w">
+          <div class="pbf-dates">
+            <label><span class="pbf-lb">From Date</span><input id="pbf-from" type="date" class="pbf-date-input"></label>
+            <label><span class="pbf-lb">To Date</span><input id="pbf-to" type="date" class="pbf-date-input"></label>
+          </div>
+          <div class="pbf-or" aria-hidden="true">OR</div>
+          <span class="pbf-lb" id="pbf-ym-label">Year &amp; Month</span>
+          <div class="pbf-ym" role="group" aria-labelledby="pbf-ym-label">
+            <div class="pbf-ym-h">
+              <button type="button" class="pbf-ym-nav" data-pbf="year-prev" aria-label="Previous year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+              <b id="pbf-year" aria-live="polite"></b>
+              <button type="button" class="pbf-ym-nav" data-pbf="year-next" aria-label="Next year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></button>
+              <button type="button" id="pbf-whole-year" class="pbf-ym-all" data-pbf="whole-year" aria-pressed="false">Whole year</button>
+            </div>
+            <div id="pbf-months" class="pbf-ym-g" role="group" aria-label="Month"></div>
+          </div>
+        </div>
+        <div id="pbf-date-note" class="pbf-note" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+          <span id="pbf-date-note-text"></span>
+        </div>
+      </section>
+
+      <div id="pbf-table" class="pbf-table">
+        <div id="pbf-th" class="pbf-tr pbf-th"></div>
+        <div id="pbf-rows" role="group"></div>
+        <div id="pbf-empty" class="pbf-empty" hidden></div>
+      </div>
+    </div>
+  </div>
+  <div class="pbf-foot">
+    <span id="pbf-summary" class="pbf-summary" aria-live="polite"></span>
+    <button type="button" class="ml-btn ml-btn-plain" data-pbf="reset">Reset Filters</button>
+    <button type="button" class="ml-btn ml-btn-primary" data-pbf="apply">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+      <span>Apply Filters</span>
+    </button>
+  </div>
+</dialog>
+
 <!-- Import popup shared by the master list pages (Import button, or I); text and icon are set per page -->
 <dialog id="master-import" class="lookup sf si" aria-labelledby="master-import-title" aria-describedby="master-import-sub">
   <div class="sf-head">

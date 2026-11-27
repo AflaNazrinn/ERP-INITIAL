@@ -43,6 +43,36 @@ const SB_EXTRA_KEYS = [
         'purchaseCategory', 'advancePayment', 'sendForApproval'],
 ];
 
+/*
+ * Who made a sales document, for the list Filters' Employee: its own salesman, else the Created By of the document it
+ * came from. Sales orders and tax invoices have no salesman field, so theirs comes from their source:
+ * sales order → its quotation; tax invoice → its delivery note, else its sales order, else its quotation.
+ * $kind 'qt', 'so', 'dn' or 'ti'; '' when there is none.
+ */
+function sb_creator(string $kind, ?int $id): string
+{
+    if ($id === null) {
+        return '';
+    }
+    $d = SB_DOCS[$kind];
+    $row = query("SELECT * FROM `{$d['table']}` WHERE id = ?", [$id])->fetch();
+    if (!$row) {
+        return '';
+    }
+    if (trim((string) $row['salesman']) !== '') {
+        return (string) $row['salesman'];
+    }
+    $sources = ['qt' => [], 'dn' => [], 'so' => [['qt', 'quotation_id']],
+        'ti' => [['dn', 'delivery_note_id'], ['so', 'sales_order_id'], ['qt', 'quotation_id']]][$kind];
+    foreach ($sources as [$source, $column]) {
+        $name = sb_creator($source, $row[$column] === null ? null : (int) $row[$column]);
+        if ($name !== '') {
+            return $name;
+        }
+    }
+    return '';
+}
+
 function sb_format(string $kind, array $row): array
 {
     $d = SB_DOCS[$kind];
@@ -61,11 +91,18 @@ function sb_format(string $kind, array $row): array
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
     ];
     if ($kind === 'qt') {
+        // The list Filter: VAT In / VAT Out (a line with a VAT % above 0) and Disc % (the whole discount over the gross).
+        $doc['vatEnabled'] = pb_vat_enabled($d['items'], $d['owner'], (int) $row['id']);
+        $doc['discountPct'] = pb_discount_pct($d['items'], $d['owner'], (int) $row['id'], 'CASE WHEN foc = 1 THEN 0 ELSE quantity * price END', $row);
         $doc += ['referenceNo' => $row['reference_no'], 'offerValidity' => $row['offer_validity'],
             'loyaltyMemberId' => $row['loyalty_member_id'], 'roundOff' => $row['round_off'],
             'certifications' => $row['certifications'] === '' ? [] : explode(', ', $row['certifications'])];
     } elseif ($kind === 'so') {
         $qt = $row['quotation_id'] === null ? '' : (string) query('SELECT qt_code FROM quotations WHERE id = ?', [$row['quotation_id']])->fetchColumn();
+        // The list Filter: Disc % (the whole discount, lines' and the order's, over the gross) and Employee: the order's
+        // salesman, else the Created By of the quotation it came from (the order form has no salesman field).
+        $doc['discountPct'] = pb_discount_pct($d['items'], $d['owner'], (int) $row['id'], 'CASE WHEN foc = 1 THEN 0 ELSE quantity * price END', $row);
+        $doc['createdBy'] = sb_creator('so', (int) $row['id']);
         $supplier = $row['supplier_id'] === null ? null : query('SELECT supplier_name FROM suppliers WHERE id = ?', [$row['supplier_id']])->fetch();
         $doc += ['quotationId' => $row['quotation_id'] === null ? null : (int) $row['quotation_id'], 'quotationCode' => $qt,
             'customerPo' => $row['customer_po'], 'advancePayment' => $row['advance_payment'],
@@ -81,6 +118,12 @@ function sb_format(string $kind, array $row): array
         $qt = $code('quotations', 'qt_code', $row['quotation_id']);
         $so = $code('sales_orders', 'so_code', $row['sales_order_id']);
         $dn = $code('delivery_notes', 'dn_code', $row['delivery_note_id']);
+        // The list Filter (as the delivery note's): VAT In / VAT Out, Disc % and Employee. The invoice form has no salesman,
+        // so Employee is the Created By of the document it came from: the delivery note, else the sales order (its
+        // salesman, else its quotation's), else the quotation.
+        $doc['vatEnabled'] = pb_vat_enabled($d['items'], $d['owner'], (int) $row['id']);
+        $doc['discountPct'] = pb_discount_pct($d['items'], $d['owner'], (int) $row['id'], 'CASE WHEN foc = 1 THEN 0 ELSE quantity * price END', $row);
+        $doc['createdBy'] = sb_creator('ti', (int) $row['id']);
         $doc += ['documentTitle' => $row['document_title'],
             'referenceNo' => $row['reference_no'] !== '' ? $row['reference_no'] : ($dn !== '' ? $dn : ($so !== '' ? $so : $qt)),
             'quotationId' => $row['quotation_id'] === null ? null : (int) $row['quotation_id'], 'quotationCode' => $qt,
@@ -89,6 +132,9 @@ function sb_format(string $kind, array $row): array
             'customerPo' => $row['customer_po'], 'purchaseCategory' => $row['purchase_category'],
             'advancePayment' => $row['advance_payment'], 'sendForApproval' => (bool) $row['send_for_approval'], 'status' => $row['status']];
     } else {
+        // The list Filter (as the quotation's): VAT In / VAT Out and Disc %.
+        $doc['vatEnabled'] = pb_vat_enabled($d['items'], $d['owner'], (int) $row['id']);
+        $doc['discountPct'] = pb_discount_pct($d['items'], $d['owner'], (int) $row['id'], 'CASE WHEN foc = 1 THEN 0 ELSE quantity * price END', $row);
         $so = $row['sales_order_id'] === null ? '' : (string) query('SELECT so_code FROM sales_orders WHERE id = ?', [$row['sales_order_id']])->fetchColumn();
         $warehouse = $row['warehouse_id'] === null ? null
             : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();

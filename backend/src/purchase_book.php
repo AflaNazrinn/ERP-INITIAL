@@ -456,10 +456,43 @@ function pb_line_totals(string $table, string $owner, int $docId, string $kind =
     return [(int) $row[0], pb_qty((string) $row[1]), ...($kind === 'grn' ? [pb_qty((string) $row[2])] : [])];
 }
 
+/* The document's whole discount (its lines' and the header's) as a % of its gross value (quantity × price before any
+   discount), for the list Filter's Disc %. $gross is the SQL for one line's gross value; $row is the header row. */
+function pb_discount_pct(string $table, string $owner, int $docId, string $gross, array $row): string
+{
+    $grossValue = (float) query("SELECT COALESCE(SUM($gross), 0) FROM `$table` WHERE `$owner` = ?", [$docId])->fetchColumn();
+    if ($grossValue <= 0) {
+        return '0';
+    }
+    $discount = max(0.0, $grossValue - (float) $row['subtotal'] + (float) $row['discount_amount']);
+    return pb_qty(number_format(min(100.0, $discount / $grossValue * 100), 2, '.', ''));
+}
+
+/* Whether the document charges VAT: a line with a VAT % above 0, as the form's VAT Enabled / VAT Disabled switch shows
+   (the switch sets every line's VAT % to 5 or to 0). The list Filter's VAT In / VAT Out. */
+function pb_vat_enabled(string $table, string $owner, int $docId): bool
+{
+    return (bool) query("SELECT EXISTS (SELECT 1 FROM `$table` WHERE `$owner` = ? AND vat_rate > 0)", [$docId])->fetchColumn();
+}
+
 /* A quantity without trailing zeros: "12.500" → "12.5", "40.000" → "40". */
 function pb_qty(string $value): string
 {
     return str_contains($value, '.') ? rtrim(rtrim($value, '0'), '.') : $value;
+}
+
+/* Every employee for the Purchase Book lists' Filter (Employee): code, name, status and the login's username, which
+   a Purchase Request's Requested By holds. Only these, so any signed-in user may read them (the employee records
+   themselves are for managers). */
+function pb_people(): array
+{
+    $rows = query(
+        "SELECT e.emp_code, TRIM(CONCAT(e.first_name, ' ', e.last_name)) AS name, e.status, u.username
+         FROM employees e LEFT JOIN users u ON u.employee_id = e.id
+         ORDER BY e.status = 'Resigned', e.first_name, e.last_name, e.id"
+    )->fetchAll();
+    return array_map(static fn (array $r): array => ['code' => $r['emp_code'], 'name' => $r['name'], 'status' => (string) $r['status'],
+        'username' => (string) ($r['username'] ?? '')], $rows);
 }
 
 /* ---------- Purchase requests ---------- */
@@ -569,12 +602,17 @@ function rfq_format(array $row): array
          WHERE qs.quotation_request_id = ? ORDER BY qs.sort_order, qs.id',
         [$row['id']]
     )->fetchAll();
-    $pr = $row['purchase_request_id'] === null ? '' : (string) query('SELECT pr_code FROM purchase_requests WHERE id = ?', [$row['purchase_request_id']])->fetchColumn();
+    $prRow = $row['purchase_request_id'] === null ? null
+        : query('SELECT pr_code, requested_by FROM purchase_requests WHERE id = ?', [$row['purchase_request_id']])->fetch();
+    $pr = $prRow ? (string) $prRow['pr_code'] : '';
     $names = array_column($suppliers, 'supplier_name');
     return pb_common($row) + [
         'code' => $row['rfq_code'], 'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $names ? implode(', ', $names) : 'No suppliers',
         'purchaseRequestId' => $row['purchase_request_id'] === null ? null : (int) $row['purchase_request_id'], 'purchaseRequestCode' => $pr,
         'requestDate' => $row['request_date'], 'submissionDeadline' => $row['submission_deadline'] ?? '',
+        'createdBy' => (string) ($row['created_by'] ?? ''),
+        // Who asked for it, as on the Purchase Request it came from (the Filter's Employee); without one, its creator.
+        'requestedBy' => $prRow && (string) $prRow['requested_by'] !== '' ? (string) $prRow['requested_by'] : (string) ($row['created_by'] ?? ''),
         'suppliers' => array_map(static fn ($s) => ['id' => (int) $s['id'], 'code' => $s['supplier_code'], 'name' => $s['supplier_name']], $suppliers),
     ];
 }
@@ -623,6 +661,9 @@ function quotation_request_save(array $data, ?int $id = null): array
     if ($v['submission_deadline'] !== null && $v['submission_deadline'] < $v['request_date']) {
         $in->fail('submissionDeadline', 'The submission deadline cannot be before the request date.');
     }
+    if ($id === null) {
+        $v['created_by'] = (string) ($_SESSION['user']['username'] ?? '');   // who made it; an edit keeps it
+    }
     $supplierIds = $in->ids('supplierIds', 'supplier', 'suppliers');
     if (!$supplierIds) {
         $in->fail('supplierIds', 'Select at least one supplier.');
@@ -667,6 +708,8 @@ function po_format(array $row): array
         'certifications' => $row['certifications'] === '' ? [] : explode(', ', $row['certifications']),
         'currency' => $row['currency'], 'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
+        'discountPct' => pb_discount_pct('purchase_order_items', 'purchase_order_id', (int) $row['id'], 'CASE WHEN foc = 1 THEN 0 ELSE quantity * price END', $row),
+        'vatEnabled' => pb_vat_enabled('purchase_order_items', 'purchase_order_id', (int) $row['id']),
     ];
 }
 
@@ -810,6 +853,8 @@ function grn_format(array $row): array
         'purchaseOrderId' => $row['purchase_order_id'] === null ? null : (int) $row['purchase_order_id'], 'poNumber' => $row['po_number'],
         'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
+        'discountPct' => pb_discount_pct('grn_items', 'grn_id', (int) $row['id'], 'accepted_qty * unit_cost', $row),
+        'vatEnabled' => pb_vat_enabled('grn_items', 'grn_id', (int) $row['id']),
     ];
 }
 

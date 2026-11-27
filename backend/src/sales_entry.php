@@ -16,6 +16,10 @@ function se_format(array $row): array
     $customer = $row['customer_id'] === null ? null : query('SELECT customer_code, customer_name FROM customers WHERE id = ?', [$row['customer_id']])->fetch();
     $ti = $row['tax_invoice_id'] === null ? '' : (string) query('SELECT ti_code FROM tax_invoices WHERE id = ?', [$row['tax_invoice_id']])->fetchColumn();
     $dn = $row['delivery_note_id'] === null ? '' : (string) query('SELECT dn_code FROM delivery_notes WHERE id = ?', [$row['delivery_note_id']])->fetchColumn();
+    // The list Filter's Employee: a sales entry has no person of its own, so the Created By of its tax invoice, else of
+    // its delivery note (sb_creator()).
+    $tiCreator = sb_creator('ti', $row['tax_invoice_id'] === null ? null : (int) $row['tax_invoice_id']);
+    $createdBy = $tiCreator !== '' ? $tiCreator : sb_creator('dn', $row['delivery_note_id'] === null ? null : (int) $row['delivery_note_id']);
     return pb_common($row) + [
         'code' => $row['se_code'], 'salesDate' => $row['se_date'], 'date' => $row['se_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $customer ? $customer['customer_name'] : 'No customer',
@@ -25,6 +29,7 @@ function se_format(array $row): array
         'deliveryNoteId' => $row['delivery_note_id'] === null ? null : (int) $row['delivery_note_id'], 'deliveryNoteCode' => $dn,
         'currency' => $row['currency'], 'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
+        'createdBy' => $createdBy,
     ];
 }
 
