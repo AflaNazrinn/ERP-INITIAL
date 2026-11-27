@@ -16,6 +16,11 @@ function pe_format(array $row): array
     $supplier = $row['supplier_id'] === null ? null : query('SELECT supplier_code, supplier_name FROM suppliers WHERE id = ?', [$row['supplier_id']])->fetch();
     $po = $row['purchase_order_id'] === null ? '' : (string) query('SELECT po_code FROM purchase_orders WHERE id = ?', [$row['purchase_order_id']])->fetchColumn();
     $grn = $row['grn_id'] === null ? '' : (string) query('SELECT grn_code FROM grns WHERE id = ?', [$row['grn_id']])->fetchColumn();
+    // The list Filter's Employee: a purchase entry has no person of its own, so the Created By of its purchase order,
+    // else of its GRN's purchase order.
+    $poId = $row['purchase_order_id'] ?? ($row['grn_id'] === null ? null
+        : query('SELECT purchase_order_id FROM grns WHERE id = ?', [$row['grn_id']])->fetchColumn());
+    $createdBy = $poId ? (string) query('SELECT salesman FROM purchase_orders WHERE id = ?', [$poId])->fetchColumn() : '';
     return pb_common($row) + [
         'code' => $row['pe_code'], 'purchaseDate' => $row['pe_date'], 'date' => $row['pe_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $supplier ? $supplier['supplier_name'] : 'No supplier',
@@ -25,6 +30,7 @@ function pe_format(array $row): array
         'grnId' => $row['grn_id'] === null ? null : (int) $row['grn_id'], 'grnCode' => $grn,
         'currency' => $row['currency'], 'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
         'discountAmount' => $row['discount_amount'], 'shipping' => $row['shipping'], 'grandTotal' => $row['grand_total'],
+        'createdBy' => $createdBy,
     ];
 }
 
