@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 require_once __DIR__ . '/sales_replacement.php';      // srp_totals(): the same line maths as a sales replacement
 
 /*
@@ -28,7 +29,7 @@ function prp_format(array $row): array
     $grn = $row['grn_id'] === null ? '' : (string) query('SELECT grn_code FROM grns WHERE id = ?', [$row['grn_id']])->fetchColumn();
     $warehouse = $row['warehouse_id'] === null ? null
         : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, (string) ($row['created_by'] ?? '')) + [
         'code' => $row['prp_code'], 'replacementDate' => $row['prp_date'], 'date' => $row['prp_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $supplier ? $supplier['supplier_name'] : 'No supplier',
         'supplierId' => $supplier ? (int) $row['supplier_id'] : null, 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
@@ -170,7 +171,11 @@ function purchase_replacement_save(array $data, ?int $id = null): array
         'discount_amount' => pb_money($discount), 'handling_charge' => pb_money($handling),
         'grand_total' => pb_money($difference - $discount + $handling)];
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('purchase_replacements', 'prp_code', $id, $v, 'purchase_replacement_next_code');
+        if ($new) {
+            rr_record_creator('purchase_replacements', $id);   // who made it (Filter › Employee)
+        }
         pb_save_lines('purchase_replacement_items', 'purchase_replacement_id', $id, 'po', $lines);
         foreach ($lines as $order => $line) {
             query('UPDATE purchase_replacement_items SET received_qty = ?, item_condition = ?, old_price = ?, replacement_item_id = ?,

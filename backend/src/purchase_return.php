@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 
 /*
  * Return & Replacement › Purchase Return (PRT-0001): goods sent back to a supplier.
@@ -32,7 +33,7 @@ function prt_format(array $row): array
     $sr = $row['sales_return_id'] === null ? '' : (string) query('SELECT sr_code FROM sales_returns WHERE id = ?', [$row['sales_return_id']])->fetchColumn();
     $warehouse = $row['warehouse_id'] === null ? null
         : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, (string) ($row['created_by'] ?? '')) + [
         'code' => $row['prt_code'], 'returnDate' => $row['prt_date'], 'date' => $row['prt_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $supplier ? $supplier['supplier_name'] : 'No supplier',
         'supplierId' => $supplier ? (int) $row['supplier_id'] : null, 'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
@@ -163,7 +164,11 @@ function purchase_return_save(array $data, ?int $id = null): array
     $v += ['subtotal' => $totals['subtotal'], 'vat_amount' => $totals['vatAmount'], 'discount_amount' => $totals['discountAmount'],
         'supplier_deduction' => pb_money($deduction), 'grand_total' => pb_money((float) $totals['grandTotal'] - $deduction)];
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('purchase_returns', 'prt_code', $id, $v, 'purchase_return_next_code');
+        if ($new) {
+            rr_record_creator('purchase_returns', $id);   // who made it (Filter › Employee)
+        }
         pb_save_lines('purchase_return_items', 'purchase_return_id', $id, 'po', $lines);
         foreach ($lines as $order => $line) {
             query('UPDATE purchase_return_items SET received_qty = ?, item_condition = ? WHERE purchase_return_id = ? AND sort_order = ?',

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/sales_book.php';
+require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 
 /*
  * Return & Replacement › Sales Replacement (SRP-0001): goods sent to a customer in place of goods they return.
@@ -26,7 +27,7 @@ function srp_format(array $row): array
     $se = $row['sales_entry_id'] === null ? '' : (string) query('SELECT se_code FROM sales_entries WHERE id = ?', [$row['sales_entry_id']])->fetchColumn();
     $warehouse = $row['warehouse_id'] === null ? null
         : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, '') + [
         'code' => $row['srp_code'], 'replacementDate' => $row['srp_date'], 'date' => $row['srp_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $customer ? $customer['customer_name'] : 'No customer',
         'customerId' => $customer ? (int) $row['customer_id'] : null, 'customerCode' => $customer ? $customer['customer_code'] : '',
@@ -183,7 +184,11 @@ function sales_replacement_save(array $data, ?int $id = null): array
         'discount_amount' => pb_money($discount), 'handling_charge' => pb_money($handling),
         'grand_total' => pb_money($difference - $discount + $handling)];
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('sales_replacements', 'srp_code', $id, $v, 'sales_replacement_next_code');
+        if ($new) {
+            rr_record_creator('sales_replacements', $id);   // who made it (Filter › Employee)
+        }
         pb_save_lines('sales_replacement_items', 'sales_replacement_id', $id, 'po', $lines);
         foreach ($lines as $order => $line) {
             query('UPDATE sales_replacement_items SET sold_qty = ?, item_condition = ?, old_price = ?, replacement_item_id = ?,

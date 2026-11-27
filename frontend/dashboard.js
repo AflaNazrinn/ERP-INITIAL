@@ -3904,7 +3904,7 @@ const warehouseForm = createFormPage({
    (#/employee/employee/edit/ID). Keys: / search, F filter, Shift+N add, Esc back; in the profile E edits, Esc closes. */
 
 const EMPLOYEE_LIST_ROUTE = 'employee/employee';
-const EMP_NO_FILTERS = { department: '', from: '', to: '', warehouse: '', resigned: '' };
+const EMP_NO_FILTERS = { picked: [], teams: [], points: [], d1: '', d2: '', y: null, m: null, resigned: '' };   // the Filter popup's (erfBlank)
 const employeeList = { rows: [], loaded: false, returnTo: null, seq: 0, filters: { ...EMP_NO_FILTERS } };
 const EMP_TONES = ['violet', 'indigo', 'teal', 'blue', 'amber', 'rose', 'green'];
 const EMP_STATUS_CLASS = { Active: 'active', 'On Leave': 'leave', Resigned: 'resigned', Inactive: 'inactive' };
@@ -3994,14 +3994,6 @@ function empCard(employee) {
   return card;
 }
 
-// The rows the filters keep (the applied ones, or the popup's while it is open, for its count).
-function empFilterRows(rows, { department, from, to, warehouse, resigned }) {
-  return rows.filter(row => (!department || row.department === department)
-    && (!from || (row.joinDate && row.joinDate >= from)) && (!to || (row.joinDate && row.joinDate <= to))
-    && (!warehouse || String(row.warehouseId ?? '') === warehouse)
-    && (!resigned || (resigned === 'only') === (row.status === 'Resigned')));
-}
-const empFilterCount = f => [f.department, f.from || f.to, f.warehouse, f.resigned].filter(Boolean).length;
 
 function empShownRows() {
   const search = byId('employee-list-search').value.trim().toLowerCase();
@@ -4023,55 +4015,76 @@ function renderEmployeeList() {
   byId('employee-list-filter').classList.toggle('is-on', filters > 0);
 }
 
-// The department filter offers the departments in use.
+/* ---------- Filter popup (F): the Filter Employees popup in the side-rail format of the other Filter popups ----------
+   All        search by name or code and tick the employees to show (none ticked: all of them)
+   Team       tick teams (departments)          Stock Point  tick stock points
+   Joining    Date of Joining: From / To, or a year (Whole year) and a month
+   Resigned   All employees / Hide resigned / Resigned only
+   The tabs work together; Apply Filters shows them on the cards, Reset clears them; Esc or Close leaves the list
+   as it was. Keys as the other Filter popups (rail ↑/↓, → into a tab, ↑/↓ in the list, Space ticks, Ctrl+Enter). */
+const ERF_TABS = [
+  { k: 'all', l: 'All', i: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
+  { k: 'team', l: 'Team', i: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.2c2.2.7 3.5 2.8 3.5 5.8"/>' },
+  { k: 'point', l: 'Stock Point', i: '<path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-7h6v7"/>' },
+  { k: 'date', l: 'Joining', i: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  { k: 'res', l: 'Resigned', i: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>' },
+];
+const ERF_RESIGNED = [['', 'All employees'], ['hide', 'Hide resigned'], ['only', 'Resigned only']];
+const erfBlank = () => ({ picked: [], teams: [], points: [], d1: '', d2: '', y: null, m: null, resigned: '' });
+const erf = { F: erfBlank(), tab: 'all', viewY: new Date().getFullYear(), points: [], shown: [], opener: null };
+const erfEl = suffix => byId(`erf-${suffix}`);
+const erfTeam = row => row.department || '—';
+const erfPoint = row => String(row.warehouseId ?? '');
+const erfIsResigned = row => row.status === 'Resigned';
+
+// Every filter but the ticks of one tab (skip), so a tab's counts show what ticking there would give.
+function erfPass(row, F, skip) {
+  if (skip !== 'picked' && F.picked.length && !F.picked.includes(row.code)) return false;
+  if (skip !== 'team' && F.teams.length && !F.teams.includes(erfTeam(row))) return false;
+  if (skip !== 'point' && F.points.length && !F.points.includes(erfPoint(row))) return false;
+  const range = rrfRange(F);
+  if (range && (!row.joinDate || row.joinDate < range[0] || row.joinDate > range[1])) return false;
+  if (F.resigned && (F.resigned === 'only') !== erfIsResigned(row)) return false;
+  return true;
+}
+// The rows the applied filters keep (the cards), and how many filters are on.
+function empFilterRows(rows, F) {
+  return rows.filter(row => erfPass(row, F));
+}
+const empFilterCount = F => (F.picked.length ? 1 : 0) + (F.teams.length ? 1 : 0) + (F.points.length ? 1 : 0) + (rrfRange(F) ? 1 : 0) + (F.resigned ? 1 : 0);
+
+// After the employees load or one is deleted: the Team tab lists the teams in use (from the rows), so an open popup
+// only needs drawing again.
 function empFillDepartments() {
-  const select = byId('employee-filter-department');
-  const current = select.value;
-  const departments = [...new Set(employeeList.rows.map(row => row.department).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  select.replaceChildren(new Option('All teams', ''), ...departments.map(name => new Option(name, name)));
-  select.value = departments.includes(current) ? current : '';
+  if (byId('employee-filter')?.open) erfRender();
 }
 
-// The Stock Point filter: the stock points in the Stock Point master.
+// The Stock Point tab lists the Stock Point master (the employees' own stock points when it cannot be read).
 async function empFillStockPoints() {
   try {
     const rows = await apiRequest('api/warehouses.php');
-    fillSelect(byId('employee-filter-warehouse'), rows.map(row => ({ value: row.id, label: [row.code, row.name].filter(Boolean).join(' – ') })), 'All stock points');
-  } catch { /* the employees' own stock points are still filtered by id */ }
+    erf.points = rows.map(row => ({ id: String(row.id), code: row.code || '', name: row.name || '' }));
+  } catch { /* the employees' own stock points are listed instead */ }
 }
-
-/* ---------- Filter popup (F), as the master lists' Filter: the choices apply with Apply Filters; Reset Filters
-   clears them (and the list) at once; Esc or Close leaves the list as it was. ---------- */
-const efEl = suffix => byId(`employee-filter-${suffix}`);
-const efResigned = () => byId('employee-filter').querySelector('input[name="employee-filter-resigned"]:checked')?.value ?? '';
-const efPicked = () => ({ department: efEl('department').value, from: efEl('from').value, to: efEl('to').value,
-  warehouse: efEl('warehouse').value, resigned: efResigned() });
-
-function efPreview() {
-  const picked = efPicked();
-  const badDates = Boolean(picked.from && picked.to && picked.from > picked.to);
-  efEl('date-error').hidden = !badDates;
-  const total = employeeList.rows.length;
-  const shown = empFilterRows(employeeList.rows, picked).length;
-  const count = empFilterCount(picked);
-  efEl('badge').textContent = count ? `${count} active` : '';
-  efEl('badge').hidden = !count;
-  efEl('summary').textContent = `${shown} of ${total} employee${total === 1 ? '' : 's'}`;
-  return !badDates;
+function erfPointList() {
+  const known = new Map(erf.points.map(p => [p.id, p]));
+  for (const row of employeeList.rows) {
+    const id = erfPoint(row);
+    if (id && !known.has(id)) known.set(id, { id, code: row.warehouseCode || '', name: row.warehouseName || `Stock point #${id}` });
+  }
+  return [...known.values()].sort((a, b) => a.code.localeCompare(b.code) || a.name.localeCompare(b.name));
 }
 
 function openEmployeeFilter() {
-  const f = employeeList.filters;
-  empFillDepartments();
-  setSelectValue(efEl('department'), f.department, f.department);
-  setSelectValue(efEl('warehouse'), f.warehouse, f.warehouse);
-  efEl('from').value = f.from;
-  efEl('to').value = f.to;
-  for (const radio of byId('employee-filter').querySelectorAll('input[name="employee-filter-resigned"]')) radio.checked = radio.value === f.resigned;
-  efPreview();
+  erf.F = JSON.parse(JSON.stringify({ ...erfBlank(), ...employeeList.filters }));
+  erf.tab = 'all';
+  erf.viewY = erf.F.y || new Date().getFullYear();
+  erf.opener = document.activeElement;
+  erfEl('q').value = ''; erfEl('tq').value = '';
+  erfRender();
   document.documentElement.classList.add('has-modal');
   byId('employee-filter').showModal();
-  efEl('department').focus();
+  erfEl('q').focus();
 }
 
 function closeEmployeeFilter() {
@@ -4079,12 +4092,12 @@ function closeEmployeeFilter() {
   if (!dialog.open) return;
   dialog.close();
   if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
-  byId('employee-list-filter').focus();
+  const back = erf.opener;
+  (back && document.contains(back) && back !== document.body ? back : byId('employee-list-filter')).focus();
 }
 
 function applyEmployeeFilter() {
-  if (!efPreview()) { efEl('from').focus(); return; }
-  employeeList.filters = efPicked();
+  employeeList.filters = JSON.parse(JSON.stringify(erf.F));
   renderEmployeeList();
   closeEmployeeFilter();
   const shown = empShownRows().length;
@@ -4092,34 +4105,314 @@ function applyEmployeeFilter() {
 }
 
 function resetEmployeeFilter() {
-  employeeList.filters = { ...EMP_NO_FILTERS };
-  efEl('department').value = '';
-  efEl('warehouse').value = '';
-  efEl('from').value = '';
-  efEl('to').value = '';
-  byId('employee-filter').querySelector('input[name="employee-filter-resigned"][value=""]').checked = true;
-  efPreview();
+  erf.F = erfBlank();
+  erf.viewY = new Date().getFullYear();
+  erfEl('q').value = ''; erfEl('tq').value = '';
+  employeeList.filters = erfBlank();
   renderEmployeeList();
-  efEl('department').focus();
+  erfRender();
+  showToast('Filters reset', 'Showing all employees.');
 }
 
-// Esc closes; Enter moves Team → Stock Point → From → To → the Resigned choice → Apply Filters (Enter on a choice
-// picks it first); Ctrl+Enter applies from anywhere.
+function erfRender() {
+  const { F, tab } = erf;
+  const rows = employeeList.rows;
+  for (const b of erfEl('rail').querySelectorAll('[role="tab"]')) {
+    const k = b.dataset.k;
+    b.setAttribute('aria-selected', String(k === tab));
+    b.tabIndex = k === tab ? 0 : -1;
+    b.classList.toggle('is-on', k === 'all' ? F.picked.length > 0 : k === 'team' ? F.teams.length > 0 : k === 'point' ? F.points.length > 0
+      : k === 'date' ? Boolean(rrfRange(F)) : Boolean(F.resigned));
+  }
+  erfEl('main').setAttribute('aria-labelledby', `erf-tab-${tab}`);
+  erfEl('srch').hidden = tab !== 'all';
+  erfEl('tsrch').hidden = tab !== 'team' && tab !== 'point';
+  erfEl('tb').hidden = tab !== 'res';
+  erfEl('dp').hidden = tab !== 'date';
+  erfEl('tbl').hidden = tab === 'date';
+  const box = (state, label, id = '') => `<span class="rrf-rb"${id ? ` id="${id}"` : ''} role="checkbox" aria-checked="${state}" aria-label="${rrfEsc(label)}">${RRF_CHECK}</span>`;
+  const head = (on, n, a, b, c, label) => `<div class="rrf-c0"><button type="button" class="rrf-rb" id="erf-all" role="checkbox" aria-checked="${!n || !on ? 'false' : on === n ? 'true' : 'mixed'}" aria-label="${label}">${RRF_CHECK}</button></div>`
+    + `<div>${a}</div><div>${b}</div><div class="rrf-last">${c}<span class="rrf-pill">${on} of ${n} selected</span></div>`;
+  const tq = erfEl('tq').value.trim().toLowerCase();
+  let total = 0; let selected = 0; let noun = 'employees';
+
+  if (tab === 'team' || tab === 'point') {
+    const base = rows.filter(row => erfPass(row, F, tab));
+    const items = tab === 'team'
+      ? [...new Set(rows.map(erfTeam))].sort((a, b) => a.localeCompare(b)).map(t => ({ key: t, code: '', name: t, sub: '' }))
+      : erfPointList().map(p => ({ key: p.id, code: p.code, name: p.name, sub: '' }));
+    const picked = tab === 'team' ? F.teams : F.points;
+    const vis = items.filter(it => !tq || it.name.toLowerCase().includes(tq) || it.code.toLowerCase().includes(tq));
+    erf.shown = vis;
+    erfEl('tq').placeholder = tab === 'team' ? 'Search team...' : 'Search stock point by name or code...';
+    erfEl('tq').setAttribute('aria-label', erfEl('tq').placeholder);
+    const count = key => base.filter(row => (tab === 'team' ? erfTeam(row) : erfPoint(row)) === key).length;
+    const on = vis.filter(it => picked.includes(it.key)).length;
+    erfEl('th').innerHTML = head(on, vis.length, tab === 'team' ? 'Team' : 'Code', tab === 'team' ? 'Details' : 'Stock Point', 'Employees', 'Select all visible');
+    erfEl('rows').innerHTML = vis.length ? vis.map(it => {
+      const s = picked.includes(it.key); const k = count(it.key);
+      return `<div class="rrf-tr${s ? ' is-sel' : ''}" role="row" tabindex="0" data-v="${rrfEsc(it.key)}">`
+        + `<div class="rrf-c0">${box(s, `Select ${it.name}`)}</div>`
+        + `<div class="rrf-code">${rrfEsc(tab === 'team' ? it.name.slice(0, 3).toUpperCase() : it.code)}</div>`
+        + `<div class="rrf-det"><b>${rrfEsc(it.name)}</b><small>${k} employee${k === 1 ? '' : 's'}${tab === 'team' ? ' in this team' : ' at this stock point'}</small></div>`
+        + `<div class="rrf-val">${k} employee${k === 1 ? '' : 's'}</div></div>`;
+    }).join('') : `<div class="rrf-empty">${tq ? 'Nothing matches the search.' : tab === 'team' ? 'No teams yet.' : 'No stock points yet.'}</div>`;
+    total = items.length; selected = picked.length; noun = tab === 'team' ? 'teams' : 'stock points';
+    erfEl('sum').innerHTML = `${selected} of ${total} ${noun} selected <span>(${vis.length} visible)</span>`;
+    return;
+  }
+
+  const q = erfEl('q').value.trim().toLowerCase();
+  const vis = rows.filter(row => erfPass(row, F, 'picked') && (!q || String(row.name || '').toLowerCase().includes(q) || String(row.code || '').toLowerCase().includes(q)));
+  erf.shown = vis;
+  if (tab === 'res') {
+    const base = rows.filter(row => erfPass(row, F, 'res'));
+    const count = v => (v === '' ? base.length : base.filter(row => (v === 'only') === erfIsResigned(row)).length);
+    erfEl('seg').innerHTML = ERF_RESIGNED.map(([v, l]) => `<button type="button" data-r="${v}" aria-pressed="${F.resigned === v}">${l} (${count(v)})</button>`).join('');
+    erfEl('tb-t').innerHTML = `${ERF_RESIGNED.find(([v]) => v === F.resigned)[1]}<span> · ${vis.length} visible</span>`;
+  }
+  const on = vis.filter(row => F.picked.includes(row.code)).length;
+  const col = tab === 'res' ? 'Status' : 'Joined';
+  erfEl('th').innerHTML = head(on, vis.length, 'Emp Code', 'Employee', col, 'Select all visible employees');
+  erfEl('rows').innerHTML = vis.length ? vis.map(row => {
+    const s = F.picked.includes(row.code);
+    const where = [row.department, row.warehouseName].filter(Boolean).join(' · ') || '—';
+    const val = tab === 'res' ? (row.status || 'Active') : (row.joinDate ? rrfLong(row.joinDate) : '—');
+    return `<div class="rrf-tr${s ? ' is-sel' : ''}" role="row" tabindex="0" data-c="${rrfEsc(row.code)}">`
+      + `<div class="rrf-c0">${box(s, `Select ${row.name}`)}</div>`
+      + `<div class="rrf-code">${rrfEsc(row.code)}</div>`
+      + `<div class="rrf-det"><b>${rrfEsc(row.name)}</b><small>${rrfEsc(where)}</small></div>`
+      + `<div class="rrf-val">${rrfEsc(val)}</div></div>`;
+  }).join('') : `<div class="rrf-empty">${rows.length ? 'No employees match these filters.' : 'No employees yet.'}</div>`;
+  erfEl('sum').innerHTML = `${F.picked.length} of ${rows.length} employees selected <span>(${vis.length} visible)</span>`;
+  if (tab === 'date') erfRenderDate();
+}
+
+function erfRenderDate() {
+  const { F } = erf;
+  if (document.activeElement !== erfEl('d1')) erfEl('d1').value = F.d1;
+  if (document.activeElement !== erfEl('d2')) erfEl('d2').value = F.d2;
+  erfEl('d2').min = F.d1 || '';
+  const now = new Date();
+  const years = [...new Set([now.getFullYear(), ...employeeList.rows.map(r => Number(String(r.joinDate || '').slice(0, 4))).filter(Boolean)])];
+  erfEl('y-cur').textContent = String(erf.viewY);
+  erfEl('y-prev').disabled = erf.viewY <= Math.min(...years);
+  erfEl('y-next').disabled = erf.viewY >= Math.max(...years);
+  const whole = F.y === erf.viewY && F.m === null;
+  erfEl('y-all').setAttribute('aria-pressed', String(whole));
+  [...erfEl('months').children].forEach(b => {
+    const m = Number(b.dataset.m);
+    b.setAttribute('aria-pressed', String(F.y === erf.viewY && F.m === m));
+    b.classList.toggle('is-inyr', whole);
+    b.classList.toggle('is-now', erf.viewY === now.getFullYear() && m === now.getMonth());
+    b.setAttribute('aria-label', `${RRF_MONTHS[m]} ${erf.viewY}`);
+  });
+  const range = rrfRange(F); const n = employeeList.rows.filter(row => erfPass(row, F, 'picked')).length;
+  const included = `${n} employee${n === 1 ? '' : 's'} included`;
+  let text = `No date filter set — all ${employeeList.rows.length} employees included`;
+  if (range && F.y) text = `Joined ${F.m !== null ? `${RRF_MONTHS[F.m]} ` : ''}${F.y} (${rrfSlash(F.d1)} – ${rrfSlash(F.d2)}) — ${included}`;
+  else if (range) text = `Joined ${F.d1 ? rrfSlash(F.d1) : 'any time'} – ${F.d2 ? rrfSlash(F.d2) : 'today'} — ${included}`;
+  erfEl('d-note-t').textContent = text;
+  erfEl('d-note').classList.toggle('is-on', Boolean(range));
+}
+
+function erfToggle(row) {
+  const F = erf.F;
+  const flip = (list, key) => (list.includes(key) ? list.filter(x => x !== key) : [...list, key]);
+  let selector;
+  if (row.dataset.v !== undefined) {
+    if (erf.tab === 'team') F.teams = flip(F.teams, row.dataset.v); else F.points = flip(F.points, row.dataset.v);
+    selector = `.rrf-tr[data-v="${CSS.escape(row.dataset.v)}"]`;
+  } else {
+    F.picked = flip(F.picked, row.dataset.c);
+    selector = `.rrf-tr[data-c="${CSS.escape(row.dataset.c)}"]`;
+  }
+  erfRender();
+  erfEl('rows').querySelector(selector)?.focus();
+}
+function erfToggleAll() {
+  const F = erf.F;
+  if (erf.tab === 'team' || erf.tab === 'point') {
+    const keys = erf.shown.map(it => it.key);
+    const listKey = erf.tab === 'team' ? 'teams' : 'points';
+    const all = keys.length && keys.every(k => F[listKey].includes(k));
+    F[listKey] = all ? F[listKey].filter(k => !keys.includes(k)) : [...new Set([...F[listKey], ...keys])];
+  } else {
+    const codes = erf.shown.map(row => row.code);
+    const all = codes.length && codes.every(c => F.picked.includes(c));
+    F.picked = all ? F.picked.filter(c => !codes.includes(c)) : [...new Set([...F.picked, ...codes])];
+  }
+  erfRender();
+  byId('erf-all')?.focus();
+}
+
+// Keys (the page hands them over first): as the other Filter popups.
+function erfTop() {
+  if (erf.tab === 'all') return [erfEl('q')];
+  if (erf.tab === 'team' || erf.tab === 'point') return [erfEl('tq')];
+  if (erf.tab === 'res') return [...erfEl('seg').children];
+  return [];
+}
+const erfLines = () => [byId('erf-all'), ...erfEl('rows').querySelectorAll('.rrf-tr')].filter(rrfVisible);
+const erfFoot = () => [...byId('employee-filter').querySelectorAll('.rrf-ft .rrf-btn')];
+const erfTabButton = () => erfEl(`tab-${erf.tab}`);
+function erfShowTab(k) { erf.tab = k; erfRender(); erfTabButton().focus(); }
+function erfEnterPanel() {
+  if (erf.tab === 'date') { erfEl('d1').focus(); return; }
+  (erfTop()[0] || erfLines()[0] || erfFoot()[1]).focus();
+}
+
 function handleEmployeeFilterKeys(event) {
   const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  event.stopPropagation();
+  const stop = node => { event.preventDefault(); node?.focus(); };
   if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeEmployeeFilter(); return true; }
-  if (key !== 'Enter' || event.altKey || event.shiftKey) return false;
-  const dialog = byId('employee-filter');
-  if (event.ctrlKey || event.metaKey) { event.preventDefault(); if (!event.repeat) applyEmployeeFilter(); return true; }
-  if (target.matches('button')) return false;                     // the button's own click
-  event.preventDefault();
-  if (event.repeat) return true;
-  if (target.type === 'radio') { target.checked = true; efPreview(); dialog.querySelector('[data-ef="apply"]').focus(); return true; }
-  const stops = [efEl('department'), efEl('warehouse'), efEl('from'), efEl('to'),
-    dialog.querySelector('input[name="employee-filter-resigned"]:checked'), dialog.querySelector('[data-ef="apply"]')];
-  stops[Math.min(stops.indexOf(target) + 1, stops.length - 1)].focus();
+  if (key === 'Enter' && ctrl) { event.preventDefault(); if (!event.repeat) applyEmployeeFilter(); return true; }
+  if (ctrl || event.altKey) return true;
+  const foot = erfFoot(); const lines = erfLines(); const top = erfTop();
+
+  if (erfEl('rail').contains(target)) {
+    const tabs = ERF_TABS.map(t => erfEl(`tab-${t.k}`));
+    const reset = erfEl('rail-reset');
+    const at = tabs.indexOf(target);
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault();
+      if (target === reset) { if (key === 'ArrowUp') erfShowTab(ERF_TABS.at(-1).k); return true; }
+      const next = at + (key === 'ArrowDown' ? 1 : -1);
+      if (next >= tabs.length) reset.focus(); else if (next >= 0) erfShowTab(ERF_TABS[next].k);
+      return true;
+    }
+    if ((key === 'ArrowRight' || key === 'Enter') && at >= 0) {
+      event.preventDefault();
+      if (erf.tab !== ERF_TABS[at].k) erfShowTab(ERF_TABS[at].k);
+      erfEnterPanel();
+    }
+    return true;
+  }
+  const fAt = foot.indexOf(target);
+  if (fAt >= 0) {
+    if (key === 'ArrowRight' && fAt < foot.length - 1) stop(foot[fAt + 1]);
+    else if (key === 'ArrowLeft') stop(fAt > 0 ? foot[fAt - 1] : erfTabButton());
+    else if (key === 'ArrowUp') stop(erf.tab === 'date' ? erfEl('months').lastElementChild : lines.at(-1) || top[0] || erfTabButton());
+    return true;
+  }
+  if (erfEl('dp').contains(target)) {
+    const months = [...erfEl('months').children];
+    const head = [erfEl('y-prev'), erfEl('y-all'), erfEl('y-next')].filter(rrfVisible);
+    const mAt = months.indexOf(target);
+    if (target === erfEl('d1') || target === erfEl('d2')) {
+      if (key === 'Enter') { event.preventDefault(); if (target === erfEl('d1')) erfEl('d2').focus(); else foot[1].focus(); }
+      return true;
+    }
+    if (mAt >= 0) {
+      if (key === 'ArrowRight' && mAt < 11) stop(months[mAt + 1]);
+      else if (key === 'ArrowLeft') stop(mAt % 4 === 0 ? erfTabButton() : months[mAt - 1]);
+      else if (key === 'ArrowDown') stop(mAt + 4 <= 11 ? months[mAt + 4] : foot[1]);
+      else if (key === 'ArrowUp') stop(mAt >= 4 ? months[mAt - 4] : erfEl('y-all'));
+      return true;
+    }
+    const hAt = head.indexOf(target);
+    if (hAt >= 0) {
+      if (key === 'ArrowRight' && hAt < head.length - 1) stop(head[hAt + 1]);
+      else if (key === 'ArrowLeft') stop(hAt > 0 ? head[hAt - 1] : erfTabButton());
+      else if (key === 'ArrowDown') stop(months[0]);
+      else if (key === 'ArrowUp') stop(erfEl('d1'));
+      return true;
+    }
+    if (target === erfEl('d-clr')) { if (key === 'ArrowDown') stop(erfEl('d1')); else if (key === 'ArrowLeft') stop(erfEl('d2')); }
+    return true;
+  }
+  const tAt = top.indexOf(target);
+  if (tAt >= 0) {
+    const text = target.tagName === 'INPUT';
+    if (key === 'ArrowDown' || (key === 'Enter' && text)) { stop(lines[1] || lines[0] || foot[1]); return true; }
+    if (key === 'ArrowLeft' && (!text || rrfCaretAt(target, 'start'))) { stop(tAt > 0 ? top[tAt - 1] : erfTabButton()); return true; }
+    if (key === 'ArrowRight' && tAt < top.length - 1 && (!text || rrfCaretAt(target, 'end'))) { stop(top[tAt + 1]); return true; }
+    return true;
+  }
+  const lAt = lines.indexOf(target);
+  if (lAt >= 0) {
+    if (key === ' ' || key === 'Enter') {
+      event.preventDefault();
+      if (!event.repeat) { if (target.id === 'erf-all') erfToggleAll(); else erfToggle(target); }
+      return true;
+    }
+    if (key === 'ArrowDown') stop(lAt < lines.length - 1 ? lines[lAt + 1] : foot[1]);
+    else if (key === 'ArrowUp') stop(lAt > 0 ? lines[lAt - 1] : top[top.length - 1] || erfTabButton());
+    else if (key === 'Home') stop(lines[1] || lines[0]);
+    else if (key === 'End') stop(lines.at(-1));
+    else if (key === 'ArrowLeft') stop(erfTabButton());
+    else if (key === 'ArrowRight') stop(foot[0]);
+    else if ((key.length === 1 || key === 'Backspace') && top[0]?.tagName === 'INPUT') {
+      const search = top[0];
+      event.preventDefault();
+      search.value = key === 'Backspace' ? search.value.slice(0, -1) : search.value + key;
+      search.focus();
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return true;
+  }
   return true;
 }
+
+function initEmployeeFilter() {
+  const dialog = byId('employee-filter');
+  erfEl('rail').innerHTML = ERF_TABS.map((t, i) => `${i === 1 ? '<div class="rrf-sep" aria-hidden="true"></div>' : ''}`
+    + `<button type="button" class="rrf-ri" role="tab" id="erf-tab-${t.k}" data-k="${t.k}" aria-selected="false" aria-controls="erf-main"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t.i}</svg>${t.l}</button>`).join('')
+    + '<button type="button" class="rrf-ri rrf-reset" id="erf-rail-reset" title="Reset all filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>';
+  erfEl('months').innerHTML = RRF_MONTHS.map((m, i) => `<button type="button" class="rrf-mo" data-m="${i}" aria-pressed="false">${m}</button>`).join('');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeEmployeeFilter(); });
+  dialog.addEventListener('click', event => {
+    const action = event.target.closest('[data-ef]')?.dataset.ef;
+    if (action === 'close') closeEmployeeFilter();
+    else if (action === 'apply') applyEmployeeFilter();
+    else if (action === 'reset') resetEmployeeFilter();
+  });
+  erfEl('rail').addEventListener('click', event => {
+    const b = event.target.closest('.rrf-ri');
+    if (!b) return;
+    if (b.id === 'erf-rail-reset') { resetEmployeeFilter(); b.focus(); return; }
+    erf.tab = b.dataset.k;
+    erfRender();
+    (erf.tab === 'all' ? erfEl('q') : erf.tab === 'team' || erf.tab === 'point' ? erfEl('tq') : b).focus();
+  });
+  erfEl('rows').addEventListener('click', event => { const r = event.target.closest('.rrf-tr'); if (r) erfToggle(r); });
+  erfEl('th').addEventListener('click', event => { if (event.target.closest('#erf-all')) erfToggleAll(); });
+  erfEl('q').addEventListener('input', erfRender);
+  erfEl('tq').addEventListener('input', erfRender);
+  erfEl('seg').addEventListener('click', event => {
+    const b = event.target.closest('button[data-r]');
+    if (!b) return;
+    erf.F.resigned = b.dataset.r;
+    erfRender();
+    erfEl('seg').querySelector(`[data-r="${b.dataset.r}"]`)?.focus();
+  });
+  // Joining: From picks To the same date; a half-erased date waits; From erased clears To too.
+  erfEl('d1').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;
+    const F = erf.F; F.d1 = input.value; F.d2 = F.d1; erfEl('d2').value = F.d1; F.y = null; F.m = null; erfRender();
+  });
+  erfEl('d2').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;
+    const F = erf.F; F.d2 = input.value; F.y = null; F.m = null; erfRender();
+  });
+  const ymToDates = () => { const F = erf.F; if (!F.y) { F.d1 = ''; F.d2 = ''; return; } [F.d1, F.d2] = rrfRange({ ...F, d1: '', d2: '' }); };
+  erfEl('y-prev').addEventListener('click', () => { erf.viewY -= 1; erfRender(); });
+  erfEl('y-next').addEventListener('click', () => { erf.viewY += 1; erfRender(); });
+  erfEl('y-all').addEventListener('click', () => { const F = erf.F; const on = F.y === erf.viewY && F.m === null; F.y = on ? null : erf.viewY; F.m = null; ymToDates(); erfRender(); });
+  erfEl('months').addEventListener('click', event => {
+    const b = event.target.closest('.rrf-mo');
+    if (!b) return;
+    const F = erf.F; const m = Number(b.dataset.m);
+    if (F.y === erf.viewY && F.m === m) { F.y = null; F.m = null; } else { F.y = erf.viewY; F.m = m; }
+    ymToDates(); erfRender();
+  });
+  erfEl('d-clr').addEventListener('click', () => { Object.assign(erf.F, { d1: '', d2: '', y: null, m: null }); erf.viewY = new Date().getFullYear(); erfRender(); });
+}
+
 
 async function loadEmployeeList() {
   const seq = ++employeeList.seq;
@@ -4360,17 +4653,7 @@ function initEmployeesPage() {
   FORM_KEY_HANDLERS['employee-list'] = handleEmployeeListKeys;
   byId('employee-list-search').addEventListener('input', renderEmployeeList);
   byId('employee-list-filter').addEventListener('click', openEmployeeFilter);
-  const filter = byId('employee-filter');
-  filter.addEventListener('input', efPreview);
-  filter.addEventListener('change', efPreview);
-  filter.addEventListener('cancel', event => { event.preventDefault(); closeEmployeeFilter(); });
-  filter.addEventListener('click', event => {
-    if (event.target === filter) { closeEmployeeFilter(); return; }      // the backdrop
-    const action = event.target.closest('[data-ef]')?.dataset.ef;
-    if (action === 'close') closeEmployeeFilter();
-    else if (action === 'reset') resetEmployeeFilter();
-    else if (action === 'apply') applyEmployeeFilter();
-  });
+  initEmployeeFilter();                   // the Filter popup (side rail)
   byId('employee-list-grid').addEventListener('click', event => {
     const view = event.target.closest('[data-emp-view]');
     if (view) openEmployeeProfile(view.dataset.empView);
@@ -6547,12 +6830,13 @@ function createMasterList(config) {
     const query = $('search').value.trim().toLowerCase();
     const { applied, rows: all } = list;
     const rows = all.filter(row => (applied.size === 0 || applied.has(row.code)) && inDateRange(row, list.range)
+      && (!list.extra || list.extra(row))           // the Return & Replacement Filter's other conditions (none elsewhere)
       && (!query || config.columns.some(column => String(row[column.key] ?? '').toLowerCase().includes(query))));
     const known = new Set(all.map(row => row.code));
     for (const code of list.selected) if (!known.has(code)) list.selected.delete(code);   // deleted meanwhile
     // ML_PAGE_SIZE rows a page. A new search or filter starts again on page 1; coming back from a record's
     // Edit or View opens the page that holds it.
-    const filterKey = [query, [...applied].join(','), list.range.from, list.range.to].join('|');
+    const filterKey = [query, [...applied].join(','), list.range.from, list.range.to, list.extraKey || ''].join('|');
     if (filterKey !== list.filterKey) { list.filterKey = filterKey; list.page = 1; }
     list.shown = rows;
     const back = list.returnTo && list.returnTo !== list.pagedFor ? rows.findIndex(row => row.code === list.returnTo) : -1;
@@ -6597,9 +6881,10 @@ function createMasterList(config) {
     $('count').textContent = rows.length
       ? `Showing ${start + 1} to ${start + visible.length} of ${rows.length} entries${filtered}` : `Showing 0 of ${all.length} entries`;
     renderPager(pages);
-    const active = applied.size + (list.range.from || list.range.to ? 1 : 0);
+    const active = applied.size + (list.range.from || list.range.to ? 1 : 0) + (list.extraCount || 0);
     $('filter-label').textContent = active ? `Filter (${active})` : 'Filter';
     $('filter').classList.toggle('is-on', active > 0);
+    config.afterRender?.(list);                    // Return & Replacement lists: Export under the list
   }
 
   // Previous, the page numbers (1 … 4 5 6 … 12 when there are many) and Next.
@@ -6658,7 +6943,7 @@ function createMasterList(config) {
     if (!pager.contains(target) || event.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) return false;
     event.preventDefault();
     if (key === 'ArrowUp') { const rows = [...$('body').rows]; if (rows.length) focusRow(rows.at(-1)); else $('search').focus(); return true; }
-    if (key === 'ArrowDown') return true;                       // the bottom of the page
+    if (key === 'ArrowDown') { config.belowPager?.(list); return true; }   // the bottom (Return & Replacement: their Export)
     const buttons = pagerButtons();
     const at = buttons.indexOf(target);
     buttons[Math.max(0, Math.min(buttons.length - 1, at + (key === 'ArrowRight' ? 1 : -1)))]?.focus();
@@ -6718,6 +7003,7 @@ function createMasterList(config) {
 
   // "/" search, F filter, I import, Shift+N new record, Esc back (Esc in a filled search clears it first).
   function handleKeys(event) {
+    if (config.filterOpen?.()) return config.filterKeys(event);   // Return & Replacement: their own Filter
     if (byId('master-filter').open) return handleMasterFilterKeys(event);
     if (byId('master-import').open) return handleMasterImportKeys(event);
     if (byId('master-view').open) return handleMasterViewKeys(event);
@@ -6737,6 +7023,7 @@ function createMasterList(config) {
       }
       return true;
     }
+    if (config.extraKeys?.(event, list)) return true;   // Return & Replacement: the Export bar under the list
     if (handleRowKeys(event)) return true;
     // Shift+N also works from an empty search box (the search ignores case, so a lowercase n still searches).
     const newKey = event.key === 'N' && event.shiftKey;
@@ -6747,7 +7034,7 @@ function createMasterList(config) {
       search.focus();
     } else if (letter === 'f' && !event.shiftKey) {
       event.preventDefault();
-      if (!event.repeat) openMasterFilter(list);
+      if (!event.repeat) (config.openFilter || openMasterFilter)(list);
     } else if (letter === 'i' && !event.shiftKey) {
       event.preventDefault();
       if (!event.repeat) openMasterImport(list);
@@ -6870,7 +7157,7 @@ function createMasterList(config) {
     });
     $('search').addEventListener('input', render);
     $('back').addEventListener('click', goBack);
-    $('filter').addEventListener('click', () => openMasterFilter(list));
+    $('filter').addEventListener('click', () => (config.openFilter || openMasterFilter)(list));
     $('import').addEventListener('click', () => openMasterImport(list));
     $('body').addEventListener('click', event => {
       const button = event.target.closest('[data-action]');
@@ -6906,6 +7193,7 @@ function createMasterList(config) {
       list.applied.clear();
       list.selected.clear();
       list.range = { from: '', to: '' };
+      config.onReset?.(list);
       list.rows = [];
       list.pagedFor = null;
       if (!list.returnTo) list.page = 1;     // a fresh visit starts on page 1; back from a record keeps its page
@@ -14288,6 +14576,7 @@ function purchaseList(spec) {
     api: spec.api, lookups: spec.lookups || [], formPage: spec.key, edit: id => spec.form.page.edit(id),
     dateOf: spec.dateOf, pdf: row => printPurchaseDocument(spec, row.id), related: purchaseItemsSection(spec.kind), viewTitle: () => spec.noun,
     noView: true,      // only the Masters lists have View; documents: Edit, PDF, Delete (Enter on a row edits it)
+    ...spec.listHooks,  // the Return & Replacement lists: their own Filter and the Export under the list
     columns: spec.columns, fromApi: spec.fromApi, sample: {},
     importColumns: [PB_IMPORT_GROUP, ...spec.importColumns], importKey: 'itemName', importSamples: spec.importSamples,
     importHint: 'One item per row. Rows with the same Document No become one document; a blank Document No makes a document of one item.',
@@ -14558,7 +14847,653 @@ const tiList = salesList({
   fromApi: r => ({ advancePayment: pbAmount(r.advancePayment) }),
 });
 
+/* ---------- Filter popup (#rr-filter): Return & Replacement and Supply Management lists ----------
+   The Sales Return, Sales Replacement, Purchase Return and Purchase Replacement lists only (every other list keeps the
+   #master-filter popup). A rail of filters, all applied together:
+     All       search the documents and tick the ones to show (none ticked: all of them)
+     Date      From / To, or a year (Whole year) and a month
+     VAT       VAT In: the document's total VAT is above 0; VAT Out: its total VAT is 0 (VAT not enabled when made)
+     Value     the grand total (OMR)  = < > a number
+     Disc %    the discount as a share of the subtotal  = < > a number
+     Qty       the total quantity  = < > a number
+     Employee  who made the document (the signed-in user's employee; a purchase document's Created By)
+   Apply Filters shows the list; with a filter on, Export (those rows, as CSV) is under the list. */
+const RRF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const RRF_TABS = [
+  { k: 'all', l: 'All', i: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
+  { k: 'date', l: 'Date', i: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  { k: 'vat', l: 'VAT', i: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' },
+  { k: 'v', l: 'Value', i: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2 0 0 0-5 0c0 2.5 5 1.5 5 4a2.5 2 0 0 1-5 0M12 6v1.5M12 16.5V18"/>' },
+  { k: 'p', l: 'Disc %', i: '<path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>' },
+  { k: 's', l: 'Qty', i: '<path d="m21 8-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>' },
+  { k: 'emp', l: 'Employee', i: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>' },
+];
+const RRF_NUM = {
+  v: { u: 'OMR', ph: 'e.g. 10000', head: 'Value', name: 'value', fmt: r => `${pbMoney(r.v)} OMR` },
+  p: { u: '%', ph: 'e.g. 5', head: 'Disc %', name: 'discount', fmt: r => `${pbQty(r.p)}%` },
+  s: { u: '#', ph: 'e.g. 100', head: 'Qty', name: 'quantity', fmt: r => `${pbQty(r.s)} ${Math.abs(r.s) === 1 ? 'unit' : 'units'}` },
+};
+const RRF_CHECK = '<svg class="ok" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><svg class="mx" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
+const rrfBlank = () => ({ d1: '', d2: '', y: null, m: null, vat: '', num: { v: { o: '', x: '' }, p: { o: '', x: '' }, s: { o: '', x: '' } }, emps: [] });
+const rrfClone = f => JSON.parse(JSON.stringify(f));
+const rrf = { list: null, F: rrfBlank(), sel: new Set(), tab: 'all', viewY: new Date().getFullYear(), employees: [], opener: null, shown: [] };
+const rrfEl = suffix => byId(`rrf-${suffix}`);
+const rrfEsc = text => String(text ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const rrfSlash = d => d.split('-').reverse().join('/');
+const rrfLong = d => { const [y, m, day] = d.split('-'); return `${Number(day)} ${RRF_MONTHS[Number(m) - 1]} ${y}`; };
+
+// A list row as the filter sees it.
+function rrfRow(row) {
+  const cfg = rrfCfg();
+  const subtotal = Math.abs(pbNum(row.subtotal));
+  return {
+    code: row.code, date: createdOn(row), party: row.name || '', items: Number(row.itemCount) || 0,
+    vat: pbNum(row.vatAmount) > 0.0005 ? 'in' : 'out',
+    v: cfg.value ? cfg.value(row) : pbNum(row.grandTotal),
+    p: subtotal > 0 ? Math.round(pbNum(row.discountAmount) / subtotal * 10000) / 100 : 0,
+    s: cfg.qty ? cfg.qty(row) : pbNum(row.totalQty),
+    e: row.employeeCode || '',
+  };
+}
+// The date range a filter state stands for: From / To, else the year (and month); null: no date filter.
+function rrfRange(F) {
+  if (F.d1 || F.d2) return [F.d1 || '0000-00-00', F.d2 || '9999-12-31'];
+  if (F.y) {
+    const a = F.m ?? 0; const b = F.m ?? 11;
+    return [`${F.y}-${String(a + 1).padStart(2, '0')}-01`, `${F.y}-${String(b + 1).padStart(2, '0')}-${String(new Date(F.y, b + 1, 0).getDate()).padStart(2, '0')}`];
+  }
+  return null;
+}
+const rrfCmp = (o, a, b) => (o === 'lt' ? a < b - 0.0005 : o === 'gt' ? a > b + 0.0005 : Math.abs(a - b) < 0.0005);
+// Every filter but the ticks (skip: leave one out, so the Employee counts show what picking it would give).
+function rrfPass(r, F, skip) {
+  const range = rrfRange(F);
+  if (range && (r.date < range[0] || r.date > range[1])) return false;
+  if (F.vat && r.vat !== F.vat) return false;
+  for (const [k, f] of Object.entries(F.num)) {
+    if (f.x !== '' && Number.isFinite(Number(f.x)) && !rrfCmp(f.o || 'eq', r[k], Number(f.x))) return false;
+  }
+  if (skip !== 'emp' && F.emps.length && !F.emps.includes(r.e)) return false;
+  return true;
+}
+// How many filters a state has on (the ticked documents count as one).
+const rrfActive = (F, picked = 0) => (picked ? 1 : 0) + (rrfRange(F) ? 1 : 0) + (F.vat ? 1 : 0)
+  + Object.values(F.num).filter(f => f.x !== '' && Number.isFinite(Number(f.x))).length + (F.emps.length ? 1 : 0);
+
+/* The lists that use this popup, and what each shows (filterHooks(settings) goes into a purchaseList's listHooks):
+     tabs   the rail's filters    theme  'return' (crimson) or 'supply' (orange)
+     value / qty / vat / disc     a row's figures (default: grand total, total quantity, VAT amount, discount %) */
+function filterHooks(settings) {
+  return {
+    rrCfg: settings,
+    openFilter: list => openRrFilter(list),
+    filterOpen: () => byId('rr-filter')?.open,
+    filterKeys: event => handleRrFilterKeys(event),
+    afterRender: list => syncRrExport(list),
+    belowPager: list => {
+      const exp = list.$('page').querySelector('.rrf-export-bar:not([hidden]) .rrf-export-btn');
+      if (exp) exp.focus();
+      return Boolean(exp);
+    },
+    extraKeys: (event, list) => handleRrExportKeys(event, list),
+    onReset: list => { list.rrF = rrfBlank(); list.extra = null; list.extraKey = ''; list.extraCount = 0; },
+  };
+}
+// Return & Replacement: every filter, in the crimson.
+const RR_LIST_HOOKS = filterHooks({ theme: 'return', tabs: ['all', 'date', 'vat', 'v', 'p', 's', 'emp'] });
+// Supply Management: no VAT or discount on these documents; in the orange. A stock adjustment's quantity is its
+// net difference (more counted: +, fewer: −); a stock reservation has no money value, so no Value filter.
+const SM_ADJ_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'], value: row => pbNum(row.totalValue), qty: row => pbNum(row.netQuantity) });
+const SM_TRANSFER_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'] });
+const SM_RESERVATION_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 's', 'emp'] });
+const rrfCfg = () => rrf.list?.config.rrCfg || {};
+const rrfTabsOn = () => RRF_TABS.filter(t => (rrfCfg().tabs || RRF_TABS.map(x => x.k)).includes(t.k));
+
+
+function rrfLabels() {
+  const { list } = rrf;
+  return { one: list.one, many: list.many, noun: list.config.noun, idLabel: (list.config.columns[0]?.label || 'No.') };
+}
+
+function openRrFilter(list) {
+  rrf.list = list;
+  rrf.F = rrfClone(list.rrF || rrfBlank());
+  rrf.sel = new Set(list.applied);
+  rrf.tab = 'all';
+  rrf.opener = document.activeElement;
+  const on = rrfTabsOn().map(t => t.k);
+  for (const t of RRF_TABS) rrfEl(`tab-${t.k}`).hidden = !on.includes(t.k);
+  byId('rr-filter').dataset.theme = rrfCfg().theme || 'return';
+  // A filter this list does not offer stays off (an older state from another list never applies).
+  if (!on.includes('vat')) rrf.F.vat = '';
+  for (const k of Object.keys(rrf.F.num)) if (!on.includes(k)) rrf.F.num[k] = { o: '', x: '' };
+  rrf.viewY = rrf.F.y || new Date().getFullYear();
+  const { one, many } = rrfLabels();
+  rrfEl('title').textContent = `Filter ${list.config.nouns}`;
+  rrfEl('sub').textContent = `Search and select the ${many} to show`;
+  rrfEl('q').value = ''; rrfEl('eq').value = '';
+  rrfEl('q').placeholder = `Filter by ${one} code or name...`;
+  rrfEl('q').setAttribute('aria-label', `Filter by ${one} code or name`);
+  // Employees: the Employee master where this user may read it, and anyone who made one of these documents.
+  const known = new Map();
+  for (const row of list.rows) if (row.employeeCode) known.set(row.employeeCode, row.employeeName || row.employeeCode);
+  rrf.employees = [...known].map(([c, n]) => ({ c, n }));
+  apiRequest('api/employees.php').then(rows => {
+    const all = new Map(rows.map(e => [e.code, e.name]));
+    for (const [c, n] of known) if (!all.has(c)) all.set(c, n);
+    rrf.employees = [...all].map(([c, n]) => ({ c, n })).sort((a, b) => a.c.localeCompare(b.c));
+    if (byId('rr-filter').open) rrfRender();
+  }).catch(() => { /* no Employee permission: the employees on these documents */ });
+  rrfRender();
+  document.documentElement.classList.add('has-modal');
+  byId('rr-filter').showModal();
+  rrfEl('q').focus();
+}
+
+function closeRrFilter() {
+  const dialog = byId('rr-filter');
+  if (!dialog.open) return;
+  dialog.close();
+  if (!byId('quick-menu').open) document.documentElement.classList.remove('has-modal');
+  const back = rrf.opener;
+  (back && document.contains(back) && back !== document.body ? back : rrf.list.$('filter')).focus();
+}
+
+// The list shows what the popup holds now.
+function rrfCommit() {
+  const { list, F } = rrf;
+  const known = new Set(list.rows.map(row => row.code));
+  list.applied = new Set([...rrf.sel].filter(code => known.has(code)));
+  const range = rrfRange(F);
+  list.range = { from: range && range[0] !== '0000-00-00' ? range[0] : '', to: range && range[1] !== '9999-12-31' ? range[1] : '' };
+  list.rrF = rrfClone(F);
+  const rest = { ...rrfClone(F), d1: '', d2: '', y: null, m: null };       // the dates go through list.range
+  const extraCount = rrfActive(rest);
+  list.extra = extraCount ? row => rrfPass(rrfRow(row), rest) : null;
+  list.extraKey = extraCount ? JSON.stringify(rest) : '';
+  list.extraCount = extraCount;
+  list.render();
+}
+
+function applyRrFilter() {
+  rrfCommit();
+  const { list } = rrf;
+  closeRrFilter();
+  const shown = list.shown.length;
+  const on = list.applied.size || list.range.from || list.range.to || list.extraCount;
+  showToast('Filter applied', on ? `Showing ${list.count(shown)}. Export them from under the list.` : `Showing all ${list.many}.`);
+}
+
+function resetRrFilter() {
+  rrf.F = rrfBlank();
+  rrf.sel.clear();
+  rrf.viewY = new Date().getFullYear();
+  rrfEl('q').value = ''; rrfEl('eq').value = ''; rrfEl('num').value = '';
+  rrfCommit();
+  rrfRender();
+  showToast('Filters reset', `Showing all ${rrf.list.many}.`);
+}
+
+function rrfRender() {
+  const { list, F } = rrf;
+  const tab = rrf.tab;
+  const { noun, many, idLabel } = rrfLabels();
+  rrfEl('rail').querySelectorAll('[role="tab"]').forEach(b => {
+    const k = b.dataset.k;
+    b.setAttribute('aria-selected', String(k === tab));
+    b.tabIndex = k === tab ? 0 : -1;
+    const on = k === 'all' ? rrf.sel.size > 0 : k === 'date' ? Boolean(rrfRange(F)) : k === 'vat' ? Boolean(F.vat)
+      : RRF_NUM[k] ? F.num[k].x !== '' : F.emps.length > 0;
+    b.classList.toggle('is-on', on);
+  });
+  rrfEl('main').setAttribute('aria-labelledby', `rrf-tab-${tab}`);
+  const isNum = Boolean(RRF_NUM[tab]);
+  rrfEl('srch-doc').hidden = tab !== 'all';
+  rrfEl('srch-emp').hidden = tab !== 'emp';
+  rrfEl('tb').hidden = tab === 'all' || tab === 'date';
+  rrfEl('tb-vat').hidden = tab !== 'vat';
+  rrfEl('tb-num').hidden = !isNum;
+  rrfEl('dp').hidden = tab !== 'date';
+  rrfEl('tbl').hidden = tab === 'date';
+  if (tab === 'emp') { rrfRenderEmployees(); return; }
+
+  const rows = list.rows.map(rrfRow);
+  const q = rrfEl('q').value.trim().toLowerCase();
+  const vis = rows.filter(r => rrfPass(r, F) && (!q || r.code.toLowerCase().includes(q) || r.party.toLowerCase().includes(q)));
+  rrf.shown = vis;
+  const n = vis.length; const visible = `<span> · ${n} visible</span>`;
+  let col = 'Date'; let val = r => rrfLong(r.date);
+  if (tab === 'vat') {
+    rrfEl('tb-t').innerHTML = `${F.vat === 'in' ? `VAT In ${rrfEsc(many)}` : F.vat === 'out' ? `VAT Out ${rrfEsc(many)}` : `All ${rrfEsc(many)}`}${visible}`;
+    rrfEl('vat').setAttribute('aria-checked', String(F.vat === 'in'));
+    rrfEl('vat-clr').hidden = !F.vat;
+    col = 'VAT'; val = r => (r.vat === 'in' ? 'VAT In' : 'VAT Out');
+  } else if (isNum) {
+    const c = RRF_NUM[tab]; const f = F.num[tab];
+    rrfEl('tb-t').innerHTML = `${f.x !== '' ? `Filtered by ${c.name}` : `All ${rrfEsc(many)}`}${visible}`;
+    rrfEl('num-u').textContent = c.u;
+    rrfEl('num').placeholder = c.ph;
+    rrfEl('num').setAttribute('aria-label', c.head);
+    if (document.activeElement !== rrfEl('num')) rrfEl('num').value = f.x;
+    [...rrfEl('ops').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.o === f.o)));
+    col = c.head; val = c.fmt;
+  }
+  const on = vis.filter(r => rrf.sel.has(r.code)).length;
+  rrfEl('tbl').setAttribute('aria-label', list.config.nouns);
+  rrfEl('th').innerHTML = `<div class="rrf-c0"><button type="button" class="rrf-rb" id="rrf-all" role="checkbox" aria-checked="${!n || !on ? 'false' : on === n ? 'true' : 'mixed'}" aria-label="Select all visible">${RRF_CHECK}</button></div>`
+    + `<div>${rrfEsc(idLabel)}</div><div>Details</div><div class="rrf-last">${rrfEsc(col)}<span class="rrf-pill">${on} of ${n} selected</span></div>`;
+  rrfEl('rows').innerHTML = n ? vis.map(r => {
+    const s = rrf.sel.has(r.code);
+    return `<div class="rrf-tr${s ? ' is-sel' : ''}" role="row" tabindex="0" data-c="${rrfEsc(r.code)}">`
+      + `<div class="rrf-c0"><span class="rrf-rb" role="checkbox" aria-checked="${s}" aria-label="Select ${rrfEsc(r.code)}">${RRF_CHECK}</span></div>`
+      + `<div class="rrf-code">${rrfEsc(r.code)}</div>`
+      + `<div class="rrf-det"><b>${rrfEsc(noun)} · ${r.items} ${r.items === 1 ? 'item' : 'items'}</b><small>${rrfEsc(r.party)}</small></div>`
+      + `<div class="rrf-val">${rrfEsc(val(r))}</div></div>`;
+  }).join('') : `<div class="rrf-empty">No ${rrfEsc(many)} match these filters.</div>`;
+  rrfEl('sum').innerHTML = `${rrf.sel.size} of ${list.rows.length} ${rrfEsc(many)} selected <span>(${n} visible)</span>`;
+  if (tab === 'date') rrfRenderDate(rows);
+}
+
+function rrfRenderEmployees() {
+  const { list, F } = rrf;
+  const { many } = rrfLabels();
+  const q = rrfEl('eq').value.trim().toLowerCase();
+  const made = {};
+  for (const r of list.rows.map(rrfRow)) if (r.e && rrfPass(r, F, 'emp')) made[r.e] = (made[r.e] || 0) + 1;
+  const emps = rrf.employees.filter(e => !q || e.n.toLowerCase().includes(q) || e.c.toLowerCase().includes(q));
+  rrf.shown = emps;
+  const n = emps.length; const on = emps.filter(e => F.emps.includes(e.c)).length;
+  rrfEl('tb-t').innerHTML = `Employees<span> · ${n} visible</span>`;
+  rrfEl('th').innerHTML = `<div class="rrf-c0"><button type="button" class="rrf-rb" id="rrf-all" role="checkbox" aria-checked="${!n || !on ? 'false' : on === n ? 'true' : 'mixed'}" aria-label="Select all visible employees">${RRF_CHECK}</button></div>`
+    + `<div>Emp Code</div><div>Employee</div><div class="rrf-last">${rrfEsc(list.config.nouns.split(' ').pop())}<span class="rrf-pill">${on} of ${n} selected</span></div>`;
+  const unit = list.config.noun.split(' ').pop().toLowerCase();   // return / replacement
+  rrfEl('rows').innerHTML = n ? emps.map(e => {
+    const s = F.emps.includes(e.c); const k = made[e.c] || 0;
+    return `<div class="rrf-tr${s ? ' is-sel' : ''}" role="row" tabindex="0" data-e="${rrfEsc(e.c)}">`
+      + `<div class="rrf-c0"><span class="rrf-rb" role="checkbox" aria-checked="${s}" aria-label="Select ${rrfEsc(e.n)}">${RRF_CHECK}</span></div>`
+      + `<div class="rrf-code">${rrfEsc(e.c)}</div>`
+      + `<div class="rrf-det"><b>${rrfEsc(e.n)}</b><small>Handled ${k} ${rrfEsc(k === 1 ? list.one : many)}</small></div>`
+      + `<div class="rrf-val">${k} ${unit}${k === 1 ? '' : 's'}</div></div>`;
+  }).join('') : `<div class="rrf-empty">${rrfEl('eq').value.trim() ? `No employee matches “${rrfEsc(rrfEl('eq').value.trim())}”.` : 'No employees yet (Employee Management › Employee).'}</div>`;
+  rrfEl('sum').innerHTML = `${F.emps.length} of ${rrf.employees.length} employees selected <span>(${n} visible)</span>`;
+}
+
+function rrfRenderDate(rows) {
+  const { F } = rrf;
+  const { many } = rrfLabels();
+  if (document.activeElement !== rrfEl('d1')) rrfEl('d1').value = F.d1;
+  if (document.activeElement !== rrfEl('d2')) rrfEl('d2').value = F.d2;
+  rrfEl('d2').min = F.d1 || '';
+  const now = new Date();
+  const years = [...new Set([now.getFullYear(), ...rows.map(r => Number(r.date.slice(0, 4))).filter(Boolean)])];
+  rrfEl('y-cur').textContent = String(rrf.viewY);
+  rrfEl('y-prev').disabled = rrf.viewY <= Math.min(...years);
+  rrfEl('y-next').disabled = rrf.viewY >= Math.max(...years);
+  const whole = F.y === rrf.viewY && F.m === null;
+  rrfEl('y-all').setAttribute('aria-pressed', String(whole));
+  [...rrfEl('months').children].forEach(b => {
+    const m = Number(b.dataset.m);
+    b.setAttribute('aria-pressed', String(F.y === rrf.viewY && F.m === m));
+    b.classList.toggle('is-inyr', whole);
+    b.classList.toggle('is-now', rrf.viewY === now.getFullYear() && m === now.getMonth());
+    b.setAttribute('aria-label', `${RRF_MONTHS[m]} ${rrf.viewY}`);
+  });
+  const range = rrfRange(F); const n = rows.filter(r => rrfPass(r, F)).length;
+  const included = `${n} ${n === 1 ? rrf.list.one : many} included`;
+  let text = `No date filter set — all ${rows.length} ${many} included`;
+  if (range && F.y) text = `${F.m !== null ? `${RRF_MONTHS[F.m]} ` : ''}${F.y} (${rrfSlash(F.d1)} – ${rrfSlash(F.d2)}) — ${included}`;
+  else if (range) text = `${F.d1 ? rrfSlash(F.d1) : 'Start'} – ${F.d2 ? rrfSlash(F.d2) : 'Today'} — ${included}`;
+  rrfEl('d-note-t').textContent = text;
+  rrfEl('d-note').classList.toggle('is-on', Boolean(range));
+}
+
+// Year / month: From and To become that month's (or year's) first and last day.
+function rrfYmToDates() {
+  const { F } = rrf;
+  if (!F.y) { F.d1 = ''; F.d2 = ''; return; }
+  const range = rrfRange({ ...F, d1: '', d2: '' });
+  [F.d1, F.d2] = range;
+}
+
+function rrfToggleRow(row) {
+  if (row.dataset.e) {
+    const c = row.dataset.e; const F = rrf.F;
+    F.emps = F.emps.includes(c) ? F.emps.filter(x => x !== c) : [...F.emps, c];
+    rrfRender();
+    rrfEl('rows').querySelector(`.rrf-tr[data-e="${CSS.escape(c)}"]`)?.focus();
+  } else {
+    const c = row.dataset.c;
+    if (rrf.sel.has(c)) rrf.sel.delete(c); else rrf.sel.add(c);
+    rrfRender();
+    rrfEl('rows').querySelector(`.rrf-tr[data-c="${CSS.escape(c)}"]`)?.focus();
+  }
+}
+
+// The page's key handler while the popup is open (the app's window listener hands every key to it first).
+function handleRrFilterKeys(event) {
+  rrfKeydown(event);
+  return true;
+}
+
+/* Keys in the popup, as the other Filter popups:
+     Esc closes without applying · Ctrl+Enter applies (from anywhere)
+     Side rail        up/down change the filter · right or Enter go into it
+     Search / toolbar down or Enter go to the list · left/right move along the toolbar (left from its start: the rail)
+     List             up/down move (Select All first, Apply Filters after the last) · Space / Enter tick · Home / End
+                      left: the rail · right: Reset Filters
+     Date             Enter: From -> To -> Apply Filters · the months move with the arrows (4 a row)
+     Footer           left/right: Reset Filters <-> Apply Filters · up: back to the list
+   Typing a letter anywhere on All or Employee goes into its search box. */
+const rrfVisible = node => Boolean(node && !node.hidden && !node.disabled && node.offsetParent !== null);
+function rrfTop() {
+  const tab = rrf.tab;
+  if (tab === 'all') return [rrfEl('q')];
+  if (tab === 'emp') return [rrfEl('eq')];
+  if (tab === 'vat') return [rrfEl('vat-clr'), rrfEl('vat')].filter(rrfVisible);
+  if (RRF_NUM[tab]) return [...rrfEl('ops').children, rrfEl('num')];
+  return [];
+}
+const rrfLines = () => [byId('rrf-all'), ...rrfEl('rows').querySelectorAll('.rrf-tr')].filter(rrfVisible);
+const rrfFoot = () => [...byId('rr-filter').querySelectorAll('.rrf-ft .rrf-btn')];
+const rrfTabButton = () => rrfEl(`tab-${rrf.tab}`);
+function rrfEnterPanel() {
+  if (rrf.tab === 'date') { rrfEl('d1').focus(); return; }
+  (rrfTop()[0] || rrfLines()[0] || rrfFoot()[1]).focus();
+}
+function rrfShowTab(k) {
+  rrf.tab = k;
+  rrfRender();
+  rrfTabButton().focus();
+}
+const rrfCaretAt = (input, where) => {
+  try { return where === 'start' ? input.selectionStart === 0 && input.selectionEnd === 0 : input.selectionEnd === input.value.length; }
+  catch { return true; }                         // a type without a caret
+};
+
+function rrfKeydown(event) {
+  const { key, target } = event;
+  const ctrl = event.ctrlKey || event.metaKey;
+  const dialog = byId('rr-filter');
+  event.stopPropagation();                        // the page's shortcuts wait until the popup closes
+  const stop = node => { event.preventDefault(); node?.focus(); };
+  if (key === 'Escape') { event.preventDefault(); if (!event.repeat) closeRrFilter(); return; }
+  if (key === 'Enter' && ctrl) { event.preventDefault(); if (!event.repeat) applyRrFilter(); return; }
+  if (ctrl || event.altKey) return;
+  const foot = rrfFoot();
+  const lines = rrfLines();
+  const top = rrfTop();
+
+  // Side rail.
+  if (rrfEl('rail').contains(target)) {
+    const shown = rrfTabsOn();
+    const tabs = shown.map(t => rrfEl(`tab-${t.k}`));
+    const reset = rrfEl('rail-reset');
+    const at = tabs.indexOf(target);
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      event.preventDefault();
+      if (target === reset) { if (key === 'ArrowUp') rrfShowTab(shown.at(-1).k); return; }
+      const next = at + (key === 'ArrowDown' ? 1 : -1);
+      if (next >= tabs.length) reset.focus();
+      else if (next >= 0) rrfShowTab(shown[next].k);
+      return;
+    }
+    if ((key === 'ArrowRight' || key === 'Enter') && at >= 0) {
+      event.preventDefault();
+      if (rrf.tab !== shown[at].k) rrfShowTab(shown[at].k);
+      rrfEnterPanel();
+    }
+    return;
+  }
+
+  // Footer.
+  const fAt = foot.indexOf(target);
+  if (fAt >= 0) {
+    if (key === 'ArrowRight' && fAt < foot.length - 1) stop(foot[fAt + 1]);
+    else if (key === 'ArrowLeft') stop(fAt > 0 ? foot[fAt - 1] : rrfTabButton());
+    else if (key === 'ArrowUp') stop(rrf.tab === 'date' ? rrfEl('months').lastElementChild : lines.at(-1) || top[0] || rrfTabButton());
+    return;
+  }
+
+  // Date panel.
+  if (rrfEl('dp').contains(target)) {
+    const months = [...rrfEl('months').children];
+    const head = [rrfEl('y-prev'), rrfEl('y-all'), rrfEl('y-next')].filter(rrfVisible);
+    const mAt = months.indexOf(target);
+    if (target === rrfEl('d1') || target === rrfEl('d2')) {
+      if (key === 'Enter') { event.preventDefault(); if (target === rrfEl('d1')) rrfEl('d2').focus(); else foot[1].focus(); }
+      return;                                     // the arrows stay with the date input
+    }
+    if (mAt >= 0) {
+      const col = mAt % 4;
+      if (key === 'ArrowRight' && mAt < 11) stop(months[mAt + 1]);
+      else if (key === 'ArrowLeft') stop(col === 0 ? rrfTabButton() : months[mAt - 1]);
+      else if (key === 'ArrowDown') stop(mAt + 4 <= 11 ? months[mAt + 4] : foot[1]);
+      else if (key === 'ArrowUp') stop(mAt >= 4 ? months[mAt - 4] : rrfEl('y-all'));
+      return;
+    }
+    const hAt = head.indexOf(target);
+    if (hAt >= 0) {
+      if (key === 'ArrowRight' && hAt < head.length - 1) stop(head[hAt + 1]);
+      else if (key === 'ArrowLeft') stop(hAt > 0 ? head[hAt - 1] : rrfTabButton());
+      else if (key === 'ArrowDown') stop(months[0]);
+      else if (key === 'ArrowUp') stop(rrfEl('d1'));
+      return;
+    }
+    if (target === rrfEl('d-clr')) {
+      if (key === 'ArrowDown') stop(rrfEl('d1'));
+      else if (key === 'ArrowLeft') stop(rrfEl('d2'));
+    }
+    return;
+  }
+
+  // Search box / toolbar.
+  const tAt = top.indexOf(target);
+  if (tAt >= 0) {
+    const text = target.tagName === 'INPUT';
+    if (key === 'ArrowDown' || (key === 'Enter' && text)) { stop(lines[1] || lines[0] || foot[1]); return; }
+    if (key === 'ArrowLeft' && (!text || rrfCaretAt(target, 'start'))) { stop(tAt > 0 ? top[tAt - 1] : rrfTabButton()); return; }
+    if (key === 'ArrowRight' && tAt < top.length - 1 && (!text || rrfCaretAt(target, 'end'))) { stop(top[tAt + 1]); return; }
+    return;
+  }
+
+  // The list: Select All, then the rows.
+  const lAt = lines.indexOf(target);
+  if (lAt >= 0) {
+    if (key === ' ' || key === 'Enter') {
+      event.preventDefault();
+      if (event.repeat) return;
+      if (target.id === 'rrf-all') target.click(); else rrfToggleRow(target);
+      return;
+    }
+    if (key === 'ArrowDown') stop(lAt < lines.length - 1 ? lines[lAt + 1] : foot[1]);
+    else if (key === 'ArrowUp') stop(lAt > 0 ? lines[lAt - 1] : top[top.length - 1] || rrfTabButton());
+    else if (key === 'Home') stop(lines[1] || lines[0]);
+    else if (key === 'End') stop(lines.at(-1));
+    else if (key === 'ArrowLeft') stop(rrfTabButton());
+    else if (key === 'ArrowRight') stop(foot[0]);
+    else if ((key.length === 1 || key === 'Backspace') && (rrf.tab === 'all' || rrf.tab === 'emp')) rrfTypeIntoSearch(event);
+    return;
+  }
+  if (dialog.contains(target) && key.length === 1 && key !== ' ' && (rrf.tab === 'all' || rrf.tab === 'emp') && target.tagName !== 'INPUT') rrfTypeIntoSearch(event);
+}
+
+// A letter typed outside the search box goes into it (Backspace edits it).
+function rrfTypeIntoSearch(event) {
+  const search = rrf.tab === 'emp' ? rrfEl('eq') : rrfEl('q');
+  event.preventDefault();
+  search.value = event.key === 'Backspace' ? search.value.slice(0, -1) : search.value + event.key;
+  search.focus();
+  search.setSelectionRange(search.value.length, search.value.length);
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Under the list: with a filter on, what it shows and Export (those rows as CSV) and Clear Filter.
+function syncRrExport(list) {
+  const page = list.$('page');
+  if (!page) return;
+  let bar = page.querySelector('.rrf-export-bar');
+  if (!bar) {
+    bar = el('div', 'rrf-export-bar');
+    bar.hidden = true;
+    const text = el('div', 'rrf-export-text');
+    const acts = el('div', 'rrf-export-acts');
+    const clear = el('button', 'rrf-export-clear', 'Clear Filter');
+    clear.type = 'button';
+    clear.addEventListener('click', () => {
+      list.applied.clear(); list.range = { from: '', to: '' }; RR_LIST_HOOKS.onReset(list); list.render();
+      ([...list.$('body').rows][0] || list.$('filter')).focus();
+      showToast('Filter cleared', `Showing all ${list.many}.`);
+    });
+    const exp = el('button', 'rrf-export-btn');
+    exp.type = 'button';
+    exp.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>';
+    exp.append(el('span', '', 'Export'));
+    exp.addEventListener('click', () => exportRrRows(list));
+    acts.append(clear, exp);
+    bar.append(text, acts);
+    bar.title = 'Keys: E export · left/right between Clear Filter and Export · up back to the list';
+    page.querySelector('.ml-card').append(bar);
+  }
+  const on = list.applied.size || list.range.from || list.range.to || list.extraCount;
+  bar.hidden = !on;
+  if (on) {
+    const text = bar.querySelector('.rrf-export-text');
+    text.replaceChildren('Filter applied: ', el('b', '', list.count(list.shown.length)), ` of ${list.rows.length} shown.`);
+  }
+}
+
+/* The Export bar's keys on the list page: left/right Clear Filter <-> Export, up back to the pager (or the last row);
+   E exports from anywhere on the list while a filter is on. Down from the pager comes here. */
+function handleRrExportKeys(event, list) {
+  const bar = list.$('page').querySelector('.rrf-export-bar');
+  if (!bar || bar.hidden || event.ctrlKey || event.altKey || event.metaKey) return false;
+  const { key, target } = event;
+  const buttons = [...bar.querySelectorAll('button')];
+  const at = buttons.indexOf(target);
+  if (at >= 0) {
+    if (key === 'ArrowRight' || key === 'ArrowLeft') {
+      event.preventDefault();
+      buttons[Math.max(0, Math.min(buttons.length - 1, at + (key === 'ArrowRight' ? 1 : -1)))].focus();
+      return true;
+    }
+    if (key === 'ArrowUp') {
+      event.preventDefault();
+      const page = list.$('page');
+      const back = page.querySelector('.ml-pager [aria-current="page"]') || [...list.$('body').rows].at(-1);
+      if (back) back.focus(); else list.$('search').focus();
+      return true;
+    }
+    if (key === 'ArrowDown') { event.preventDefault(); return true; }    // the bottom of the page
+    return false;                                  // Enter / Space: the button's own click
+  }
+  if ((key === 'e' || key === 'E') && !event.shiftKey && !isTextEntry(target)) {
+    event.preventDefault();
+    if (!event.repeat) exportRrRows(list);
+    return true;
+  }
+  return false;
+}
+
+function exportRrRows(list) {
+  const { columns } = list.config;
+  const rows = list.shown;
+  if (!rows.length) { showToast('Nothing to export', `No ${list.many} match the filter.`, true); return; }
+  downloadCsv(masterFileName(list, `filtered-${today.toISOString().slice(0, 10)}`),
+    [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
+  showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
+}
+
+function initRrFilter() {
+  const dialog = byId('rr-filter');
+  if (!dialog) return;
+  rrfEl('rail').innerHTML = RRF_TABS.map((t, i) => `${i === 1 ? '<div class="rrf-sep" aria-hidden="true"></div>' : ''}`
+    + `<button type="button" class="rrf-ri" role="tab" id="rrf-tab-${t.k}" data-k="${t.k}" aria-selected="false" aria-controls="rrf-main"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t.i}</svg>${t.l}</button>`).join('')
+    + '<button type="button" class="rrf-ri rrf-reset" id="rrf-rail-reset" title="Reset all filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>';
+  rrfEl('months').innerHTML = RRF_MONTHS.map((m, i) => `<button type="button" class="rrf-mo" data-m="${i}" aria-pressed="false">${m}</button>`).join('');
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeRrFilter(); });
+  dialog.addEventListener('click', event => {
+    const action = event.target.closest('[data-rrf]')?.dataset.rrf;
+    if (action === 'close') closeRrFilter();
+    else if (action === 'apply') applyRrFilter();
+    else if (action === 'reset') resetRrFilter();
+  });
+  rrfEl('rail').addEventListener('click', event => {
+    const b = event.target.closest('.rrf-ri');
+    if (!b) return;
+    if (b.id === 'rrf-rail-reset') { resetRrFilter(); b.focus(); return; }
+    rrf.tab = b.dataset.k;
+    rrfRender();
+    (rrf.tab === 'all' ? rrfEl('q') : rrf.tab === 'emp' ? rrfEl('eq') : RRF_NUM[rrf.tab] ? rrfEl('num') : b).focus();
+  });
+  rrfEl('rows').addEventListener('click', event => { const r = event.target.closest('.rrf-tr'); if (r) rrfToggleRow(r); });
+  rrfEl('th').addEventListener('click', event => {
+    if (!event.target.closest('#rrf-all')) return;
+    if (rrf.tab === 'emp') {
+      const codes = rrf.shown.map(e => e.c);
+      const all = codes.length && codes.every(c => rrf.F.emps.includes(c));
+      rrf.F.emps = all ? rrf.F.emps.filter(c => !codes.includes(c)) : [...new Set([...rrf.F.emps, ...codes])];
+    } else {
+      const all = rrf.shown.length && rrf.shown.every(r => rrf.sel.has(r.code));
+      for (const r of rrf.shown) { if (all) rrf.sel.delete(r.code); else rrf.sel.add(r.code); }
+    }
+    rrfRender();
+    byId('rrf-all').focus();
+  });
+  for (const input of [rrfEl('q'), rrfEl('eq')]) input.addEventListener('input', rrfRender);
+  // VAT switch: on = VAT In (total VAT above 0), off = VAT Out (VAT 0); Clear = both.
+  rrfEl('vat').addEventListener('click', () => { rrf.F.vat = rrf.F.vat === 'in' ? 'out' : 'in'; rrfRender(); });
+  rrfEl('vat-clr').addEventListener('click', () => { rrf.F.vat = ''; rrfRender(); rrfEl('vat').focus(); });
+  rrfEl('ops').addEventListener('click', event => {
+    const b = event.target.closest('button');
+    if (!b) return;
+    const f = rrf.F.num[rrf.tab];
+    f.o = f.o === b.dataset.o ? '' : b.dataset.o;
+    rrfRender();
+    rrfEl('num').focus();
+  });
+  rrfEl('num').addEventListener('input', event => {
+    const clean = event.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+    if (clean !== event.target.value) event.target.value = clean;
+    rrf.F.num[rrf.tab].x = clean.trim();
+    rrfRender();
+  });
+  // Date: a range (picking From puts the same date in To; change To for a longer range), or a year / month.
+  // From: a whole date (typed, or its day / month / year changed) → To takes the same date. Only part of it erased
+  // (the browser then reports it empty, but badInput): nothing changes yet. Every part erased → To is cleared too.
+  rrfEl('d1').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;          // still being edited
+    const F = rrf.F; F.d1 = input.value;
+    F.d2 = F.d1; rrfEl('d2').value = F.d1;
+    F.y = null; F.m = null; rrfRender();
+  });
+  rrfEl('d2').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;          // still being edited
+    const F = rrf.F; F.d2 = input.value; F.y = null; F.m = null; rrfRender();
+  });
+  rrfEl('y-prev').addEventListener('click', () => { rrf.viewY -= 1; rrfRender(); });
+  rrfEl('y-next').addEventListener('click', () => { rrf.viewY += 1; rrfRender(); });
+  rrfEl('y-all').addEventListener('click', () => {
+    const F = rrf.F; const on = F.y === rrf.viewY && F.m === null;
+    F.y = on ? null : rrf.viewY; F.m = null; rrfYmToDates(); rrfRender();
+  });
+  rrfEl('months').addEventListener('click', event => {
+    const b = event.target.closest('.rrf-mo');
+    if (!b) return;
+    const F = rrf.F; const m = Number(b.dataset.m);
+    if (F.y === rrf.viewY && F.m === m) { F.y = null; F.m = null; } else { F.y = rrf.viewY; F.m = m; }
+    rrfYmToDates(); rrfRender();
+  });
+  rrfEl('d-clr').addEventListener('click', () => {
+    Object.assign(rrf.F, { d1: '', d2: '', y: null, m: null });
+    rrf.viewY = new Date().getFullYear();
+    rrfRender();
+  });
+}
+
 const saList = purchaseList({
+  listHooks: SM_ADJ_HOOKS,
   key: 'sa', route: 'supply/stock-adjustment', noun: 'Stock Adjustment', nouns: 'Stock Adjustments', api: 'api/stock-adjustments.php',
   kind: 'simple', form: saForm, dateOf: record => record.adjustmentDate,
   columns: [
@@ -14583,6 +15518,7 @@ const saList = purchaseList({
 });
 
 const stList = purchaseList({
+  listHooks: SM_TRANSFER_HOOKS,
   key: 'st', route: 'supply/stock-transfer', noun: 'Stock Transfer', nouns: 'Stock Transfers', api: 'api/stock-transfers.php',
   kind: 'simple', form: stForm, dateOf: record => record.transferDate,
   columns: [
@@ -14607,6 +15543,7 @@ const stList = purchaseList({
 });
 
 const rsvList = purchaseList({
+  listHooks: SM_RESERVATION_HOOKS,
   key: 'rsv', route: 'supply/stock-reservation', noun: 'Stock Reservation', nouns: 'Stock Reservations', api: 'api/stock-reservations.php',
   kind: 'simple', form: rsvForm, dateOf: record => record.reservationDate,
   columns: [
@@ -14693,6 +15630,7 @@ const seList = purchaseList({
 });
 
 const srList = purchaseList({
+  listHooks: RR_LIST_HOOKS,
   key: 'sr', route: 'returns/sales-return', noun: 'Sales Return', nouns: 'Sales Returns', api: 'api/sales-returns.php',
   kind: 'po', form: srForm, lookups: ['returndn', 'salesentry'], dateOf: record => record.returnDate,
   columns: [
@@ -14732,6 +15670,7 @@ const srList = purchaseList({
 });
 
 const prtList = purchaseList({
+  listHooks: RR_LIST_HOOKS,
   key: 'prt', route: 'returns/purchase-return', noun: 'Purchase Return', nouns: 'Purchase Returns', api: 'api/purchase-returns.php',
   kind: 'po', form: prtForm, lookups: ['prtref'], dateOf: record => record.returnDate,
   columns: [
@@ -14772,6 +15711,7 @@ const prtList = purchaseList({
 });
 
 const prpList = purchaseList({
+  listHooks: RR_LIST_HOOKS,
   key: 'prp', route: 'returns/purchase-replacement', noun: 'Purchase Replacement', nouns: 'Purchase Replacements', api: 'api/purchase-replacements.php',
   kind: 'po', form: prpForm, lookups: ['prtref'], dateOf: record => record.replacementDate,
   columns: [
@@ -14816,6 +15756,7 @@ const prpList = purchaseList({
 });
 
 const rpList = purchaseList({
+  listHooks: RR_LIST_HOOKS,
   key: 'rp', route: 'returns/sales-replacement', noun: 'Sales Replacement', nouns: 'Sales Replacements', api: 'api/sales-replacements.php',
   kind: 'po', form: rpForm, lookups: ['returndn', 'salesentry'], dateOf: record => record.replacementDate,
   columns: [
@@ -15936,6 +16877,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   for (const form of MASTER_FORMS) form.init();
   initPurchaseBook();
   initMasterFilter();
+  initRrFilter();
   initMasterImport();
   initMasterView();
   initMasterConfirm();

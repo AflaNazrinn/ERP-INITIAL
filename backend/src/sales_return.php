@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/sales_book.php';
+require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 
 /*
  * Return & Replacement › Sales Return (SR-0001): goods a customer sends back.
@@ -25,7 +26,7 @@ function sr_format(array $row): array
     $se = $row['sales_entry_id'] === null ? '' : (string) query('SELECT se_code FROM sales_entries WHERE id = ?', [$row['sales_entry_id']])->fetchColumn();
     $warehouse = $row['warehouse_id'] === null ? null
         : query('SELECT warehouse_code, warehouse_name FROM warehouses WHERE id = ?', [$row['warehouse_id']])->fetch();
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, '') + [
         'code' => $row['sr_code'], 'returnDate' => $row['sr_date'], 'date' => $row['sr_date'],
         'itemCount' => $lines[0], 'totalQty' => $lines[1], 'name' => $customer ? $customer['customer_name'] : 'No customer',
         'customerId' => $customer ? (int) $row['customer_id'] : null, 'customerCode' => $customer ? $customer['customer_code'] : '',
@@ -135,7 +136,11 @@ function sales_return_save(array $data, ?int $id = null): array
     $v += ['subtotal' => $totals['subtotal'], 'vat_amount' => $totals['vatAmount'], 'discount_amount' => $totals['discountAmount'],
         'restocking_fee' => pb_money($fee), 'grand_total' => pb_money((float) $totals['grandTotal'] - $fee)];
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('sales_returns', 'sr_code', $id, $v, 'sales_return_next_code');
+        if ($new) {
+            rr_record_creator('sales_returns', $id);   // who made it (Filter › Employee)
+        }
         pb_save_lines('sales_return_items', 'sales_return_id', $id, 'po', $lines);
         foreach ($lines as $order => $line) {
             query('UPDATE sales_return_items SET sold_qty = ?, item_condition = ? WHERE sales_return_id = ? AND sort_order = ?',

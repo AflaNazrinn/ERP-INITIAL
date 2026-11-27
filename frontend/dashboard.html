@@ -6191,6 +6191,88 @@
   </div>
 </dialog>
 
+<!-- Return & Replacement › Filter (Sales Return, Sales Replacement, Purchase Return, Purchase Replacement lists only;
+     the other lists keep #master-filter). A side rail: All (search and tick documents), Date (range, or a year and
+     month), VAT (VAT In: total VAT above 0; VAT Out: 0), Value, Disc %, Qty (= < > a number), Employee (who made it). Apply Filters shows the list; its Export is
+     under the list. -->
+<dialog id="rr-filter" class="rrf" aria-labelledby="rrf-title" aria-describedby="rrf-sub">
+  <header class="rrf-hd">
+    <div class="rrf-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></div>
+    <div>
+      <h2 id="rrf-title">Filter Sales Returns</h2>
+      <p id="rrf-sub">Search and select the sales returns to show</p>
+    </div>
+    <button type="button" class="rrf-x" data-rrf="close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+  </header>
+
+  <div class="rrf-bd">
+    <nav class="rrf-rail" id="rrf-rail" role="tablist" aria-orientation="vertical" aria-label="Filters"></nav>
+    <div class="rrf-main" id="rrf-main" role="tabpanel">
+      <div class="rrf-srch" id="rrf-srch-doc">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="rrf-q" type="search" autocomplete="off">
+      </div>
+      <div class="rrf-srch" id="rrf-srch-emp">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="rrf-eq" type="search" placeholder="Search employee by name or code..." autocomplete="off" aria-label="Search employee by name or code">
+      </div>
+
+      <div class="rrf-tb" id="rrf-tb">
+        <div class="rrf-tb-t" id="rrf-tb-t"></div>
+        <div class="rrf-tb-r" id="rrf-tb-vat">
+          <button type="button" class="rrf-lnk" id="rrf-vat-clr" hidden>Clear</button>
+          <button type="button" class="rrf-tg" id="rrf-vat" role="switch" aria-checked="false">VAT In<span class="rrf-sw" aria-hidden="true"><i></i></span></button>
+        </div>
+        <div class="rrf-tb-r" id="rrf-tb-num">
+          <div class="rrf-ops" id="rrf-ops" role="group" aria-label="Condition">
+            <button type="button" data-o="eq" aria-pressed="false" title="Equal to" aria-label="Equal to">=</button><button type="button" data-o="lt" aria-pressed="false" title="Less than" aria-label="Less than">&lt;</button><button type="button" data-o="gt" aria-pressed="false" title="Greater than" aria-label="Greater than">&gt;</button>
+          </div>
+          <label class="rrf-num"><b id="rrf-num-u">OMR</b><input id="rrf-num" inputmode="decimal" autocomplete="off" aria-label="Value"></label>
+        </div>
+      </div>
+
+      <section class="rrf-dp" id="rrf-dp" aria-label="Date">
+        <div class="rrf-dp-h">
+          <div><h3>Date</h3><p>Set a date range, or pick a year and month</p></div>
+          <button type="button" class="rrf-btn-sm" id="rrf-d-clr">Clear dates</button>
+        </div>
+        <div class="rrf-dp-w">
+          <div class="rrf-dates">
+            <div><label class="rrf-lb" for="rrf-d1">From Date</label><input type="date" id="rrf-d1"></div>
+            <div><label class="rrf-lb" for="rrf-d2">To Date</label><input type="date" id="rrf-d2"></div>
+          </div>
+          <div class="rrf-or">OR</div>
+          <span class="rrf-lb">Year &amp; Month</span>
+          <div class="rrf-ym">
+            <div class="rrf-ym-h">
+              <button type="button" class="rrf-ym-nav" id="rrf-y-prev" aria-label="Previous year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+              <b id="rrf-y-cur" aria-live="polite"></b>
+              <button type="button" class="rrf-ym-nav" id="rrf-y-next" aria-label="Next year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></button>
+              <button type="button" class="rrf-ym-all" id="rrf-y-all" aria-pressed="false">Whole year</button>
+            </div>
+            <div class="rrf-ym-g" id="rrf-months" role="group" aria-label="Month"></div>
+          </div>
+        </div>
+        <div class="rrf-note" id="rrf-d-note" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+          <span id="rrf-d-note-t"></span>
+        </div>
+      </section>
+
+      <div class="rrf-tbl" id="rrf-tbl" role="grid">
+        <div class="rrf-tr rrf-th" role="row" id="rrf-th"></div>
+        <div id="rrf-rows"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="rrf-ft">
+    <div class="rrf-sum" id="rrf-sum" aria-live="polite"></div>
+    <button type="button" class="rrf-btn rrf-btn-out" data-rrf="reset">Reset Filters</button>
+    <button type="button" class="rrf-btn rrf-btn-ap" data-rrf="apply"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Apply Filters</button>
+  </footer>
+</dialog>
+
 <!-- Import popup shared by the master list pages (Import button, or I); text and icon are set per page -->
 <dialog id="master-import" class="lookup sf si" aria-labelledby="master-import-title" aria-describedby="master-import-sub">
   <div class="sf-head">
@@ -7271,51 +7353,72 @@
 </dialog>
 <!-- Employees › Filter (F): Team, Date of Joining, Stock Point and Resigned; applied with Apply Filters, as the
      master lists' Filter popup. Esc or Close leaves the list as it was. -->
-<dialog id="employee-filter" class="lookup sf emp-sf" aria-labelledby="employee-filter-title" aria-describedby="employee-filter-sub">
-  <div class="sf-head">
-    <span class="sf-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></span>
-    <div class="sf-heading">
-      <h2 id="employee-filter-title" class="sf-title">Filter Employees</h2>
-      <p id="employee-filter-sub" class="sf-sub">Choose the employees to show</p>
+<!-- Filter Employees (F on Employee Management): the side-rail Filter of the other modules, in the Employee violet.
+     All (search, tick employees), Team, Stock Point, Joining (date of joining), Resigned. -->
+<!-- Filter Employees (F on Employee Management): the side-rail Filter of the other modules, in the Employee violet.
+     All (search, tick employees), Team, Stock Point, Joining (date of joining), Resigned. -->
+<dialog id="employee-filter" class="rrf" data-theme="employee" aria-labelledby="erf-title" aria-describedby="erf-sub">
+  <header class="rrf-hd">
+    <div class="rrf-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg></div>
+    <div>
+      <h2 id="erf-title">Filter Employees</h2>
+      <p id="erf-sub">Choose the employees to show</p>
     </div>
-    <button type="button" class="lk-close" data-ef="close" aria-label="Close" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
-  </div>
-  <div class="sf-body">
-    <div class="sf-label-row">
-      <h3 class="sf-label">Filter Records</h3>
-      <span id="employee-filter-badge" class="sf-badge" aria-live="polite"></span>
-    </div>
-    <div class="esf-grid">
-      <label class="esf-field"><span class="sf-label">Team</span><select id="employee-filter-department" class="fp-input fp-select"><option value="">All teams</option></select></label>
-      <label class="esf-field"><span class="sf-label">Stock Point</span><select id="employee-filter-warehouse" class="fp-input fp-select"><option value="">All stock points</option></select></label>
-      <div class="esf-field esf-wide" role="group" aria-labelledby="employee-filter-date-label">
-        <span id="employee-filter-date-label" class="sf-label">Date of Joining</span>
-        <div class="sf-date-fields">
-          <label class="sf-date-field"><span>From</span><input id="employee-filter-from" type="date" class="sf-date-input"></label>
-          <label class="sf-date-field"><span>To</span><input id="employee-filter-to" type="date" class="sf-date-input"></label>
-        </div>
-        <p id="employee-filter-date-error" class="sf-date-error" hidden>The From date must be on or before the To date.</p>
+    <button type="button" class="rrf-x" data-ef="close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+  </header>
+  <div class="rrf-bd">
+    <nav class="rrf-rail" id="erf-rail" role="tablist" aria-orientation="vertical" aria-label="Filters"></nav>
+    <div class="rrf-main" id="erf-main" role="tabpanel">
+      <div class="rrf-srch" id="erf-srch">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="erf-q" type="search" autocomplete="off" placeholder="Search employee by name or code..." aria-label="Search employee by name or code">
       </div>
-      <div class="esf-field esf-wide" role="radiogroup" aria-labelledby="employee-filter-resigned-label">
-        <span id="employee-filter-resigned-label" class="sf-label">Resigned</span>
-        <div class="sf-bulk esf-options">
-          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="" class="sf-radio" checked><span>All employees</span></label>
-          <span class="sf-divider" aria-hidden="true"></span>
-          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="hide" class="sf-radio"><span>Hide resigned</span></label>
-          <span class="sf-divider" aria-hidden="true"></span>
-          <label class="sf-check"><input type="radio" name="employee-filter-resigned" value="only" class="sf-radio"><span>Resigned only</span></label>
+      <div class="rrf-srch" id="erf-tsrch">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="erf-tq" type="search" autocomplete="off">
+      </div>
+      <div class="rrf-tb" id="erf-tb">
+        <div class="rrf-tb-t" id="erf-tb-t"></div>
+        <div class="rrf-tb-r"><div class="rrf-seg" id="erf-seg" role="group" aria-label="Resigned"></div></div>
+      </div>
+      <section class="rrf-dp" id="erf-dp" aria-label="Date of joining">
+        <div class="rrf-dp-h">
+          <div><h3>Date of Joining</h3><p>Set a date range, or pick a year and month</p></div>
+          <button type="button" class="rrf-btn-sm" id="erf-d-clr">Clear dates</button>
         </div>
+        <div class="rrf-dp-w">
+          <div class="rrf-dates">
+            <div><label class="rrf-lb" for="erf-d1">From Date</label><input type="date" id="erf-d1"></div>
+            <div><label class="rrf-lb" for="erf-d2">To Date</label><input type="date" id="erf-d2"></div>
+          </div>
+          <div class="rrf-or">OR</div>
+          <span class="rrf-lb">Year &amp; Month</span>
+          <div class="rrf-ym">
+            <div class="rrf-ym-h">
+              <button type="button" class="rrf-ym-nav" id="erf-y-prev" aria-label="Previous year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+              <b id="erf-y-cur" aria-live="polite"></b>
+              <button type="button" class="rrf-ym-nav" id="erf-y-next" aria-label="Next year"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></button>
+              <button type="button" class="rrf-ym-all" id="erf-y-all" aria-pressed="false">Whole year</button>
+            </div>
+            <div class="rrf-ym-g" id="erf-months" role="group" aria-label="Month"></div>
+          </div>
+        </div>
+        <div class="rrf-note" id="erf-d-note" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+          <span id="erf-d-note-t"></span>
+        </div>
+      </section>
+      <div class="rrf-tbl" id="erf-tbl" role="grid" aria-label="Employees">
+        <div class="rrf-tr rrf-th" role="row" id="erf-th"></div>
+        <div id="erf-rows"></div>
       </div>
     </div>
   </div>
-  <div class="sf-foot">
-    <span id="employee-filter-summary" class="sf-summary"></span>
-    <button type="button" class="ml-btn ml-btn-plain" data-ef="reset">Reset Filters</button>
-    <button type="button" class="ml-btn ml-btn-primary" data-ef="apply">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-      <span>Apply Filters</span>
-    </button>
-  </div>
+  <footer class="rrf-ft">
+    <div class="rrf-sum" id="erf-sum" aria-live="polite"></div>
+    <button type="button" class="rrf-btn rrf-btn-out" data-ef="reset">Reset Filters</button>
+    <button type="button" class="rrf-btn rrf-btn-ap" data-ef="apply"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Apply Filters</button>
+  </footer>
 </dialog>
 <!-- Employee profile (Employees › View profile): every detail of one employee; Edit opens the form, Esc closes. -->
 <dialog id="emp-profile" class="emp-profile" aria-labelledby="emp-profile-name">

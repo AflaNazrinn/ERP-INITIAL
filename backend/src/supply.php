@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
 require_once __DIR__ . '/stock_report.php';
+require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 
 /*
  * Supply Management: Stock Adjustment (ADJ000001), Stock Transfer (ST-0001) and Stock Reservation (SR000001).
@@ -203,7 +204,7 @@ function sa_format(array $row): array
 {
     $count = (int) query('SELECT COUNT(*) FROM stock_adjustment_items WHERE stock_adjustment_id = ?', [$row['id']])->fetchColumn();
     $w = sm_warehouse($row['warehouse_id'] === null ? null : (int) $row['warehouse_id']);
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, (string) ($row['requested_by'] ?? '')) + [
         'code' => $row['sa_code'], 'adjustmentDate' => $row['sa_date'], 'date' => $row['sa_date'],
         'warehouseId' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'], 'warehouseCode' => $w['code'], 'warehouseName' => $w['name'],
         'name' => $w['name'], 'adjustmentType' => $row['adjustment_type'], 'reason' => $row['reason'],
@@ -268,7 +269,11 @@ function stock_adjustment_save(array $data, ?int $id = null): array
     $v += ['adjustment_type' => $up && $down ? 'Mixed' : ($up ? 'Increase' : ($down ? 'Decrease' : '')),
         'net_quantity' => number_format($net, 3, '.', ''), 'total_value' => pb_money($value)];
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('stock_adjustments', 'sa_code', $id, $v, 'stock_adjustment_next_code');
+        if ($new) {
+            rr_record_creator('stock_adjustments', $id);   // who made it (Filter › Employee)
+        }
         sm_save_lines('stock_adjustment_items', 'stock_adjustment_id', $id, $lines, SA_EXTRAS);
         return $id;
     });
@@ -289,7 +294,7 @@ function st_format(array $row): array
     [$count, $qty] = pb_line_totals('stock_transfer_items', 'stock_transfer_id', (int) $row['id']);
     $from = sm_warehouse($row['from_warehouse_id'] === null ? null : (int) $row['from_warehouse_id']);
     $to = sm_warehouse($row['to_warehouse_id'] === null ? null : (int) $row['to_warehouse_id']);
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, '') + [
         'code' => $row['st_code'], 'transferDate' => $row['st_date'], 'date' => $row['st_date'], 'expectedDate' => $row['expected_date'] ?? '',
         'fromWarehouseId' => $row['from_warehouse_id'] === null ? null : (int) $row['from_warehouse_id'], 'fromWarehouseCode' => $from['code'], 'fromWarehouseName' => $from['name'],
         'toWarehouseId' => $row['to_warehouse_id'] === null ? null : (int) $row['to_warehouse_id'], 'toWarehouseCode' => $to['code'], 'toWarehouseName' => $to['name'],
@@ -360,7 +365,11 @@ function stock_transfer_save(array $data, ?int $id = null): array
     }
     $v['grand_total'] = pb_money($total);
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('stock_transfers', 'st_code', $id, $v, 'stock_transfer_next_code');
+        if ($new) {
+            rr_record_creator('stock_transfers', $id);   // who made it (Filter › Employee)
+        }
         sm_save_lines('stock_transfer_items', 'stock_transfer_id', $id, $lines, ST_EXTRAS);
         return $id;
     });
@@ -379,7 +388,7 @@ function sr_format(array $row): array
     [$count, $qty] = pb_line_totals('stock_reservation_items', 'stock_reservation_id', (int) $row['id']);
     $w = sm_warehouse($row['warehouse_id'] === null ? null : (int) $row['warehouse_id']);
     $customer = $row['customer_id'] === null ? null : query('SELECT customer_code, customer_name FROM customers WHERE id = ?', [$row['customer_id']])->fetch();
-    return pb_common($row) + [
+    return pb_common($row) + rr_list_extras($row, (string) ($row['created_by'] ?? '')) + [
         'code' => $row['sr_code'], 'reservationDate' => $row['sr_date'], 'date' => $row['sr_date'],
         'reservationType' => $row['reservation_type'], 'referenceNo' => $row['reference_no'],
         'customerId' => $customer ? (int) $row['customer_id'] : null, 'customerName' => $customer ? $customer['customer_name'] : '',
@@ -446,7 +455,11 @@ function stock_reservation_save(array $data, ?int $id = null): array
     $lines = sm_read_lines($in, [], false, 'Reserved quantity');
     $in->done();
     $id = transaction(static function () use ($id, $v, $lines): int {
+        $new = $id === null;
         $id = pb_write_header('stock_reservations', 'sr_code', $id, $v, 'stock_reservation_next_code');
+        if ($new) {
+            rr_record_creator('stock_reservations', $id);   // who made it (Filter › Employee)
+        }
         sm_save_lines('stock_reservation_items', 'stock_reservation_id', $id, $lines, []);
         return $id;
     });
