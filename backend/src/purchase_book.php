@@ -549,7 +549,9 @@ function purchase_request_save(array $data, ?int $id = null): array
         'purchase_type' => $in->choice('purchaseType', 'Purchase type', PB_PURCHASE_TYPES, 'Against Order'),
         'requested_date' => $in->date('requestedDate', 'Requested date') ?? date('Y-m-d'),
         'required_date' => $in->date('requiredDate', 'Required delivery date'),
-        'requested_by' => $in->text('requestedBy', 'Requested by', 100) ?: 'admin',
+        // Left blank (an import, the API): the signed-in user's name.
+        'requested_by' => $in->text('requestedBy', 'Requested by', 100)
+            ?: (string) ($_SESSION['user']['fullName'] ?? '') ?: (string) ($_SESSION['user']['username'] ?? 'admin'),
         // Stock Point: a warehouse picked in the popup; its name is kept too. Without one (an import), typed text.
         'warehouse_id' => $in->id('warehouseId', 'stock point', 'warehouses'),
         'delivery_location' => $in->text('deliveryLocation', 'Stock point', 200),

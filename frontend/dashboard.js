@@ -1488,6 +1488,25 @@ function goToSignIn() {
   location.replace('login.html');      // signing in again opens the dashboard's home page
 }
 // Before anything loads: the signed-in user, or off to the sign-in page (null).
+// The signed-in user's name (an employee's login: the employee's name): the Created By / Requested By of the documents
+// made here: a new PR's Requested By, and the Salesman / Created By field of the PO, Quotation, Delivery Note, Purchase
+// Return and Purchase Replacement. Those fields are read-only; an edit keeps the saved name. (form.reset() puts a
+// field's default back, so the default is set.)
+let signedInName = '';
+function useSignedInName(user) {
+  signedInName = String(user.fullName || user.username || '').trim();
+  if (!signedInName) return;
+  for (const id of ['po-salesman', 'qt-salesman', 'dn-salesman', 'prt-created-by', 'prp-created-by']) {
+    const field = byId(id);
+    if (!field) continue;
+    const name = field.dataset.upper !== undefined ? signedInName.toUpperCase() : signedInName;
+    if (field.value === field.defaultValue) field.value = name;
+    field.defaultValue = name;
+  }
+  byId('pr-requested-by').defaultValue = signedInName;
+  byId('pr-requested-by').value = signedInName;
+}
+
 async function checkSignedIn() {
   try {
     const session = await apiRequest('api/session.php');
@@ -11644,14 +11663,14 @@ const prForm = createPurchaseForm({
       errors.push({ node: byId('pr-required'), message: 'The required delivery date cannot be before the requested date.' });
     }
   },
-  onReset() { byId('pr-date').value = todayInputValue(); byId('pr-requested-by').value = 'admin'; },
+  onReset() { byId('pr-date').value = todayInputValue(); byId('pr-requested-by').value = signedInName || 'admin'; },
   listRoute: 'purchase-book/purchase-request',
   fill(form, pr) {
     byId('pr-reference').value = pr.referenceNo;
     setSelectValue(byId('pr-type'), pr.purchaseType);
     byId('pr-date').value = pr.requestedDate;
     byId('pr-required').value = pr.requiredDate || '';
-    byId('pr-requested-by').value = pr.requestedBy || 'admin';
+    byId('pr-requested-by').value = pr.requestedBy || signedInName || 'admin';
   },
 });
 
@@ -11822,7 +11841,7 @@ const poForm = createPurchaseForm({
     setSelectValue(byId('po-payment'), po.paymentMode || 'As usual');
     byId('po-credit-period').value = po.creditPeriod || '';
     poShowCredit();
-    byId('po-salesman').value = po.salesman || '';
+    byId('po-salesman').value = po.salesman || signedInName.toUpperCase();   // read-only: kept as saved
     putPhone(byId('po-salesman-contact'), po.salesmanContact);
     byId('po-certifications').value = (po.certifications || []).join(', ');
     poShowCertifications();
@@ -12135,7 +12154,7 @@ function createSalesForm(cfg) {
       if ($('credit-period')) $('credit-period').value = doc.creditPeriod || '';
       showCredit();
       if ($('salesman')) {
-        $('salesman').value = doc.salesman || '';
+        $('salesman').value = doc.salesman || signedInName.toUpperCase();   // read-only: kept as saved
         putPhone($('salesman-contact'), doc.salesmanContact);
       }
       cfg.fill(doc);
@@ -14306,7 +14325,7 @@ const prtForm = createPurchaseForm({
     byId('prt-date').value = prt.returnDate;
     fillLookup(byId('prt-ref'), prt.grnId ? { id: `grn:${prt.grnId}`, code: prt.grnCode }
       : prt.purchaseOrderId ? { id: `po:${prt.purchaseOrderId}`, code: prt.purchaseOrderCode } : null);
-    byId('prt-created-by').value = prt.createdBy || '';
+    byId('prt-created-by').value = prt.createdBy || signedInName.toUpperCase();   // read-only: kept as saved
     putPhone(byId('prt-created-by-contact'), prt.createdByContact);
     byId('prt-supplier-invoice').value = prt.supplierInvoiceNo || '';
     byId('prt-reason').value = prt.returnReason || '';
@@ -14461,7 +14480,7 @@ const prpForm = createPurchaseForm({
     byId('prp-date').value = prp.replacementDate;
     fillLookup(byId('prp-ref'), prp.grnId ? { id: `grn:${prp.grnId}`, code: prp.grnCode }
       : prp.purchaseOrderId ? { id: `po:${prp.purchaseOrderId}`, code: prp.purchaseOrderCode } : null);
-    byId('prp-created-by').value = prp.createdBy || '';
+    byId('prp-created-by').value = prp.createdBy || signedInName.toUpperCase();   // read-only: kept as saved
     putPhone(byId('prp-created-by-contact'), prp.createdByContact);
     byId('prp-supplier-invoice').value = prp.supplierInvoiceNo || '';
     setSelectValue(byId('prp-reason'), prp.replacementReason || '');
@@ -15280,7 +15299,7 @@ const poList = purchaseList({
   importHeader: async g => ({
     poDate: g.poDate, supplierId: await importLookupId('supplier', g.supplier), status: g.status, quotationNumber: g.quotationNumber,
     paymentMode: g.paymentMode, deliveryDate: g.deliveryDate, deliveryLocation: g.deliveryLocation, deliveryTerms: g.deliveryTerms, vatMode: g.vatMode || 'include',
-    salesman: g.salesman,
+    salesman: g.salesman || signedInName.toUpperCase(),
   }),
   importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: line.discountPct || '0' }),
 });
@@ -15377,7 +15396,7 @@ function salesList(cfg) {
       { docNo: '1', itemName: 'PTFE TAPE', quantity: '25', unit: 'Pieces', price: '0.350', vatRate: '5' },
     ],
     importHeader: async g => ({
-      [cfg.dateKey]: g.date, customerId: await importLookupId('customer', g.customer), salesman: g.salesman,
+      [cfg.dateKey]: g.date, customerId: await importLookupId('customer', g.customer), salesman: g.salesman || signedInName.toUpperCase(),
       deliveryLocation: g.deliveryLocation, vatMode: g.vatMode || 'exclude',
     }),
     importLine: line => ({ deliveryTerm: line.deliveryTerm || '', quantity: line.quantity || '1', price: line.price || '0',
@@ -16339,7 +16358,7 @@ const prtList = purchaseList({
     { docNo: '1', itemName: 'PTFE TAPE', quantity: '5', unit: 'Pieces', price: '0.350', vatRate: '5' },
   ],
   importHeader: async g => ({ returnDate: g.returnDate, supplierId: await importLookupId('supplier', g.supplier), supplierInvoiceNo: g.supplierInvoiceNo,
-    returnReason: g.returnReason || 'Other', createdBy: 'ADMIN', vatMode: 'exclude' }),
+    returnReason: g.returnReason || 'Other', createdBy: signedInName.toUpperCase() || 'ADMIN', vatMode: 'exclude' }),
   importLine: line => ({ quantity: line.quantity || '1', price: line.price || '0', vatRate: line.vatRate || '5', discountPct: '0' }),
 });
 
@@ -16383,7 +16402,7 @@ const prpList = purchaseList({
     { docNo: '1', itemName: 'PTFE TAPE', quantity: '5', unit: 'Pieces', oldPrice: '0.350', price: '0.400', vatRate: '5' },
   ],
   importHeader: async g => ({ replacementDate: g.replacementDate, supplierId: await importLookupId('supplier', g.supplier), supplierInvoiceNo: g.supplierInvoiceNo,
-    replacementReason: g.replacementReason || 'Other', createdBy: 'ADMIN', vatMode: 'exclude' }),
+    replacementReason: g.replacementReason || 'Other', createdBy: signedInName.toUpperCase() || 'ADMIN', vatMode: 'exclude' }),
   importLine: line => ({ quantity: line.quantity || '1', oldPrice: line.oldPrice || line.price || '0', price: line.price || line.oldPrice || '0',
     vatRate: line.vatRate || '5', discountPct: '0' }),
 });
@@ -17486,6 +17505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.documentElement.classList.remove('auth-pending');
   loadDashboard(firstFigures);
   byId('header-user').textContent = user.fullName || user.username;
+  useSignedInName(user);
   // The signed-in company's name in the header (also printed on Purchase Book PDFs, which read it from there).
   if (user.company?.name) {
     document.querySelector('#app .brand-name, .brand-name').textContent = user.company.name;
