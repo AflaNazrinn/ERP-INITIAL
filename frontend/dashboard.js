@@ -7975,16 +7975,21 @@ function initPbFilter() {
     pbFilter.f.num[pbFilter.tab][pbFilter.op] = event.target.value.trim();
     pbfRender();
   });
-  // A typed range replaces the year / month; a To before the From moves the From back to it.
+  // A typed range replaces the year / month. From, as the Return & Replacement and Supply Filter: a whole date (typed,
+  // or its day / month / year changed) puts the same date in To; only part of it erased (badInput) changes nothing
+  // yet; every part erased clears To too. To before From moves From back to it.
   pbfEl('from').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;          // still being edited
     const f = pbFilter.f;
-    Object.assign(f, { from: event.target.value, year: null, month: null });
-    if (f.from && f.to && f.to < f.from) f.to = f.from;
+    Object.assign(f, { from: input.value, to: input.value, year: null, month: null });
     pbfRender();
   });
   pbfEl('to').addEventListener('input', event => {
+    const input = event.target;
+    if (!input.value && input.validity.badInput) return;          // still being edited
     const f = pbFilter.f;
-    Object.assign(f, { to: event.target.value, year: null, month: null });
+    Object.assign(f, { to: input.value, year: null, month: null });
     if (f.from && f.to && f.to < f.from) f.from = f.to;
     pbfRender();
   });
@@ -15943,8 +15948,10 @@ function clearListFilter(list) {
 }
 
 /* The lists whose bar also shows Page Total and Grand Total (their grandTotal, in OMR: totals are kept in OMR): the
-   priced documents, returns and replacements (Total Refund / Price Difference are their grandTotal). */
-const LIST_TOTAL_KEYS = new Set(['po', 'grn', 'qt', 'so', 'dn', 'ti', 'pe', 'se', 'sr', 'rp', 'prt', 'prp']);
+   priced documents, returns and replacements (Total Refund / Price Difference are their grandTotal), and the stock
+   adjustments and transfers (their value at unit cost; an adjustment's is the net difference, so it can be below 0).
+   A stock reservation has no prices, so its list has no totals. */
+const LIST_TOTAL_KEYS = new Set(['po', 'grn', 'qt', 'so', 'dn', 'ti', 'pe', 'se', 'sr', 'rp', 'prt', 'prp', 'sa', 'st']);
 const omrText = n => `${(Number.isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} OMR`;
 
 /* Under every list, always: Export (the rows the list shows, every page of them, as CSV); with a filter on,
