@@ -8,6 +8,11 @@ $front = realpath("$root/frontend$path");
 if ($front && is_file($front) && str_starts_with($front, realpath("$root/frontend"))) {
     $types = ['html'=>'text/html','css'=>'text/css','js'=>'text/javascript','svg'=>'image/svg+xml','png'=>'image/png','woff2'=>'font/woff2','woff'=>'font/woff','ttf'=>'font/ttf','json'=>'application/json'];
     header('Content-Type: ' . ($types[strtolower(pathinfo($front, PATHINFO_EXTENSION))] ?? 'application/octet-stream'));
+    // As public_html/.htaccess does on the server: the page, its script and styles are checked for a newer copy on
+    // every load, so a change shows without Ctrl+F5.
+    if (in_array(strtolower(pathinfo($front, PATHINFO_EXTENSION)), ['html', 'js', 'css'], true)) {
+        header('Cache-Control: no-cache');
+    }
     readfile($front);
     return true;
 }

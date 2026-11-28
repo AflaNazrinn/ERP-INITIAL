@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/document_storage.php';
+require_once __DIR__ . '/stock_report.php';          // the stock on hand (stock_on_hand_matrix)
 require_once __DIR__ . '/item_documents.php';
 
 /*
@@ -57,6 +58,50 @@ function item_format(array $row): array
 }
 
 /* Items for the lookups (not obsolete); every item when $all (the Item list page). */
+/*
+ * The stock on hand, worked out from the documents (src/stock_report.php: opening stock, GRNs, purchase entries,
+ * transfers, adjustments, delivery notes, invoices, replacements, damaged goods moved back) — not the opening stock
+ * saved on the Item page (availableStock, which the Item form edits). [itemId => ['total' => qty, 'points' => [id => qty]]].
+ */
+function item_stock_on_hand(): array
+{
+    static $stock = null;
+    if ($stock !== null) {
+        return $stock;
+    }
+    $stock = [];
+    try {
+        foreach (stock_on_hand_matrix() as $warehouseId => $items) {
+            foreach ($items as $itemId => $qty) {
+                $entry = &$stock[(int) $itemId];
+                $entry['total'] = ($entry['total'] ?? 0.0) + $qty;
+                if ($warehouseId) {
+                    $entry['points'][(int) $warehouseId] = ($entry['points'][(int) $warehouseId] ?? 0.0) + $qty;
+                }
+                unset($entry);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Item stock on hand: ' . $e->getMessage());   // the item lists still load (stock from the opening stock)
+        $stock = [];
+    }
+    return $stock;
+}
+
+/* { stockOnHand: "57", stockByPoint: { warehouseId: "45", … } } for an item (only stock points that hold some). */
+function item_stock_fields(int $itemId): array
+{
+    $entry = item_stock_on_hand()[$itemId] ?? null;
+    $qty = static fn (float $n): string => rtrim(rtrim(number_format(round($n, 3), 3, '.', ''), '0'), '.') ?: '0';
+    $points = [];
+    foreach ($entry['points'] ?? [] as $id => $n) {
+        if (abs($n) > 0.0005) {
+            $points[(string) $id] = $qty($n);
+        }
+    }
+    return ['stockOnHand' => $qty((float) ($entry['total'] ?? 0.0)), 'stockByPoint' => (object) $points];
+}
+
 function items_list(string $search = '', bool $all = false): array
 {
     $sql = ITEM_SELECT . ($all ? ' WHERE 1 = 1' : " WHERE i.status <> 'OBSOLETE'");
@@ -65,7 +110,7 @@ function items_list(string $search = '', bool $all = false): array
         $sql .= ' AND (i.item_code LIKE ? OR i.item_name LIKE ?)';
         $params = [like($search), like($search)];
     }
-    return array_map('item_format', query($sql . ' ORDER BY i.id DESC', $params)->fetchAll());
+    return array_map(static fn ($row) => item_format($row) + item_stock_fields((int) $row['id']), query($sql . ' ORDER BY i.id DESC', $params)->fetchAll());
 }
 
 function item_find(int $id): array
@@ -81,7 +126,7 @@ function item_find(int $id): array
         [$id]
     )->fetchAll();
     // documents: the Doc / PDF Spec and CAD / Image files (the View popup shows them).
-    return item_format($row) + ['documents' => item_documents_list($id), 'sourcing' => array_map(static fn ($s) => [
+    return item_format($row) + item_stock_fields($id) + ['documents' => item_documents_list($id), 'sourcing' => array_map(static fn ($s) => [
         'brandId'      => $s['brand_id'] === null ? null : (int) $s['brand_id'],
         'brandName'    => $s['brand_name'],
         'supplierId'   => $s['supplier_id'] === null ? null : (int) $s['supplier_id'],

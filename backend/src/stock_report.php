@@ -295,6 +295,11 @@ function damage_restock_save(array $data): array
     if (!$lines) {
         throw new ValidationError(['key' => 'Choose a damaged item.']);
     }
+    // Only goods a customer sent back (sales return, sales replacement) go back into stock; a purchase return's goods
+    // go back to the supplier.
+    if (($lines[0]['side'] ?? '') !== 'sales') {
+        throw new ValidationError(['key' => 'Only a sales return\'s damaged goods can be moved to stock.']);
+    }
     $available = round(array_sum(array_column($lines, 'qty')), 3);
     if (!is_numeric($qty) || (float) $qty <= 0) {
         throw new ValidationError(['qty' => 'Enter a quantity more than 0.']);

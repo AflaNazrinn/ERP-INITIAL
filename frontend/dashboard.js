@@ -1777,8 +1777,11 @@ async function apiRequest(url, { method = 'GET', json, body } = {}, retried = fa
   if (!response.ok || !result || !('data' in result)) {
     throw new ApiError(result?.error || `The server answered ${response.status}. Check that the backend is running.`, response.status, result?.fields || {});
   }
+  // A saved (or deleted) document that moves stock: the item popups read the stock on hand afresh next time.
+  if (method !== 'GET' && STOCK_MOVING_API.test(url)) forgetLookups('item', 'itemcode');
   return result.data;
 }
+const STOCK_MOVING_API = /api\/(grns|purchase-entries|delivery-notes|tax-invoices|stock-transfers|stock-adjustments|stock-reservations|sales-replacements|purchase-replacements|damage-restock)\.php/;
 
 /* =====================================================================
    Lookup popups ("Select UOM", "Select Warehouse" …), one per foreign key
@@ -1954,7 +1957,8 @@ const isSalesLine = node => SALES_ROW_KINDS.includes(node?.closest?.('[data-pb-r
 const itemLinePrice = (item, node) => (isSalesLine(node) ? item.sellingPrice : item.buyingRate);
 
 function itemLookupCard(row) {
-  const stock = pbNum(row.availableStock);
+  // The stock on hand (GRNs, transfers, sales … counted: api/items.php stockOnHand), not the Item page's opening stock.
+  const stock = pbNum(row.stockOnHand ?? row.availableStock);
   const td = el('td', 'lk-item');
   const main = el('div', 'lk-item-main');
   const top = el('div', 'lk-item-top');
@@ -7448,18 +7452,17 @@ function resetMasterFilter() {
   mfEl('search').focus();
 }
 
-// Saves rows (arrays of cells) as a CSV file Excel opens with the right characters (BOM first).
+// Saves rows (arrays of cells, the first the headings) as an Excel workbook (downloadXlsx): columns as wide as their
+// contents, dates and numbers as such. Once a CSV, which Excel opened with narrow columns, ##### dates and cut text.
+// The import template keeps every cell as text (plain), so what is typed in it imports as typed.
 function downloadCsv(fileName, lines) {
-  const cell = value => `"${String(value).replace(/"/g, '""')}"`;
-  const blob = new Blob([`﻿${lines.map(line => line.map(cell).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
-  const link = el('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = fileName;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+  const [head = [], ...rows] = lines;
+  const name = fileName.replace(/\.(csv|xlsx)$/i, '').replace(/-?(selected-|filtered-)?\d{4}-\d{2}-\d{2}$/, '').replace(/-import-template$/, ' import')
+    .replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+  downloadXlsx(fileName.replace(/\.(csv|xlsx)$/i, '.xlsx'), name || 'Sheet1', head, rows, { plain: /import-template/.test(fileName) });
 }
 
-const masterFileName = (list, suffix) => `${list.config.nouns.toLowerCase().replace(/\s+/g, '-')}-${suffix}.csv`;
+const masterFileName = (list, suffix) => `${list.config.nouns.toLowerCase().replace(/\s+/g, '-')}-${suffix}.xlsx`;
 
 
 /* Date panel inside the Filter popup: records created From ... To (either end may be left open). */
@@ -10464,7 +10467,7 @@ const itemList = createMasterList({
     { key: 'category', label: 'Category', group: 'Classification', headers: ['item category', 'group', 'item group'] },
     { key: 'subCategory', label: 'Sub Category', group: 'Classification', headers: ['subcategory', 'sub group', 'subgroup'] },
     { key: 'unit', label: 'Unit', type: 'pill', group: 'Classification', headers: ['uom', 'unit name', 'unit of measure'] },
-    // Available Stock: the opening stock of every sourcing line added up (22 at one stock point + 22 at another = 44).
+    // Available Stock: the stock on hand at every stock point added up (opening stock, GRNs, transfers, sales …).
     { key: 'availableStock', label: 'Available Stock', type: 'qty', group: 'Storage' },
     statusColumn(ITEM_STATUSES),
     detail({ key: 'stockPoint', label: 'Stock Point', group: 'Storage', headers: ['warehouse', 'store', 'location'] }),
@@ -10472,7 +10475,8 @@ const itemList = createMasterList({
     detail({ key: 'buyingRate', label: 'Buying Rate (OMR)', type: 'mono', group: 'Pricing' }),
     detail({ key: 'sellingPrice', label: 'Selling Price (OMR)', type: 'mono', group: 'Pricing' }),
     detail({ key: 'description', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['comments', 'remarks', 'notes'] })],
-  fromApi: record => ({ ...record, stockPoint: record.stockPoints ?? record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
+  // Available Stock: the stock on hand from the documents (the Item page edits the opening stock).
+  fromApi: record => ({ ...record, availableStock: record.stockOnHand ?? record.availableStock, stockPoint: record.stockPoints ?? record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
   async toPayload(row) {
     const categoryId = await importLookupId('category', row.category);
     return {
@@ -10981,6 +10985,11 @@ async function applyPurchaseItem(form, row, itemId) {
    warehouse_stock() on the server counts it. */
 function itemStockByPoint(item) {
   const stock = new Map();
+  // The stock on hand at each stock point, from the documents (api/items.php stockByPoint).
+  if (item.stockByPoint) {
+    for (const [id, quantity] of Object.entries(item.stockByPoint)) stock.set(String(id), pbNum(quantity));
+    return stock;
+  }
   const lines = item.sourcing || [];
   const kept = lines.filter(line => line.openingStock !== null && line.openingStock !== undefined && line.openingStock !== '');
   if (kept.length) {
@@ -12069,7 +12078,9 @@ async function showSealName() {
   let seal = null;
   try { seal = await apiRequest('api/company-seal.php'); } catch { /* shown as no seal */ }
   sealOnFile = Boolean(seal);
-  // Attach Seal shows no seal on the page: it only prints on the PDF.
+  // Attach Seal shows nothing on the form: the seal prints on the PDF only. Its image is fetched now, so the PDF
+  // preview shows it without a wait.
+  if (seal) companySealImage();
 }
 
 /* Attach Seal is a checkbox only: the seal itself is added on Create a Company. Ticked without a seal on file,
@@ -13583,12 +13594,27 @@ async function stkLoad({ sync = false } = {}) {
 // The Period, Stock Point and Movement Type lists from the data (a choice already made is kept).
 function stkFillFilters() {
   const keep = select => select.value;
-  const months = [...new Set(stk.data.movements.map(m => String(m.date).slice(0, 7)))].sort().reverse();
+  // Every month of every year from the first stock document to this year, grouped by year (the newest year first),
+  // each year's months in calendar order January → December — not only the months that have movements (a month
+  // without any shows its empty figures).
+  const now = new Date();
+  const years = [...stk.data.movements, ...stk.data.damaged].map(m => Number(String(m.date).slice(0, 4))).filter(y => y > 1900 && y < 3000);
+  const firstYear = Math.min(now.getFullYear(), ...years);
+  const lastYear = Math.max(now.getFullYear(), ...years);
+  const months = [];
   const period = stkEl('period'); const p = keep(period);
-  period.replaceChildren(new Option('All Months', ''), ...months.map(month => {
-    const [y, m] = month.split('-').map(Number);
-    return new Option(new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), month);
-  }));
+  const groups = [];
+  for (let y = lastYear; y >= firstYear; y--) {
+    const group = document.createElement('optgroup');
+    group.label = String(y);
+    for (let m = 1; m <= 12; m++) {
+      const value = `${y}-${String(m).padStart(2, '0')}`;
+      months.push(value);
+      group.append(new Option(new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), value));
+    }
+    groups.push(group);
+  }
+  period.replaceChildren(new Option('All Months', ''), ...groups);
   period.value = months.includes(p) ? p : '';
   const points = Object.entries(stk.data.stockPoints).map(([id, w]) => new Option(`${w.code} · ${w.name}`, id));
   for (const id of ['point', 'levels-point', 'damaged-point']) {
@@ -13814,10 +13840,17 @@ function stkRender() {
     const tr = el('tr'); const unit = stkItem(d.itemId).unit;
     const reason = el('td', 'stk-remarks'); reason.append(el('div', '', d.remarks || d.condition || '—'));
     if (d.by) reason.append(el('div', 'stk-by', `By: ${d.by}`));
-    const move = el('button', 'stk-move-btn', 'Move to Stock');
-    move.type = 'button'; move.dataset.stkMove = d.key;
-    move.prepend(stkMoveIcon());
-    const action = el('td', 'stk-act-col'); action.append(move);
+    // Move to Stock: the sales side only (goods a customer sent back: Sales Return, Sales Replacement). Purchase
+    // returns and replacements go back to the supplier, so they are not put back into stock here.
+    const action = el('td', 'stk-act-col');
+    if (stkCanRestock(d)) {
+      const move = el('button', 'stk-move-btn', 'Move to Stock');
+      move.type = 'button'; move.dataset.stkMove = d.key;
+      move.prepend(stkMoveIcon());
+      action.append(move);
+    } else {
+      action.append(el('span', 'stk-dash', '–'));
+    }
     tr.append(el('td', 'stk-mono', stkDate(d.date)), el('td', 'stk-mono stk-strong', d.ref), el('td'), stkItemCell(d.itemId), el('td', 'stk-party', d.party || '—'),
       stkPointCell(d.warehouseId), el('td', 'num'), el('td', 'num stk-money', stkMoney(d.rate)), el('td', 'num stk-money stk-strong', stkMoney(pbNum(d.qty) * pbNum(d.rate))), reason, action);
     tr.children[2].append(el('span', `stk-type is-${STK_RETURN_TONE[d.source] || 'grey'}`, d.source));
@@ -13836,7 +13869,12 @@ function stkShowTab(tab) {
   stk.tab = tab;
   for (const button of document.querySelectorAll('[data-stk-tab]')) button.setAttribute('aria-selected', String(button.dataset.stkTab === tab));
   for (const panel of document.querySelectorAll('[data-stk-panel]')) panel.hidden = panel.dataset.stkPanel !== tab;
-  stkEl('export-label').textContent = { levels: 'Export Valuation', ledger: 'Export Movements', damaged: 'Export Damaged Stock' }[tab];
+  // "Export" on the button (the tab's tools stay on one line with the tabs); what it exports in its tooltip.
+  const exportName = { levels: 'Export Valuation', ledger: 'Export Movements', damaged: 'Export Damaged Stock' }[tab];
+  stkEl('export-label').textContent = 'Export';
+  const exportButton = document.querySelector('#stkr-page [data-stk="export"]');
+  exportButton.title = exportName;
+  exportButton.setAttribute('aria-label', exportName);
   // Damaged Stock: Filter (All / Sales Return / Purchase Return) in the bar instead of Stock Point, and no Print PDF.
   stkEl('dmg-filter-wrap').hidden = tab !== 'damaged';
   // Stock Levels: Filter (All / All Sales / All Purchases) in the bar, Stock Point in the tab's own row.
@@ -13905,9 +13943,12 @@ function stkMoveIcon() {
   return svg;
 }
 // Damaged lines by key (a return's lines for one item together): { key: { first line, qty still damaged } }.
+// Only the sales side's damaged goods can be moved back to stock (see damage_restock_save on the server).
+const stkCanRestock = d => d.side === 'sales';
+// Damaged lines that can be moved to stock, by key (a return's lines for one item together).
 function stkDamagedByKey() {
   const byKey = new Map();
-  for (const d of stk.data.damaged) {
+  for (const d of stk.data.damaged.filter(stkCanRestock)) {
     const entry = byKey.get(d.key);
     if (entry) entry.qty += pbNum(d.qty);
     else byKey.set(d.key, { line: d, qty: pbNum(d.qty) });
@@ -13920,7 +13961,7 @@ function stkOpenRestock(key) {
   const select = stkEl('restock-key');
   select.replaceChildren(...[...byKey.entries()].map(([k, { line, qty }]) => {
     const item = stkItem(line.itemId);
-    return new Option(`${line.ref} · ${item.name} · ${stkQty(qty)} ${String(item.unit || '').toUpperCase()}`.trim(), k);
+    return new Option(`${line.ref} · ${mtsWords(item.name)} · ${stkQty(qty)} ${String(item.unit || '').toLowerCase()}`.trim(), k);
   }));
   select.value = key;
   stkFillRestock(true);
@@ -13930,15 +13971,20 @@ function stkOpenRestock(key) {
   stkEl('restock-qty').select();
 }
 // The chosen damaged line's details; fresh: the quantity is set to all of it and the description cleared.
+// "HYDRAULIC HOSE 2\"" → "Hydraulic Hose 2\"" (the popup reads quieter in title case); codes stay as they are: a word of
+// up to 3 letters and no vowel (MCB, WH, SKF) or with a digit in it (32A, 3-POLE); "NEW" is a word: "New".
+const mtsWords = text => String(text || '').split(' ').map(word => ((word.length <= 3 && !/[aeiou]/i.test(word)) || /\d/.test(word)
+  ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())).join(' ');
 function stkFillRestock(fresh) {
   const entry = stkDamagedByKey().get(stkEl('restock-key').value);
   if (!entry) return;
-  const { line, qty } = entry; const item = stkItem(line.itemId); const unit = String(item.unit || '').toUpperCase();
-  stkEl('restock-from').textContent = `From ${line.source} ${line.ref}${line.party ? ` · ${line.party}` : ''}`;
-  stkEl('restock-item').textContent = item.name;
+  const { line, qty } = entry; const item = stkItem(line.itemId); const unit = mtsWords(item.unit || '');
+  // "Damaged · PRT-0002 · NHNH"
+  const from = stkEl('restock-from');
+  from.replaceChildren(el('b', '', 'Damaged'), ` · ${line.ref}${line.party ? ` · ${line.party}` : ''}`);
   stkEl('restock-avail').textContent = `${stkQty(qty)} ${unit}`.trim();
-  stkEl('restock-to').textContent = stkPoint(line.warehouseId).name;
-  stkEl('restock-unit').textContent = unit;
+  stkEl('restock-to').textContent = mtsWords(stkPoint(line.warehouseId).name);
+  stkEl('restock-unit').textContent = `${unit ? `${unit} · ` : ''}max ${stkQty(qty)}`;
   stkEl('restock-qty').max = String(qty);
   if (fresh) { stkEl('restock-qty').value = stkQty(qty); stkEl('restock-desc').value = ''; }
   stkEl('restock-error').hidden = true;
@@ -14128,6 +14174,111 @@ async function stkDeleteItem(itemId) {
 }
 
 // Export (CSV, the tab's rows with its filters, every page) and Print PDF (the same rows on a printable page).
+/* ---------- Excel export (.xlsx), no library (the CSP allows 'self' only) ----------
+   downloadXlsx(fileName, sheetName, head, rows): a real workbook that Excel, LibreOffice and Google Sheets open as is —
+   columns as wide as their contents, a bold header row frozen at the top with filter arrows, dates (DD/MM/YYYY) as
+   dates, numbers as numbers (money with 3 decimals). A CSV cannot hold column widths, so Excel showed ##### and cut
+   the text. The file is a zip of XML parts, written uncompressed ("stored"). */
+const XLSX_CRC = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  return bytes => { let c = 0xFFFFFFFF; for (const b of bytes) c = table[(c ^ b) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+})();
+function xlsxZip(files) {
+  const enc = new TextEncoder();
+  const parts = []; const central = []; let offset = 0;
+  const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+  for (const [name, text] of files) {
+    const data = enc.encode(text); const path = enc.encode(name); const crc = XLSX_CRC(data);
+    const local = new Uint8Array([0x50, 0x4B, 0x03, 0x04, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(path.length), ...u16(0)]);
+    parts.push(local, path, data);
+    central.push(new Uint8Array([0x50, 0x4B, 0x01, 0x02, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(path.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), path);
+    offset += local.length + path.length + data.length;
+  }
+  const size = central.reduce((n, p) => n + p.length, 0);
+  const end = new Uint8Array([0x50, 0x4B, 0x05, 0x06, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(size), ...u32(offset), ...u16(0)]);
+  return new Blob([...parts, ...central, end], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const xlsxEsc = text => String(text ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+const xlsxCol = i => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
+// A cell as Excel should hold it: a DD/MM/YYYY date → a date; "12,200.000" / "−3" → a number; anything else text.
+function xlsxValue(value) {
+  const text = String(value ?? '').trim();
+  const d = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text) || /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (d) {
+    const [y, m, day] = text.includes('/') ? [d[3], d[2], d[1]] : [d[1], d[2], d[3]];
+    const serial = (Date.UTC(+y, +m - 1, +day) - Date.UTC(1899, 11, 30)) / 86400000;
+    if (Number.isFinite(serial)) return { kind: 'date', n: serial };
+  }
+  const plain = text.replace(/,/g, '').replace(/^−/, '-');
+  if (/^-?\d+(\.\d+)?$/.test(plain) && !/^0\d/.test(plain.replace(/^-/, ''))) return { kind: 'num', n: Number(plain), decimals: (plain.split('.')[1] || '').length };
+  return { kind: 'text', s: text };
+}
+function downloadXlsx(fileName, sheetName, head, rows, { plain = false } = {}) {
+  // Codes, phone numbers, references, IDs stay text (91234567 is a phone number, not 91,234,567).
+  const textCol = head.map(h => /code|phone|mobile|contact|tel|fax|zip|postal|\bno\b|no\.|number|\bref\b|reference|\bid\b|vat reg|cr no|account|iban|po\b|sku/i.test(String(h)));
+  const values = rows.map(row => row.map((v, c) => (plain || textCol[c] ? { kind: 'text', s: String(v ?? '').trim() } : xlsxValue(v))));
+  // A column is money when it holds amounts with 3 decimals (Rate, Value, Cost, Price …), else a plain number.
+  const qtyCol = h => /qty|quantity/i.test(h);          // "Total Qty" is a quantity; "Stock Value" is money
+  const money = head.map((h, c) => !qtyCol(h) && (/rate|value|cost|price|amount|total|refund|balance|limit/i.test(h)
+    || values.some(r => r[c]?.kind === 'num' && r[c].decimals === 3)));
+  const width = head.map((h, c) => {
+    const longest = Math.max(String(h).length, ...rows.map((r, i) => {
+      const v = values[i][c];
+      return v?.kind === 'date' ? 10 : v?.kind === 'num' ? (money[c] ? v.n.toFixed(3).length + 3 : String(v.n).length + 2) : String(r[c] ?? '').length;
+    }));
+    return Math.min(60, Math.max(8, longest + 2));
+  });
+  const cell = (v, ref) => {
+    if (v.kind === 'date') return `<c r="${ref}" s="2"><v>${v.n}</v></c>`;
+    if (v.kind === 'num') return `<c r="${ref}" s="${money[xlsxColIndex(ref)] ? 3 : 4}"><v>${v.n}</v></c>`;   // money / number
+    return v.s ? `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(v.s)}</t></is></c>` : '';
+  };
+  const xlsxColIndex = ref => { let n = 0; for (const ch of ref.replace(/\d+/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  const last = `${xlsxCol(head.length - 1)}${rows.length + 1}`;
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="18"/>
+<cols>${width.map((w, c) => `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<sheetData><row r="1" ht="22" customHeight="1">${head.map((h, c) => `<c r="${xlsxCol(c)}1" t="inlineStr" s="1"><is><t>${xlsxEsc(h)}</t></is></c>`).join('')}</row>
+${values.map((row, r) => `<row r="${r + 2}">${row.map((v, c) => cell(v, `${xlsxCol(c)}${r + 2}`)).join('')}</row>`).join('\n')}</sheetData>
+<autoFilter ref="A1:${last}"/>
+</worksheet>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0.000"/><numFmt numFmtId="166" formatCode="#,##0.###"/></numFmts>
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF7C2D12"/><name val="Calibri"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFEDD5"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFFDBA74"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"><alignment horizontal="left"/></xf>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+  const name = xlsxEsc(String(sheetName).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Sheet1');
+  const blob = xlsxZip([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${name}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${name.replace(/'/g, "''")}'!$A$1:$${xlsxCol(head.length - 1)}$${rows.length + 1}</definedName></definedNames></workbook>`],
+    ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ['xl/worksheets/sheet1.xml', sheet],
+    ['xl/styles.xml', styles],
+  ]);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
 function stkTabTable() {
   if (stk.tab === 'levels') {
     return { title: 'Stock Valuation Overview', head: ['Item Code', 'Item Name', 'Brand', 'Stock Point', 'Purchased', 'Sold', 'Stock Available', 'Unit', 'Status', 'Avg Buying Cost', 'Selling Price', 'Stock Value'],
@@ -14145,15 +14296,11 @@ function stkTabTable() {
     rows: stkFilteredDamaged().map(d => [stkDate(d.date), d.ref, d.source, stkItem(d.itemId).code, stkItem(d.itemId).name, d.party, stkPoint(d.warehouseId).name,
       stkQty(d.qty), stkQty(d.origQty), stkItem(d.itemId).unit, pbMoney(pbNum(d.rate)), pbMoney(pbNum(d.qty) * pbNum(d.rate)), d.condition, d.remarks, d.by]) };
 }
+// Export: the tab's rows (its filters, every page) as an Excel workbook (.xlsx): readable columns, dates and numbers.
 function stkExport() {
   const { title, head, rows } = stkTabTable();
-  const cell = value => { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
-  const csv = [head, ...rows].map(row => row.map(cell).join(',')).join('\r\n');
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-  link.download = `${title.replace(/[^A-Za-z]+/g, '-')}-${todayInputValue()}.csv`;
-  document.body.append(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  downloadXlsx(`${title.replace(/[^A-Za-z]+/g, '-')}-${todayInputValue()}.xlsx`, title, head, rows);
+  showToast('Export ready', `${rows.length} row${rows.length === 1 ? '' : 's'} saved as an Excel file.`);
 }
 function stkPrint() {
   const { title, head, rows } = stkTabTable();
@@ -14220,6 +14367,16 @@ function stkInit() {
     if (event.target === restock || event.target.closest('[data-stk-restock="close"]')) restock.close();
   });
   stkEl('restock-key').addEventListener('change', () => { stkFillRestock(true); stkEl('restock-qty').focus(); });
+  byId('stkr-restock').addEventListener('click', event => {
+    const step = event.target.closest('[data-mts-step]');
+    if (!step) return;
+    const box = stkEl('restock-qty');
+    const max = pbNum(box.max);
+    const next = Math.min(max, Math.max(0, Math.round((pbNum(box.value) + Number(step.dataset.mtsStep)) * 1000) / 1000));
+    box.value = stkQty(next);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.focus();
+  });
   stkEl('restock-qty').addEventListener('input', () => { stkEl('restock-error').hidden = true; stkEl('restock-qty').classList.remove('is-invalid'); });
   stkEl('restock-form').addEventListener('submit', event => { event.preventDefault(); stkSaveRestock(); });
   // Any filter: back to page 1 of its tab, and the cards follow the Period and the stock point.
@@ -15311,7 +15468,29 @@ function initGrnTransfer(form) {
   const lines = () => [...list.querySelectorAll('li')];
   const showError = message => { byId('grn-transfer-error').textContent = message; byId('grn-transfer-error').hidden = !message; };
 
+  // A stock point is used once per transfer: each row's list leaves out the stock points the other rows have chosen
+  // (its own choice stays). A row removed or changed gives its stock point back to the others. + Add Stock Point
+  // is off once every stock point is in use.
+  function syncPoints() {
+    const selects = lines().map(li => li.querySelector('[data-gt-point]'));
+    const chosen = selects.map(select => select.value).filter(Boolean);
+    for (const select of selects) {
+      for (const option of select.options) {
+        if (!option.value) continue;
+        const taken = option.value !== select.value && chosen.includes(option.value);
+        option.hidden = taken;
+        option.disabled = taken;
+      }
+    }
+    const free = points.filter(point => !chosen.includes(String(point.id))).length;
+    const blank = selects.some(select => !select.value);
+    const add = dialog.querySelector('[data-gt="add"]');
+    add.disabled = free === 0 || (free === 1 && blank);
+    add.title = add.disabled ? 'Every stock point is already on a transfer row' : 'Add another destination stock point (Shift+X)';
+  }
+
   function totals() {
+    syncPoints();
     const sent = lines().reduce((sum, li) => sum + pbNum(li.querySelector('[data-gt-qty]').value), 0);
     byId('grn-transfer-allocated').textContent = withUnit(sent);
     byId('grn-transfer-allocated').classList.toggle('is-over', sent > accepted() + 0.0005);
@@ -15320,6 +15499,14 @@ function initGrnTransfer(form) {
   }
 
   function addLine(transfer = {}, focus = true) {
+    if (!transfer.warehouseId && focus) {
+      const chosen = lines().map(li => li.querySelector('[data-gt-point]').value).filter(Boolean);
+      const free = points.filter(point => !chosen.includes(String(point.id)));
+      if (!free.length || (free.length === 1 && lines().some(li => !li.querySelector('[data-gt-point]').value))) {
+        showError('Every stock point is already on a transfer row.');
+        return;
+      }
+    }
     const li = el('li', 'gt-row');
     const place = el('label', 'gt-field gt-field-point');
     const select = el('select', 'fp-input fp-select fp-select-list gt-select');   // the green list, not the browser's blue
@@ -15346,8 +15533,8 @@ function initGrnTransfer(form) {
     remove.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg>';
     li.append(place, amount, remove);
     list.append(li);
-    if (focus) enterField(select);           // a new row's stock point list opens at once
-    totals();
+    totals();                                // first: the other rows' stock points come off this row's list …
+    if (focus) enterField(select);           // … then its list opens (the stock points still free only)
   }
 
   async function open(line) {
@@ -15430,6 +15617,7 @@ function initGrnTransfer(form) {
     }
   });
   dialog.addEventListener('input', totals);
+  dialog.addEventListener('change', event => { if (event.target.matches('[data-gt-point]')) totals(); });
   // A stock point picked from its list with Enter: on to that row's quantity.
   dialog.addEventListener('menu-advance', event => {
     const qty = event.target.closest('li.gt-row')?.querySelector('[data-gt-qty]');
@@ -15463,22 +15651,42 @@ function initGrnTransfer(form) {
       else dialog.querySelector('[data-gt="save"]').focus();
       return;
     }
-    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && li && target.matches('[data-gt-qty]')) {
+    // Arrows, as a table: ← / → along the line (Stock Point → Qty → Delete; in the Qty box only from its edge, so the
+    // caret still moves in the number), ↑ / ↓ to the same field of the line above / below; past the last line ↓ goes
+    // to + Add Stock Point, then the footer (Cancel, Save), where ← / → move along and ↑ goes back to the last line.
+    const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+    if (!ARROWS.includes(event.key) || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+    const go = node => { if (!node) return; event.preventDefault(); event.stopPropagation(); node.focus(); if (node.matches?.('[data-gt-qty]')) node.select(); };
+    const add = dialog.querySelector('[data-gt="add"]');
+    const footer = [...dialog.querySelectorAll('.gt-foot button')];
+    const lastLine = () => lines().at(-1);
+    if (li) {
+      const cells = [li.querySelector('[data-gt-point]'), li.querySelector('[data-gt-qty]'), li.querySelector('[data-gt="remove"]')];
+      const col = cells.findIndex(cell => cell === target || cell?.contains(target));
+      if (col < 0) return;
+      const qtyBox = cells[1];
+      const caretAtEdge = edge => target !== qtyBox || qtyBox.selectionStart !== qtyBox.selectionEnd
+        || (edge === 'start' ? qtyBox.selectionStart === 0 : qtyBox.selectionEnd === qtyBox.value.length);
+      if (event.key === 'ArrowLeft') { if (col > 0 && caretAtEdge('start')) go(cells[col - 1]); else if (col > 0) return; else event.preventDefault(); return; }
+      if (event.key === 'ArrowRight') { if (col < cells.length - 1 && caretAtEdge('end')) go(cells[col + 1]); else if (col < cells.length - 1) return; else event.preventDefault(); return; }
       const other = event.key === 'ArrowDown' ? li.nextElementSibling : li.previousElementSibling;
-      event.preventDefault();
-      event.stopPropagation();
-      if (other) other.querySelector('[data-gt-qty]').focus();
-      else if (event.key === 'ArrowDown') dialog.querySelector('[data-gt="add"]').focus();
+      if (other) { go([other.querySelector('[data-gt-point]'), other.querySelector('[data-gt-qty]'), other.querySelector('[data-gt="remove"]')][col]); return; }
+      if (event.key === 'ArrowDown') { go(add.disabled ? footer.at(-1) : add); return; }
+      event.preventDefault();                                   // the first line: ↑ stays
       return;
     }
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && target.closest('.gt-foot, .gt-add')) {
-      const buttons = [dialog.querySelector('[data-gt="add"]'), ...dialog.querySelectorAll('.gt-foot button')];
-      const at = buttons.indexOf(target.closest('button'));
-      const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
-      event.preventDefault();
-      event.stopPropagation();
-      if (at + step < 0) (lines().at(-1)?.querySelector('[data-gt-qty]') || buttons[0]).focus();
-      else buttons[Math.min(buttons.length - 1, at + step)].focus();
+    if (target === add) {
+      if (event.key === 'ArrowUp') go(lastLine()?.querySelector('[data-gt-point]'));
+      else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') go(footer.at(-1));
+      else event.preventDefault();
+      return;
+    }
+    const at = footer.indexOf(target);
+    if (at >= 0) {
+      if (event.key === 'ArrowLeft') go(at > 0 ? footer[at - 1] : (add.disabled ? footer[0] : add));
+      else if (event.key === 'ArrowRight') go(footer[Math.min(footer.length - 1, at + 1)]);
+      else if (event.key === 'ArrowUp') go(add.disabled ? lastLine()?.querySelector('[data-gt-point]') : add);
+      else event.preventDefault();
     }
   };
 }
@@ -16550,7 +16758,7 @@ function exportListRows(list) {
   if (!rows.length) { showToast('Nothing to export', `No ${list.many} to export.`, true); return; }
   downloadCsv(masterFileName(list, `${listFiltered(list) ? 'filtered-' : ''}${today.toISOString().slice(0, 10)}`),
     [columns.map(column => column.label), ...rows.map(row => columns.map(column => row[column.key] ?? ''))]);
-  showToast('Export ready', `${list.count(rows.length)} saved as CSV.`);
+  showToast('Export ready', `${list.count(rows.length)} saved as an Excel file.`);
 }
 
 function initRrFilter() {
