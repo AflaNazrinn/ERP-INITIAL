@@ -47,7 +47,54 @@ function brand_find(int $id): array
         [$id]
     )->fetchAll();
     return brand_format($row) + ['items' => array_map(static fn ($i) => ['id' => (int) $i['id'], 'code' => $i['code'], 'name' => $i['name'],
-        'category' => $i['category'] ?? '', 'unit' => $i['unit'] ?? '', 'status' => $i['status'] ?? '', 'suppliers' => $i['suppliers'] ?? ''], $items)];
+        'category' => $i['category'] ?? '', 'unit' => $i['unit'] ?? '', 'status' => $i['status'] ?? '', 'suppliers' => $i['suppliers'] ?? ''], $items),
+        'soldItems' => brand_sold_items($id, (string) $row['brand_name'])];
+}
+
+/*
+ * The items sold under the brand: every Sales Order, Delivery Note, Tax Invoice and Sales Entry line with this brand
+ * (its brand_id, or the brand's name on a line saved without one), one row per item with the documents, the
+ * customers and the last date it was sold. Shown on the brand's View only; never saved back as the brand's items.
+ */
+function brand_sold_items(int $id, string $name): array
+{
+    $sources = [
+        ['sales_order_items', 'sales_order_id', 'sales_orders', 'so_code', 'so_date'],
+        ['delivery_note_items', 'delivery_note_id', 'delivery_notes', 'dn_code', 'dn_date'],
+        ['tax_invoice_items', 'tax_invoice_id', 'tax_invoices', 'ti_code', 'ti_date'],
+        ['sales_entry_items', 'sales_entry_id', 'sales_entries', 'se_code', 'se_date'],
+    ];
+    $byItem = [];
+    foreach ($sources as [$lines, $fk, $docs, $code, $date]) {
+        try {
+            $rows = query(
+                "SELECT l.item_id, COALESCE(i.item_code, l.item_code) AS item_code, COALESCE(i.item_name, l.item_name) AS item_name,
+                        l.unit, l.quantity, d.$code AS doc_code, d.$date AS doc_date, c.customer_name
+                 FROM $lines l JOIN $docs d ON d.id = l.$fk
+                 LEFT JOIN items i ON i.id = l.item_id LEFT JOIN customers c ON c.id = d.customer_id
+                 WHERE l.brand_id = ? OR (l.brand_id IS NULL AND UPPER(TRIM(l.brand_name)) = UPPER(TRIM(?)) AND TRIM(?) <> '')",
+                [$id, $name, $name]
+            )->fetchAll();
+        } catch (PDOException) {
+            continue;                                   // a company database without that table yet
+        }
+        foreach ($rows as $r) {
+            $key = $r['item_id'] !== null ? 'id:' . $r['item_id'] : 'name:' . mb_strtoupper(trim((string) $r['item_name']));
+            $item = $byItem[$key] ?? ['id' => $r['item_id'] !== null ? (int) $r['item_id'] : null, 'code' => (string) ($r['item_code'] ?? ''),
+                'name' => (string) ($r['item_name'] ?? ''), 'unit' => (string) ($r['unit'] ?? ''), 'documents' => [], 'customers' => [], 'lastSold' => ''];
+            $item['documents'][(string) $r['doc_code']] = true;
+            if (trim((string) $r['customer_name']) !== '') {
+                $item['customers'][(string) $r['customer_name']] = true;
+            }
+            $item['lastSold'] = max($item['lastSold'], (string) $r['doc_date']);
+            $byItem[$key] = $item;
+        }
+    }
+    $out = array_map(static fn ($i) => ['id' => $i['id'], 'code' => $i['code'], 'name' => $i['name'], 'unit' => $i['unit'],
+        'documents' => implode(', ', array_keys($i['documents'])), 'customers' => implode(', ', array_keys($i['customers'])),
+        'lastSold' => substr($i['lastSold'], 0, 10)], array_values($byItem));
+    usort($out, static fn ($a, $b) => strcmp($b['lastSold'], $a['lastSold']) ?: strcmp($a['name'], $b['name']));
+    return $out;
 }
 
 function brand_next_code(): string

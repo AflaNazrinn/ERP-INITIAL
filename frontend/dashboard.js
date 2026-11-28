@@ -10804,15 +10804,23 @@ const uomList = createMasterList({
 const brandList = createMasterList({
   key: 'brand', route: 'masters/brand', newRoute: '#/masters/brand/new', noun: 'Brand', nouns: 'Brands',
   api: 'api/brands.php', lookups: ['brand'], formPage: 'brand', edit: id => brandForm.edit(id),
-  // The View's Items tab: the items sold under the brand.
+  // The View's Items tab: the items actually sold under the brand (sales order, delivery note, tax invoice and sales
+  // entry lines with it), then the items that carry the brand on their own record (Item page sourcing lines).
   related: (record, note) => {
     if (!record) return { general: [], tabs: [{ label: 'Items', sections: [viewCard({ title: 'Items', wide: true }, viewNote(note))] }] };
     const items = record.items ?? [];
-    return { general: [], tabs: [{ label: 'Items', count: items.length, sections: [
-      viewCard({ title: 'Items Sold Under This Brand', count: viewCount(items.length, 'item'), wide: true },
+    const sold = record.soldItems ?? [];
+    const count = new Set([...items.map(item => `id:${item.id}`), ...sold.map(item => (item.id ? `id:${item.id}` : `name:${item.name}`))]).size;
+    return { general: [], tabs: [{ label: 'Items', count, sections: [
+      viewCard({ title: 'Items Sold Under This Brand', count: viewCount(sold.length, 'item'), wide: true },
+        viewTable(['S.No', 'Item Code', 'Item Name', 'Unit', 'Sales Documents', 'Customers', 'Last Sold'],
+          sold.map((item, i) => [viewSerial(i), viewMono(item.code, true), el('strong', '', item.name || '—'), item.unit, viewMono(item.documents), item.customers,
+            item.lastSold ? formatDate(new Date(`${item.lastSold}T00:00`)) : '']),
+          'Nothing has been sold under this brand yet.')),
+      viewCard({ title: 'Items Carrying This Brand', count: viewCount(items.length, 'item'), wide: true },
         viewTable(['S.No', 'Item Code', 'Item Name', 'Category', 'Unit', 'Suppliers', 'Status'],
           items.map((item, i) => [viewSerial(i), viewMono(item.code, true), el('strong', '', item.name || '—'), item.category, item.unit, item.suppliers, item.status]),
-          'No items are sold under this brand yet.'))] }] };
+          'No item has this brand on its sourcing lines.'))] }] };
   },
   columns: [codeColumn('brand code'), nameColumn('Brand', 'brand', 'make', 'manufacturer'), statusColumn()],
   fromApi: record => ({ ...record }),
