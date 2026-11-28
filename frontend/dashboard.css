@@ -186,6 +186,8 @@ button, select { font-family: inherit; }
 .tone-sales    { --tone-ink: var(--sales-ink);    --tone-solid: var(--sales-bar);    --tone-soft: var(--sales-soft);    --tone-line: var(--sales-line); }
 .tone-employee { --tone-ink: var(--employee-ink); --tone-solid: var(--employee-bar); --tone-soft: var(--employee-soft); --tone-line: var(--employee-line); }
 .kpi-card { background: linear-gradient(180deg, var(--tone-soft) 0%, var(--surface) 45%); }
+.kpi-card.is-link { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+.kpi-card.is-link:hover .card-label { color: var(--tone-ink); }
 .card-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); }
 .card-head { display: flex; align-items: center; justify-content: space-between; }
 .card-icon {
@@ -1544,6 +1546,9 @@ th[data-under]:not([hidden]) { display: table-cell; }
 .mv-table .po-doc { text-decoration: none; }
 
 /* Document Upload: a card per file. */
+.mv-doc-thumb { display: block; height: 120px; margin: -4px -4px 0; border-radius: 6px; overflow: hidden; background: var(--surface-muted); border: 1px solid var(--line); }
+.mv-doc-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mv-link { color: var(--accent-ink); word-break: break-all; }
 .mv-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; padding: 14px; }
 .mv-doc { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .mv-doc:hover { border-color: var(--ink-300); }
@@ -1814,9 +1819,6 @@ body:is([data-page="pr"], [data-page="rfq"], [data-page="po"], [data-page="grn"]
 .pb-link:hover { text-decoration: underline; }
 .pb-link:disabled { color: var(--ink-400); cursor: default; text-decoration: none; }
 .pb-seal-name { font-size: 11px; color: var(--ink-500); }
-.pb-seal-preview { display: none; align-self: flex-start; padding: 0; border: 0; background: transparent; }
-.pb-print-box:has([data-print-field="attachSeal"]:checked) .pb-seal-preview:not([hidden]) { display: block; }
-.pb-seal-preview img { display: block; width: 140px; height: 90px; object-fit: contain; }
 
 /* Remarks beside the Summary (Purchase Order, GRN) */
 .pb-pair-summary { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
@@ -2074,6 +2076,55 @@ dialog.pv::backdrop { background: #eef2f6; }
 .ps-meta-item dd { margin: 0; font-size: 11px; font-weight: 700; color: #0f172a; overflow-wrap: anywhere; }
 .ps-meta-item:first-child dd { font-family: var(--ps-mono); font-size: 11.5px; }   /* the document number */
 .ps-meta-item.is-ref dd { font-family: var(--ps-mono); color: #0284c7; }       /* the document it came from */
+/* The Sales Order PDF (soCostingParts): rounded cards, the costing table, Remarks beside the profit. */
+.pso-refline { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1px solid #cbd5e1; font-size: 11.5px; color: #334155; }
+.pso-refline b { font-weight: 800; color: #0f172a; }
+.pso-refline .pso-ref b { font-family: var(--ps-mono); }
+.pso-label { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #334155; }
+.pso-parties { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; break-inside: avoid; }
+.pso-card, .pso-terms, .pso-box { border: 1px solid #cbd5e1; border-radius: 12px; background: rgba(248, 250, 252, .9); break-inside: avoid; }
+.pso-card { min-width: 0; padding: 12px 14px; }
+.pso-name { margin-top: 6px; overflow-wrap: anywhere; font-size: 12.5px; font-weight: 800; text-transform: uppercase; color: #0f172a; }
+.pso-name-plain { text-transform: none; }
+.pso-note { margin-top: 2px; font-size: 10.5px; color: #475569; }
+.pso-card-lines { margin-top: 8px; padding-top: 8px; border-top: 1px solid #cbd5e1; display: grid; gap: 3px; }
+.pso-contact { font-size: 10.5px; font-weight: 600; text-transform: uppercase; color: #475569; }
+.pso-contact b { font-weight: 800; color: #0f172a; }
+.pso-terms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 12px; padding: 10px 14px; }
+.pso-terms dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 11.5px; font-weight: 700; color: #0f172a; }
+.pso-mono { font-family: var(--ps-mono); }
+.ps-table.pso-table { table-layout: auto; }        /* columns as wide as their figures; the description takes what is left */
+.ps-table.pso-table th { padding: 6px 6px; vertical-align: bottom; font-size: 9px; letter-spacing: .02em; line-height: 1.3; }
+.ps-table.pso-table td { padding: 7px 6px; vertical-align: top; font-size: 10px; font-weight: 500; }
+.ps-table.pso-table td:last-child { font-weight: 800; }
+.ps-table.pso-table .pso-c-sno { width: 1%; text-align: center; white-space: nowrap; }
+.ps-table.pso-table .pso-c-desc { width: 34%; min-width: 120px; }
+.ps-table.pso-table .pso-c-supplier { width: 12%; font-weight: 700; text-transform: uppercase; }
+.ps-table.pso-table .pso-c-qty { width: 1%; text-align: right; white-space: nowrap; }
+.ps-table.pso-table td.pso-c-qty { font-family: var(--ps-mono); font-weight: 800; }
+.ps-table.pso-table .pso-c-unit { width: 1%; text-align: center; white-space: nowrap; text-transform: uppercase; }
+.ps-table.pso-table .pso-c-num { width: 1%; text-align: right; white-space: nowrap; }
+.ps-table.pso-table td.pso-c-num { font-family: var(--ps-mono); }
+.ps-table.pso-table td.pso-strong { font-weight: 800; }
+.pso-item { font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: #0f172a; }
+.pso-sub { margin-top: 2px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #0369a1; }
+.pso-unit { font-size: 8.5px; font-weight: 500; color: #64748b; }
+th .pso-unit { font-weight: 600; text-transform: uppercase; }
+.pso-trans { font-size: 8.5px; font-weight: 600; color: #334155; }
+.ps-table.pso-table td.pso-profit { font-weight: 800; color: #15803d; }
+.ps-table.pso-table td.pso-profit.is-loss { color: #b91c1c; }
+.pso-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: stretch; break-inside: avoid; }
+.pso-box { min-width: 0; padding: 12px 14px; }
+.pso-rule { padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; }
+.pso-remarks-body { font-size: 10.5px; line-height: 1.6; white-space: pre-wrap; color: #1e293b; }
+.pso-empty { font-size: 10.5px; font-style: italic; color: #94a3b8; }
+.pso-total-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 11.5px; color: #0f172a; }
+.pso-total-row b { font-family: var(--ps-mono); font-weight: 800; white-space: nowrap; }
+.pso-profit-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 10px 12px;
+  border: 1px solid #a7f3d0; border-radius: 10px; background: #ecfdf5; color: #166534; }
+.pso-profit-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; }
+.pso-profit-value { font-family: var(--ps-mono); font-size: 15px; font-weight: 800; white-space: nowrap; }
+.pso-profit-box.is-loss { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 .ps-section-title { margin: 14px 0 6px; font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; color: #0f172a; }
 .ps-table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; background: rgba(255, 255, 255, .9); }
 .ps-table th {

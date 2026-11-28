@@ -36,12 +36,18 @@ function brand_find(int $id): array
     if (!$row) {
         throw new NotFound('Brand not found.');
     }
+    // The items sold under the brand (its item_brands lines), with what the brand's View shows of them:
+    // category, unit, status and the suppliers on those lines.
     $items = query(
-        'SELECT i.id, i.item_code AS code, i.item_name AS name FROM item_brands ib JOIN items i ON i.id = ib.item_id
-         WHERE ib.brand_id = ? GROUP BY i.id, i.item_code, i.item_name ORDER BY i.item_name',
+        'SELECT i.id, i.item_code AS code, i.item_name AS name, i.category, u.uom_name AS unit, i.status,
+                GROUP_CONCAT(DISTINCT s.supplier_name ORDER BY s.supplier_name SEPARATOR \', \') AS suppliers
+         FROM item_brands ib JOIN items i ON i.id = ib.item_id
+         LEFT JOIN uoms u ON u.id = i.uom_id LEFT JOIN suppliers s ON s.id = ib.supplier_id
+         WHERE ib.brand_id = ? GROUP BY i.id, i.item_code, i.item_name, i.category, u.uom_name, i.status ORDER BY i.item_name',
         [$id]
     )->fetchAll();
-    return brand_format($row) + ['items' => array_map(static fn ($i) => ['id' => (int) $i['id'], 'code' => $i['code'], 'name' => $i['name']], $items)];
+    return brand_format($row) + ['items' => array_map(static fn ($i) => ['id' => (int) $i['id'], 'code' => $i['code'], 'name' => $i['name'],
+        'category' => $i['category'] ?? '', 'unit' => $i['unit'] ?? '', 'status' => $i['status'] ?? '', 'suppliers' => $i['suppliers'] ?? ''], $items)];
 }
 
 function brand_next_code(): string

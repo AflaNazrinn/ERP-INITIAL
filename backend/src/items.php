@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/document_storage.php';
 require_once __DIR__ . '/stock_report.php';          // the stock on hand (stock_on_hand_matrix)
+require_once __DIR__ . '/item_documents.php';
 
 /*
  * Item master. Every lookup on the item form is a foreign key: uom_id, category_id,
@@ -124,7 +125,8 @@ function item_find(int $id): array
          WHERE ib.item_id = ? ORDER BY ib.sort_order, ib.id',
         [$id]
     )->fetchAll();
-    return item_format($row) + item_stock_fields($id) + ['sourcing' => array_map(static fn ($s) => [
+    // documents: the Doc / PDF Spec and CAD / Image files (the View popup shows them).
+    return item_format($row) + item_stock_fields($id) + ['documents' => item_documents_list($id), 'sourcing' => array_map(static fn ($s) => [
         'brandId'      => $s['brand_id'] === null ? null : (int) $s['brand_id'],
         'brandName'    => $s['brand_name'],
         'supplierId'   => $s['supplier_id'] === null ? null : (int) $s['supplier_id'],

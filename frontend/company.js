@@ -85,9 +85,9 @@ const CURRENCIES = [['OMR', 'Omani Rial'], ['AED', 'UAE Dirham'], ['INR', 'India
 // The "Select …" popups (the same columns, titles and letters as LOOKUPS in dashboard.js).
 const LOOKUPS = {
   country: { title: 'Select Country', letter: 'C', list: 'Country List', plural: 'countries', rows: () => COUNTRIES,
-    columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name },
+    columns: [['code', 'Code'], ['name', 'Country Name'], ['currency', 'Currency']], display: row => row.name.toUpperCase() },
   currency: { title: 'Select Currency', letter: '$', list: 'Currency List', plural: 'currencies', rows: () => CURRENCIES,
-    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}` },
+    columns: [['code', 'Code'], ['name', 'Currency Name']], display: row => `${row.code} – ${row.name}`.toUpperCase() },
 };
 // The CR and VAT certificates are optional (they may be added later).
 const REQUIRED = [
@@ -887,7 +887,7 @@ function openLookup(field, { query = '', byKeyboard = false } = {}) {
   Object.assign(lookup, { field, kind: field.dataset.lookup, rows, byKeyboard });
   const current = lookupIdInput(field)?.value ?? field.value;
   // The current value is highlighted; opened by typing a letter, the first match is.
-  lookup.active = query ? 0 : Math.max(0, rows.findIndex(row => String(row.id) === current));
+  lookup.active = query ? 0 : Math.max(0, rows.findIndex(row => String(row.id).toUpperCase() === current.toUpperCase()));
   $('lookup-letter').textContent = config.letter;
   $('lookup-title').textContent = config.title;
   $('lookup-list-title').textContent = config.list;
@@ -1435,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   form.addEventListener('change', updateProgress);
   // Picking the country sets its currency, as on the supplier and customer forms (Base Currency can still be changed).
   field('country').addEventListener('input', () => {
-    const country = COUNTRIES.find(row => row.name === field('country').value);
+    const country = COUNTRIES.find(row => row.name.toUpperCase() === field('country').value.toUpperCase());
     const currency = country && CURRENCIES.find(row => row.code === country.currency);
     if (currency) setLookupValue(field('baseCurrency'), currency);
     if (country) $('cc-phoneCode').value = country.dial;         // the phone's calling code follows the country

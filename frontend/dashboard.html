@@ -1004,7 +1004,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-sup-head">Account Head</label>
-          <input id="party-sup-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="Sundry Creditors" placeholder="e.g. Sundry Creditors">
+          <input id="party-sup-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="" readonly tabindex="-1" title="The user who created the supplier">
         </div>
         <div class="fp-field fp-span-12">
           <label class="fp-label" for="party-sup-organization">Organization Name</label>
@@ -1128,7 +1128,7 @@
         </div>
         <div class="fp-field fp-span-3">
           <label class="fp-label" for="party-cus-head">Account Head</label>
-          <input id="party-cus-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="Sundry Debtors" placeholder="e.g. Sundry Debtors">
+          <input id="party-cus-head" class="fp-input" type="text" autocomplete="off" maxlength="100" value="" readonly tabindex="-1" title="The user who created the customer">
         </div>
         <div class="fp-field fp-span-12">
           <label class="fp-label" for="party-cus-organization">Organization Name</label>
@@ -3265,7 +3265,7 @@
         </div>
         <div class="fp-field">
           <label class="fp-label" for="so-quotation">Ref ID (Click to Select Quotation)</label>
-          <div class="fp-input-wrap fp-lookup-wrap"><input id="so-quotation" class="fp-input fp-lookup" type="text" data-lookup="quotation" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select reference quotation..."><input id="so-quotation-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
+          <div class="fp-input-wrap fp-lookup-wrap"><input id="so-quotation" class="fp-input fp-lookup" type="text" data-lookup="quotation" data-lookup-party="so-customer-id" autocomplete="off" spellcheck="false" inputmode="none" aria-haspopup="dialog" placeholder="Select reference quotation..."><input id="so-quotation-id" type="hidden"><span class="fp-lookup-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span></div>
         </div>
         <div class="fp-field">
           <label class="fp-label" for="so-customer-po">Customer PO Number</label>

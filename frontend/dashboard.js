@@ -107,21 +107,25 @@ const KPI_ICONS = {
   debtors: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>',
   employees: '<circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
 };
+// Each tile opens the page behind its number (route).
 const KPI_TILES = [
-  { key: 'totalSales', label: 'Total Sales', money: true, tone: 'sales', icon: 'sales' },
-  { key: 'totalPurchase', label: 'Total Purchase', money: true, tone: 'purchase', icon: 'purchase' },
-  { key: 'pendingPurchase', label: 'Pending Purchase', money: true, tone: 'purchase', icon: 'pending' },
-  { key: 'totalItems', label: 'Total Items', money: false, tone: 'masters', icon: 'items' },
-  { key: 'creditors', label: 'Creditors', money: false, tone: 'masters', icon: 'creditors', admin: true },
-  { key: 'debtors', label: 'Debtors', money: false, tone: 'masters', icon: 'debtors', admin: true },
-  { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees', admin: true },
+  { key: 'totalSales', label: 'Total Sales', money: true, tone: 'sales', icon: 'sales', route: 'entry/sales-entry' },
+  { key: 'totalPurchase', label: 'Total Purchase', money: true, tone: 'purchase', icon: 'purchase', route: 'entry/purchase-entry' },
+  { key: 'pendingPurchase', label: 'Pending Purchase', money: true, tone: 'purchase', icon: 'pending', route: 'purchase-book/purchase-order' },
+  { key: 'totalItems', label: 'Total Items', money: false, tone: 'masters', icon: 'items', route: 'masters/item' },
+  { key: 'creditors', label: 'Creditors', money: false, tone: 'masters', icon: 'creditors', admin: true, route: 'masters/supplier' },
+  { key: 'debtors', label: 'Debtors', money: false, tone: 'masters', icon: 'debtors', admin: true, route: 'masters/customer' },
+  { key: 'totalEmployees', label: 'Total Employees', money: false, tone: 'employee', icon: 'employees', admin: true, route: 'employee/employee' },
 ];
 
 function renderKpis(kpis) {
   const grid = byId('dashboard-kpis');
   // A manager's dashboard has the first four tiles; creditors, debtors and employees are the admins'.
   grid.replaceChildren(...KPI_TILES.filter(tile => userAccess.admin || !tile.admin).map(tile => {
-    const card = el('div', `metric-card kpi-card tone-${tile.tone}`);
+    // A link to the tile's page; a plain card when this user may not open that page.
+    const link = tile.route && routeAllowed(tile.route);
+    const card = el(link ? 'a' : 'div', `metric-card kpi-card tone-${tile.tone}`);
+    if (link) { card.href = `#/${tile.route}`; card.classList.add('is-link'); }
     const head = el('div', 'card-head');
     const icon = el('div', 'card-icon');
     icon.setAttribute('aria-hidden', 'true');
@@ -328,6 +332,48 @@ function renderActivities(rows, total = rows.length) {
    Every recorded activity, newest first: AUDIT_PAGE_SIZE a page with Previous / Next / page numbers.
    From / To narrow it to the activities on those days (either may be left blank); Today, Last 7 Days and This Month
    fill both. Keys: ← / → (or PageUp / PageDown) the previous / next page, Esc back. */
+/* ---------- From / To date ranges: To can never be before From ----------
+   Every From / To pair (To's id → From's id). The To field's calendar starts at From (min). A date field still takes
+   a typed or arrow-stepped date below its min, so a whole To date before From is put back to From at once. While
+   the year is still being typed (below 1000) the events are held back instead, and leaving To fixes it. A From
+   moved past To on leaving it takes To with it. A fix on leaving is sent on as input + change, so every filter's
+   own handlers update. */
+const DATE_RANGE_PAIRS = {
+  'audit-to': 'audit-from', 'stkr-ledger-to': 'stkr-ledger-from', 'master-filter-to': 'master-filter-from',
+  'rrf-d2': 'rrf-d1', 'erf-d2': 'erf-d1', 'pbf-to': 'pbf-from',
+};
+const DATE_RANGE_FROM = Object.fromEntries(Object.entries(DATE_RANGE_PAIRS).map(([to, from]) => [from, to]));
+const dateRangeTo = node => node instanceof HTMLInputElement && DATE_RANGE_PAIRS[node.id] ? node : null;
+const dateRangeFrom = node => node instanceof HTMLInputElement && DATE_RANGE_FROM[node.id] ? node : null;
+const dateRangeBackwards = to => { const from = byId(DATE_RANGE_PAIRS[to.id]).value; return Boolean(from && to.value && to.value < from); };
+function setDateRangeValue(input, value) {
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+for (const type of ['input', 'change']) {
+  document.addEventListener(type, event => {
+    const to = dateRangeTo(event.target);
+    if (to && dateRangeBackwards(to)) {
+      if (Number(to.value.slice(0, 4)) >= 1000) to.value = byId(DATE_RANGE_PAIRS[to.id]).value;   // back to From
+      else event.stopImmediatePropagation();                     // year still being typed: fixed on leaving
+    }
+    const from = dateRangeFrom(event.target);
+    if (from) byId(DATE_RANGE_FROM[from.id]).min = from.value;
+  }, true);
+}
+document.addEventListener('focusin', event => {
+  const to = dateRangeTo(event.target);
+  if (to) to.min = byId(DATE_RANGE_PAIRS[to.id]).value;
+});
+document.addEventListener('focusout', event => {
+  const to = dateRangeTo(event.target);
+  if (to && dateRangeBackwards(to)) setDateRangeValue(to, byId(DATE_RANGE_PAIRS[to.id]).value);
+  const from = dateRangeFrom(event.target);
+  const pairTo = from && byId(DATE_RANGE_FROM[from.id]);
+  if (pairTo && dateRangeBackwards(pairTo)) setDateRangeValue(pairTo, from.value);
+});
+
 const AUDIT_PAGE_SIZE = 15;
 const audit = { rows: [], page: 1, all: false, loaded: false, seq: 0 };
 // A date as the date inputs hold it (YYYY-MM-DD), in local time.
@@ -449,7 +495,18 @@ function initAuditPage() {
 
 function handleAuditPageKeys(event) {
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
-  if (event.target.matches?.('input[type="date"]') && event.key !== 'Escape') return false;   // the arrows step the date
+  // The date fields keep their arrows: ↑/↓ step the day, month or year, ←/→ move between them. Enter goes
+  // From → To → Today; Tab / Shift+Tab leave as anywhere else.
+  if (event.target.matches?.('input[type="date"]') && event.key !== 'Escape') {
+    if (event.key.startsWith('Arrow') && !event.shiftKey) return true;
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (event.target.id === 'audit-from') byId('audit-to').focus();
+      else document.querySelector('[data-audit-range="today"]').focus();
+      return true;
+    }
+    return false;
+  }
   const pages = Math.max(1, Math.ceil(auditShownRows().length / AUDIT_PAGE_SIZE));
   const step = { ArrowLeft: -1, PageUp: -1, ArrowRight: 1, PageDown: 1 }[event.key];
   if (event.key === 'Escape') {
@@ -644,6 +701,13 @@ function initKeyboardNavigation() {
     }
     // A dropdown list opened with Enter (openSelectMenu) takes every key while it is open.
     if (handleSelectMenuKeys(event)) {
+      event.stopPropagation();
+      return;
+    }
+    // Party › Under: ↓ opens its list (Creditors / Debtors) instead of moving to the next field.
+    if (event.target.id === 'party-under' && event.key === 'ArrowDown' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      openSelectMenu(event.target);
       event.stopPropagation();
       return;
     }
@@ -1490,13 +1554,14 @@ function goToSignIn() {
 // Before anything loads: the signed-in user, or off to the sign-in page (null).
 // The signed-in user's name (an employee's login: the employee's name): the Created By / Requested By of the documents
 // made here: a new PR's Requested By, and the Salesman / Created By field of the PO, Quotation, Delivery Note, Purchase
-// Return and Purchase Replacement. Those fields are read-only; an edit keeps the saved name. (form.reset() puts a
+// Return and Purchase Replacement, and a new supplier's / customer's Account Head. Those fields are read-only; an
+// edit keeps the saved name. (form.reset() puts a
 // field's default back, so the default is set.)
 let signedInName = '';
 function useSignedInName(user) {
   signedInName = String(user.fullName || user.username || '').trim();
   if (!signedInName) return;
-  for (const id of ['po-salesman', 'qt-salesman', 'dn-salesman', 'prt-created-by', 'prp-created-by']) {
+  for (const id of ['po-salesman', 'qt-salesman', 'dn-salesman', 'prt-created-by', 'prp-created-by', 'party-sup-head', 'party-cus-head']) {
     const field = byId(id);
     if (!field) continue;
     const name = field.dataset.upper !== undefined ? signedInName.toUpperCase() : signedInName;
@@ -1890,10 +1955,10 @@ const LOOKUPS = {
   brand: { title: 'Select Brand', letter: 'B', list: 'Brand List', plural: 'brands', api: 'api/brands.php',
     columns: [['code', 'Code'], ['name', 'Brand Name']], display: row => row.name },
   supplier: { title: 'Select Supplier', letter: 'S', list: 'Supplier List', plural: 'suppliers', api: 'api/suppliers.php',
-    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['city', 'City']], display: row => row.name,
+    columns: [['code', 'Code'], ['name', 'Supplier Name'], ['country', 'Country']], display: row => row.name,
     // The card style (a field with data-lookup-cards: the Purchase Order's Supplier Name).
     subtitle: 'Choose a supplier from the database catalog.', search: 'Search supplier by name or code...',
-    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Supplier' },
+    cardMeta: row => [row.code, row.country].filter(Boolean).join(' • '), create: 'Create Supplier' },
   // data-lookup-exclude names another stock point field's id input: the stock point picked there is left off this
   // list (Stock Transfer: To never offers the From stock point; From always lists every stock point).
   warehouse: { title: 'Select Stock Point', letter: 'P', list: 'Stock Point List', plural: 'stock points', api: 'api/warehouses.php',
@@ -1917,9 +1982,9 @@ const LOOKUPS = {
     prepare: row => ({ ...row, requestedDateText: viewDate(row.requestedDate) }) },
   // Trade Management: the customer (card style, as the Purchase Order's supplier), and the documents a sales order or delivery note comes from.
   customer: { title: 'Select Customer', letter: 'C', list: 'Customer List', plural: 'customers', api: 'api/customers.php',
-    columns: [['code', 'Code'], ['name', 'Customer Name'], ['city', 'City']], display: row => row.name,
+    columns: [['code', 'Code'], ['name', 'Customer Name'], ['country', 'Country']], display: row => row.name,
     subtitle: 'Choose a customer from the database catalog.', search: 'Search customer by name or code...',
-    cardMeta: row => [row.code, row.country || row.city].filter(Boolean).join(' • '), create: 'Create Customer', newCustomer: true, compact: true },
+    cardMeta: row => [row.code, row.country].filter(Boolean).join(' • '), create: 'Create Customer', newCustomer: true, compact: true },
   // The quotation's Buyer Name: the picked customer's contact persons (field data-lookup-customer names its customer id
   // input); + New Contact adds one to the buyer (Party › Debtors › Contact Persons) and picks it.
   buyercontact: { title: 'Select Buyer Name', letter: 'B', list: 'Contact Persons', plural: 'contact persons',
@@ -1947,7 +2012,12 @@ const LOOKUPS = {
         .map(contact => ({ id: contact.name, name: contact.name, designation: contact.designation || '', number: contact.number || '' }));
     } },
   quotation: { title: 'Select Quotation', letter: 'Q', list: 'Quotations', plural: 'quotations', api: 'api/quotations.php',
-    columns: [['code', 'Quotation ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code },
+    columns: [['code', 'Quotation ID'], ['name', 'Customer'], ['date', 'Date']], display: row => row.code,
+    // The Sales Order's Ref Quotation (data-lookup-party): only the selected buyer's quotations; every one before a buyer is picked.
+    filterFor: (rows, field) => {
+      const customerId = byId(field?.dataset.lookupParty || '')?.value;
+      return customerId ? rows.filter(row => String(row.customerId) === String(customerId)) : rows;
+    } },
   // The Tax Invoice's Ref ID: the quotations, sales orders and delivery notes in one list (id "qt:5" / "so:12" / "dn:3").
   invoiceref: { title: 'Select Reference Document', letter: 'R', list: 'Quotations, Sales Orders & Delivery Notes',
     plural: 'quotations, sales orders and delivery notes',
@@ -4054,6 +4124,13 @@ const ERF_TABS = [
 ];
 const ERF_RESIGNED = [['', 'All employees'], ['hide', 'Hide resigned'], ['only', 'Resigned only']];
 const erfBlank = () => ({ picked: [], teams: [], points: [], d1: '', d2: '', y: null, m: null, resigned: '' });
+// The years a filter's ‹ › arrows go through: from 2000 to five years ahead, wider when records fall outside.
+// (Only the records' own years left both arrows greyed out while every record was from this year.)
+function filterYearBounds(years) {
+  const now = new Date().getFullYear();
+  return [Math.min(2000, ...years), Math.max(now + 5, ...years)];
+}
+
 const erf = { F: erfBlank(), tab: 'all', viewY: new Date().getFullYear(), points: [], shown: [], opener: null };
 const erfEl = suffix => byId(`erf-${suffix}`);
 const erfTeam = row => row.department || '—';
@@ -4219,8 +4296,9 @@ function erfRenderDate() {
   const now = new Date();
   const years = [...new Set([now.getFullYear(), ...employeeList.rows.map(r => Number(String(r.joinDate || '').slice(0, 4))).filter(Boolean)])];
   erfEl('y-cur').textContent = String(erf.viewY);
-  erfEl('y-prev').disabled = erf.viewY <= Math.min(...years);
-  erfEl('y-next').disabled = erf.viewY >= Math.max(...years);
+  const [firstYear, lastYear] = filterYearBounds(years);
+  erfEl('y-prev').disabled = erf.viewY <= firstYear;
+  erfEl('y-next').disabled = erf.viewY >= lastYear;
   const whole = F.y === erf.viewY && F.m === null;
   erfEl('y-all').setAttribute('aria-pressed', String(whole));
   [...erfEl('months').children].forEach(b => {
@@ -6504,6 +6582,8 @@ const partyForm = createFormPage({
     ['poNumber', 'cpo-number'], ['poDate', 'cpo-date'], ['poDeliveryDate', 'cpo-delivery'],
   ].map(([key, suffix]) => [key, () => partyEl(typeof suffix === 'function' ? suffix() : suffix)])),
   firstField: () => (partyEl('under').value ? partyEl(`${partyVariant()}-name`) : partyEl('under')),
+  // A new party starts with the Under list (Creditors / Debtors) open: ↑/↓ and Enter pick one.
+  onShow: () => { if (!partyEl('under').value) openSelectMenu(partyEl('under')); },
   setCode() {
     showNextCode(partyEl('sup-code'), 'api/suppliers.php');
     showNextCode(partyEl('cus-code'), 'api/customers.php');
@@ -6705,7 +6785,8 @@ function fillPartyForm(party) {
   set('tax', party.taxRegNo);
   set('owner', party.ownerDetails);
   set('organization', party.organizationName);
-  set('head', party.accountHead || (variant === 'cus' ? 'Sundry Debtors' : 'Sundry Creditors'));
+  // Account Head: the user who created it (read-only). Saved before that (Sundry Creditors / Debtors): the user saving it.
+  set('head', /^Sundry (Creditors|Debtors)$/.test(party.accountHead || '') ? signedInName : party.accountHead || signedInName);
   set('email', party.email);
   const dial = countryNamed(party.country)?.dial || '+968';
   for (const [field, value] of [['mobile', party.phone], ['phone', party.telephone]]) {
@@ -6781,7 +6862,7 @@ const ML_CELL_CLASS = { code: 'ml-code', name: 'ml-name', upper: 'ml-email', mon
 
 // A column's value as shown in the table and the View popup ("—" when empty).
 function masterValue(column, value) {
-  const text = String(value ?? '');
+  const text = ['mono', 'qty', 'qty-ok'].includes(column.type) ? groupDigits(value) : String(value ?? '');   // 1,061,720.000
   if (!text) return document.createTextNode('—');
   if (column.type === 'pill') return el('span', 'ml-pill', text);
   if (column.type === 'status') return el('span', `ml-status${/^active/i.test(text) ? '' : ' ml-status-off'}`, text);
@@ -7507,6 +7588,7 @@ const PBF_TABS = {
   value: { label: 'Value', icon: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2 0 0 0-5 0c0 2.5 5 1.5 5 4a2.5 2 0 0 1-5 0M12 6v1.5M12 16.5V18"/>' },
   disc: { label: 'Disc %', icon: '<path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>' },
   qty: { label: 'Qty', icon: '<path d="m21 8-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>' },
+  party: { label: 'Supplier', icon: '<path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>' },
   emp: { label: 'Employee', icon: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>' },
 };
 const PBF_SVG = paths => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -7519,9 +7601,9 @@ const PBF_NUM = {
 const PBF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // A list's conditions (list.facets); from / to are also the list's date range (list.range).
-const pbfEmpty = () => ({ from: '', to: '', year: null, month: null, vat: '', emps: new Set(),
+const pbfEmpty = () => ({ from: '', to: '', year: null, month: null, vat: '', emps: new Set(), parties: new Set(),
   num: { value: pbfNumEmpty(), disc: pbfNumEmpty(), qty: pbfNumEmpty() } });
-const pbfClone = f => ({ ...f, emps: new Set(f.emps),
+const pbfClone = f => ({ ...f, emps: new Set(f.emps), parties: new Set(f.parties || []),
   num: Object.fromEntries(Object.entries(f.num).map(([key, c]) => [key, { ...c }])) });
 // A number filter: the number typed for = (eq), < (lt) and > (gt); '' = not used.
 // Matches: equal to eq, or inside the < / > bounds; so = 20 with < 20 is ≤ 20, and > 20 with < 30 is a range.
@@ -7579,24 +7661,26 @@ function pbfPass(spec, f, row, skip) {
   if (skip !== 'vat' && f.vat && pbfVatOf(row) !== f.vat) return false;
   for (const [key, c] of Object.entries(f.num)) if (pbfNumOn(c) && !pbfNumMatch(c, PBF_NUM[key].of(row))) return false;
   if (skip !== 'emp' && f.emps.size && !f.emps.has(pbfEmpKey(row[spec.employee.key]))) return false;
+  // Supplier: any of the document's suppliers ticked (a request sent to several counts for each).
+  if (skip !== 'party' && f.parties?.size && !(spec.parties?.(row) || []).some(party => f.parties.has(party.key))) return false;
   return true;
 }
 // The conditions besides the ticked documents and the dates (the list counts those itself), for "Filter (3)".
-const pbfActive = f => [f.vat, ...Object.values(f.num).map(pbfNumOn), f.emps.size].filter(Boolean).length;
-const pbfKey = f => JSON.stringify([f.vat, f.num, [...f.emps]]);
+const pbfActive = f => [f.vat, ...Object.values(f.num).map(pbfNumOn), f.emps.size, f.parties?.size].filter(Boolean).length;
+const pbfKey = f => JSON.stringify([f.vat, f.num, [...f.emps], [...(f.parties || [])]]);
 
 const pbFilter = { list: null, spec: null, f: null, picked: new Set(), tab: 'all', year: 0, query: {}, opener: null, op: 'eq' };
 const pbfEl = suffix => byId(`pbf-${suffix}`);
 const pbfIsOn = (tab, f = pbFilter.f) => ({
   all: pbFilter.picked.size > 0, date: Boolean(f.from || f.to), vat: Boolean(f.vat),
-  emp: f.emps.size > 0,
+  emp: f.emps.size > 0, party: f.parties.size > 0,
 }[tab] ?? pbfNumOn(f.num[tab]));
 
 function openPbFilter(list) {
   const spec = list.config.docFilter;
   const f = pbfClone(list.facets);
   Object.assign(f, list.range);
-  Object.assign(pbFilter, { list, spec, f, picked: new Set(list.applied), tab: 'all', query: { all: '', emp: '' },
+  Object.assign(pbFilter, { list, spec, f, picked: new Set(list.applied), tab: 'all', query: { all: '', emp: '', party: '' },
     opener: document.activeElement, year: Number((f.from || dateInputValue(new Date())).slice(0, 4)) });
   pbfEl('title').textContent = `Filter ${list.config.nouns}`;
   pbfEl('sub').textContent = `Search and select the ${list.many} to show`;
@@ -7652,7 +7736,7 @@ function resetPbFilter() {
   const { list } = pbFilter;
   pbFilter.f = pbfEmpty();
   pbFilter.picked.clear();
-  pbFilter.query = { all: '', emp: '' };
+  pbFilter.query = { all: '', emp: '', party: '' };
   pbFilter.year = new Date().getFullYear();
   list.applied.clear();
   list.facets = pbfEmpty();
@@ -7675,10 +7759,10 @@ function pbfRender() {
     button.classList.toggle('is-on', pbfIsOn(button.dataset.tab));
   }
   pbfEl('main').setAttribute('aria-labelledby', `pbf-tab-${tab}`);
-  const searching = tab === 'all' || tab === 'emp';
+  const searching = tab === 'all' || tab === 'emp' || tab === 'party';
   pbfEl('search-wrap').hidden = !searching;
   if (searching) {
-    const what = tab === 'emp' ? 'Search employee by name or code...'
+    const what = tab === 'emp' ? 'Search employee by name or code...' : tab === 'party' ? 'Search supplier by name or code...'
       : `Filter by ${spec.short} number, ${spec.searchHint}...`;
     pbfEl('search').placeholder = what;
     pbfEl('search').setAttribute('aria-label', what.replace(/\.\.\.$/, ''));
@@ -7691,6 +7775,7 @@ function pbfRender() {
   pbfEl('table').hidden = tab === 'date';
   if (tab === 'date') pbfRenderDate();
   else if (tab === 'emp') pbfRenderPeople();
+  else if (tab === 'party') pbfRenderParties();
   else pbfRenderDocs();
   if (focusValue) {
     const again = focusValue.startsWith('v:') ? [...pbfEl('rows').querySelectorAll('.pbf-rb')].find(box => `v:${box.value}` === focusValue) : byId(focusValue);
@@ -7809,6 +7894,28 @@ function pbfRenderPeople() {
   pbfEl('summary').replaceChildren(`${chosen.size} of ${all.length} employees selected `, el('span', '', `(${rows.length} visible)`));
 }
 
+// Supplier: one row a supplier on the documents, with how many of the documents that meet the other conditions are theirs.
+function pbfRenderParties() {
+  const { list, spec, f, tab } = pbFilter;
+  const parties = new Map();
+  for (const row of list.rows) {
+    const counted = pbfPass(spec, f, row, 'party');
+    for (const party of spec.parties(row)) {
+      if (!parties.has(party.key)) parties.set(party.key, { ...party, count: 0 });
+      if (counted) parties.get(party.key).count++;
+    }
+  }
+  const query = pbFilter.query[tab].trim().toLowerCase();
+  const all = [...parties.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const rows = all.filter(party => !query || `${party.name} ${party.code}`.toLowerCase().includes(query));
+  pbFilter.shown = rows;
+  pbfEl('tb-title').replaceChildren('Suppliers', el('span', '', ` · ${rows.length} visible`));
+  pbfTable(['Code', 'Supplier', list.config.nouns], rows.map(party => ({
+    key: party.key, code: party.code, title: party.name, sub: 'Supplier', value: list.count(party.count),
+  })), key => f.parties.has(key), query ? `No supplier matches “${pbFilter.query[tab].trim()}”.` : `None of the ${list.many} has a supplier yet.`);
+  pbfEl('summary').replaceChildren(`${f.parties.size} of ${all.length} suppliers selected `, el('span', '', `(${rows.length} visible)`));
+}
+
 function pbfRenderDate() {
   const { list, spec, f } = pbFilter;
   if (document.activeElement !== pbfEl('from')) pbfEl('from').value = f.from;
@@ -7816,8 +7923,7 @@ function pbfRenderDate() {
   pbfEl('to').min = f.from || '';
   const now = new Date();
   const years = list.rows.map(row => Number(String(row.createdOn || '').slice(0, 4))).filter(Boolean);
-  const first = Math.min(now.getFullYear(), ...years);
-  const last = Math.max(now.getFullYear(), ...years);
+  const [first, last] = filterYearBounds(years);
   pbFilter.year = Math.min(last, Math.max(first, pbFilter.year));
   const year = pbFilter.year;
   pbfEl('year').textContent = String(year);
@@ -7980,7 +8086,7 @@ function initPbFilter() {
   });
   // A typed range replaces the year / month. From, as the Return & Replacement and Supply Filter: a whole date (typed,
   // or its day / month / year changed) puts the same date in To; only part of it erased (badInput) changes nothing
-  // yet; every part erased clears To too. To before From moves From back to it.
+  // yet; every part erased clears To too. To before From goes back to From on leaving it (DATE_RANGE_PAIRS).
   pbfEl('from').addEventListener('input', event => {
     const input = event.target;
     if (!input.value && input.validity.badInput) return;          // still being edited
@@ -7992,8 +8098,7 @@ function initPbFilter() {
     const input = event.target;
     if (!input.value && input.validity.badInput) return;          // still being edited
     const f = pbFilter.f;
-    Object.assign(f, { to: input.value, year: null, month: null });
-    if (f.from && f.to && f.to < f.from) f.from = f.to;
+    Object.assign(f, { to: input.value, year: null, month: null });   // never before From (DATE_RANGE_PAIRS)
     pbfRender();
   });
   // Ticks: All ticks documents; Employee picks people.
@@ -8001,7 +8106,7 @@ function initPbFilter() {
     const box = event.target;
     if (!box.classList.contains('pbf-rb')) return;
     const { tab, f } = pbFilter;
-    const set = tab === 'emp' ? f.emps : pbFilter.picked;
+    const set = tab === 'emp' ? f.emps : tab === 'party' ? f.parties : pbFilter.picked;
     const keys = box.id === 'pbf-all' ? pbFilter.shown.map(item => item.key ?? item.code) : [box.value];
     const on = box.id === 'pbf-all' ? keys.some(k => !set.has(k)) : box.checked;
     for (const k of keys) if (on) set.add(k); else set.delete(k);
@@ -8141,14 +8246,19 @@ const findMasterRow = (rows, row, list = masterImport.list) => (list?.config.mat
 
 // Headings every list understands, by our column key (a list's own headers come first).
 const IMPORT_HEADERS = {
-  name: ['name', 'full name', 'display name', 'title', 'account name', 'business name', 'trade name', 'legal name'],
+  name: ['name', 'full name', 'display name', 'title', 'account name', 'business name', 'trade name', 'legal name', 'particulars', 'ledger', 'ledger name'],
+  // Tally's Buyer / Mailing Name: the name the party is printed with (kept when it differs from the name).
+  organizationName: ['mailing name', 'buyer', 'buyer name', 'seller', 'seller name', 'print name', 'organisation name'],
   code: ['id', 'code', 'account code', 'account id', 'ref no', 'reference code'],
   email: ['email', 'e mail', 'email address', 'mail id', 'email id', 'emailid', 'mail address'],
-  phone: ['mobile', 'mobile no', 'cell', 'cell no', 'cellphone', 'gsm', 'whatsapp', 'whatsapp no', 'phone', 'contact no', 'contact number', 'mobile phone'],
-  telephone: ['landline', 'work phone', 'office phone', 'office no', 'alternate phone', 'alternative phone', 'other phone', 'secondary phone', 'phone 2', 'tel no'],
-  address: ['addr', 'street address', 'full address', 'address 1', 'address line 1', 'billing address', 'postal address', 'office address'],
-  city: ['town', 'city name', 'city town', 'municipality'],
-  country: ['nation', 'country name', 'country code', 'country region'],
+  phone: ['mobile', 'mobile no', 'cell', 'cell no', 'cellphone', 'gsm', 'gsm no', 'whatsapp', 'whatsapp no', 'phone', 'contact no', 'contact number', 'mobile phone',
+    'ph', 'ph no', 'mob', 'mob no', 'mobile tel', 'phone mobile', 'mobile phone no', 'hp', 'handphone'],
+  telephone: ['landline', 'work phone', 'office phone', 'office no', 'alternate phone', 'alternative phone', 'other phone', 'secondary phone', 'phone 2', 'tel no',
+    'tel', 'tel fax', 'telephone no', 'fax', 'fax no', 'office tel', 'land line'],
+  address: ['addr', 'street address', 'full address', 'address 1', 'address line 1', 'billing address', 'postal address', 'office address',
+    'buyer address', 'seller address', 'mailing address', 'party address'],
+  city: ['town', 'city name', 'city town', 'municipality', 'place', 'emirate', 'governorate', 'wilayat', 'state city'],
+  country: ['nation', 'country name', 'country code', 'country region', 'nationality', 'country of origin', 'origin'],
   zipCode: ['zip', 'zip code', 'postcode', 'post code', 'postal code', 'pincode', 'pin'],
   currency: ['currency', 'curr', 'ccy', 'currency code', 'currency name'],
   status: ['status', 'active', 'is active', 'active status', 'state', 'enabled'],
@@ -8221,14 +8331,53 @@ const COUNTRY_ALIASES = {
   deu: 'Germany', ger: 'Germany', deutschland: 'Germany', ita: 'Italy', italia: 'Italy',
   uk: 'United Kingdom', gbr: 'United Kingdom', gb: 'United Kingdom', greatbritain: 'United Kingdom', britain: 'United Kingdom', england: 'United Kingdom',
   us: 'United States', usa: 'United States', america: 'United States', unitedstatesofamerica: 'United States',
+  // Nationalities ("Omani"), as some sheets name the country.
+  omani: 'Oman', emirati: 'United Arab Emirates', saudiarabian: 'Saudi Arabia', qatari: 'Qatar', kuwaiti: 'Kuwait', bahraini: 'Bahrain',
+  indian: 'India', pakistani: 'Pakistan', egyptian: 'Egypt', jordanian: 'Jordan', turkish: 'Türkiye', chinese: 'China', japanese: 'Japan',
+  korean: 'South Korea', german: 'Germany', italian: 'Italy', british: 'United Kingdom', american: 'United States',
 };
 function findCountry(text) {
   const key = squash(text).replace(/^the/, '');
   if (!key) return null;
-  const dial = String(text).trim();
+  const dial = String(text).trim().replace(/^00/, '+').replace(/^(\d{1,4})$/, '+$1');   // "968", "00968" → "+968"
   return COUNTRIES.find(country => squash(country.name) === key || country.code.toLowerCase() === key || country.dial === dial)
     || COUNTRIES.find(country => country.name === COUNTRY_ALIASES[key]) || null;
 }
+// A country inside a longer text: "Salalah - Oman", "Oman / Muscat", "Country: Oman", "Mumbai 400069, India".
+// Returns { country, city } (the place beside it, when there is one), or null.
+const PLACE_SPLIT = /\s*[,;|/\\:&\n]\s*|\s+[-–—]\s+|\s*[-–—]\s*(?=[A-Za-z])/;
+function countryIn(text) {
+  const whole = findCountry(text);
+  if (whole) return { country: whole, city: '' };
+  const parts = String(text ?? '').split(PLACE_SPLIT).map(part => part.trim()).filter(Boolean);
+  if (parts.length < 2) {
+    // "Dubai UAE", "Muscat Sultanate of Oman": the country in the last words, the city before it.
+    const words = (parts[0] || '').split(/\s+/);
+    for (let take = Math.min(4, words.length - 1); take >= 1; take--) {
+      const country = findCountry(words.slice(-take).join(' '));
+      if (country) return { country, city: placeName(words.slice(0, -take).join(' ')) };
+    }
+    return null;
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const country = findCountry(parts[i]);
+    if (!country) continue;
+    // The city: the part just before the country, else just after it ("Oman - Muscat"), without a postcode.
+    const near = [parts[i - 1], parts[i + 1]].map(part => placeName(part)).find(Boolean) || '';
+    return { country, city: near };
+  }
+  return null;
+}
+// A town's name from "Mumbai 400069" / "PC 112 Ruwi" → "Mumbai" / "Ruwi"; '' when it is not a place name.
+function placeName(text) {
+  const name = String(text ?? '').replace(/\b(p\.?\s?o\.?\s?box|pc|p\.?c\.?|zip|pin|postal code|post code)\b\.?\s*:?\s*\d*/gi, ' ')
+    .replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
+  const labels = /^(country|city|town|location|address|place|region|state|nationality)$/i;
+  // A country's own name is not a town; a city that also names its country ("Dubai") is.
+  return /[a-z]{2}/i.test(name) && name.length <= 30 && name.split(' ').length <= 3 && !labels.test(name)
+    && !COUNTRIES.some(country => squash(country.name) === squash(name) || country.code.toLowerCase() === squash(name)) ? name : '';
+}
+
 const CURRENCY_ALIASES = {
   $: 'USD', us$: 'USD', usdollar: 'USD', dollar: 'USD', dollars: 'USD', '€': 'EUR', euro: 'EUR', euros: 'EUR', '£': 'GBP', pound: 'GBP', pounds: 'GBP', sterling: 'GBP',
   '₹': 'INR', rs: 'INR', inr: 'INR', rupee: 'INR', rupees: 'INR', ro: 'OMR', rial: 'OMR', omanirial: 'OMR', omaniriyal: 'OMR', bz: 'OMR',
@@ -8328,7 +8477,8 @@ function columnKind(column) {
 }
 const looksLike = {
   email: value => EMAIL.test(value.replace(/^mailto:/i, '')),
-  phone: value => /^[+\d\s\-().]+$/.test(value) && isPhoneToken(value) && !sheetDate(value),
+  // One number, or several ("9123 4567 / 2456 7890").
+  phone: value => value.split(/\s*[/,;|]\s*/).every(part => /^[+\d\s\-().]+$/.test(part) && isPhoneToken(part)) && !sheetDate(value),
   country: value => Boolean(findCountry(value)),
   currency: value => value.length <= 20 && Boolean(findCurrency(value)) && !/^\d/.test(value),
   date: value => Boolean(sheetDate(value)) && !/^\d{5}(\.\d+)?$/.test(value),
@@ -8389,28 +8539,213 @@ function matchColumnsByContent(columns, sheetColumns, headers, body, required) {
       mapping.push({ at: best.at, header: headers[best.at] || `Column ${best.at + 1}`, labels: [requiredColumn.label], how: 'content' });
     }
   }
+  // A column of short place names beside the Country column, with no heading for it: the City.
+  const city = columns.find(column => column.key === 'city');
+  const countryAt = sheetColumns.findIndex(column => column?.key === 'country');
+  if (city && !taken().has('city') && countryAt >= 0) {
+    for (const at of [countryAt - 1, countryAt + 1]) {
+      if (at < 0 || at >= width || sheetColumns[at]) continue;
+      const cells = values(at);
+      if (cells.length && share(cells, value => placeName(value) === value) >= 0.8) {
+        sheetColumns[at] = city;
+        mapping.push({ at, header: headers[at] || `Column ${at + 1}`, labels: [city.label], how: 'content' });
+        break;
+      }
+    }
+  }
   return mapping.sort((a, b) => a.at - b.at);
 }
 
 // Values that depend on each other: country from the phone or the address, city from the address,
 // currency from the country, phone numbers given the country's calling code.
-function tidyImportRow(columns, raw) {
+/* Towns, for the City: an area names its city ("Ghala" → Muscat). Wilayats and towns are cities of their own.
+   Keys are squashed (letters and digits only); several spellings point to one place. */
+const PLACE_CITIES = (() => {
+  const places = {
+    Oman: {
+      Muscat: ['muscat', 'ruwi', 'ghala', 'azaiba', 'alazaiba', 'aziaba', 'southazaiba', 'alkhuwair', 'khuwair', 'qurum', 'alqurum', 'madinatsultanqaboos', 'msq',
+        'minaalfahal', 'wattayah', 'alwattayah', 'darsait', 'wadikabir', 'alkhoudh', 'ghubrah', 'alghubrah', 'cbd', 'hamriya', 'muttrah', 'mutrah', 'udhaybah', 'aludhaybah', 'northaludhaybah'],
+      Seeb: ['seeb', 'alseeb', 'alhail', 'hail', 'mawaleh', 'almawaleh', 'alkhoud', 'khoud', 'mabellah', 'mabela', 'mabelah', 'mabilah', 'southmabilah', 'mabellahindarea',
+        'mabelahsanaiya', 'seebnaseemgarden', 'naseemgarden', 'rusayl'],
+      Bousher: ['bousher', 'bausher', 'ansab', 'alansab', 'bousherheights', 'ghala heights'],
+      Amerat: ['amerat', 'alamerat', 'amerath', 'ameraith', 'alamerait', 'amerait', 'alamrat'],
+      Quriyat: ['quriyat', 'qurayyat', 'mizan'],
+      Barka: ['barka', 'barkasanayya', 'jehailah', 'manooma', 'mainooma'],
+      Musannah: ['musannah', 'almusannah'],
+      Suwaiq: ['suwaiq', 'alsuwaiq', 'umseih', 'shabia'],
+      Sohar: ['sohar', 'suhar'], Saham: ['saham'], Shinas: ['shinas'], Liwa: ['liwa'], Khabourah: ['khabourah', 'alkhaburah'],
+      Rustaq: ['rustaq', 'rustaq'], Nakhal: ['nakhal'],
+      Samail: ['samail', 'sumail', 'semail', 'madrah', 'almadrah', 'luzugh', 'lizugh', 'lizuge', 'lizugue', 'lizuque', 'lizug', 'lazigh'],
+      Bidbid: ['bidbid', 'fanja', 'thumayd'],
+      Izki: ['izki'], Nizwa: ['nizwa'], Bahla: ['bahla'], Adam: ['adam'], Ibri: ['ibri'], Buraimi: ['buraimi', 'alburaimi'],
+      Sur: ['sur', 'bilad', 'biladsur', 'sursanaiya', 'bimmah'], Ibra: ['ibra'], Mudhaibi: ['mudhaibi', 'almudhaibi'],
+      Salalah: ['salalah'], Taqah: ['taqah'], Mirbat: ['mirbat'], Thumrait: ['thumrait'], Duqm: ['duqm'], Khasab: ['khasab'],
+    },
+    'United Arab Emirates': {
+      Dubai: ['dubai', 'deira', 'burdubai', 'jebelali', 'alquoz', 'karama'], 'Abu Dhabi': ['abudhabi', 'mussafah', 'musaffah'], Sharjah: ['sharjah'],
+      Ajman: ['ajman'], Fujairah: ['fujairah'], 'Ras Al Khaimah': ['rasalkhaimah', 'rak'], 'Al Ain': ['alain'], 'Umm Al Quwain': ['ummalquwain'],
+    },
+    'Saudi Arabia': { Riyadh: ['riyadh'], Jeddah: ['jeddah'], Dammam: ['dammam'], 'Al Khobar': ['khobar'] },
+    Qatar: { Doha: ['doha'] }, Bahrain: { Manama: ['manama'] }, Kuwait: { 'Kuwait City': ['kuwaitcity'] },
+    India: { Mumbai: ['mumbai', 'bombay'], Delhi: ['delhi', 'newdelhi'], Chennai: ['chennai', 'madras'], Bangalore: ['bangalore', 'bengaluru'],
+      Kochi: ['kochi', 'cochin'], Hyderabad: ['hyderabad'], Kolkata: ['kolkata', 'calcutta'], Rajkot: ['rajkot'], Morbi: ['morbi'], Ahmedabad: ['ahmedabad'] },
+  };
+  const map = new Map();
+  for (const [country, cities] of Object.entries(places)) {
+    for (const [city, names] of Object.entries(cities)) for (const name of [city, ...names]) map.set(squash(name), { city, country, own: squash(name) === squash(city) });
+  }
+  return map;
+})();
+// The town a text names: its parts and their words ("AL AZAIBA", "LUZUGH SUMAIL", "SUR SOUQ"). A town named outright wins
+// over an area of one; the last named wins ("SEEB ..., AL HAIL" → Seeb).
+function placeIn(text) {
+  let found = null;
+  for (const part of String(text ?? '').split(/\s*[,;|/\n]\s*|\s+[-–—]\s+|-(?=[A-Za-z])/)) {
+    const words = part.replace(/\b(souq|sanaiya|sanaiyah|industrial|ind|area|near|opp|beside|road|street|st)\b\.?/gi, ' ').trim().split(/[\s.]+/).filter(Boolean);
+    // Whole part first ("AL AZAIBA"), then two-word and one-word pieces.
+    const pieces = [words.join(' '), ...words.slice(0, -1).map((word, i) => `${word} ${words[i + 1]}`), ...words];
+    for (const piece of pieces) {
+      const place = PLACE_CITIES.get(squash(piece.replace(/\d+/g, '')));   // "RAJ KOT-360002" → Rajkot
+      if (place && (!found || place.own || !found.own)) { found = place; break; }
+    }
+  }
+  return found;
+}
+
+/* An address cell from an accounts export holds much more than the address, often with its line breaks lost:
+   "CR NO: 1023610P.O BOX: 631, P.C: 13099706544AL AZAIBA, SULTANATE OF OMANOM1100293895". Taken apart into
+   C.R No 1023610, P.O Box 631, postal code 130, phone 99706544, VAT OM1100293895 and the address "AL AZAIBA" (Oman). */
+const ADDRESS_LABEL = String.raw`(?<![A-Za-z])(?:C\.?\s?R\.?(?:\s*NO\.?)?|P\.?\s?O\.?\s*BOX(?:\s*NO\.?)?|P\.?\s?B\.?|POSTAL\s*CODE|PIN\s*CODE|P\.?\s?C\.?|MOB(?:ILE)?|TEL(?:EPHONE)?|PH(?:ONE)?|FAX|GSM|E-?MAIL)\s*[:.\-]`;
+function splitAddressBlob(text) {
+  const out = { cr: '', poBox: '', postalCode: '', phones: [], emails: [], vat: '', address: '' };
+  let t = ` ${String(text ?? '')} `;
+  const phoneTail = digits => {            // a code glued to a phone number: "13099706544" → 130 + 99706544
+    if (digits.length >= 13 || (digits.length >= 10 && digits.length <= 12)) { out.phones.push(digits.slice(-8)); return digits.slice(0, -8); }
+    return digits;
+  };
+  t = t.replace(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/gi, match => { out.emails.push(match.toLowerCase()); return ', '; });
+  out.broken = [];
+  t = t.replace(/[a-z0-9._%+-]+@[a-z0-9.-]+/gi, match => { out.broken.push(match); return ', '; });   // "INFO@EDM-ENGINEER": cut short
+  t = t.replace(/(?:VAT|TRN)?\s*(?:NO\.?|REG\.?\s*NO\.?)?\s*[:.\-]?\s*OM\s?(\d{8,10}X?)(?![0-9A-Z])/gi, (match, digits) => { out.vat ||= `OM${digits.toUpperCase()}`; return ', '; });
+  // Put back the breaks the export lost: before a label, between a long number and a word.
+  t = t.replace(new RegExp(`(?=${ADDRESS_LABEL})`, 'gi'), ', ')
+    .replace(/(\d{3,})(?=[A-Za-z]{2})/g, '$1, ').replace(/([A-Za-z]{2})(?=\d{5,})/g, '$1, ');
+  t = t.replace(/(?<![A-Za-z])C\.?\s?R\.?(?:\s*NO\.?)?\s*[:.\-]\s*([\d/]+)/gi, (match, value) => {
+    out.cr ||= /^\d+$/.test(value) ? phoneTail(value) : value;
+    return ', ';
+  });
+  t = t.replace(/(?<![A-Za-z])(?:P\.?\s?O\.?\s*BOX(?:\s*NO\.?)?|P\.?\s?B\.?)\s*[:.\-]?\s*(\d+)/gi, (match, value) => { out.poBox ||= phoneTail(value); return ', '; });
+  t = t.replace(/(?<![A-Za-z])(?:POSTAL\s*CODE|PIN\s*CODE|P\.?\s?C\.?)\s*[:.\-]?\s*(\d+)/gi, (match, value) => { out.postalCode ||= phoneTail(value); return ', '; });
+  t = t.replace(/(?<![A-Za-z])(?:MOB(?:ILE)?|TEL(?:EPHONE)?|PH(?:ONE)?|FAX|GSM|E-?MAIL)\s*[:.\-]/gi, ', ');
+  t = t.replace(/(?:\+|00)?\d[\d\s\-()]{5,}\d/g, match => {
+    if (!isPhoneToken(match)) return match;
+    let phone = match.replace(/[\s\-()]/g, '').replace(/^00/, '+');
+    if (/^\+986\d{8}$/.test(phone)) phone = `+968${phone.slice(4)}`;          // a common slip for Oman's +968
+    out.phones.push(phone);
+    return ', ';
+  });
+  out.address = [...new Set(t.split(/\s*[,;]\s*/).map(part => part.replace(/^[\s\-:.]+|[\s\-:.]+$/g, '').trim())
+    .filter(part => part && /[a-z]/i.test(part)))].join(', ');
+  return out;
+}
+
+// rest: text left in contact cells once their emails and phone numbers are out ("Sohar, Oman", "Country: Oman").
+// sheetCountry: the country most of the sheet's numbers dial, for numbers written without a code.
+function tidyImportRow(columns, raw, rest = [], sheetCountry = null) {
   const has = key => columns.some(column => column.key === key);
   const kinds = kind => columns.filter(column => column.kind === kind);
-  let country = raw.country ? findCountry(raw.country) : null;
-  if (country) raw.country = country.name;
-  const parts = (raw.address || '').split(',').map(part => part.trim()).filter(Boolean);
+  // The mailing name, kept only when it says something the name does not.
+  if (raw.organizationName && squash(raw.organizationName) === squash(raw.name)) raw.organizationName = '';
+  // An address cell holding C.R No, P.O Box, postal code, phones, emails and VAT: each to its own field.
+  const extraPhones = new Set();
+  if (raw.address) {
+    const blob = splitAddressBlob(raw.address);
+    const notes = [];
+    if (blob.cr) notes.push(`C.R No: ${blob.cr}`);
+    for (const text of blob.broken) notes.push(`Email (incomplete): ${text.toLowerCase()}`);
+    if (blob.vat) { if (has('taxRegNo') && !raw.taxRegNo) raw.taxRegNo = blob.vat; else if (squash(raw.taxRegNo) !== squash(blob.vat)) notes.push(`VAT: ${blob.vat}`); }
+    if (blob.postalCode && has('zipCode') && !raw.zipCode) raw.zipCode = blob.postalCode;
+    for (const email of blob.emails) {
+      const column = kinds('email').find(other => !raw[other.key]);
+      if (column) raw[column.key] = email; else if (!kinds('email').some(other => raw[other.key] === email)) notes.push(`Email: ${email}`);
+    }
+    for (const phone of blob.phones) {
+      const column = kinds('phone').find(other => !raw[other.key]);
+      if (column) { raw[column.key] = phone; extraPhones.add(column.key); } else notes.push(phone);
+    }
+    // What is left is the address: the P.O Box first, without the country (it has its own field).
+    // A part that is only a country ("SULTANATE OF OMAN"), not a town that also names it ("Dubai").
+    const parts = blob.address.split(', ').filter(part => !(findCountry(part) && !PLACE_CITIES.has(squash(part))));
+    const where = countryIn(blob.address) || (/sultanate\s*of\s*oman/i.test(raw.address) ? { country: findCountry('Oman'), city: '' } : null);
+    if (where && has('country') && !raw.country) raw.country = where.country.name;
+    // No country written: the one the phone numbers dial ("+968 …").
+    const dialled = blob.phones.find(phone => phone.startsWith('+'));
+    if (has('country') && !raw.country && dialled) raw.country = findCountry(normalPhone(dialled).split(' ')[0])?.name || '';
+    raw.address = [blob.poBox && `P.O. Box ${blob.poBox}`, ...parts].filter(Boolean).join(', ');
+    // A postcode at the end of a part ("RAJ KOT-360002").
+    const pin = /[a-z][\s-]+(\d{5,6})$/i.exec(parts.find(part => /[a-z][\s-]+\d{5,6}$/i.test(part)) || '');
+    if (pin && has('zipCode') && !raw.zipCode) raw.zipCode = pin[1];
+    if (notes.length && has('accountDetails')) raw.accountDetails = [raw.accountDetails, notes.filter(note => /:/.test(note)).join(', '),
+      notes.some(note => !/:/.test(note)) ? `Other numbers: ${notes.filter(note => !/:/.test(note)).join(', ')}` : ''].filter(Boolean).join('\n');
+  }
+  // "(INDIA)" in the name: the country.
+  if (has('country') && !raw.country) {
+    const named = /\(([^)]+)\)/.exec(raw.name || '');
+    if (named && findCountry(named[1])) raw.country = findCountry(named[1]).name;
+  }
+  // City: the town the address names (an area gives its city), else the one in the name ("…- SUR SOUQ").
+  if (has('city') && !raw.city) {
+    const fits = place => place && (!raw.country || findCountry(raw.country)?.name === place.country);
+    const place = [placeIn(raw.address), placeIn(raw.name)].find(fits);
+    if (place) {
+      raw.city = place.city;
+      if (has('country') && !raw.country) raw.country = place.country;
+    }
+  }
+  // Country: a country name, code, calling code or nationality; "Salalah - Oman" gives the city too.
+  let country = null;
+  if (raw.country) {
+    const found = countryIn(raw.country);
+    if (found) {
+      country = found.country;
+      raw.country = country.name;
+      if (has('city') && !raw.city && found.city) raw.city = found.city;
+    }
+  }
+  // The address's last parts: "PO Box 123, Ruwi, Muscat, Oman" → country Oman, city Muscat;
+  // "Andheri East, Mumbai 400069, India" → city Mumbai, zip 400069.
+  const parts = (raw.address || '').split(/\s*[,;\n]\s*|\s+-\s+/).map(part => part.trim()).filter(Boolean);
   const addressCountry = parts.length > 1 ? findCountry(parts[parts.length - 1]) : null;
+  const fromRest = rest.map(text => countryIn(text)).find(Boolean) || null;
   if (has('country') && !raw.country) {
     const dialled = kinds('phone').map(column => raw[column.key]).find(value => /^(\+|00)/.test(value || ''));
-    country = addressCountry || (dialled ? findCountry(normalPhone(dialled).split(' ')[0]) : null);
+    country = addressCountry || fromRest?.country || (dialled ? findCountry(normalPhone(dialled).split(' ')[0]) : null);
     if (country) raw.country = country.name;
   }
-  if (has('city') && !raw.city && addressCountry && parts.length > 1) {
-    const city = parts[parts.length - 2];
-    if (/[a-z]/i.test(city) && city.length <= 40 && !/\d{3,}/.test(city)) raw.city = city;
+  if (has('city') && !raw.city) {
+    if (addressCountry && parts.length > 1) raw.city = placeName(parts[parts.length - 2]);
+    if (!raw.city && fromRest?.city) raw.city = fromRest.city;
+  }
+  if (has('zipCode') && !raw.zipCode && addressCountry && parts.length > 1) {
+    const zip = /\b\d{3,10}\b/.exec(parts[parts.length - 2]);
+    if (zip) raw.zipCode = zip[0];
+  }
+  // Numbers without a code, in a row with no country: the sheet's country when they fit it ("79448617" → +968).
+  if (!country && sheetCountry) {
+    const numbers = kinds('phone').map(column => raw[column.key]).filter(Boolean);
+    if (numbers.length && numbers.every(value => normalPhone(value, sheetCountry).startsWith(sheetCountry.dial))) {
+      country = sheetCountry;
+      if (has('country') && !raw.country) raw.country = country.name;
+      if (has('currency') && !raw.currency) raw.currency = country.currency;
+    }
   }
   for (const column of kinds('phone')) if (raw[column.key]) raw[column.key] = normalPhone(raw[column.key], country);
+  // A number taken out of the address that is not a valid phone number ("+968-997507"): kept in Other Details.
+  for (const key of extraPhones) {
+    if (!raw[key] || !phoneProblem(raw[key], '')) continue;
+    if (has('accountDetails')) raw.accountDetails = [raw.accountDetails, `Other numbers: ${raw[key]}`].filter(Boolean).join('\n');
+    raw[key] = '';
+  }
   for (const column of kinds('email')) if (raw[column.key]) raw[column.key] = raw[column.key].replace(/^mailto:/i, '').toLowerCase();
   if (has('currency') && !raw.currency && country) raw.currency = country.currency;
 }
@@ -8447,7 +8782,9 @@ function takeContacts(text, { phones: wantPhones = true } = {}) {
 
 // raw: our column key → cell text; cells / sheetColumns / headers: the sheet row as read. Returns a note for
 // the preview naming the sheet columns contacts were taken from, or ''.
-function sortContacts(columns, raw, cells, sheetColumns, headers, sources = new Set()) {
+// contactAt: sheet columns no heading explains whose cells mostly hold emails / phone numbers. rest collects what
+// such cells hold besides (a place, "Country: Oman") for tidyImportRow.
+function sortContacts(columns, raw, cells, sheetColumns, headers, sources = new Set(), contactAt = new Set(), rest = []) {
   const emailColumns = columns.filter(column => column.kind === 'email');
   const phoneColumns = columns.filter(column => column.kind === 'phone');
   if (!emailColumns.length && !phoneColumns.length) return '';
@@ -8462,7 +8799,7 @@ function sortContacts(columns, raw, cells, sheetColumns, headers, sources = new 
     const column = sheetColumns[at];
     const text = String(cells[at] ?? '').trim();
     if (!text) continue;
-    const contactHeading = CONTACT_HEADER.test(normalHeader(headers[at] ?? ''));
+    const contactHeading = CONTACT_HEADER.test(normalHeader(headers[at] ?? '')) || contactAt.has(at);
     const own = column && readFrom[column.key] === at;             // this cell is the value of one of our columns
     if (column && !column.kind && (!contactHeading || !own)) continue;   // a known column that is not about contacts
     const found = takeContacts(text, { phones: Boolean(column?.kind) || contactHeading || text.includes('@') });
@@ -8470,6 +8807,12 @@ function sortContacts(columns, raw, cells, sheetColumns, headers, sources = new 
     emails.push(...found.emails);
     phones.push(...found.phones);
     if (!column?.kind) { from.add(String(headers[at] ?? '').trim() || 'another column'); sources.add(at); }
+    // What else the cell holds, with its separators kept ("Sohar, Oman"), for the country and city.
+    if (!column) {
+      const left = text.replace(new RegExp(CONTACT_EMAIL.source, 'gi'), ',')
+        .replace(CONTACT_PHONE, match => (isPhoneToken(match) ? ',' : match)).replace(CONTACT_LABELS, ' ');
+      if (/[a-z]{2}/i.test(left)) rest.push(left);
+    }
     if (own) raw[column.key] = column.kind ? '' : found.rest;      // email / phone are refilled below; "Ali 9123 4567" keeps "Ali"
   }
   const fill = (targets, values) => {
@@ -8497,10 +8840,23 @@ function masterRowsFromSheet(list, sheet) {
   const matchHeader = headerMatcher(columns, noun);
   const lines = sheet.map((cells, index) => ({ cells: cells.map(cleanCell), line: index + 1 })).filter(row => row.cells.some(Boolean));
   if (!lines.length) throw new Error('The sheet is empty.');
-  let headerAt = lines.slice(0, 5).findIndex(row => row.cells.some(cell => matchHeader(cell)[0]?.key === required));
+  // The heading row: of the top ten rows, the one with the most cells that are known headings (a title row such as
+  // "SUPPLIER LIST 2026" above it has one filled cell, and is skipped). A row naming the required column wins ties.
+  const headingScore = row => {
+    const filled = row.cells.filter(Boolean);
+    if (filled.length < 2 || filled.some(cell => looksLike.email(cell))) return -1;
+    const known = filled.filter(cell => matchHeader(cell)[0]).length;
+    return known * 2 + (row.cells.some(cell => matchHeader(cell)[0]?.key === required) ? 1 : 0);
+  };
+  let headerAt = -1, best = 0;
+  lines.slice(0, 10).forEach((row, index) => { const score = headingScore(row); if (score > best) { best = score; headerAt = index; } });
+  if (best < 2) headerAt = -1;                         // one known heading at most: a stray word, not a heading row
   if (headerAt === -1) {
-    const data = lines[0].cells.some(cell => looksLike.email(cell) || looksLike.date(cell) || /^[+\d][\d\s.,\-()]*$/.test(cell));
-    headerAt = data ? -1 : 0;
+    const first = lines.find(row => row.cells.filter(Boolean).length >= 2) || lines[0];
+    const data = first.cells.some(cell => looksLike.email(cell) || looksLike.date(cell) || /^[+\d][\d\s.,\-()]*$/.test(cell));
+    const at = lines.indexOf(first);
+    if (data) lines.splice(0, at);                    // no headings: a title row above the data is dropped
+    headerAt = data ? -1 : at;
   }
   const headers = headerAt >= 0 ? lines[headerAt].cells : [];
   const elsewhere = sheetBelongsElsewhere(list, headers);
@@ -8524,9 +8880,24 @@ function masterRowsFromSheet(list, sheet) {
   if (!sheetColumns.some(column => column?.key === required)) {
     throw new Error(`No "${requiredLabel}" column was found. Download the template to see the expected columns.`);
   }
+  // Columns no heading explains that mostly hold emails / phone numbers ("Ahmed 9123 4567, ahmed@x.com").
+  const contactAt = new Set();
+  for (let at = 0; at < width; at++) {
+    if (sheetColumns[at]) continue;
+    const cells = body.map(row => row.cells[at]).filter(Boolean);
+    const email = new RegExp(CONTACT_EMAIL.source, 'i');
+    if (share(cells, value => email.test(value) || (value.match(CONTACT_PHONE) || []).some(isPhoneToken)) >= 0.6) contactAt.add(at);
+  }
+  // The calling code most of the sheet's numbers start with (+968 …), for numbers written without one.
+  const dials = new Map();
+  for (const { cells } of body) for (const cell of cells) for (const match of String(cell).matchAll(/(?:\+|\b00)(\d{2,3})[\s-]?\d/g)) {
+    const place = COUNTRIES.find(other => other.dial === `+${match[1]}`);
+    if (place) dials.set(place, (dials.get(place) || 0) + 1);
+  }
+  const sheetCountry = [...dials].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
   const rows = [], errors = [], sources = new Set();
   for (const { cells, line } of body) {
-    const raw = {};
+    const raw = {}, rest = [];
     sheetColumns.forEach((column, at) => {
       const value = cells[at] || '';
       if (!column || !value) return;
@@ -8539,8 +8910,23 @@ function masterRowsFromSheet(list, sheet) {
       }
       if (!raw[column.key]) raw[column.key] = value;
     });
-    const note = sortContacts(columns, raw, cells, sheetColumns, headers, sources);
-    tidyImportRow(columns, raw);
+    // Everything in the name cell ("Omicron Trading, omicron@x.om, 9123 4567, Muscat, Oman"): the name is its first
+    // part; the email and phone numbers go to their columns, the place to country / city.
+    // (Split at " - " only when the cell has an email: "CREDIT CUSTOMERS - COUNTER - 79448617" is a name.)
+    const hasEmail = new RegExp(CONTACT_EMAIL.source, 'i').test(raw[required] || '');
+    if (raw[required] && (hasEmail || (raw[required].match(CONTACT_PHONE) || []).some(isPhoneToken)) && (hasEmail || /[,;|\n]/.test(raw[required]))) {
+      const [first, ...others] = raw[required].split(hasEmail ? /\s*[,;|\n]\s*|\s+[-–—]\s+/ : /\s*[,;|\n]\s*/).map(part => part.trim()).filter(Boolean);
+      raw[required] = first || '';
+      const extra = takeContacts(others.join(', '));
+      for (const [kind, found] of [['email', extra.emails], ['phone', extra.phones]]) {
+        for (const column of columns.filter(other => other.kind === kind)) if (!raw[column.key] && found.length) raw[column.key] = found.shift();
+      }
+      const left = others.join(', ').replace(new RegExp(CONTACT_EMAIL.source, 'gi'), ',')
+        .replace(CONTACT_PHONE, match => (isPhoneToken(match) ? ',' : match)).replace(CONTACT_LABELS, ' ');
+      if (/[a-z]{2}/i.test(left)) rest.push(left);
+    }
+    const note = sortContacts(columns, raw, cells, sheetColumns, headers, sources, contactAt, rest);
+    tidyImportRow(columns, raw, rest, sheetCountry);
     if (!raw[required]) { errors.push({ line, raw, message: `${requiredLabel} is missing` }); continue; }
     if (looksLike.email(raw[required]) || looksLike.phone(raw[required]) || !/[a-z0-9]/i.test(raw[required])) {
       errors.push({ line, raw, message: `${requiredLabel} "${raw[required]}" is not a name` });
@@ -9472,7 +9858,7 @@ function viewChips(names, className = '') {
 
 // One column's value, shown by its type: codes in orange mono, status as a badge, currency code and name, phone / email with icons.
 function viewValue(column, value) {
-  const text = String(value ?? '').trim();
+  const text = column.type === 'code' || column.type === 'mono' || !column.type ? groupDigits(String(value ?? '').trim()) : String(value ?? '').trim();
   if (!text) return el('span', 'mv-none', '—');
   if (column.type === 'code') return viewMono(text, true);
   if (column.type === 'status') return viewStatus(text);
@@ -9605,13 +9991,27 @@ function viewDocCards(kind, docs) {
       el('p', 'mv-doc-meta', [viewFileSize(doc.size), doc.uploadedAt ? `Uploaded ${viewDate(doc.uploadedAt)}` : ''].filter(Boolean).join(' · ')));
     const top = el('div', 'mv-doc-top');
     top.append(file, text);
+    // A picture shows itself above its name (opens full size).
+    let thumb = null;
+    if (['jpg', 'jpeg', 'png'].includes(extension)) {
+      thumb = el('a', 'mv-doc-thumb');
+      thumb.href = partyDocUrl(kind, doc.id, true);
+      thumb.target = '_blank';
+      thumb.rel = 'noopener';
+      thumb.tabIndex = -1;
+      const img = el('img');
+      img.src = thumb.href;
+      img.alt = doc.originalName;
+      img.loading = 'lazy';
+      thumb.append(img);
+    }
     const actions = el('span', 'mv-doc-acts');
     if (preview) actions.append(viewDocLink(kind, doc.id, doc.originalName, 'eye', 'Open', true));
     actions.append(viewDocLink(kind, doc.id, doc.originalName, 'download', 'Download', false));
     const foot = el('div', 'mv-doc-foot');
-    foot.append(viewExpiry(doc.expiryDate), actions);
+    foot.append('expiryDate' in doc ? viewExpiry(doc.expiryDate) : el('span'), actions);   // item files have no expiry
     const card = el('article', 'mv-doc');
-    card.append(top, foot);
+    card.append(...(thumb ? [thumb] : []), top, foot);
     grid.append(card);
   }
   return grid;
@@ -9997,9 +10397,39 @@ const customerList = createMasterList({
   sample: { name: 'OMAN OIL SERVICES LLC', phone: '+968 2456 1100', email: 'procurement@omanoil.om', city: 'Muscat', country: 'Oman', status: 'active' },
 });
 
+// The item View's tabs: Suppliers (its sourcing lines: brand, supplier, stock point, cost, opening stock) and
+// Documents & Images (the Doc / PDF Spec and CAD / Image files uploaded on Item Creation), plus its links.
+function itemViewSections(record, note) {
+  const labels = ['Suppliers', 'Documents & Images'];
+  if (!record) return { general: [], tabs: labels.map(label => ({ label, sections: [viewCard({ title: label, wide: true }, viewNote(note))] })) };
+  const sourcing = record.sourcing ?? [];
+  const suppliers = { label: labels[0], count: sourcing.length, sections: [
+    viewCard({ title: 'Suppliers & Sourcing', count: viewCount(sourcing.length, 'line'), wide: true },
+      viewTable(['S.No', 'Supplier', 'Brand', 'Stock Point', 'Cost (OMR)', 'Opening Stock'],
+        sourcing.map((s, i) => [viewSerial(i), el('strong', '', s.supplierName || '—'), s.brandName,
+          [s.warehouseCode, s.warehouseName].filter(Boolean).join(' · '),
+          s.cost == null || s.cost === '' ? '' : viewMono(formatAmount(s.cost)), viewMono(s.openingStock ?? '')]),
+        'No suppliers added to this item.'))] };
+  const files = (record.documents ?? []).map(doc => ({ ...doc, docType: doc.kind === 'image' ? 'CAD / Image' : 'Doc / PDF Spec' }));
+  const specs = files.filter(doc => doc.kind !== 'image');
+  const images = files.filter(doc => doc.kind === 'image');
+  const links = [{ label: 'Image Link', value: record.imagePath }, { label: 'Supplier URL', value: record.webLink }].filter(link => link.value);
+  const documents = { label: labels[1], count: files.length, sections: [
+    viewCard({ title: 'CAD / Images', count: viewCount(images.length, 'file'), wide: true }, viewDocCards('item', images)),
+    viewCard({ title: 'Doc / PDF Specifications', count: viewCount(specs.length, 'file'), wide: true }, viewDocCards('item', specs)),
+    ...(links.length ? [viewCard({ title: 'Links', wide: true }, viewFields(links.map(({ label, value }) => {
+      const link = el('a', 'mv-link', value);
+      link.href = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      return { label, value: link };
+    })))] : [])] };
+  return { general: [], tabs: [suppliers, documents] };
+}
+
 const itemList = createMasterList({
   key: 'item', route: 'masters/item', newRoute: `#/${ITEM_ROUTE}`, noun: 'Item', nouns: 'Items',
-  api: 'api/items.php', lookups: ['item'], formPage: 'item', edit: id => editItem(id),
+  api: 'api/items.php', lookups: ['item'], formPage: 'item', edit: id => editItem(id), related: itemViewSections,
   // No Brand column: an item's brands are its sourcing rows.
   columns: [codeColumn('item code', 'sku', 'part no', 'part number'),
     nameColumn('Item', 'item', 'product', 'product name', 'item description'),
@@ -10052,6 +10482,16 @@ const uomList = createMasterList({
 const brandList = createMasterList({
   key: 'brand', route: 'masters/brand', newRoute: '#/masters/brand/new', noun: 'Brand', nouns: 'Brands',
   api: 'api/brands.php', lookups: ['brand'], formPage: 'brand', edit: id => brandForm.edit(id),
+  // The View's Items tab: the items sold under the brand.
+  related: (record, note) => {
+    if (!record) return { general: [], tabs: [{ label: 'Items', sections: [viewCard({ title: 'Items', wide: true }, viewNote(note))] }] };
+    const items = record.items ?? [];
+    return { general: [], tabs: [{ label: 'Items', count: items.length, sections: [
+      viewCard({ title: 'Items Sold Under This Brand', count: viewCount(items.length, 'item'), wide: true },
+        viewTable(['S.No', 'Item Code', 'Item Name', 'Category', 'Unit', 'Suppliers', 'Status'],
+          items.map((item, i) => [viewSerial(i), viewMono(item.code, true), el('strong', '', item.name || '—'), item.category, item.unit, item.suppliers, item.status]),
+          'No items are sold under this brand yet.'))] }] };
+  },
   columns: [codeColumn('brand code'), nameColumn('Brand', 'brand', 'make', 'manufacturer'), statusColumn()],
   fromApi: record => ({ ...record }),
   toPayload: row => ({ brandName: row.name, status: row.status }),
@@ -10289,6 +10729,11 @@ const pbNum = value => {
   return Number.isFinite(number) ? number : 0;
 };
 const pbMoney = number => (Number.isFinite(number) ? number : 0).toFixed(3);
+// Amounts as shown (not typed into a field): thousands separated, "1061720.000" → "1,061,720.000" (big INR / AED
+// figures stay readable). groupDigits does it to every amount (digits with decimals) in a text; pbNum reads them back.
+const groupDigits = text => String(text ?? '').replace(/(^|[^\w.,])(-?)(\d{4,})(\.\d+)(?![\w.])/g,
+  (match, before, sign, whole, decimals) => `${before}${sign}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${decimals}`);
+const pbShow = number => groupDigits(pbMoney(number));
 const pbQty = number => String(Math.round(number * 1000) / 1000);
 const pbCell = (row, field) => row.querySelector(`[data-field="${field}"]`);
 
@@ -10450,7 +10895,8 @@ function poItemSource(item, row) {
   return { cost: pbNum(line ? line.cost : item.buyingRate), brandId: line?.brandId ? String(line.brandId) : '', brandName: line?.brandName || '' };
 }
 
-// Fills a row from a picked item: code, name, brand list (one brand is picked for you), unit and cost.
+// Fills a row from a picked item: code, name, brand list (one brand is picked for you, except where Brand is a
+// popup), unit and cost.
 async function applyPurchaseItem(form, row, itemId) {
   row.dataset.itemApplied = itemId;
   let item;
@@ -10466,8 +10912,12 @@ async function applyPurchaseItem(form, row, itemId) {
   pbCell(row, 'itemName').value = item.name;
   pbCell(row, 'itemId').value = String(item.id);
   const brands = itemBrands(item);
-  pbCell(row, 'brandId').value = brands.length === 1 ? String(brands[0].value) : '';
-  pbCell(row, 'brandName').value = brands.length === 1 ? brands[0].label : '';
+  // The Brand popup (PR, RFQ, GRN) is the user's choice: nothing is picked for them, so Esc leaves it empty.
+  // (Cleared when the item is picked, before this loads, so a brand picked meanwhile stays.)
+  if (!pbCell(row, 'brandName')?.matches('.fp-lookup')) {
+    pbCell(row, 'brandId').value = brands.length === 1 ? String(brands[0].value) : '';
+    pbCell(row, 'brandName').value = brands.length === 1 ? brands[0].label : '';
+  }
   const poSource = row.dataset.pbRow === 'po' ? poItemSource(item, row) : null;   // a purchase order line: its supplier's brand
   if (poSource?.brandId && !pbCell(row, 'brandId').value) {
     pbCell(row, 'brandId').value = poSource.brandId;
@@ -10650,7 +11100,7 @@ function showItemDescCode(code) {
 function showItemDescPrice(item) {
   const cell = pbCell(itemDesc.row, 'price') || pbCell(itemDesc.row, 'unitCost');
   idpEl('price-label').textContent = cell ? 'Unit Price' : 'Buying Rate';
-  if (cell) idpEl('price').textContent = pbMoney(pbNum(cell.value));
+  if (cell) idpEl('price').textContent = pbShow(pbNum(cell.value));
   else idpEl('price').textContent = item ? pbMoney(pbNum(item.buyingRate)) : '…';
 }
 
@@ -11059,7 +11509,7 @@ function showGrandInOmr(el, pricesInOmr = false) {
   }
   const rate = SO_RATES_TO_OMR[currency];
   row.hidden = currency === 'OMR' || !rate;
-  row.querySelector('dd').textContent = pbMoney(pbNum(grand.textContent) * (rate || 0));
+  row.querySelector('dd').textContent = pbShow(pbNum(grand.textContent) * (rate || 0));
   row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
 }
 
@@ -11076,7 +11526,7 @@ function showGrandInSupplierCurrency(grand, currency) {
   row.hidden = currency === 'OMR' || !rate;
   const label = (grandRow.querySelector('.rp-grand-label') || grandRow.querySelector('dt')).textContent.replace(/\s*\([A-Z]{3}\)\s*$/, '');
   row.querySelector('dt').textContent = `${label} (${currency})`;
-  row.querySelector('dd').textContent = pbMoney(rate ? pbNum(grand.textContent) / rate : 0);
+  row.querySelector('dd').textContent = pbShow(rate ? pbNum(grand.textContent) / rate : 0);
   row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
 }
 
@@ -11117,9 +11567,9 @@ function createPurchaseForm(spec) {
       const filled = !isBlankRow(row) || totals.lineTotals[i] > 0;
       row.querySelector('[data-total]').textContent = spec.kind === 'po' && !filled ? '—' : pbMoney(totals.lineTotals[i]);
     });
-    el('subtotal').textContent = pbMoney(totals.subtotal);
-    el('vat').textContent = pbMoney(totals.vat);
-    el('grand').textContent = pbMoney(totals.grand);
+    el('subtotal').textContent = pbShow(totals.subtotal);
+    el('vat').textContent = pbShow(totals.vat);
+    el('grand').textContent = pbShow(totals.grand);
     if (el('grand-currency')) el('grand-currency').textContent = PRICES_IN_OMR.includes(spec.key) ? 'OMR' : el('currency-id')?.value || 'OMR';
     // The summary says what the VAT switch is set to: "VAT (5%)", "VAT (Disabled)", or the rates when lines differ.
     const filled = rows().filter(row => !isBlankRow(row));
@@ -11363,6 +11813,12 @@ function initPurchaseForm(form) {
         const picked = lookupCache[other.dataset.lookup]?.find(entry => String(entry.id) === id)
           || lookupCache[target.dataset.lookup]?.find(entry => String(entry.id) === id);
         if (picked) fillLookup(other, picked);
+        // Another item: its Brand starts empty (PR, RFQ, GRN pick it in the popup; Esc leaves it empty).
+        const brandCell = pbCell(row, 'brandName');
+        if (brandCell?.matches('.fp-lookup') && id !== row.dataset.itemApplied) {
+          brandCell.value = '';
+          pbCell(row, 'brandId').value = '';
+        }
         lockRowBrand(row, false);        // at once: Enter moves on from the item to Brand (and opens it), not past it
         applyPurchaseItem(form, row, id);
         // A pick by mouse leaves the cursor on the item: on to Brand and its popup, as Enter does (PR, RFQ, GRN).
@@ -11569,7 +12025,7 @@ function writeSignatories(box, slots) {
   box.querySelector('[data-signatories]').replaceChildren(...(slots || []).map(signatoryRow));
 }
 
-// Units for the Unit cells, racks for the GRN; the seal's name beside Replace / Remove.
+// Units for the Unit cells, racks for the GRN; whether a seal is on file (Attach Seal warns without one).
 async function loadPurchaseMasters() {
   loadLookup('uom').catch(() => {});              // ready before the first Unit cell is typed in
   try { pbData.racks = await apiRequest('api/rack-bins.php'); } catch { pbData.racks = []; }
@@ -12262,10 +12718,10 @@ const qtForm = createSalesForm({
   },
   afterRefresh(totals) {
     const lineDiscounts = [...byId('qt-items').rows].reduce((sum, row) => sum + pbNum(pbCell(row, 'discountAmount')?.value), 0);
-    byId('qt-items-total').textContent = pbMoney(totals.subtotal + lineDiscounts);
-    byId('qt-line-discounts').textContent = pbMoney(lineDiscounts);
+    byId('qt-items-total').textContent = pbShow(totals.subtotal + lineDiscounts);
+    byId('qt-line-discounts').textContent = pbShow(lineDiscounts);
     byId('qt-vat-label').textContent = 'Total VAT Amount';               // the quotation screen's wording
-    byId('qt-grand').textContent = pbMoney(totals.grand + qtRoundOff());
+    byId('qt-grand').textContent = pbShow(totals.grand + qtRoundOff());
   },
   fill(doc) {
     byId('qt-reference').value = doc.referenceNo || '';
@@ -12339,7 +12795,7 @@ function soRefreshCosts(totals) {
     const buyingBase = buying * landing;
     items += lineBuying;
     if (supplierCurrency !== base && buying > 0) foreign = true;
-    row.querySelector('[data-buying-total]').textContent = pbMoney(lineBuying);
+    row.querySelector('[data-buying-total]').textContent = pbShow(lineBuying);
     const profit = price > 0 ? (price - buyingBase) / price * 100 : 0;
     const cell = row.querySelector('[data-profit]');
     cell.textContent = `${profit.toFixed(2)}%`;
@@ -12350,8 +12806,8 @@ function soRefreshCosts(totals) {
   const promotion = pbNum(byId('so-promotion').value);
   const totalBuying = items + duty + shipping + promotion;
   const profit = totals.subtotal - items - duty - shipping - promotion - totals.discount;
-  byId('so-landing').textContent = pbMoney(items);
-  byId('so-total-buying').textContent = pbMoney(totalBuying);
+  byId('so-landing').textContent = pbShow(items);
+  byId('so-total-buying').textContent = pbShow(totalBuying);
   // Total Buying Cost (AED), (USD) …: one row per foreign supplier currency, after the base currency's row (which
   // already shows it in the order's own currency). None for OMR, nor for a currency without a rate in SO_RATES_TO_OMR.
   for (const old of byId('so-form').querySelectorAll('.so-foreign-row')) old.remove();
@@ -12362,7 +12818,7 @@ function soRefreshCosts(totals) {
     after.after(row);
     after = row;
   }
-  byId('so-profit').textContent = pbMoney(profit);
+  byId('so-profit').textContent = pbShow(profit);
   byId('so-profit-pct').textContent = `${(totals.subtotal > 0 ? profit / totals.subtotal * 100 : 0).toFixed(2)}%`;
   for (const id of ['so-profit', 'so-profit-pct']) byId(id).classList.toggle('is-loss', profit < 0);
   // Custom Duty: only when a supplier is paid in another currency than the base (or a duty is already entered).
@@ -12490,6 +12946,13 @@ const soForm = createSalesForm({
     soSales = sales;
     // A quotation picked in Ref ID: its customer, terms and lines become the order's, each line with the buying cost
     // an item picked on the line gets (soFillBuyingCost).
+    // Another buyer: a quotation picked for the one before is cleared (it is not this buyer's).
+    byId('so-customer').addEventListener('input', () => {
+      const quotationId = byId('so-quotation-id').value;
+      const customerId = byId('so-customer-id').value;
+      const quotation = (lookupCache.quotation || []).find(row => String(row.id) === quotationId);
+      if (quotation && customerId && String(quotation.customerId) !== customerId) fillLookup(byId('so-quotation'), null);
+    });
     byId('so-quotation').addEventListener('input', async () => {
       const id = byId('so-quotation-id').value;
       if (!id) return;
@@ -12582,8 +13045,8 @@ const dnForm = createSalesForm({
     const rows = [...byId('dn-items').rows];
     const lineDiscounts = rows.reduce((sum, row) => sum + pbNum(pbCell(row, 'discountAmount')?.value), 0);
     const subtotal = pbNum(byId('dn-subtotal').textContent);
-    byId('dn-items-total').textContent = pbMoney(subtotal + lineDiscounts);
-    byId('dn-line-discounts').textContent = pbMoney(lineDiscounts);
+    byId('dn-items-total').textContent = pbShow(subtotal + lineDiscounts);
+    byId('dn-line-discounts').textContent = pbShow(lineDiscounts);
     byId('dn-vat-label').textContent = 'Total VAT Amount';
   },
   fill(doc) {
@@ -12805,15 +13268,15 @@ const saForm = createPurchaseForm({
       const dir = row.querySelector('[data-dir]');
       dir.textContent = !filled ? '' : diff > 0.0005 ? 'Stock In' : diff < -0.0005 ? 'Stock Out' : '';
       dir.className = `sm-dir${diff > 0.0005 ? ' is-in' : diff < -0.0005 ? ' is-out' : ''}`;
-      row.querySelector('[data-total]').textContent = pbMoney(filled ? amount : 0);
+      row.querySelector('[data-total]').textContent = pbShow(filled ? amount : 0);
       if (!filled) continue;
       net += diff;
       value += amount;
     }
     byId('sa-item-count').textContent = String(rows.filter(smFilled).length || rows.length);
     byId('sa-net').textContent = smSigned(net);
-    byId('sa-subtotal').textContent = pbMoney(value);
-    byId('sa-grand').textContent = pbMoney(value);
+    byId('sa-subtotal').textContent = pbShow(value);
+    byId('sa-grand').textContent = pbShow(value);
     byId('sa-save-label').textContent = FORM_PAGES['supply/stock-adjustment/new']?.isEditing?.() ? 'Update Adjustment' : 'Save Adjustment';
   },
   listRoute: 'supply/stock-adjustment',
@@ -12899,11 +13362,11 @@ const stForm = createPurchaseForm({
     let total = 0;
     for (const row of rows) {
       const amount = smFilled(row) ? pbNum(pbCell(row, 'quantity').value) * pbNum(pbCell(row, 'unitCost').value) : 0;
-      row.querySelector('[data-total]').textContent = pbMoney(amount);
+      row.querySelector('[data-total]').textContent = pbShow(amount);
       total += amount;
     }
-    byId('st-subtotal').textContent = pbMoney(total);
-    byId('st-grand').textContent = pbMoney(total);
+    byId('st-subtotal').textContent = pbShow(total);
+    byId('st-grand').textContent = pbShow(total);
     byId('st-item-count').textContent = String(rows.filter(smFilled).length || rows.length);
     byId('st-save-label').textContent = FORM_PAGES['supply/stock-transfer/new']?.isEditing?.() ? 'Update Stock Transfer' : 'Save Stock Transfer';
     stMarkStock(rows);
@@ -13934,8 +14397,8 @@ const peForm = createPurchaseForm({
     const shared = totals.discount;
     rows.forEach((row, i) => {
       const gross = totals.lineTotals[i];
-      row.querySelector('[data-gross]').textContent = pbMoney(gross);
-      row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
+      row.querySelector('[data-gross]').textContent = pbShow(gross);
+      row.querySelector('[data-total]').textContent = pbShow(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('pe-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
     for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
@@ -14060,8 +14523,8 @@ const seForm = createPurchaseForm({
     const shared = totals.discount;
     rows.forEach((row, i) => {
       const gross = totals.lineTotals[i];
-      row.querySelector('[data-gross]').textContent = pbMoney(gross);
-      row.querySelector('[data-total]').textContent = pbMoney(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
+      row.querySelector('[data-gross]').textContent = pbShow(gross);
+      row.querySelector('[data-total]').textContent = pbShow(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('se-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
     for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
@@ -14212,11 +14675,11 @@ const srForm = createPurchaseForm({
   // Every line shows its total (0.000 on a blank one) and its brand; Total Refund less the Restocking Fee.
   afterRefresh(totals) {
     srForm.page.rowsOf('items').forEach((row, i) => {
-      row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]);
+      row.querySelector('[data-total]').textContent = pbShow(totals.lineTotals[i]);
       row.querySelector('[data-brand-show]').value = pbCell(row, 'brandName').value;
     });
     const fee = Math.min(pbNum(byId('sr-restocking').value), Math.max(0, totals.grand));
-    byId('sr-grand').textContent = pbMoney(totals.grand - fee);
+    byId('sr-grand').textContent = pbShow(totals.grand - fee);
     for (const label of byId('sr-form').querySelectorAll('[data-sr-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, sr) {
@@ -14470,11 +14933,11 @@ const prtForm = createPurchaseForm({
   // Every line shows its total (0.000 on a blank one) and its brand; Total Return Amount less the Supplier Deduction.
   afterRefresh(totals) {
     prtForm.page.rowsOf('items').forEach((row, i) => {
-      row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]);
+      row.querySelector('[data-total]').textContent = pbShow(totals.lineTotals[i]);
       row.querySelector('[data-brand-show]').value = pbCell(row, 'brandName').value;
     });
     const deduction = Math.min(pbNum(byId('prt-deduction').value), Math.max(0, totals.grand));
-    byId('prt-grand').textContent = pbMoney(totals.grand - deduction);
+    byId('prt-grand').textContent = pbShow(totals.grand - deduction);
     for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
   },
   fill(form, prt) {
@@ -14622,11 +15085,11 @@ const prpForm = createPurchaseForm({
   afterRefresh() {
     const rows = prpForm.page.rowsOf('items');
     const totals = rpTotals(rows, prpForm.vatMode(), 'prp');
-    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]); });
-    byId('prp-returned-value').textContent = pbMoney(totals.returned);
-    byId('prp-replacement-value').textContent = pbMoney(totals.replacement);
-    byId('prp-vat').textContent = pbMoney(totals.vat);
-    byId('prp-grand').textContent = pbMoney(totals.grand);
+    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbShow(totals.lineTotals[i]); });
+    byId('prp-returned-value').textContent = pbShow(totals.returned);
+    byId('prp-replacement-value').textContent = pbShow(totals.replacement);
+    byId('prp-vat').textContent = pbShow(totals.vat);
+    byId('prp-grand').textContent = pbShow(totals.grand);
     const grand = Math.round(totals.grand * 1000);
     byId('prp-grand-note').textContent = grand > 0 ? 'Payable to the supplier'
       : grand < 0 ? 'Owed by the supplier (debit note / refund)' : 'No difference – like-for-like replacement';
@@ -14808,11 +15271,11 @@ const rpForm = createPurchaseForm({
   afterRefresh() {
     const rows = rpForm.page.rowsOf('items');
     const totals = rpTotals(rows, rpForm.vatMode());
-    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbMoney(totals.lineTotals[i]); });
-    byId('rp-returned-value').textContent = pbMoney(totals.returned);
-    byId('rp-replacement-value').textContent = pbMoney(totals.replacement);
-    byId('rp-vat').textContent = pbMoney(totals.vat);
-    byId('rp-grand').textContent = pbMoney(totals.grand);
+    rows.forEach((row, i) => { row.querySelector('[data-total]').textContent = pbShow(totals.lineTotals[i]); });
+    byId('rp-returned-value').textContent = pbShow(totals.returned);
+    byId('rp-replacement-value').textContent = pbShow(totals.replacement);
+    byId('rp-vat').textContent = pbShow(totals.vat);
+    byId('rp-grand').textContent = pbShow(totals.grand);
     const grand = Math.round(totals.grand * 1000);
     byId('rp-grand-note').textContent = grand > 0 ? 'The buyer pays the difference'
       : grand < 0 ? 'Owed to the buyer (credit / refund)' : 'No difference – like-for-like replacement';
@@ -15310,6 +15773,9 @@ async function importItemLine(row) {
 /* The Purchase Book Filter (#pb-filter) of each list: its filters (rail), the No. column's prefix, what the search
    finds besides the number, the two lines of a document's Details and who raised it (Employee). */
 const pbfItems = row => `${row.itemCount || 0} item${Number(row.itemCount) === 1 ? '' : 's'}`;
+// The Supplier filter (RFQ, PO, GRN): the document's supplier(s) as { key, code, name }.
+const pbfSupplierOf = row => (row.supplierId || row.supplierName
+  ? [{ key: row.supplierId ? `sup:${row.supplierId}` : `name:${String(row.supplierName).trim().toLowerCase()}`, code: row.supplierCode || '', name: row.supplierName || '' }] : []);
 const PB_DOC_FILTERS = {
   pr: {
     tabs: ['all', 'date', 'qty', 'emp'], short: 'PR', searchHint: 'type or requester',
@@ -15318,18 +15784,21 @@ const PB_DOC_FILTERS = {
   },
   rfq: {
     // As the Purchase Request's filter: Employee is the Requested By (of the PR this request came from).
-    tabs: ['all', 'date', 'qty', 'emp'], short: 'RFQ', searchHint: 'PR, supplier or requester',
+    tabs: ['all', 'date', 'party', 'qty', 'emp'], short: 'RFQ', searchHint: 'PR, supplier or requester',
+    parties: row => (row.suppliers || []).map(s => ({ key: `sup:${s.id}`, code: s.code, name: s.name })),   // every supplier it went to
     details: row => [`${pbfItems(row)} · ${row.supplierCount} supplier${row.supplierCount === 1 ? '' : 's'}${row.purchaseRequestCode ? ` · ${row.purchaseRequestCode}` : ''}`,
       `Requested by ${row.requestedBy || '—'} · ${row.name}`],
     employee: { key: 'requestedBy', label: 'Requested By' },
   },
   po: {
-    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'PO', searchHint: 'supplier or reference',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'PO', searchHint: 'supplier or reference',
+    parties: pbfSupplierOf,
     details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.reference, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
     employee: { key: 'salesman', label: 'Created By' },
   },
   grn: {
-    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty'], short: 'GRN', searchHint: 'supplier or PO',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty'], short: 'GRN', searchHint: 'supplier or PO',
+    parties: pbfSupplierOf,
     details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.poNumber ? `PO ${row.poNumber}` : 'No PO', row.warehouseName].filter(Boolean).join(' · ')],
   },
   // Trade Management › Quotation (sales): the Quotation Request's filter, VAT, Value and Disc %; Employee is its Created By.
@@ -15930,8 +16399,9 @@ function rrfRenderDate(rows) {
   const now = new Date();
   const years = [...new Set([now.getFullYear(), ...rows.map(r => Number(r.date.slice(0, 4))).filter(Boolean)])];
   rrfEl('y-cur').textContent = String(rrf.viewY);
-  rrfEl('y-prev').disabled = rrf.viewY <= Math.min(...years);
-  rrfEl('y-next').disabled = rrf.viewY >= Math.max(...years);
+  const [firstYear, lastYear] = filterYearBounds(years);
+  rrfEl('y-prev').disabled = rrf.viewY <= firstYear;
+  rrfEl('y-next').disabled = rrf.viewY >= lastYear;
   const whole = F.y === rrf.viewY && F.m === null;
   rrfEl('y-all').setAttribute('aria-pressed', String(whole));
   [...rrfEl('months').children].forEach(b => {
@@ -16837,6 +17307,142 @@ function inPartyCurrency(spec, doc) {
   };
 }
 
+/* The Sales Order PDF (not a Proforma Invoice): the order's costing sheet. REF NO and DATE under the title; Supplier
+   Details (the order's supplier, "Multiple Suppliers", or the supplier this copy is for) beside Buyer / Customer
+   Details (contact and phone when given); Ref Quotation / PO · Payment Terms · Currency / Supplier Currency; one line
+   per item with its selling price and total (OMR), buying unit and total in the supplier's currency (AED: 10% transport
+   included) and profit %; Remarks & Notes beside the Total Selling Price, Item Landing Cost, any other costs and the
+   Total Profit. Buying costs are kept in OMR (soRefreshCosts): the supplier currency figures are converted at the
+   fixed SO_RATES_TO_OMR. copy: a single supplier's copy of a multi-supplier order (the order-wide costs left off). */
+function soCostingParts(doc, { picked = null, customer = null } = {}) {
+  const multi = doc.supplierMode === 'multi';
+  const allSuppliers = multi && !picked;
+  const lineCurrency = line => String((multi ? line.supplierCurrency : doc.supplierCurrency) || 'OMR').toUpperCase();
+  const landingOf = currency => (currency === 'AED' ? 1.1 : 1);
+  const toCurrency = (omr, currency) => omr / (SO_RATES_TO_OMR[currency] || 1);
+  // 1,108.800 · 173.2632: thousands separated, three decimals at least and a fourth when it is not 0.
+  const money = value => (Number.isFinite(value) ? value : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
+  const money3 = value => (Number.isFinite(value) ? value : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 6,600.000
+  const text = value => String(value ?? '').trim();
+  const items = doc.items || [];
+  const currencies = [...new Set(items.map(lineCurrency))];
+  const oneCurrency = !allSuppliers || currencies.length === 1 ? (currencies[0] || lineCurrency({})) : '';
+  const parts = [el('h1', 'ps-title', 'Sales Order')];
+  const refline = el('div', 'pso-refline');
+  const pair = (label, value, className) => { const span = el('span', className || ''); span.append(`${label}: `, el('b', '', text(value) || '—')); return span; };
+  refline.append(pair('Ref No', doc.code, 'pso-ref'), pair('Date', String(doc.orderDate || doc.date || '').slice(0, 10)));
+  parts.push(refline);
+
+  // Supplier | Buyer.
+  const card = (label, name, extra = []) => {
+    const box = el('div', 'pso-card');
+    box.append(el('div', 'pso-label', label));
+    if (name) box.append(name instanceof Node ? name : el('div', 'pso-name', name));
+    if (extra.length) {
+      const list = el('div', 'pso-card-lines');
+      list.append(...extra);
+      box.append(list);
+    }
+    return box;
+  };
+  const supplierName = picked?.name || doc.supplierName;
+  const supplierCard = allSuppliers
+    ? card('Supplier Details', el('div', 'pso-name pso-name-plain', 'Multiple Suppliers'), [el('div', 'pso-note', 'Supplier details specified per line item in the table below')])
+    : card('Supplier Details', text(supplierName) ? `M/s. ${text(supplierName)}` : '—');
+  const contactLine = (label, value) => { const row = el('div', 'pso-contact'); row.append(`${label}: `, el('b', '', text(value))); return row; };
+  const buyerExtra = [text(doc.contactName) && contactLine('Contact', doc.contactName), text(doc.contactNumber) && contactLine('Phone', doc.contactNumber)].filter(Boolean);
+  const buyerName = text(customer?.name || doc.customerName);
+  const parties = el('div', 'pso-parties');
+  parties.append(supplierCard, card('Buyer / Customer Details', buyerName ? `M/s. ${buyerName}` : '—', buyerExtra));
+  parts.push(parties);
+
+  // Ref Quotation / PO · Payment Terms · Currency (/ Supplier Currency).
+  const terms = el('dl', 'pso-terms');
+  const term = (label, value, mono) => { const item = el('div'); item.append(el('dt', 'pso-label', label), el('dd', mono ? 'pso-mono' : '', value)); return item; };
+  const refs = [text(doc.quotationCode), text(doc.customerPo)].filter(Boolean).join(' / ') || 'N/A';
+  const payment = [text(doc.paymentMode), doc.paymentMode === 'Credit' && text(doc.creditPeriod)].filter(Boolean).join(' · ') || 'As agreed';
+  const base = 'OMR';
+  const showSupplierCurrency = oneCurrency && oneCurrency !== base;
+  terms.append(term('Ref Quotation / PO', refs, true), term('Payment Terms', payment),
+    term(showSupplierCurrency ? 'Currency / Supplier Currency' : 'Currency', showSupplierCurrency ? `${base} / ${oneCurrency}` : base, true));
+  parts.push(terms);
+
+  // The lines.
+  const unitTag = currency => el('div', 'pso-unit', `(${currency})`);
+  const heads = [['SL', 'sno'], ['Description', 'desc'], ...(allSuppliers ? [['Supplier', 'supplier']] : []), ['Qty', 'qty'], ['Unit', 'unit'],
+    ['Selling Price', 'num', base], ['Selling Total', 'num', base], ['Buying Unit', 'num', oneCurrency], ['Buying Total', 'num', oneCurrency], ['Profit %', 'num']];
+  const table = el('table', `ps-table pso-table${allSuppliers ? ' pso-has-supplier' : ''}`);
+  const thead = el('thead');
+  const headRow = el('tr');
+  for (const [label, kind, currency] of heads) {
+    const th = el('th', `pso-c-${kind}`, label);
+    if (currency) th.append(unitTag(currency));
+    headRow.append(th);
+  }
+  thead.append(headRow);
+  const tbody = el('tbody');
+  let landing = 0;
+  items.forEach((line, i) => {
+    const currency = lineCurrency(line);
+    const factor = landingOf(currency);
+    const qty = pbNum(line.quantity);
+    const price = pbNum(line.price);
+    const buyingOmr = pbNum(line.buyingCost);
+    landing += qty * buyingOmr * factor;
+    // Kept in OMR to 3 decimals: 7 AED is saved as 0.739, so the unit is shown to 3 decimals again (7.000, not 7.0047).
+    const buyingUnit = Math.round(toCurrency(buyingOmr, currency) * 1000) / 1000;
+    const profit = price > 0 ? (price - buyingOmr * factor) / price * 100 : 0;
+    const tr = el('tr');
+    const desc = el('td', 'pso-c-desc');
+    const name = el('div', 'pso-item');
+    if (line.itemNameHtml) name.append(remarksFragment(line.itemNameHtml)); else name.textContent = text(line.itemName);
+    desc.append(name);
+    if (text(line.brandName)) desc.append(el('div', 'pso-sub', `Make: ${text(line.brandName)}`));
+    if (text(line.deliveryTerm)) desc.append(el('div', 'pso-sub', `Delivery: ${text(line.deliveryTerm)}`));
+    const numCell = (value, extra = []) => { const td = el('td', 'pso-c-num'); td.append(el('div', '', value), ...extra); return td; };
+    tr.append(el('td', 'pso-c-sno', String(i + 1)), desc,
+      ...(allSuppliers ? [el('td', 'pso-c-supplier', text(line.supplierName) || '—')] : []),
+      el('td', 'pso-c-qty', pbQty(qty)), el('td', 'pso-c-unit', text(line.unit)),
+      numCell(money3(price)), numCell(money3(pbNum(line.lineTotal)), []),
+      numCell(money(buyingUnit), [unitTag(currency)]),
+      numCell(money(qty * buyingUnit * factor), [unitTag(currency), ...(factor > 1 ? [el('div', 'pso-trans', '(Trans Incl.)')] : [])]));
+    const pct = el('td', `pso-c-num pso-profit${profit < 0 ? ' is-loss' : ''}`, `${profit.toFixed(2)}%`);
+    tr.append(pct);
+    tr.children[allSuppliers ? 6 : 5].classList.add('pso-strong');           // the selling total in bold
+    tbody.append(tr);
+  });
+  table.append(thead, tbody);
+  parts.push(table);
+
+  // Remarks & Notes | the totals and the profit.
+  const bottom = el('div', 'pso-bottom');
+  const remarks = el('div', 'pso-box pso-remarks');
+  remarks.append(el('div', 'pso-label pso-rule', 'Remarks & Notes'));
+  if (text(doc.remarks)) {
+    const body = el('div', 'pso-remarks-body');
+    if (isRemarksHtml(doc.remarks)) body.append(remarksFragment(doc.remarks)); else body.textContent = doc.remarks;
+    remarks.append(body);
+  } else {
+    remarks.append(el('div', 'pso-empty', 'No additional remarks provided.'));
+  }
+  const subtotal = pbNum(doc.subtotal);
+  // The order-wide costs (left off a single supplier's copy, as its discount and charges are).
+  const costs = picked ? [] : [['Discount', pbNum(doc.discountAmount)], ['Custom Duty', pbNum(doc.customDuty)],
+    ['Transportation Charge', pbNum(doc.shipping)], ['Business Promotion', pbNum(doc.businessPromotion)]].filter(([, value]) => value);
+  const profit = subtotal - landing - costs.reduce((sum, [, value]) => sum + value, 0);
+  const totals = el('div', 'pso-box pso-totals');
+  const totalRow = (label, value) => { const row = el('div', 'pso-total-row'); row.append(el('span', '', label), el('b', '', `${base} ${value}`)); return row; };
+  totals.append(totalRow('Total Selling Price (Subtotal)', money3(subtotal)), totalRow('Item Landing Cost', money(landing)),
+    ...costs.map(([label, value]) => totalRow(label, money(value))));
+  const profitBox = el('div', `pso-profit-box${profit < 0 ? ' is-loss' : ''}`);
+  profitBox.append(el('span', 'pso-profit-label', `Total ${profit < 0 ? 'Loss' : 'Profit'} (${base})`),
+    el('b', 'pso-profit-value', `${money(profit)} (${(subtotal > 0 ? profit / subtotal * 100 : 0).toFixed(2)}%)`));
+  totals.append(profitBox);
+  bottom.append(remarks, totals);
+  parts.push(bottom);
+  return parts;
+}
+
 async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: chosenSupplier = null, hidePrices = false, stillWanted = () => true } = {}) {
   doc = inPartyCurrency(spec, doc);
   // The GRN: the procurement document design (letterhead, supplier details, totals box). The Purchase Order keeps
@@ -17072,6 +17678,10 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     brand.append(el('div', 'ps-company', companyName));
     parts.push(brand);
   }
+  // The Sales Order: its own costing layout (soCostingParts); every other document the layout below.
+  const soDesign = spec.key === 'so' && !proforma;
+  if (soDesign) parts.push(...soCostingParts(doc, { picked, customer }));
+  if (!soDesign) {
   parts.push(el('h1', 'ps-title', title));
 
   // Buyer (this company, from Create a Company) | the other party.
@@ -17317,6 +17927,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     bottom.append(totals);
   }
   if (bottom.childElementCount) parts.push(bottom);
+  }                                                    // !soDesign
 
   const foot = el('footer', 'ps-foot');
   if (doc.includeSignatory) {
@@ -17357,6 +17968,14 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   const frameHead = el('thead'); frameHead.append(spacer('ps-space-top'));
   const frameFoot = el('tfoot'); frameFoot.append(spacer('ps-space-bottom'));
   const frameBody = el('tbody'); const bodyRow = el('tr'); const bodyCell = el('td', 'ps-body');
+  // Every amount on the page with thousands separators (1,061,720.000).
+  for (const part of parts) {
+    const walker = document.createTreeWalker(part, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const grouped = groupDigits(node.nodeValue);
+      if (grouped !== node.nodeValue) node.nodeValue = grouped;
+    }
+  }
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
   if (termsText) {
     const currencyCode = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency ? 'OMR' : String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();

@@ -190,3 +190,17 @@ function party_delete(string $kind, string $table, int $id, string $notFound): v
         delete_stored($path);
     }
 }
+
+/* A supplier's / customer's Account Head: the user who created it (an employee login: the employee's name).
+   An update keeps the saved one; a record saved before this (or without one) takes the user saving it. */
+function party_account_head(string $table, ?int $id): string
+{
+    if ($id !== null) {
+        $saved = trim((string) query("SELECT account_head FROM $table WHERE id = ?", [$id])->fetchColumn());
+        if ($saved !== '' && !in_array($saved, ['Sundry Creditors', 'Sundry Debtors'], true)) {
+            return $saved;
+        }
+    }
+    $user = $_SESSION['user'] ?? [];
+    return mb_substr(trim((string) ($user['fullName'] ?? '')) ?: trim((string) ($user['username'] ?? '')) ?: 'admin', 0, 100);
+}

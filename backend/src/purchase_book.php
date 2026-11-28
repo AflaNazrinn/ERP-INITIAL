@@ -851,6 +851,7 @@ function grn_format(array $row): array
     return pb_common($row) + [
         'code' => $row['grn_code'], 'itemCount' => $lines[0], 'totalQty' => $lines[1], 'acceptedQty' => $lines[2], 'name' => $supplier ? $supplier['supplier_name'] : 'No supplier', 'grnDate' => $row['grn_date'],
         'supplierId' => $row['supplier_id'] === null ? null : (int) $row['supplier_id'], 'supplierName' => $supplier ? $supplier['supplier_name'] : '',
+        'supplierCode' => $supplier ? $supplier['supplier_code'] : '',
         'warehouseId' => $row['warehouse_id'] === null ? null : (int) $row['warehouse_id'], 'warehouseName' => $warehouse ? $warehouse['warehouse_name'] : '', 'warehouseCode' => $warehouse ? $warehouse['warehouse_code'] : '',
         'purchaseOrderId' => $row['purchase_order_id'] === null ? null : (int) $row['purchase_order_id'], 'poNumber' => $row['po_number'],
         'vatMode' => $row['vat_mode'], 'subtotal' => $row['subtotal'], 'vatAmount' => $row['vat_amount'],
