@@ -98,7 +98,8 @@ function supplier_save(array $data, ?int $id = null): array
     $in = new Input($data);
     $row = [
         'supplier_name'   => $in->name('supplierName', 'Name', 150),
-        'account_head'    => $in->text('accountHead', 'Account head', 100) ?: 'Sundry Creditors',
+        // Account Head: the user who created the supplier; an update keeps it.
+        'account_head'    => party_account_head('suppliers', $id),
         'organization_name' => $in->text('organizationName', 'Organization name', 150),
         'address'         => $in->text('address', 'Address', 255),
         'country'         => $in->text('country', 'Country', 80),

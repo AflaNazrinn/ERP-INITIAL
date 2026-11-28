@@ -107,8 +107,9 @@ function customer_save(array $data, ?int $id = null): array
     $in = new Input($data);
     $row = [
         'customer_name'     => $in->name('customerName', 'Name', 150),
+        // Account Head: the user who created the customer; an update keeps it.
+        'account_head'      => party_account_head('customers', $id),
         'organization_name' => $in->text('organizationName', 'Organization name', 150),
-        'account_head'      => $in->text('accountHead', 'Account head', 100) ?: 'Sundry Debtors',
         'address'           => $in->text('address', 'Address', 255),
         'country'           => $in->text('country', 'Country', 80),
         'city'              => $in->text('city', 'City', 100),
