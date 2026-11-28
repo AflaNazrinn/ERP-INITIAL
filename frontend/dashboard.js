@@ -839,6 +839,14 @@ function initKeyboardNavigation() {
       if (event.key === 'Enter' && openSelect.dataset.enterOpens !== undefined && openSelect.closest('form')) {
         setTimeout(() => { if (!isOpenSelect(openSelect)) focusNextField(openSelect); }, 0);
       }
+      // The GRN Stock Transfer popup: a stock point picked with Enter goes on to that row's Transfer Qty.
+      if (event.key === 'Enter' && openSelect.matches('#grn-transfer [data-gt-point]')) {
+        setTimeout(() => {
+          if (isOpenSelect(openSelect) || !openSelect.value) return;
+          const qty = openSelect.closest('li.gt-row')?.querySelector('[data-gt-qty]');
+          if (qty) { qty.focus(); qty.select(); }
+        }, 0);
+      }
       return;
     }
 
@@ -15741,6 +15749,14 @@ function initGrnTransfer(form) {
     showError(sent > accepted() + 0.0005 ? `Total transfer quantity (${pbQty(sent)}) exceeds the accepted quantity (${pbQty(accepted())}).` : '');
   }
 
+  // A stock point's list: the green dropdown list (showPicker), the same one Enter opens; the select menu where the
+  // browser cannot open it from a script.
+  function openPointList(select) {
+    select.focus();
+    if (!hasDropdownChoices(select)) return;
+    try { select.showPicker(); } catch { enterField(select); }
+  }
+
   function addLine(transfer = {}, focus = true) {
     if (!transfer.warehouseId && focus) {
       const chosen = lines().map(li => li.querySelector('[data-gt-point]').value).filter(Boolean);
@@ -15777,7 +15793,7 @@ function initGrnTransfer(form) {
     li.append(place, amount, remove);
     list.append(li);
     totals();                                // first: the other rows' stock points come off this row's list …
-    if (focus) enterField(select);           // … then its list opens (the stock points still free only)
+    if (focus) openPointList(select);        // … then its list opens (the stock points still free only)
   }
 
   async function open(line) {
@@ -15798,7 +15814,7 @@ function initGrnTransfer(form) {
     totals();
     dialog.showModal();
     const first = list.querySelector('select');
-    if (first && !first.value) enterField(first);   // nothing chosen yet: its list opens straight away
+    if (first && !first.value) openPointList(first);   // nothing chosen yet: its list opens straight away
     else (first || dialog.querySelector('[data-gt="add"]')).focus();
   }
 
@@ -15888,9 +15904,18 @@ function initGrnTransfer(form) {
     if (event.key === 'Enter' && li && !target.closest('button')) {
       event.preventDefault();
       event.stopPropagation();
-      if (target.matches('[data-gt-point]')) { li.querySelector('[data-gt-qty]').focus(); li.querySelector('[data-gt-qty]').select(); return; }
+      // Enter on the stock point opens its list (as on the forms); picking one with Enter goes on to Qty (menu-advance).
+      // With no stock point left to pick, on to Qty.
+      if (target.matches('[data-gt-point]')) {
+        if (!event.repeat && hasDropdownChoices(target)) {
+          try { target.showPicker(); return; } catch { /* no picker in this browser: the select menu */ }
+          if (openSelectMenu(target)) return;
+        }
+        li.querySelector('[data-gt-qty]').focus(); li.querySelector('[data-gt-qty]').select();
+        return;
+      }
       const next = li.nextElementSibling;
-      if (next) enterField(next.querySelector('[data-gt-point]'));   // the next row's stock point list opens, as on the forms
+      if (next) openPointList(next.querySelector('[data-gt-point]'));   // the next row's stock point list opens, as on the forms
       else dialog.querySelector('[data-gt="save"]').focus();
       return;
     }
@@ -16512,7 +16537,8 @@ const RR_LIST_HOOKS = filterHooks({ theme: 'return', countryPick: true, tabs: ['
 // net difference (more counted: +, fewer: −); a stock reservation has no money value, so no Value filter.
 const SM_ADJ_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'], value: row => pbNum(row.totalValue), qty: row => pbNum(row.netQuantity) });
 const SM_TRANSFER_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'] });
-const SM_RESERVATION_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 's', 'emp'] });
+// A stock reservation can be for a customer: Party (Debtors only, no Creditors switch) and the All countries dropdown.
+const SM_RESERVATION_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'party', 's', 'emp'], countryPick: true, debtorsOnly: true });
 const rrfCfg = () => rrf.list?.config.rrCfg || {};
 const rrfTabsOn = () => RRF_TABS.filter(t => (rrfCfg().tabs || RRF_TABS.map(x => x.k)).includes(t.k));
 
@@ -16535,7 +16561,7 @@ function openRrFilter(list) {
   if (!on.includes('vat')) rrf.F.vat = '';
   rrf.F.parties = on.includes('party') ? rrf.F.parties || [] : [];
   rrf.F.countries = rrfCfg().countryPick ? rrf.F.countries || [] : [];
-  rrf.partyKind = rrfPartyNoun() === 'Supplier' ? 'sup' : 'cus';
+  rrf.partyKind = rrfPartyNoun() === 'Supplier' && !rrfCfg().debtorsOnly ? 'sup' : 'cus';
   rrfEl('pq').value = '';
   if (on.includes('party') || rrfCfg().countryPick) loadPartyDir().then(() => { if (byId('rr-filter').open) rrfRender(); });
   for (const k of Object.keys(rrf.F.num)) if (!on.includes(k)) rrf.F.num[k] = pbfNumEmpty();
@@ -16623,7 +16649,7 @@ function rrfRender() {
   rrfEl('srch-doc').hidden = tab !== 'all';
   rrfEl('srch-emp').hidden = tab !== 'emp';
   rrfEl('srch-pty').hidden = tab !== 'party';
-  rrfEl('tb-kind').hidden = tab !== 'party';
+  rrfEl('tb-kind').hidden = tab !== 'party' || Boolean(rrfCfg().debtorsOnly);
   if (tab === 'party') {
     rrfEl('pq').placeholder = `Search ${PARTY_KINDS[rrf.partyKind].one.toLowerCase()} by name or code...`;
     rrfEl('pq').setAttribute('aria-label', rrfEl('pq').placeholder.replace(/\.\.\.$/, ''));
@@ -16819,7 +16845,7 @@ function rrfTop() {
   const tab = rrf.tab;
   if (tab === 'all') return [rrfEl('q'), rrfEl('country')].filter(rrfVisible);
   if (tab === 'emp') return [rrfEl('eq')];
-  if (tab === 'party') return [rrfEl('pq'), ...rrfEl('tb-kind').children];
+  if (tab === 'party') return [rrfEl('pq'), ...(rrfCfg().debtorsOnly ? [] : rrfEl('tb-kind').children)];
   if (tab === 'vat') return [rrfEl('vat-clr'), rrfEl('vat')].filter(rrfVisible);
   if (RRF_NUM[tab]) return [rrfEl('num-clr'), ...rrfEl('ops').children, rrfEl('num')].filter(rrfVisible);
   return [];
