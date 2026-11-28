@@ -4274,3 +4274,6 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dash-range-apply { border-color: var(--accent); background: var(--accent); color: #fff; }
 .dash-range-apply:hover { filter: brightness(.95); }
 @media (max-width: 560px) { .dash-range-pop { right: auto; left: 0; width: min(320px, calc(100vw - 32px)); } }
+
+/* A line's Qty more than is in stock (Delivery Note, Tax Invoice): red, as the Supply pages' (.sm-over). */
+:is(#dn-form, #ti-form) .fp-cell.sm-over { border-color: #f87171; background: #fef2f2; color: #b91c1c; }

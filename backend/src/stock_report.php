@@ -47,11 +47,7 @@ function stock_ledger(array $except = []): array
 {
     $moves = [];
     $damaged = [];
-    $defaultPoint = [];
-    foreach (stk_rows('SELECT i.id, COALESCE((SELECT ib.warehouse_id FROM item_brands ib WHERE ib.item_id = i.id AND ib.warehouse_id IS NOT NULL
-                       ORDER BY ib.sort_order, ib.id LIMIT 1), i.warehouse_id) AS warehouse_id FROM items i') as $r) {
-        $defaultPoint[(int) $r['id']] = $r['warehouse_id'] === null ? null : (int) $r['warehouse_id'];
-    }
+    $defaultPoint = stock_default_points();
     $add = static function (array $m) use (&$moves): void {
         if ($m['itemId'] === null || (float) $m['qty'] <= 0) {
             return;
@@ -247,12 +243,28 @@ function stock_ledger(array $except = []): array
     return [$moves, $damaged];
 }
 
-/* [warehouseId|0 => [itemId => quantity]]: stock on hand per stock point (0: lines with no stock point). */
+/* [itemId => warehouseId|null]: the stock point a line with none of its own uses (the item's first sourcing line's,
+   else the item's). */
+function stock_default_points(): array
+{
+    $points = [];
+    foreach (stk_rows('SELECT i.id, COALESCE((SELECT ib.warehouse_id FROM item_brands ib WHERE ib.item_id = i.id AND ib.warehouse_id IS NOT NULL
+                       ORDER BY ib.sort_order, ib.id LIMIT 1), i.warehouse_id) AS warehouse_id FROM items i') as $r) {
+        $points[(int) $r['id']] = $r['warehouse_id'] === null ? null : (int) $r['warehouse_id'];
+    }
+    return $points;
+}
+
+/* [warehouseId|0 => [itemId => quantity]]: stock on hand per stock point (0: lines with no stock point).
+   $except['doc'] / ['docId'] (e.g. 'dn', 12) also leaves out that document's own movements (the one being edited). */
 function stock_on_hand_matrix(array $except = []): array
 {
     [$moves] = stock_ledger($except);
     $out = [];
     foreach ($moves as $m) {
+        if (isset($except['doc'], $except['docId']) && $m['doc'] === $except['doc'] && (int) $m['docId'] === (int) $except['docId']) {
+            continue;
+        }
         $w = $m['warehouseId'] ?? 0;
         $out[$w][$m['itemId']] = ($out[$w][$m['itemId']] ?? 0.0) + ($m['dir'] === 'in' ? $m['qty'] : -$m['qty']);
     }

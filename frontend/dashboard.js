@@ -3857,6 +3857,7 @@ function createFormPage(config) {
     clearFormErrors(el('form'));
     const { payload, errors } = config.read();
     errors.push(...fieldCheckErrors(el('form')));      // email and phone fields (data-check)
+    if (!errors.length) errors.push(...await stockOutErrors(config.key, { fresh: true }));   // not more than is in stock
     if (errors.length) {
       showFormErrors(errors, config.reveal);
       return;
@@ -13654,6 +13655,84 @@ const saForm = createPurchaseForm({
 
 /* Stock Transfer (ST-0001): stock sent From one stock point To another; Total = Quantity × Unit Cost. A quantity
    more than the source holds is marked (the transfer still saves). */
+/* ---------- Not more than is in stock: Delivery Note, Tax Invoice (not made from a delivery note), Stock Transfer ----------
+   A line's quantity (the lines of one item at one stock point together) may not be more than is in stock there: the
+   Qty turns red with "Only 10 NOS available at …" as it is typed, a toast says so when it is left, and Save stops on it.
+   The stock point is the line's (Delivery Note), From (Stock Transfer), else the item's own, as the stock ledger takes
+   it. The figures leave out the document being edited (api/stock-levels.php?forDoc=). The server refuses it too
+   (stock_safe_transaction). */
+const STOCK_OUT = {
+  dn: { form: () => dnForm, point: row => pbCell(row, 'warehouseId')?.value || '' },
+  ti: { form: () => tiForm, point: () => '', skip: () => byId('ti-reference-id').value.startsWith('dn:') },   // from a DN: nothing moves
+  st: { form: () => stForm, point: () => byId('st-from-id').value, skip: () => !byId('st-from-id').value },
+};
+const stockOutLevels = {};
+function stockOutLoad(key, fresh) {
+  const id = STOCK_OUT[key].form().page.editingId();
+  const want = `${key}:${id ?? ''}`;
+  const kept = stockOutLevels[key];
+  if (!fresh && kept?.want === want && Date.now() - kept.at < 30000) return kept.promise;
+  const promise = apiRequest(`api/stock-levels.php?forDoc=${key}${id ? `&id=${id}` : ''}`).catch(() => null);
+  stockOutLevels[key] = { want, at: Date.now(), promise };
+  return promise;
+}
+// [{ node: the Qty cell, message }] for each line asking more than is in stock.
+async function stockOutErrors(key, { fresh = false } = {}) {
+  const config = STOCK_OUT[key];
+  if (!config || config.skip?.()) return [];
+  const levels = await stockOutLoad(key, fresh);
+  if (!levels) return [];
+  const lines = [];
+  const need = new Map();
+  for (const row of config.form().page.rowsOf('items')) {
+    const itemId = pbCell(row, 'itemId')?.value;
+    const qty = pbNum(pbCell(row, 'quantity')?.value);
+    if (!itemId || !(qty > 0)) continue;
+    const point = String(config.point(row) || levels.defaultPoint?.[itemId] || 0);
+    const at = `${point}:${itemId}`;
+    need.set(at, (need.get(at) || 0) + qty);
+    lines.push({ row, itemId, point, at });
+  }
+  const errors = [];
+  for (const { row, itemId, point, at } of lines) {
+    const have = Math.max(0, pbNum(levels.onHand?.[point]?.[itemId]));
+    if (need.get(at) <= have + 0.0005) continue;
+    const unit = pbCell(row, 'unit')?.value.trim() || '';
+    const where = levels.points?.[point] ? ` at ${levels.points[point]}` : '';
+    const name = pbCell(row, 'itemName')?.value.trim() || 'this item';
+    errors.push({ node: pbCell(row, 'quantity'), message: have > 0.0005
+      ? `Not that much in stock: only ${pbQty(have)}${unit ? ` ${unit}` : ''} of ${name} available${where}.`
+      : `Not in stock: no ${name} available${where}.` });
+  }
+  return errors;
+}
+// The Qty cells over the stock turn red (Delivery Note, Tax Invoice; the Stock Transfer marks its own); toast: say so.
+const stockOutTimers = {};
+async function stockOutMark(key, { toast = false } = {}) {
+  const errors = await stockOutErrors(key);
+  const over = new Map(errors.map(error => [error.node, error.message]));
+  if (key !== 'st') {
+    for (const row of STOCK_OUT[key].form().page.rowsOf('items')) {
+      const cell = pbCell(row, 'quantity');
+      if (!cell) continue;
+      const message = over.get(cell);
+      if (message) { cell.classList.add('sm-over'); cell.title = message; }
+      else if (cell.classList.contains('sm-over')) { cell.classList.remove('sm-over'); cell.title = ''; }
+    }
+  }
+  if (toast && errors.length) showToast('Not enough stock', errors[0].message, true);
+}
+function stockOutMarkSoon(key) {
+  clearTimeout(stockOutTimers[key]);
+  stockOutTimers[key] = setTimeout(() => stockOutMark(key), 250);
+}
+for (const [key, formId] of [['dn', 'dn-form'], ['ti', 'ti-form'], ['st', 'st-form']]) {
+  document.addEventListener('input', event => { if (event.target.closest?.(`#${formId}`)) stockOutMarkSoon(key); });
+  document.addEventListener('change', event => {
+    if (event.target.closest?.(`#${formId}`) && ['quantity', 'warehouseId'].includes(event.target.dataset.field)) stockOutMark(key, { toast: true });
+  });
+}
+
 async function stMarkStock(rows) {
   const from = byId('st-from-id').value;
   const levels = from ? await smLoadLevels('st', from, 'transfer') : null;
