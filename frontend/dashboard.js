@@ -16624,6 +16624,8 @@ function rrfPartyOf(row) {
 }
 // What the Party filter calls a list's party: a purchase return / replacement's supplier, else the customer.
 const rrfPartyNoun = () => (/^p/.test(rrf.list?.config.key || '') ? 'Supplier' : 'Customer');
+// The Party list's words: Debtors / Creditors, or Customers on a list with customers only (Stock Reservation).
+const rrfKindNames = kind => (rrfCfg().debtorsOnly ? { many: 'Customers', one: 'Customer' } : PARTY_KINDS[kind]);
 // The date range a filter state stands for: From / To, else the year (and month); null: no date filter.
 function rrfRange(F) {
   if (F.d1 || F.d2) return [F.d1 || '0000-00-00', F.d2 || '9999-12-31'];
@@ -16667,7 +16669,7 @@ const RR_LIST_HOOKS = filterHooks({ theme: 'return', countryPick: true, tabs: ['
 const SM_ADJ_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'], value: row => pbNum(row.totalValue), qty: row => pbNum(row.netQuantity) });
 const SM_TRANSFER_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'] });
 // A stock reservation can be for a customer: Party (Debtors only, no Creditors switch) and the All countries dropdown.
-const SM_RESERVATION_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'party', 's', 'emp'], countryPick: true, debtorsOnly: true });
+const SM_RESERVATION_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'party', 's', 'emp'], countryPick: true, debtorsOnly: true, partyLabel: 'Customer' });
 const rrfCfg = () => rrf.list?.config.rrCfg || {};
 const rrfTabsOn = () => RRF_TABS.filter(t => (rrfCfg().tabs || RRF_TABS.map(x => x.k)).includes(t.k));
 
@@ -16689,6 +16691,7 @@ function openRrFilter(list) {
   // A filter this list does not offer stays off (an older state from another list never applies).
   if (!on.includes('vat')) rrf.F.vat = '';
   rrf.F.parties = on.includes('party') ? rrf.F.parties || [] : [];
+  rrfEl('tab-party').lastChild.textContent = rrfCfg().partyLabel || 'Party';
   rrf.F.countries = rrfCfg().countryPick ? rrf.F.countries || [] : [];
   rrf.partyKind = rrfPartyNoun() === 'Supplier' && !rrfCfg().debtorsOnly ? 'sup' : 'cus';
   rrfEl('pq').value = '';
@@ -16780,7 +16783,7 @@ function rrfRender() {
   rrfEl('srch-pty').hidden = tab !== 'party';
   rrfEl('tb-kind').hidden = tab !== 'party' || Boolean(rrfCfg().debtorsOnly);
   if (tab === 'party') {
-    rrfEl('pq').placeholder = `Search ${PARTY_KINDS[rrf.partyKind].one.toLowerCase()} by name or code...`;
+    rrfEl('pq').placeholder = `Search ${rrfKindNames(rrf.partyKind).one.toLowerCase()} by name or code...`;
     rrfEl('pq').setAttribute('aria-label', rrfEl('pq').placeholder.replace(/\.\.\.$/, ''));
     for (const b of rrfEl('tb-kind').children) b.setAttribute('aria-pressed', String(b.dataset.kind === rrf.partyKind));
   }
@@ -16868,7 +16871,8 @@ function rrfRenderEmployees() {
 function rrfRenderParties() {
   const { list, F } = rrf;
   const kind = rrf.partyKind;
-  const noun = PARTY_KINDS[kind].one;
+  const names = rrfKindNames(kind);
+  const noun = names.one;
   const groups = new Map(partyDir[kind].map(party => [party.key,
     { k: party.key, code: party.code, name: party.name, sub: countryText(partyCountry(party)), count: 0 }]));
   for (const r of list.rows.map(rrfRow)) {
@@ -16881,7 +16885,7 @@ function rrfRenderParties() {
   const vis = all.filter(g => !q || `${g.name} ${g.code}`.toLowerCase().includes(q));
   rrf.shown = vis;
   const n = vis.length; const on = vis.filter(g => F.parties.includes(g.k)).length;
-  rrfEl('tb-t').innerHTML = `${PARTY_KINDS[kind].many}<span> · ${n} visible</span>`;
+  rrfEl('tb-t').innerHTML = `${names.many}<span> · ${n} visible</span>`;
   rrfEl('th').innerHTML = `<div class="rrf-c0"><button type="button" class="rrf-rb" id="rrf-all" role="checkbox" aria-checked="${!n || !on ? 'false' : on === n ? 'true' : 'mixed'}" aria-label="Select all visible">${RRF_CHECK}</button></div>`
     + `<div>Code</div><div>${rrfEsc(noun)}</div><div class="rrf-last">${rrfEsc(list.config.nouns.split(' ').pop())}<span class="rrf-pill">${on} of ${n} selected</span></div>`;
   const unit = list.config.noun.split(' ').pop().toLowerCase();   // return / replacement
@@ -16892,9 +16896,9 @@ function rrfRenderParties() {
       + `<div class="rrf-code">${rrfEsc(g.code || '—')}</div>`
       + `<div class="rrf-det"><b>${rrfEsc(g.name)}</b><small>${rrfEsc(g.sub)}</small></div>`
       + `<div class="rrf-val">${g.count} ${unit}${g.count === 1 ? '' : 's'}</div></div>`;
-  }).join('') : `<div class="rrf-empty">${q ? `Nothing matches “${rrfEsc(rrfEl('pq').value.trim())}”.` : `No ${PARTY_KINDS[kind].many.toLowerCase()} yet.`}</div>`;
+  }).join('') : `<div class="rrf-empty">${q ? `Nothing matches “${rrfEsc(rrfEl('pq').value.trim())}”.` : `No ${names.many.toLowerCase()} yet.`}</div>`;
   const ticked = all.filter(g => F.parties.includes(g.k)).length;
-  rrfEl('sum').innerHTML = `${ticked} of ${all.length} ${PARTY_KINDS[kind].many.toLowerCase()} selected <span>(${n} visible)</span>`;
+  rrfEl('sum').innerHTML = `${ticked} of ${all.length} ${names.many.toLowerCase()} selected <span>(${n} visible)</span>`;
 }
 
 function rrfRenderDate(rows) {
