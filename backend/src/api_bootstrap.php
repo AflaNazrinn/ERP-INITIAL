@@ -16,7 +16,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/master_validation.php';   // ValidationError, NotFound
-require_once __DIR__ . '/permissions.php';         // who may do what (User Setting)
+require_once __DIR__ . '/permissions.php';
+require_once __DIR__ . '/company_currency.php';   // the company's base currency and VAT         // who may do what (User Setting)
 
 function json_out(mixed $data, int $status = 200): never
 {

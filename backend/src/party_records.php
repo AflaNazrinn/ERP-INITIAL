@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/party_documents.php';
+require_once __DIR__ . '/company_currency.php';
 
 /*
  * The rows a party (supplier or customer) carries besides its own columns: contacts, quotation lines,

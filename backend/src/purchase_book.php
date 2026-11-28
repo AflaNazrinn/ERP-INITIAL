@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/master_validation.php';
+require_once __DIR__ . '/company_currency.php';
 
 /*
  * Purchase Book documents: purchase requests (PR), quotation requests (RFQ), purchase orders (PO) and
@@ -823,7 +824,7 @@ function po_certifications(Input $in, mixed $raw): string
     return implode(', ', $picked);
 }
 
-/* The order's currency: the one picked on the form, else the supplier's, else OMR. */
+/* The order's currency: the one picked on the form, else the supplier's, else the company's base currency. */
 function po_currency(Input $in, ?int $supplierId): string
 {
     $currency = strtoupper($in->text('currency', 'Currency', 10));
@@ -833,7 +834,7 @@ function po_currency(Input $in, ?int $supplierId): string
     if ($currency === '' && $supplierId !== null) {
         $currency = (string) query('SELECT currency FROM suppliers WHERE id = ?', [$supplierId])->fetchColumn();
     }
-    return $currency !== '' ? $currency : 'OMR';
+    return $currency !== '' ? $currency : company_base_currency();
 }
 
 function purchase_order_delete(int $id): void

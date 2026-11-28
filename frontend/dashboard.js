@@ -10,9 +10,16 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 const omrNumber = new Intl.NumberFormat('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const countNumber = new Intl.NumberFormat('en-US');
 
+/* The company's base currency (picked on Create a Company; the session sends it): prices, costs and totals are kept
+   in it, and a document or party with no currency of its own takes it. OMR until the session says otherwise.
+   COMPANY_VAT: whether the company charges VAT and at what % (a document in the base currency gets it). */
+let BASE_CURRENCY = 'OMR';
+let COMPANY_VAT = { on: true, rate: 5 };
+const vatInBase = currency => COMPANY_VAT.on && currency === BASE_CURRENCY;   // a line's VAT: in the base currency only
+
 // Money arrives from the API as DECIMAL strings ("1234.500"); only format here.
 function formatOmr(value) {
-  return `OMR ${omrNumber.format(Number(value) || 0)}`;
+  return `${BASE_CURRENCY} ${omrNumber.format(Number(value) || 0)}`;
 }
 function formatAmount(value) {
   return omrNumber.format(Number(value) || 0);
@@ -1699,6 +1706,38 @@ function useSignedInName(user) {
   }
   byId('pr-requested-by').defaultValue = signedInName;
   byId('pr-requested-by').value = signedInName;
+}
+
+/* The company's base currency and VAT (Create a Company), from the session: every price, cost, total, conversion and
+   VAT default follows them. An OMR company's page is left exactly as written; for another currency the page's own
+   "OMR" labels (headings, summaries, column names, placeholders) are rewritten in it. */
+function applyCompanyCurrency(user) {
+  const code = String(user?.baseCurrency || '').trim().toUpperCase();
+  BASE_CURRENCY = /^[A-Z]{3}$/.test(code) ? code : 'OMR';
+  COMPANY_VAT = { on: user?.vatApplicable !== false, rate: Number.isFinite(Number(user?.vatPercentage)) ? Number(user.vatPercentage) : 5 };
+  PB_VAT_RATE = COMPANY_VAT.rate;
+  // The Sales Order's Supplier Currency list always offers the base currency.
+  const supplierCurrency = byId('so-supplier-currency');
+  if (supplierCurrency && ![...supplierCurrency.options].some(option => option.value === BASE_CURRENCY)) {
+    supplierCurrency.prepend(new Option(BASE_CURRENCY, BASE_CURRENCY));
+  }
+  if (BASE_CURRENCY === 'OMR') return;
+  const swap = text => text.replace(/\bOMR\b/g, BASE_CURRENCY);
+  const relabel = root => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (/\bOMR\b/.test(node.nodeValue) && !node.parentElement?.closest('option, script, style')) node.nodeValue = swap(node.nodeValue);
+    }
+    for (const node of root.querySelectorAll('[aria-label*="OMR"], [placeholder*="OMR"], [title*="OMR"]')) {
+      for (const name of ['aria-label', 'placeholder', 'title']) if (node.hasAttribute(name)) node.setAttribute(name, swap(node.getAttribute(name)));
+    }
+  };
+  relabel(document.body);
+  for (const template of document.querySelectorAll('template')) relabel(template.content);
+  // The labels set up when the script loaded: master list columns and the filters' value units.
+  for (const list of [supplierList, customerList, itemList]) for (const column of list.config.columns) column.label = swap(column.label);
+  PBF_NUM.value.unit = BASE_CURRENCY;
+  RRF_NUM.v.u = BASE_CURRENCY;
 }
 
 async function checkSignedIn() {
@@ -6585,7 +6624,7 @@ function renderPartyOrders() {
     const tr = el('tr');
     tr.dataset.order = String(index);
     const value = el('td', 'po-value');
-    if (order.value !== '') value.append(formatAmount(order.value), el('small', '', 'OMR')); else value.textContent = '—';
+    if (order.value !== '') value.append(formatAmount(order.value), el('small', '', BASE_CURRENCY)); else value.textContent = '—';
     const status = el('td', 'po-col-center');
     status.append(el('span', `po-status po-status-${order.status.toLowerCase()}`, order.status));
     const doc = el('td');
@@ -6637,7 +6676,7 @@ function openOrderView(index) {
     { label: `${sales ? 'SO' : 'PO'} Number`, value: order.number, column: { type: 'code' } },
     { label: 'Order Date', value: order.date ? formatDate(new Date(`${order.date}T00:00`)) : '' },
     ...(sales ? [{ label: 'Quotation Ref', value: order.quotationRef }] : []),
-    { label: 'Total Value (OMR)', value: order.value === '' ? '' : formatAmount(order.value) },
+    { label: `Total Value (${BASE_CURRENCY})`, value: order.value === '' ? '' : formatAmount(order.value) },
     { label: 'Total Items', value: order.items === '' ? '' : formatCount(order.items) },
     { label: 'Status', value: el('span', `po-status po-status-${order.status.toLowerCase()}`, order.status) },
     { label: `${sales ? 'SO' : 'PO'} Document`, value: docName ? `${docName}${order.file ? ' (uploads when you save)' : ''}` : 'No document' },
@@ -6938,7 +6977,7 @@ function fillPartyForm(party) {
   // Lines saved as "Label: value" (see read()) go back to their fields.
   const accountLines = String(party.accountDetails ?? '').split('\n').filter(Boolean);
   ensureOption(partyEl(`${variant}-currency`), party.currency);
-  set('currency', party.currency || 'OMR');
+  set('currency', party.currency || BASE_CURRENCY);
   // Financial Terms and Other Details are the same on both sides (suppliers name the limit "debit").
   set('credit-limit', variant === 'sup' ? party.debitLimit : party.creditLimit);
   set('credit-days', variant === 'sup' ? party.debitDays : party.creditDays);
@@ -7738,7 +7777,7 @@ const PBF_TABS = {
 };
 const PBF_SVG = paths => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 const PBF_NUM = {
-  value: { unit: 'OMR', placeholder: 'e.g. 10000', name: 'value', of: row => pbNum(row.grandTotal), text: row => `${pbMoney(pbNum(row.grandTotal))} OMR` },
+  value: { unit: 'OMR', placeholder: 'e.g. 10000', name: 'value', of: row => pbNum(row.grandTotal), text: row => `${pbMoney(pbNum(row.grandTotal))} ${BASE_CURRENCY}` },
   disc: { unit: '%', placeholder: 'e.g. 5', name: 'discount', of: row => pbNum(row.discountPct), text: row => `${pbNum(row.discountPct)}%` },
   qty: { unit: '#', placeholder: 'e.g. 100', name: 'quantity', of: row => pbNum(row.totalQty),
     text: row => `${row.totalQty || 0} ${pbNum(row.totalQty) === 1 ? 'unit' : 'units'}` },
@@ -9830,7 +9869,7 @@ function openQuickSupplier(field, name = '', kind = 'supplier') {
   qsEl('name').value = name.toUpperCase();
   qsEl('country').value = 'Oman';
   qsEl('phone-code').value = '+968';
-  qsEl('currency').value = 'OMR';
+  qsEl('currency').value = BASE_CURRENCY;
   document.documentElement.classList.add('has-modal');
   byId('quick-supplier').showModal();
   qsEl('name').focus();
@@ -9865,7 +9904,7 @@ async function saveQuickSupplier() {
   if (problem) return quickSupplierError(qsEl('phone'), problem);
   if (email && !EMAIL.test(email)) return quickSupplierError(qsEl('email'), 'Enter a valid email address.');
   const payload = {
-    [party.nameKey]: value('name'), country: value('country'), currency: qsEl('currency').value || 'OMR', phone, email,
+    [party.nameKey]: value('name'), country: value('country'), currency: qsEl('currency').value || BASE_CURRENCY, phone, email,
     contacts: value('contact') || phone || email ? [{ name: value('contact'), designation: '', number: phone, email }] : [],
   };
   quickSupplier.saving = true;
@@ -10466,7 +10505,7 @@ function partyViewSections(kind) {
     let second;
     if (supplier) {
       second = { label: labels[1], count: record.quotations.length, sections: [viewCard({ title: 'Quotations', count: viewCount(record.quotations.length, 'item'), wide: true },
-        viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', 'Rate (OMR)', 'Delivery', 'Warranty'],
+        viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', `Rate (${BASE_CURRENCY})`, 'Delivery', 'Warranty'],
           record.quotations.map((q, i) => [viewSerial(i), el('strong', '', q.itemName || '—'), q.description, q.unit, amount(q.rate), q.deliveryTime, q.warranty]), 'No quotations.'))] };
     } else {
       const lines = record.poItems ?? [];
@@ -10477,9 +10516,9 @@ function partyViewSections(kind) {
           { label: 'Customer PO No.', value: record.poNumber, column: { type: 'code' } }, { label: 'PO Date', value: viewDate(record.poDate) },
           { label: 'Delivery Date', value: viewDate(record.poDeliveryDate) }, { label: 'Total Items', value: String(lines.length), column: { type: 'mono' } },
           { label: 'Total Quantity', value: lines.length ? String(Math.round(qty * 1000) / 1000) : '', column: { type: 'mono' } },
-          { label: 'Total Value (OMR)', value: lines.length ? formatAmount(total) : '', column: { type: 'mono' } }])),
+          { label: `Total Value (${BASE_CURRENCY})`, value: lines.length ? formatAmount(total) : '', column: { type: 'mono' } }])),
         viewCard({ title: 'Items', count: viewCount(lines.length, 'item'), wide: true },
-          viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', 'Qty', 'Rate (OMR)', 'Amount (OMR)'],
+          viewTable(['SL.NO', 'Item Name', 'Description', 'Unit', 'Qty', `Rate (${BASE_CURRENCY})`, `Amount (${BASE_CURRENCY})`],
             lines.map((line, i) => [viewSerial(i), el('strong', '', line.itemName || '—'), line.description, line.unit, viewMono(line.qty == null ? '' : String(Number(line.qty))),
               amount(line.rate), line.qty == null || line.rate == null ? '' : amount(Number(line.qty) * Number(line.rate))]), 'No purchase order lines.'))] };
     }
@@ -10499,7 +10538,7 @@ function partyViewSections(kind) {
     };
     const orders = { label: labels[2], count: record.orders.length, sections: [
       viewCard({ title: supplier ? 'Previous Purchase Orders' : 'Previous Sales Orders', count: viewCount(record.orders.length, 'order'), wide: true },
-        viewTable([supplier ? 'PO Number' : 'SO Number', 'Date', ...(supplier ? [] : ['Quotation Ref']), 'Value (OMR)', 'Items', 'Status', 'Document'],
+        viewTable([supplier ? 'PO Number' : 'SO Number', 'Date', ...(supplier ? [] : ['Quotation Ref']), `Value (${BASE_CURRENCY})`, 'Items', 'Status', 'Document'],
           record.orders.map(o => [viewMono(o.number, !supplier), viewDate(o.date), ...(supplier ? [] : [o.quotationRef]), amount(o.value),
             o.items == null || o.items === '' ? '' : viewMono(formatCount(o.items)), el('span', `po-status po-status-${String(o.status).toLowerCase()}`, o.status), docChip(o)]),
           'No previous orders.'))] };
@@ -10628,9 +10667,9 @@ const supplierList = createMasterList({
     detail({ key: 'country', label: 'Country', group: 'Location' }),
     detail({ key: 'taxRegNo', label: 'Tax Reg. No', group: 'Identification', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
     detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Financial Terms', headers: ['terms'], read: readChoice('payment terms', TERMS, TERM_ALIASES) }),
-    detail({ key: 'debitLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Financial Terms', headers: ['debit limit'], read: readAmount('credit limit') }),
+    detail({ key: 'debitLimit', label: `Credit Limit (${BASE_CURRENCY})`, type: 'mono', group: 'Financial Terms', headers: ['debit limit'], read: readAmount('credit limit') }),
     detail({ key: 'debitDays', label: 'Credit Period (Days)', group: 'Financial Terms', headers: ['credit days', 'debit days'], read: readWholeNumber('credit period') }),
-    detail({ key: 'openingBalance', label: 'Opening Balance (OMR)', type: 'mono', group: 'Financial Terms', headers: ['opening'], read: readAmount('opening balance') }),
+    detail({ key: 'openingBalance', label: `Opening Balance (${BASE_CURRENCY})`, type: 'mono', group: 'Financial Terms', headers: ['opening'], read: readAmount('opening balance') }),
     detail({ key: 'accountDetails', label: 'Bank / Other Details', type: 'wrap', group: 'Other Details', headers: ['bank details', 'bank account', 'iban'] }),
     detail({ key: 'remarks', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
   fromApi: record => ({ ...record, debitDays: record.debitDays ?? '' }),
@@ -10662,10 +10701,10 @@ const customerList = createMasterList({
     detail({ key: 'zipCode', label: 'Zip Code', group: 'Location', headers: ['zip', 'postal code', 'po box', 'pin code'] }),
     detail({ key: 'country', label: 'Country', group: 'Location' }),
     detail({ key: 'currency', label: 'Currency', type: 'pill', group: 'Credit & Sales', read: readCurrency }),
-    detail({ key: 'creditLimit', label: 'Credit Limit (OMR)', type: 'mono', group: 'Credit & Sales', read: readAmount('credit limit') }),
+    detail({ key: 'creditLimit', label: `Credit Limit (${BASE_CURRENCY})`, type: 'mono', group: 'Credit & Sales', read: readAmount('credit limit') }),
     detail({ key: 'creditDays', label: 'Credit Period (Days)', group: 'Credit & Sales', headers: ['credit days', 'credit period'], read: readWholeNumber('credit period') }),
     detail({ key: 'paymentTerms', label: 'Payment Terms', group: 'Credit & Sales', headers: ['terms'], read: readChoice('payment terms', TERMS, TERM_ALIASES) }),
-    detail({ key: 'openingBalance', label: 'Opening Balance (OMR)', type: 'mono', group: 'Credit & Sales', headers: ['opening'], read: readAmount('opening balance') }),
+    detail({ key: 'openingBalance', label: `Opening Balance (${BASE_CURRENCY})`, type: 'mono', group: 'Credit & Sales', headers: ['opening'], read: readAmount('opening balance') }),
     detail({ key: 'taxRegNo', label: 'Tax Registration No', group: 'Identification', headers: ['vat no', 'vat number', 'tax number', 'trn'] }),
     detail({ key: 'accountDetails', label: 'Bank / Other Details', type: 'wrap', group: 'Other Details', headers: ['bank details', 'bank account', 'iban', 'other details'] }),
     detail({ key: 'comments', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['notes', 'remarks'] })],
@@ -10687,7 +10726,7 @@ function itemViewSections(record, note) {
   const sourcing = record.sourcing ?? [];
   const suppliers = { label: labels[0], count: sourcing.length, sections: [
     viewCard({ title: 'Suppliers & Sourcing', count: viewCount(sourcing.length, 'line'), wide: true },
-      viewTable(['S.No', 'Supplier', 'Brand', 'Stock Point', 'Cost (OMR)', 'Opening Stock'],
+      viewTable(['S.No', 'Supplier', 'Brand', 'Stock Point', `Cost (${BASE_CURRENCY})`, 'Opening Stock'],
         sourcing.map((s, i) => [viewSerial(i), el('strong', '', s.supplierName || '—'), s.brandName,
           [s.warehouseCode, s.warehouseName].filter(Boolean).join(' · '),
           s.cost == null || s.cost === '' ? '' : viewMono(formatAmount(s.cost)), viewMono(s.openingStock ?? '')]),
@@ -10723,8 +10762,8 @@ const itemList = createMasterList({
     statusColumn(ITEM_STATUSES),
     detail({ key: 'stockPoint', label: 'Stock Point', group: 'Storage', headers: ['warehouse', 'store', 'location'] }),
     detail({ key: 'rack', label: 'Rack / Bin', group: 'Storage', headers: ['rack', 'bin'] }),
-    detail({ key: 'buyingRate', label: 'Buying Rate (OMR)', type: 'mono', group: 'Pricing' }),
-    detail({ key: 'sellingPrice', label: 'Selling Price (OMR)', type: 'mono', group: 'Pricing' }),
+    detail({ key: 'buyingRate', label: `Buying Rate (${BASE_CURRENCY})`, type: 'mono', group: 'Pricing' }),
+    detail({ key: 'sellingPrice', label: `Selling Price (${BASE_CURRENCY})`, type: 'mono', group: 'Pricing' }),
     detail({ key: 'description', label: 'Comments', type: 'wrap', group: 'Other Details', headers: ['comments', 'remarks', 'notes'] })],
   // Available Stock: the stock on hand from the documents (the Item page edits the opening stock).
   fromApi: record => ({ ...record, availableStock: record.stockOnHand ?? record.availableStock, stockPoint: record.stockPoints ?? record.warehouseName, rack: record.rackCode ?? '', buyingRate: record.buyingRate ?? '', sellingPrice: record.sellingPrice ?? '' }),
@@ -11737,7 +11776,7 @@ async function loadPurchaseLines(form, lines, toRow) {
   form.page.record();
 }
 
-const PB_VAT_RATE = 5;                              // the VAT % a line gets when VAT is enabled
+let PB_VAT_RATE = 5;                                // the VAT % a line gets when VAT is enabled: the company's (Create a Company)
 // The documents whose line prices and totals are always in OMR; the Currency field is the party's (supplier's or
 // customer's) currency, and the summary (and the PDF) also gives the Grand Total in it at the fixed SO_RATES_TO_OMR.
 const PRICES_IN_OMR = ['po', 'pe', 'se', 'qt', 'so', 'dn', 'ti', 'sr', 'prt', 'rp', 'prp'];
@@ -11776,7 +11815,7 @@ function purchaseTotals(rows, kind, vatMode, discount, shipping) {
    that Grand Total in the party's currency. */
 function showGrandInOmr(el, pricesInOmr = false) {
   const grand = el('grand');
-  const currency = el('currency-id')?.value || 'OMR';
+  const currency = el('currency-id')?.value || BASE_CURRENCY;
   if (!grand) return;
   if (pricesInOmr) { showGrandInSupplierCurrency(grand, currency); return; }
   const grandRow = grand.closest('div');
@@ -11785,14 +11824,14 @@ function showGrandInOmr(el, pricesInOmr = false) {
     row = document.createElement('div');
     row.className = 'pb-sum-omr';
     const label = document.createElement('dt');
-    label.textContent = 'Grand Total (OMR)';
+    label.textContent = `Grand Total (${BASE_CURRENCY})`;
     row.append(label, document.createElement('dd'));
     grandRow.after(row);
   }
-  const rate = SO_RATES_TO_OMR[currency];
-  row.hidden = currency === 'OMR' || !rate;
+  const rate = rateToBase(currency);
+  row.hidden = currency === BASE_CURRENCY || !rate;
   row.querySelector('dd').textContent = pbShow(pbNum(grand.textContent) * (rate || 0));
-  row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
+  row.title = rate ? `1 ${currency} = ${rate} ${BASE_CURRENCY}` : '';
 }
 
 function showGrandInSupplierCurrency(grand, currency) {
@@ -11804,12 +11843,12 @@ function showGrandInSupplierCurrency(grand, currency) {
     row.append(document.createElement('dt'), document.createElement('dd'));
     grandRow.after(row);
   }
-  const rate = SO_RATES_TO_OMR[currency];
-  row.hidden = currency === 'OMR' || !rate;
+  const rate = rateToBase(currency);
+  row.hidden = currency === BASE_CURRENCY || !rate;
   const label = (grandRow.querySelector('.rp-grand-label') || grandRow.querySelector('dt')).textContent.replace(/\s*\([A-Z]{3}\)\s*$/, '');
   row.querySelector('dt').textContent = `${label} (${currency})`;
   row.querySelector('dd').textContent = pbShow(rate ? pbNum(grand.textContent) / rate : 0);
-  row.title = rate ? `1 ${currency} = ${rate} OMR` : '';
+  row.title = rate ? `1 ${currency} = ${rate} ${BASE_CURRENCY}` : '';
 }
 
 function createPurchaseForm(spec) {
@@ -11852,7 +11891,7 @@ function createPurchaseForm(spec) {
     el('subtotal').textContent = pbShow(totals.subtotal);
     el('vat').textContent = pbShow(totals.vat);
     el('grand').textContent = pbShow(totals.grand);
-    if (el('grand-currency')) el('grand-currency').textContent = PRICES_IN_OMR.includes(spec.key) ? 'OMR' : el('currency-id')?.value || 'OMR';
+    if (el('grand-currency')) el('grand-currency').textContent = PRICES_IN_OMR.includes(spec.key) ? BASE_CURRENCY : el('currency-id')?.value || BASE_CURRENCY;
     // The summary says what the VAT switch is set to: "VAT (5%)", "VAT (Disabled)", or the rates when lines differ.
     const filled = rows().filter(row => !isBlankRow(row));
     const rates = [...new Set((filled.length ? filled : rows()).map(row => pbNum(pbCell(row, 'vatRate').value)))];
@@ -12527,13 +12566,13 @@ async function poShowCredit({ fill = false } = {}) {
 // VAT follows the currency: VAT Enabled (5%) on an order in OMR (Omani Rial, Oman), none in any other currency.
 // The VAT button can still change it for one order.
 function poVatFromCurrency(form) {
-  form.setVat(poCurrency() === 'OMR');
+  form.setVat(vatInBase(poCurrency()));
 }
 
 // The order's currency code, and setting it (a code not in the list is shown as it is).
-const poCurrency = () => byId('po-currency-id').value || 'OMR';
+const poCurrency = () => byId('po-currency-id').value || BASE_CURRENCY;
 function poSetCurrency(code) {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId('po-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 
@@ -12603,7 +12642,7 @@ const poForm = createPurchaseForm({
     byId('po-date').value = todayInputValue();
     fillLookup(byId('po-ref'), null);
     poRefLoaded = '';
-    poSetCurrency('OMR');                        // hidden ids were cleared by the reset
+    poSetCurrency(BASE_CURRENCY);                        // hidden ids were cleared by the reset
     poVatFromCurrency(form);                     // a new order is in OMR: VAT Enabled
     byId('po-certifications').value = 'N/A';
     poShowCertifications();
@@ -12778,14 +12817,14 @@ const SALES_HELPERS = {};                          // each sales form's copyFrom
 function createSalesForm(cfg) {
   const k = cfg.key;
   const $ = suffix => byId(`${k}-${suffix}`);
-  const currency = () => $('currency-id').value || 'OMR';
+  const currency = () => $('currency-id').value || BASE_CURRENCY;
   const setCurrency = code => {
-    const text = String(code || 'OMR').toUpperCase();
+    const text = String(code || BASE_CURRENCY).toUpperCase();
     fillLookup($('currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
   };
   // The sales order has free-text Payment Terms and no Credit Period / Salesman fields.
   const isCredit = () => Boolean($('credit-field')) && $('payment')?.value === 'Credit';
-  const vatWanted = () => (cfg.vatWanted ? cfg.vatWanted() : currency() === 'OMR');
+  const vatWanted = () => (cfg.vatWanted ? cfg.vatWanted() : vatInBase(currency()));
   async function showCredit({ fill = false } = {}) {
     if (!$('credit-field')) return;
     $('credit-field').hidden = !isCredit();
@@ -12911,7 +12950,7 @@ function createSalesForm(cfg) {
     afterFill: () => showCustomer(),
     async onReset(form) {
       $('date').value = todayInputValue();
-      setCurrency('OMR');                            // hidden ids were cleared by the reset
+      setCurrency(BASE_CURRENCY);                            // hidden ids were cleared by the reset
       form.setVat(vatWanted());                      // a new document is in OMR: VAT Enabled (a sales order: none)
       if (cfg.defaultLocation !== false && !$('location').value.trim()) $('location').value = 'DDP Muscat Limit';
       if ($('certifications')) $('certifications').value = 'N/A';
@@ -13037,12 +13076,23 @@ const qtForm = createSalesForm({
    line), a buying cost per line with the line's Total Buying and Profit %, and the Financial Summary: landing cost,
    custom duty (when a supplier currency is not the base currency), transportation, business promotion, total buying
    cost (and in AED), total profit. The same sums as sb_order_costs() on the server, with the same fixed rates. */
-const SO_RATES_TO_OMR = { OMR: 1, AED: 0.1055, USD: 0.385, SAR: 0.1026, INR: 1 / 241.3, EUR: 0.42, GBP: 0.49, QAR: 0.1057, KWD: 1.25, BHD: 1.02 };
+const SO_RATES_TO_OMR = { OMR: 1, AED: 0.1055, USD: 0.385, SAR: 0.1026, INR: 1 / 241.3, EUR: 0.42, GBP: 0.49, QAR: 0.1057, KWD: 1.25, BHD: 1.02,
+  // The other currencies a company can be set up in (approximate fixed rates, as the rest; the server's SB_RATES_TO_OMR).
+  PKR: 0.385 / 280, EGP: 0.385 / 48.5, JOD: 0.385 / 0.709, TRY: 0.385 / 40, CNY: 0.385 / 7.1, JPY: 0.385 / 150, KRW: 0.385 / 1400 };
+// One unit of `currency` in the company's base currency (the table is kept against OMR); 0 when either has no rate.
+function rateToBase(currency) {
+  if (currency === BASE_CURRENCY) return 1;
+  const from = SO_RATES_TO_OMR[currency];
+  const base = SO_RATES_TO_OMR[BASE_CURRENCY];
+  return from && base ? from / base : 0;
+}
+// The 10% freight and clearing on goods bought in AED, from abroad (none when the company's own currency is AED).
+const landingFor = currency => (currency === 'AED' && BASE_CURRENCY !== 'AED' ? 1.1 : 1);
 const soRate = (from, to) => (from === to || !SO_RATES_TO_OMR[from] || !SO_RATES_TO_OMR[to] ? 1 : SO_RATES_TO_OMR[from] / SO_RATES_TO_OMR[to]);
 const soIsInvoice = () => byId('so-doc-title').value === 'Proforma Invoice';
 const soIsMulti = () => byId('so-mode').value === 'multi';
-const soBase = () => 'OMR';                          // prices, costs and profit are in OMR (PRICES_IN_OMR)
-const soCurrency = () => byId('so-currency-id').value || 'OMR';   // the customer's currency
+const soBase = () => BASE_CURRENCY;                          // prices, costs and profit are in OMR (PRICES_IN_OMR)
+const soCurrency = () => byId('so-currency-id').value || BASE_CURRENCY;   // the customer's currency
 let soSales = null;                                    // createSalesForm's helpers for the sales order
 
 // Shows what the title and the mode allow (the CSS hides the rest) and the currency labels.
@@ -13051,7 +13101,7 @@ function soShowMode() {
   formNode.dataset.doc = soIsInvoice() ? 'invoice' : 'order';
   formNode.dataset.mode = soIsMulti() ? 'multi' : 'single';
   for (const label of formNode.querySelectorAll('[data-so-base]')) label.textContent = soBase();
-  for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = ' (OMR)';   // buying costs are in OMR too
+  for (const label of formNode.querySelectorAll('[data-so-sup-label]')) label.textContent = ` (${BASE_CURRENCY})`;   // buying costs are in OMR too
   // An opened Sales Order is updated (as the other forms' Update … Record).
   byId('so-save-label').textContent = FORM_PAGES['trade/sales-order/new']?.isEditing?.() ? 'Update Sales Order Record' : 'Save Sales Order';
 }
@@ -13069,7 +13119,7 @@ function soRefreshCosts(totals) {
   for (const row of rows) {
     const supplierCurrency = soIsMulti() ? (pbCell(row, 'supplierCurrency').value || base) : byId('so-supplier-currency').value;
     if (soIsMulti() && pbCell(row, 'supplierId').value) supplierCurrencies.add(supplierCurrency);
-    const landing = supplierCurrency === 'AED' ? 1.1 : 1;
+    const landing = landingFor(supplierCurrency);
     const qty = value(row, 'quantity');
     const price = value(row, 'price');
     const buying = value(row, 'buyingCost');
@@ -13094,7 +13144,7 @@ function soRefreshCosts(totals) {
   // already shows it in the order's own currency). None for OMR, nor for a currency without a rate in SO_RATES_TO_OMR.
   for (const old of byId('so-form').querySelectorAll('.so-foreign-row')) old.remove();
   let after = byId('so-total-buying').parentElement;
-  for (const code of [...supplierCurrencies].filter(code => code && code !== 'OMR' && code !== base && SO_RATES_TO_OMR[code]).sort()) {
+  for (const code of [...supplierCurrencies].filter(code => code && code !== BASE_CURRENCY && code !== base && rateToBase(code)).sort()) {
     const row = el('div', 'so-buy-row so-foreign-row');
     row.append(el('dt', '', `Total Buying Cost (${code})`), el('dd', '', pbMoney(totalBuying * soRate(base, code))));
     after.after(row);
@@ -13111,7 +13161,7 @@ function soRefreshCosts(totals) {
 function soAsDocument() {
   const value = id => byId(id).value.trim();
   // A sales order's lines have no VAT; in the quotation / delivery note they take VAT as usual (5% in OMR).
-  const vat = soIsInvoice() ? null : (value('so-currency-id') || 'OMR') === 'OMR' ? '5.00' : '0.00';
+  const vat = soIsInvoice() ? null : vatInBase(value('so-currency-id') || BASE_CURRENCY) ? PB_VAT_RATE.toFixed(2) : '0.00';
   const items = soForm.page.rowsOf('items').map(row => {
     const cell = field => pbCell(row, field)?.value.trim() ?? '';
     return {
@@ -13123,7 +13173,7 @@ function soAsDocument() {
   }).filter(line => line.itemName || line.itemId);
   return {
     code: 'the Sales Order', customerId: value('so-customer-id') || null, customerName: value('so-customer'),
-    contactName: value('so-contact'), contactNumber: phoneOf(byId('so-contact-number')), currency: value('so-currency-id') || 'OMR',
+    contactName: value('so-contact'), contactNumber: phoneOf(byId('so-contact-number')), currency: value('so-currency-id') || BASE_CURRENCY,
     deliveryLocation: value('so-location'), paymentMode: value('so-payment'), creditPeriod: '',
     vatMode: 'exclude', discountAmount: value('so-discount'), shipping: value('so-shipping'), items,
   };
@@ -13152,7 +13202,7 @@ async function soAutoSelectSuppliers(form) {
       let bestCost = Infinity;
       for (const offer of latest.values()) {
         const currency = offer.currency || base;
-        const cost = pbNum(offer.rate) * (currency === 'AED' ? 1.1 : 1);   // the prices are in OMR
+        const cost = pbNum(offer.rate) * landingFor(currency);   // the prices are in OMR
         if (cost < bestCost) { bestCost = cost; best = offer; }
       }
       if (!best) continue;
@@ -13176,7 +13226,7 @@ const soForm = createSalesForm({
   key: 'so', route: 'trade/sales-order', noun: 'Sales Order', api: 'api/sales-orders.php', dateKey: 'orderDate', lookups: ['salesorder'],
   template: 'pb-line-so', lineExtras: ['deliveryTerm', 'buyingCost', 'supplierId'], defaultLocation: false,
   // A Sales Order has no VAT; a Proforma Invoice has VAT Enabled in OMR.
-  vatWanted: () => soIsInvoice() && soCurrency() === 'OMR',
+  vatWanted: () => soIsInvoice() && vatInBase(soCurrency()),
   copyLine: values => ({ ...values, discountPct: '0.00', discountAmount: '0.000', vatRate: soIsInvoice() ? values.vatRate : '0.00' }),
   afterRefresh: totals => soRefreshCosts(totals),
   fieldNodes: { documentTitle: 'so-doc-title', supplierMode: 'so-mode', supplierId: 'so-supplier', supplierCurrency: 'so-supplier-currency',
@@ -13208,7 +13258,7 @@ const soForm = createSalesForm({
     setSelectValue(byId('so-doc-title'), doc.documentTitle || 'Sales Order');
     setSelectValue(byId('so-mode'), doc.supplierMode || 'single');
     fillLookup(byId('so-supplier'), doc.supplierId ? { id: doc.supplierId, name: doc.supplierName } : null);
-    setSelectValue(byId('so-supplier-currency'), doc.supplierCurrency || 'OMR');
+    setSelectValue(byId('so-supplier-currency'), doc.supplierCurrency || BASE_CURRENCY);
     fillLookup(byId('so-quotation'), doc.quotationId ? { id: doc.quotationId, code: doc.quotationCode } : null);
     byId('so-customer-po').value = doc.customerPo || '';
     byId('so-category').value = doc.purchaseCategory || '';
@@ -13221,7 +13271,7 @@ const soForm = createSalesForm({
     forgetLookups('quotation');
     byId('so-doc-title').value = 'Sales Order';
     byId('so-mode').value = 'single';
-    byId('so-supplier-currency').value = 'OMR';
+    byId('so-supplier-currency').value = BASE_CURRENCY;
     soShowMode();
   },
   init(form, sales) {
@@ -13258,7 +13308,7 @@ const soForm = createSalesForm({
         return;
       }
       soShowMode();
-      form.setVat(soIsInvoice() && soCurrency() === 'OMR');
+      form.setVat(soIsInvoice() && vatInBase(soCurrency()));
       form.page.absorb();
     });
     byId('so-mode').addEventListener('change', () => { soShowMode(); form.refresh(); form.page.absorb(); });
@@ -13314,7 +13364,7 @@ const dnForm = createSalesForm({
   template: 'pb-line-dn', lineExtras: ['deliveryTerm', 'warehouseId'],
   onShow: () => openLookup(byId('dn-customer')),          // a new delivery note starts by picking the Buyer
   // A sales order's lines carry no VAT: on the delivery note they take VAT as usual (5% in OMR).
-  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && (byId('dn-currency-id').value || 'OMR') === 'OMR' ? '5.00' : values.vatRate }),
+  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && vatInBase(byId('dn-currency-id').value || BASE_CURRENCY) ? PB_VAT_RATE.toFixed(2) : values.vatRate }),
   fieldNodes: { referenceNo: 'dn-reference', customerPo: 'dn-customer-po', carrier: 'dn-carrier', vehicleNo: 'dn-vehicle' },
   header: () => {
     const [kind, id] = byId('dn-reference-id').value.split(':');
@@ -13361,7 +13411,7 @@ const dnForm = createSalesForm({
    Purchase Category, Delivery Location, Payment Terms (a list) and, for Credit, Credit Period; lines with Delivery Term, Qty, Unit, Unit Price,
    VAT % and Total Price (VAT Enabled in OMR); the summary: Total Selling Price, Transportation Charge, VAT / Tax
    Total, Discount, Advance Payment, Grand Total. Send For Approval saves it approved. */
-const tiBase = () => byId('ti-currency-id').value || 'OMR';
+const tiBase = () => byId('ti-currency-id').value || BASE_CURRENCY;
 
 // What is entered on the invoice, as a saved document's shape (for copyFrom into the form its Document Title opens).
 function tiAsDocument() {
@@ -13389,7 +13439,7 @@ const tiForm = createSalesForm({
   onShow: () => openLookup(byId('ti-customer')),          // a new invoice starts by picking the Buyer
   // A sales order's lines carry no VAT: on the invoice they take VAT as usual (5% in OMR). A line's discount is kept
   // (in the line's hidden cells), so the invoice totals what the document it came from does.
-  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && tiBase() === 'OMR' ? '5.00' : values.vatRate }),
+  copyLine: values => ({ ...values, vatRate: pbNum(values.vatRate) === 0 && vatInBase(tiBase()) ? PB_VAT_RATE.toFixed(2) : values.vatRate }),
   fieldNodes: { documentTitle: 'ti-doc-title', referenceNo: 'ti-reference', quotationId: 'ti-reference', salesOrderId: 'ti-reference',
     deliveryNoteId: 'ti-reference', customerPo: 'ti-customer-po', purchaseCategory: 'ti-category', advancePayment: 'ti-advance' },
   header: () => {
@@ -13406,8 +13456,8 @@ const tiForm = createSalesForm({
     if (amount !== '' && !/^\d{1,11}(\.\d{1,3})?$/.test(amount)) errors.push({ node: byId('ti-advance'), message: 'Enter an amount with up to 3 decimals.' });
   },
   afterRefresh() {
-    for (const label of byId('ti-form').querySelectorAll('[data-ti-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
-    byId('ti-vat-label').textContent = 'VAT / Tax Total (OMR)';
+    for (const label of byId('ti-form').querySelectorAll('[data-ti-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
+    byId('ti-vat-label').textContent = `VAT / Tax Total (${BASE_CURRENCY})`;
     byId('ti-save-label').textContent = FORM_PAGES['entry/tax-invoice/new']?.isEditing?.() ? 'Update Invoice' : 'Save Invoice';
   },
   fill(doc) {
@@ -14021,7 +14071,7 @@ function stkRender() {
   stkEl('kpi-hand').textContent = stkQty(levels.reduce((sum, row) => sum + Math.max(row.available, 0), 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   stkEl('kpi-in').textContent = stkSigned(inQty);
   stkEl('kpi-out').textContent = outQty ? stkSigned(-outQty) : '0';
-  stkEl('kpi-value').replaceChildren(document.createTextNode(stkMoney(levels.reduce((sum, row) => sum + row.value, 0))), el('small', '', ' OMR'));
+  stkEl('kpi-value').replaceChildren(document.createTextNode(stkMoney(levels.reduce((sum, row) => sum + row.value, 0))), el('small', '', ` ${BASE_CURRENCY}`));
   stkEl('kpi-in-note').textContent = `From GRN, purchases & returns · ${label}`;
   stkEl('kpi-out-note').textContent = `From invoices, delivery notes & returns · ${label}`;
   stkEl('levels-sub').textContent = `Stock on hand from purchase inward and invoice / delivery note outward – ${label}.`;
@@ -14048,9 +14098,9 @@ function stkRender() {
     for (const [qty, from] of [[row.restockedSales, 'Sales Return'], [row.restockedPurchase, 'Purchase Return']]) {
       if (qty) tr.children[5].append(el('div', 'stk-restocked', `${stkSigned(qty)} ${String(unit || '').toUpperCase()} from ${from} (Damaged)`.replace(/\s+/g, ' ')));
     }
-    tr.children[6].append(stkMoney(row.cost), el('small', '', ' OMR'));
-    tr.children[7].append(stkMoney(row.price), el('small', '', ' OMR'));
-    tr.children[8].append(stkMoney(row.value), el('small', '', ' OMR'));
+    tr.children[6].append(stkMoney(row.cost), el('small', '', ` ${BASE_CURRENCY}`));
+    tr.children[7].append(stkMoney(row.price), el('small', '', ` ${BASE_CURRENCY}`));
+    tr.children[8].append(stkMoney(row.value), el('small', '', ` ${BASE_CURRENCY}`));
     return tr;
   }));
   stkEl('levels-empty').hidden = levelRows.length > 0;
@@ -14086,7 +14136,7 @@ function stkRender() {
   stkEl('dmg-entries').textContent = String(damaged.length);
   stkEl('dmg-items').textContent = String(new Set(damaged.map(d => String(d.itemId))).size);
   stkEl('dmg-qty').textContent = stkQty(damaged.reduce((sum, d) => sum + pbNum(d.qty), 0));
-  stkEl('dmg-value').replaceChildren(document.createTextNode(stkMoney(damaged.reduce((sum, d) => sum + pbNum(d.qty) * pbNum(d.rate), 0))), el('small', '', ' OMR'));
+  stkEl('dmg-value').replaceChildren(document.createTextNode(stkMoney(damaged.reduce((sum, d) => sum + pbNum(d.qty) * pbNum(d.rate), 0))), el('small', '', ` ${BASE_CURRENCY}`));
   stkEl('damaged-body').replaceChildren(...stkPageOf(damaged, 'damaged').map(d => {
     const tr = el('tr'); const unit = stkItem(d.itemId).unit;
     const reason = el('td', 'stk-remarks'); reason.append(el('div', '', d.remarks || d.condition || '—'));
@@ -14159,7 +14209,7 @@ function stkRenderHistory() {
   withUnit(stkEl('hist-in'), stkSigned(inQty));
   withUnit(stkEl('hist-out'), outQty ? stkSigned(-outQty) : '0');
   withUnit(stkEl('hist-avail'), stkQty(inQty - outQty));
-  stkEl('hist-value').replaceChildren(document.createTextNode(stkMoney(Math.max(inQty - outQty, 0) * cost)), el('small', '', ' OMR'));
+  stkEl('hist-value').replaceChildren(document.createTextNode(stkMoney(Math.max(inQty - outQty, 0) * cost)), el('small', '', ` ${BASE_CURRENCY}`));
   const q = stkEl('hist-search').value.trim().toLowerCase(); const dir = stkEl('hist-dir').value;
   const shown = withBalance.filter(m => (!dir || m.dir === dir)
     && (!q || stkText(m.type, m.party, m.ref, stkDate(m.date), m.date, m.remarks, stkPoint(m.warehouseId).name).includes(q))).reverse();
@@ -14651,9 +14701,9 @@ function stkInit() {
    invoice number, the purchase order and / or GRN it is for (a pick fills the supplier, currency and lines), the
    currency, lines priced quantity × rate (Total) with Line Total less the line's share of the discount, Remarks,
    signatory slots and the seal. No VAT or shipping (pe_save() keeps them at 0). */
-const peCurrency = () => byId('pe-currency-id').value || 'OMR';
+const peCurrency = () => byId('pe-currency-id').value || BASE_CURRENCY;
 function peSetCurrency(code) {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId('pe-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 
@@ -14683,7 +14733,7 @@ const peForm = createPurchaseForm({
       row.querySelector('[data-total]').textContent = pbShow(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('pe-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
-    for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('pe-form').querySelectorAll('[data-pe-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
     byId('pe-save-label').textContent = FORM_PAGES['entry/purchase-entry/new']?.isEditing?.() ? 'Update Purchase' : 'Save Purchase';
   },
   listRoute: 'entry/purchase-entry',
@@ -14697,7 +14747,7 @@ const peForm = createPurchaseForm({
   },
   onReset() {
     byId('pe-date').value = todayInputValue();
-    peSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    peSetCurrency(BASE_CURRENCY);                          // hidden ids were cleared by the reset
     forgetLookups('purchaseorder', 'grn');
   },
   init(form) {
@@ -14777,9 +14827,9 @@ const peForm = createPurchaseForm({
    number, the tax invoice and / or delivery note it is for (a pick fills the customer, currency and lines), the
    currency, lines priced quantity × rate (Total) with Line Total less the line's share of the discount, Remarks,
    signatory slots and the seal. No VAT or shipping (sales_entry_save() keeps them at 0). */
-const seCurrency = () => byId('se-currency-id').value || 'OMR';
+const seCurrency = () => byId('se-currency-id').value || BASE_CURRENCY;
 function seSetCurrency(code) {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId('se-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 
@@ -14809,7 +14859,7 @@ const seForm = createPurchaseForm({
       row.querySelector('[data-total]').textContent = pbShow(gross - (totals.subtotal > 0 ? shared * gross / totals.subtotal : 0));
     });
     byId('se-item-count').textContent = String(rows.filter(row => pbCell(row, 'itemId').value || pbCell(row, 'itemName').value.trim()).length || rows.length);
-    for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('se-form').querySelectorAll('[data-se-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
     byId('se-save-label').textContent = FORM_PAGES['entry/sales-entry/new']?.isEditing?.() ? 'Update Sale' : 'Save Sale';
   },
   listRoute: 'entry/sales-entry',
@@ -14823,7 +14873,7 @@ const seForm = createPurchaseForm({
   },
   onReset() {
     byId('se-date').value = todayInputValue();
-    seSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    seSetCurrency(BASE_CURRENCY);                          // hidden ids were cleared by the reset
     forgetLookups('taxinvoice', 'deliverynote');
   },
   init(form) {
@@ -14894,9 +14944,9 @@ const seForm = createPurchaseForm({
    currency, stock point and lines are copied in, each line's quantity as Sold Qty (Return Qty starts at all of it and
    can be at most that). Unit prices include VAT or have it added (Include / Exclude VAT). Total Refund = the lines' total
    less the Discount and the Restocking Fee, as backend/src/sales_return.php works it out. */
-const srCurrency = () => byId('sr-currency-id').value || 'OMR';
+const srCurrency = () => byId('sr-currency-id').value || BASE_CURRENCY;
 function srSetCurrency(code) {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId('sr-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 // The buyer's contact persons as suggestions for Buyer Contact Person; a new pick also sets the currency and, when the
@@ -14962,7 +15012,7 @@ const srForm = createPurchaseForm({
     });
     const fee = Math.min(pbNum(byId('sr-restocking').value), Math.max(0, totals.grand));
     byId('sr-grand').textContent = pbShow(totals.grand - fee);
-    for (const label of byId('sr-form').querySelectorAll('[data-sr-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('sr-form').querySelectorAll('[data-sr-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
   },
   fill(form, sr) {
     byId('sr-date').value = sr.returnDate;
@@ -14988,7 +15038,7 @@ const srForm = createPurchaseForm({
   },
   onReset() {
     byId('sr-date').value = todayInputValue();
-    srSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    srSetCurrency(BASE_CURRENCY);                          // hidden ids were cleared by the reset
     byId('sr-restocking').value = '0.000';
     byId('sr-contact-list').replaceChildren();
     forgetLookups('returndn', 'salesentry');
@@ -15061,9 +15111,9 @@ const srForm = createPurchaseForm({
    every line's VAT % to 5 or 0, added on top of the prices. Total Return Amount = the lines' total less the Discount and the Supplier Deduction, as
    backend/src/purchase_return.php works it out. */
 // These helpers take the page's key: 'prt' (Purchase Return) or 'prp' (Purchase Replacement).
-const prtCurrency = (key = 'prt') => byId(`${key}-currency-id`).value || 'OMR';
+const prtCurrency = (key = 'prt') => byId(`${key}-currency-id`).value || BASE_CURRENCY;
 function prtSetCurrency(code, key = 'prt') {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId(`${key}-currency`), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 // The picked Ref ID ("po:5" / "grn:3").
@@ -15220,7 +15270,7 @@ const prtForm = createPurchaseForm({
     });
     const deduction = Math.min(pbNum(byId('prt-deduction').value), Math.max(0, totals.grand));
     byId('prt-grand').textContent = pbShow(totals.grand - deduction);
-    for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('prt-form').querySelectorAll('[data-prt-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
   },
   fill(form, prt) {
     byId('prt-date').value = prt.returnDate;
@@ -15243,7 +15293,7 @@ const prtForm = createPurchaseForm({
   },
   onReset() {
     byId('prt-date').value = todayInputValue();
-    prtSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    prtSetCurrency(BASE_CURRENCY);                          // hidden ids were cleared by the reset
     byId('prt-deduction').value = '0.000';
     forgetLookups('prtref', 'prtsr');
     byId('prt-sr-field').hidden = true;             // the reason starts blank: the Ref ID (PO / GRN) shows
@@ -15375,7 +15425,7 @@ const prpForm = createPurchaseForm({
     const grand = Math.round(totals.grand * 1000);
     byId('prp-grand-note').textContent = grand > 0 ? 'Payable to the supplier'
       : grand < 0 ? 'Owed by the supplier (debit note / refund)' : 'No difference – like-for-like replacement';
-    for (const label of byId('prp-form').querySelectorAll('[data-prp-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('prp-form').querySelectorAll('[data-prp-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
   },
   fill(form, prp) {
     byId('prp-date').value = prp.replacementDate;
@@ -15395,7 +15445,7 @@ const prpForm = createPurchaseForm({
   onReset() {
     byId('prp-date').value = todayInputValue();
     byId('prp-returned').value = 'Sent to Supplier';
-    prtSetCurrency('OMR', 'prp');                   // hidden ids were cleared by the reset
+    prtSetCurrency(BASE_CURRENCY, 'prp');                   // hidden ids were cleared by the reset
     forgetLookups('prtref');
     // Receive To: the stock points (the list is loaded before a saved replacement is filled in).
     return purchaseOptions(byId('prp-warehouse'), 'api/warehouses.php', row => [row.code, row.name].filter(Boolean).join(' – '));
@@ -15464,9 +15514,9 @@ const prpForm = createPurchaseForm({
    (New − Old), its VAT % added on top (VAT Enabled; Disabled sets every line's VAT % to 0). Price Difference = Replacement − Returned
    value (+ VAT on the difference when excluded) − Discount + Handling / Delivery Charge, as
    backend/src/sales_replacement.php works it out: above 0 the buyer pays, below 0 it is owed to the buyer. */
-const rpCurrency = () => byId('rp-currency-id').value || 'OMR';
+const rpCurrency = () => byId('rp-currency-id').value || BASE_CURRENCY;
 function rpSetCurrency(code) {
-  const text = String(code || 'OMR').toUpperCase();
+  const text = String(code || BASE_CURRENCY).toUpperCase();
   fillLookup(byId('rp-currency'), PO_CURRENCIES.find(row => row.code === text) || { id: text, code: text, name: text });
 }
 // The buyer's contact persons as suggestions for Buyer Contact Person; a new pick also sets the currency and, when the
@@ -15561,7 +15611,7 @@ const rpForm = createPurchaseForm({
     const grand = Math.round(totals.grand * 1000);
     byId('rp-grand-note').textContent = grand > 0 ? 'The buyer pays the difference'
       : grand < 0 ? 'Owed to the buyer (credit / refund)' : 'No difference – like-for-like replacement';
-    for (const label of byId('rp-form').querySelectorAll('[data-rp-base]')) label.textContent = 'OMR';   // PRICES_IN_OMR
+    for (const label of byId('rp-form').querySelectorAll('[data-rp-base]')) label.textContent = BASE_CURRENCY;   // PRICES_IN_OMR
   },
   fill(form, rp) {
     byId('rp-date').value = rp.replacementDate;
@@ -15587,7 +15637,7 @@ const rpForm = createPurchaseForm({
   onReset() {
     byId('rp-date').value = todayInputValue();
     byId('rp-returned').value = 'Collected from Buyer';
-    rpSetCurrency('OMR');                          // hidden ids were cleared by the reset
+    rpSetCurrency(BASE_CURRENCY);                          // hidden ids were cleared by the reset
     byId('rp-contact-list').replaceChildren();
     forgetLookups('returndn', 'salesentry');
     // Issue From: the stock points (the list is loaded before a saved replacement is filled in).
@@ -16455,7 +16505,7 @@ const RRF_TABS = [
   { k: 'emp', l: 'Employee', i: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>' },
 ];
 const RRF_NUM = {
-  v: { u: 'OMR', ph: 'e.g. 10000', head: 'Value', name: 'value', fmt: r => `${pbMoney(r.v)} OMR` },
+  v: { u: 'OMR', ph: 'e.g. 10000', head: 'Value', name: 'value', fmt: r => `${pbMoney(r.v)} ${BASE_CURRENCY}` },
   p: { u: '%', ph: 'e.g. 5', head: 'Disc %', name: 'discount', fmt: r => `${pbQty(r.p)}%` },
   s: { u: '#', ph: 'e.g. 100', head: 'Qty', name: 'quantity', fmt: r => `${pbQty(r.s)} ${Math.abs(r.s) === 1 ? 'unit' : 'units'}` },
 };
@@ -17011,7 +17061,7 @@ function clearListFilter(list) {
    adjustments and transfers (their value at unit cost; an adjustment's is the net difference, so it can be below 0).
    A stock reservation has no prices, so its list has no totals. */
 const LIST_TOTAL_KEYS = new Set(['po', 'grn', 'qt', 'so', 'dn', 'ti', 'pe', 'se', 'sr', 'rp', 'prt', 'prp', 'sa', 'st']);
-const omrText = n => `${(Number.isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} OMR`;
+const omrText = n => `${(Number.isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${BASE_CURRENCY}`;
 
 /* Under every list, always: Export (the rows the list shows, every page of them, as CSV); with a filter on,
    "Filter applied: …" and Clear Filter too. The priced lists (LIST_TOTAL_KEYS) also show, at the left end,
@@ -17698,9 +17748,9 @@ function companyProfile() {
    prints as it is (in OMR). */
 const PARTY_CURRENCY_PDF = ['po', 'qt', 'dn', 'ti'];
 function inPartyCurrency(spec, doc) {
-  const currency = String(doc.currency || 'OMR').toUpperCase();
-  const rate = SO_RATES_TO_OMR[currency];
-  if (!PARTY_CURRENCY_PDF.includes(spec.key) || currency === 'OMR' || !rate) return doc;
+  const currency = String(doc.currency || BASE_CURRENCY).toUpperCase();
+  const rate = rateToBase(currency);
+  if (!PARTY_CURRENCY_PDF.includes(spec.key) || currency === BASE_CURRENCY || !rate) return doc;
   const to = value => pbNum(value) / rate;
   return {
     ...doc, inPartyCurrency: true,
@@ -17720,9 +17770,9 @@ function inPartyCurrency(spec, doc) {
 function soCostingParts(doc, { picked = null, customer = null } = {}) {
   const multi = doc.supplierMode === 'multi';
   const allSuppliers = multi && !picked;
-  const lineCurrency = line => String((multi ? line.supplierCurrency : doc.supplierCurrency) || 'OMR').toUpperCase();
-  const landingOf = currency => (currency === 'AED' ? 1.1 : 1);
-  const toCurrency = (omr, currency) => omr / (SO_RATES_TO_OMR[currency] || 1);
+  const lineCurrency = line => String((multi ? line.supplierCurrency : doc.supplierCurrency) || BASE_CURRENCY).toUpperCase();
+  const landingOf = landingFor;
+  const toCurrency = (omr, currency) => omr / (rateToBase(currency) || 1);
   // 1,108.800 · 173.2632: thousands separated, three decimals at least and a fourth when it is not 0.
   const money = value => (Number.isFinite(value) ? value : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
   const money3 = value => (Number.isFinite(value) ? value : 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });   // 6,600.000
@@ -17763,7 +17813,7 @@ function soCostingParts(doc, { picked = null, customer = null } = {}) {
   // Ref No · Date · Ref Quotation / PO · Payment Terms · Currency (/ Supplier Currency).
   const refs = [text(doc.quotationCode), text(doc.customerPo)].filter(Boolean).join(' / ') || 'N/A';
   const payment = [text(doc.paymentMode), doc.paymentMode === 'Credit' && text(doc.creditPeriod)].filter(Boolean).join(' · ') || 'As agreed';
-  const base = 'OMR';
+  const base = BASE_CURRENCY;
   const showSupplierCurrency = oneCurrency && oneCurrency !== base;
   const meta = [['Ref No', text(doc.code) || '—'], ['Date', String(doc.orderDate || doc.date || '').slice(0, 10) || '—'], ['Ref Quotation / PO', refs, 'ref'],
     ['Payment Terms', payment], [showSupplierCurrency ? 'Currency / Supplier Currency' : 'Currency', showSupplierCurrency ? `${base} / ${oneCurrency}` : base]];
@@ -18038,36 +18088,36 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     ...{
       simple: [['Qty', 'center', l => qty(l.quantity)], ['Unit', 'center', l => l.unit]],
       po: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-        [`Price${doc.inPartyCurrency ? ` (${doc.currency})` : PRICES_IN_OMR.includes(spec.key) ? ' (OMR)' : doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
+        [`Price${doc.inPartyCurrency ? ` (${doc.currency})` : PRICES_IN_OMR.includes(spec.key) ? ` (${BASE_CURRENCY})` : doc.currency ? ` (${doc.currency})` : ''}`, 'num', l => (l.foc ? 'FOC' : pbAmount(l.price))],
         ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`], ['Disc %', 'num', l => `${poDiscPct(l).toFixed(2)}%`], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
       grn: [['Qty', 'qty', l => qty(l.acceptedQty)], ['Unit', 'center', l => l.unit],
         ...(noPrices ? [] : [['Rate', 'num', l => grnMoney(l.unitCost)], ['VAT %', 'num', l => `${pbNum(l.vatRate).toFixed(2)}%`],
           ['Amount', 'num total', l => grnMoney(l.lineTotal)]])],
     // A sales order: no discount column, and VAT only on a proforma invoice (the buying side is never printed).
     so: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      [`Unit Price (${doc.inPartyCurrency ? doc.currency : 'OMR'})`, 'num', l => pbAmount(l.price)],
+      [`Unit Price (${doc.inPartyCurrency ? doc.currency : BASE_CURRENCY})`, 'num', l => pbAmount(l.price)],
       ...(proforma || spec.key === 'ti' ? [['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)]] : []), ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase entry: quantity × rate, no VAT or line discount.
     pe: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      ['Price (OMR)', 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
+      [`Price (${BASE_CURRENCY})`, 'num', l => pbAmount(l.price)], ['Line Total', 'num total', l => pbAmount(l.lineTotal)]],
     // A sales return: the quantity returned and the condition it came back in.
     sr: [['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
-      ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
+      [`Unit Price (${BASE_CURRENCY})`, 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase return: the quantity received and returned, and the condition of the goods.
     prt: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Return Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
-      ['Condition', 'center', l => l.condition], ['Unit Price (OMR)', 'num', l => pbAmount(l.price)],
+      ['Condition', 'center', l => l.condition], [`Unit Price (${BASE_CURRENCY})`, 'num', l => pbAmount(l.price)],
       ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Total Price', 'num total', l => pbAmount(l.lineTotal)]],
     // A purchase replacement: what the supplier sends in place of each returned item, at the old and the new price.
     prp: [['Received Qty', 'num', l => qty(l.receivedQty)], ['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit],
       ['Condition', 'center', l => l.condition], ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
       ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
-      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Difference (OMR)', 'num total', l => pbAmount(l.lineTotal)]],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference (${BASE_CURRENCY})`, 'num total', l => pbAmount(l.lineTotal)]],
     // A sales replacement: what goes back in place of each returned item, at the old and the new price.
     rp: [['Qty', 'num', l => qty(l.quantity)], ['Unit', 'num', l => l.unit], ['Condition', 'center', l => l.condition],
       ['Replacement Item', 'supplier', l => l.replacementItemName || 'Same item'],
       ['Old Price', 'num', l => pbAmount(l.oldPrice)], ['New Price', 'num', l => pbAmount(l.price)],
-      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], ['Difference (OMR)', 'num total', l => pbAmount(l.lineTotal)]],
+      ['VAT (%)', 'num', l => pbNum(l.vatRate).toFixed(2)], [`Difference (${BASE_CURRENCY})`, 'num total', l => pbAmount(l.lineTotal)]],
     // Supply Management.
     sa: [['System Qty', 'num', l => qty(l.systemQty)], ['Physical Qty', 'num', l => qty(l.quantity)],
       ['Difference', 'num', l => { const d = pbNum(l.quantity) - pbNum(l.systemQty); return d > 0.0005 ? `+${pbQty(d)}` : pbQty(d); }],
@@ -18272,7 +18322,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     bottom.append(totals);
   } else if (spec.key === 'grn') {
     const totals = el('dl', 'ps-totals ps-grn-totals');
-    const currency = doc.currency || profile?.baseCurrency || 'OMR';     // a GRN has no currency of its own: the company's
+    const currency = doc.currency || profile?.baseCurrency || BASE_CURRENCY;     // a GRN has no currency of its own: the company's
     const money = (value, sign = '') => `${currency ? `${currency} ` : ''}${sign}${grnMoney(value)}`;   // OMR -1.000
     for (const [label, value, sign] of [['Subtotal', doc.subtotal], [doc.vatMode === 'exclude' ? 'VAT (Tax)' : 'VAT (included)', doc.vatAmount],
       ['Discount', doc.discountAmount, '-'], ['Shipping / Freight', doc.shipping]]) {
@@ -18289,7 +18339,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     // A sales / purchase replacement: the returned and replacement values, the VAT on the difference, then the Price
     // Difference (below 0: owed to the buyer, or owed by the supplier). A zero discount or charge is left out.
     const totals = el('dl', 'ps-totals');
-    const currency = ' OMR';                              // PRICES_IN_OMR: only the OMR difference is printed
+    const currency = ` ${BASE_CURRENCY}`;                              // PRICES_IN_OMR: only the OMR difference is printed
     for (const [label, value, kind] of [['Returned Items Value', doc.returnedValue], ['Replacement Items Value', doc.replacementValue],
       [doc.vatMode === 'exclude' ? 'VAT on Difference' : 'VAT on Difference (included)', doc.vatAmount],
       ['Discount', doc.discountAmount, 'discount'], ['Handling / Delivery Charge', doc.handlingCharge], ['Price Difference', doc.grandTotal, 'grand']]) {
@@ -18305,8 +18355,8 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
     const inOmr = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency;   // a PO / quotation / delivery note / tax invoice in another currency: already converted
     // A sales order, purchase / sales entry and purchase / sales return print only the OMR totals (no Grand Total in
     // the party's currency).
-    const poRate = inOmr && !['so', 'pe', 'se', 'sr', 'prt'].includes(spec.key) && doc.currency && doc.currency !== 'OMR' ? SO_RATES_TO_OMR[doc.currency] : 0;
-    const currency = inOmr ? ' OMR' : doc.currency ? ` ${doc.currency}` : '';
+    const poRate = inOmr && !['so', 'pe', 'se', 'sr', 'prt'].includes(spec.key) && doc.currency && doc.currency !== BASE_CURRENCY ? rateToBase(doc.currency) : 0;
+    const currency = inOmr ? ` ${BASE_CURRENCY}` : doc.currency ? ` ${doc.currency}` : '';
     const grn = spec.key === 'grn';
     for (const [label, value, strong] of [[grn ? 'Subtotal (Accepted Net)' : 'Subtotal (Net)', doc.subtotal],
       [doc.vatMode === 'exclude' ? 'Total VAT / Tax' : 'VAT (included)', doc.vatAmount],
@@ -18386,7 +18436,7 @@ async function fillPurchaseSheet(sheet, spec, doc, { screen = false, supplier: c
   }
   bodyCell.append(...parts); bodyRow.append(bodyCell); frameBody.append(bodyRow);   // no faint logo behind the items
   if (termsText) {
-    const currencyCode = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency ? 'OMR' : String(doc.currency || profile?.baseCurrency || 'OMR').toUpperCase();
+    const currencyCode = PRICES_IN_OMR.includes(spec.key) && !doc.inPartyCurrency ? BASE_CURRENCY : String(doc.currency || profile?.baseCurrency || BASE_CURRENCY).toUpperCase();
     const currencyName = PO_CURRENCIES.find(row => row.code === currencyCode)?.name;
     const validity = String(doc.offerValidity ?? '').trim().toLowerCase() || '30 days';   // "30 Days" → "30 days"
     const termsRow = el('tr', 'ps-terms-row');
@@ -18738,6 +18788,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const firstFigures = fetchDashboard(currentPeriod, state.range);
   const user = await checkSignedIn();
   if (!user) return;
+  applyCompanyCurrency(user);                       // before anything shows a price
   document.documentElement.classList.remove('auth-pending');
   loadDashboard(firstFigures);
   initDashRange();
