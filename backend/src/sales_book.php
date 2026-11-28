@@ -214,7 +214,7 @@ function sb_save(string $kind, array $data, ?int $id = null): array
             'document_title' => $in->choice('documentTitle', 'Document title', SB_ORDER_TITLES, 'Sales Order'),
             'supplier_mode' => $in->choice('supplierMode', 'Supplier mode', ['single', 'multi'], 'single'),
             'supplier_id' => $in->id('supplierId', 'supplier', 'suppliers'),
-            'supplier_currency' => strtoupper($in->text('supplierCurrency', 'Supplier currency', 10)) ?: 'OMR',
+            'supplier_currency' => strtoupper($in->text('supplierCurrency', 'Supplier currency', 10)) ?: company_base_currency(),
             'quotation_id' => $in->id('quotationId', 'quotation', 'quotations'),
             'customer_po' => $in->text('customerPo', 'Customer PO number', 60),
             'purchase_category' => $in->text('purchaseCategory', 'Purchase category', 100),
@@ -319,7 +319,10 @@ const SB_INVOICE_TITLES = ['Invoice'];
 
 /* Fixed rates to OMR for a sales order's buying costs (the order screen uses the same table). */
 const SB_RATES_TO_OMR = ['OMR' => 1.0, 'AED' => 0.1055, 'USD' => 0.385, 'SAR' => 0.1026, 'INR' => 1 / 241.3, 'EUR' => 0.42,
-    'GBP' => 0.49, 'QAR' => 0.1057, 'KWD' => 1.25, 'BHD' => 1.02];
+    'GBP' => 0.49, 'QAR' => 0.1057, 'KWD' => 1.25, 'BHD' => 1.02,
+    // The other currencies a company can be set up in (approximate fixed rates, as the rest of the table).
+    'PKR' => 0.385 / 280, 'EGP' => 0.385 / 48.5, 'JOD' => 0.385 / 0.709, 'TRY' => 0.385 / 40, 'CNY' => 0.385 / 7.1,
+    'JPY' => 0.385 / 150, 'KRW' => 0.385 / 1400];
 
 /* One unit of $from in $to (1 when either is not in the table). */
 function sb_rate(string $from, string $to): float
@@ -330,8 +333,10 @@ function sb_rate(string $from, string $to): float
 }
 
 /*
- * A sales order's buying side, in OMR (selling prices and buying costs are in OMR; the currencies are shown converted):
- *   item landing cost = Σ quantity × buying cost × landing (1.10 for an AED supplier: freight and clearing)
+ * A sales order's buying side, in the company's base currency (selling prices and buying costs are in it; the
+ * currencies are shown converted):
+ *   item landing cost = Σ quantity × buying cost × landing (1.10 for an AED supplier abroad: freight and clearing;
+ *                       none when the company's own currency is AED)
  *   total buying      = item landing cost + custom duty + transportation + business promotion
  *   total profit      = total selling (subtotal) − item landing cost − custom duty − transportation − business promotion − discount
  * Each line's supplier currency is its supplier's in multi-supplier mode, else the order's supplier currency.
@@ -339,10 +344,11 @@ function sb_rate(string $from, string $to): float
 function sb_order_costs(array $v, array $lines): array
 {
     $items = 0.0;
+    $base = company_base_currency();
     foreach ($lines as $line) {
-        $supplierCurrency = $v['supplier_mode'] === 'multi' ? ($line['supplierCurrency'] ?: 'OMR') : $v['supplier_currency'];
-        $landing = $supplierCurrency === 'AED' ? 1.10 : 1.0;
-        $items += (float) $line['quantity'] * (float) $line['buyingCost'] * $landing;   // the buying cost is in OMR
+        $supplierCurrency = $v['supplier_mode'] === 'multi' ? ($line['supplierCurrency'] ?: $base) : $v['supplier_currency'];
+        $landing = $supplierCurrency === 'AED' && $base !== 'AED' ? 1.10 : 1.0;
+        $items += (float) $line['quantity'] * (float) $line['buyingCost'] * $landing;   // the buying cost is in the base currency
     }
     $costs = (float) $v['custom_duty'] + (float) $v['shipping'] + (float) $v['business_promotion'];
     return [
@@ -352,7 +358,7 @@ function sb_order_costs(array $v, array $lines): array
     ];
 }
 
-/* The document's currency: the one picked on the form, else the customer's, else OMR. */
+/* The document's currency: the one picked on the form, else the customer's, else the company's base currency. */
 function sb_currency(Input $in, ?int $customerId): string
 {
     $currency = strtoupper($in->text('currency', 'Currency', 10));
@@ -365,7 +371,7 @@ function sb_currency(Input $in, ?int $customerId): string
             $currency = '';
         }
     }
-    return $currency !== '' ? $currency : 'OMR';
+    return $currency !== '' ? $currency : company_base_currency();
 }
 
 function sb_delete(string $kind, int $id): void

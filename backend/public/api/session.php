@@ -25,5 +25,10 @@ if ($user !== null) {
     $user['landing'] = $access['admin'] || $access['role'] === 'manager' ? 'dashboard' : 'modules';
     $user['permissions'] = $access['admin'] ? null : (object) $access['permissions'];
     $user['modules'] = PERMISSION_MODULES;
+    // The company's base currency and VAT (Create a Company): the page prices, converts and labels in them.
+    $user['baseCurrency'] = company_base_currency();
+    $vat = company_vat();
+    $user['vatApplicable'] = $vat['applicable'];
+    $user['vatPercentage'] = $vat['percentage'];
 }
 json_out(['csrfToken' => csrf_token(), 'user' => $user]);
