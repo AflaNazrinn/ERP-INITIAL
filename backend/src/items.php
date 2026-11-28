@@ -258,7 +258,7 @@ function item_save(array $data, ?int $id = null): array
         'available_stock' => $sourcing ? rtrim(rtrim(number_format($openingStock, 3, '.', ''), '0'), '.') : '',
     ];
 
-    $id = transaction(static function () use ($id, $row, $sourcing): int {
+    $id = stock_safe_transaction(static function () use ($id, $row, $sourcing): int {
         if ($id === null) {
             $row['item_code'] = item_next_code();
             query(
@@ -302,7 +302,8 @@ function item_create(array $data): array
 function item_delete(int $id): void
 {
     $files = query('SELECT file_path FROM item_documents WHERE item_id = ?', [$id])->fetchAll(PDO::FETCH_COLUMN);
-    delete_row('items', $id, 'Item not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('items', $id, 'Item not found.'));
     foreach ($files as $path) {
         delete_stored($path);
     }

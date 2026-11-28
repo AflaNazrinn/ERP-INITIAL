@@ -268,7 +268,7 @@ function stock_adjustment_save(array $data, ?int $id = null): array
     }
     $v += ['adjustment_type' => $up && $down ? 'Mixed' : ($up ? 'Increase' : ($down ? 'Decrease' : '')),
         'net_quantity' => number_format($net, 3, '.', ''), 'total_value' => pb_money($value)];
-    $id = transaction(static function () use ($id, $v, $lines): int {
+    $id = stock_safe_transaction(static function () use ($id, $v, $lines): int {
         $new = $id === null;
         $id = pb_write_header('stock_adjustments', 'sa_code', $id, $v, 'stock_adjustment_next_code');
         if ($new) {
@@ -282,7 +282,8 @@ function stock_adjustment_save(array $data, ?int $id = null): array
 
 function stock_adjustment_delete(int $id): void
 {
-    delete_row('stock_adjustments', $id, 'Stock adjustment not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('stock_adjustments', $id, 'Stock adjustment not found.'));
 }
 
 /* ---------- Stock Transfer ---------- */
@@ -364,7 +365,7 @@ function stock_transfer_save(array $data, ?int $id = null): array
         $total += (float) $l['quantity'] * (float) $l['unitCost'];
     }
     $v['grand_total'] = pb_money($total);
-    $id = transaction(static function () use ($id, $v, $lines): int {
+    $id = stock_safe_transaction(static function () use ($id, $v, $lines): int {
         $new = $id === null;
         $id = pb_write_header('stock_transfers', 'st_code', $id, $v, 'stock_transfer_next_code');
         if ($new) {
@@ -378,7 +379,8 @@ function stock_transfer_save(array $data, ?int $id = null): array
 
 function stock_transfer_delete(int $id): void
 {
-    delete_row('stock_transfers', $id, 'Stock transfer not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('stock_transfers', $id, 'Stock transfer not found.'));
 }
 
 /* ---------- Stock Reservation ---------- */

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/master_validation.php';
+require_once __DIR__ . '/stock_report.php';      // stock_safe_transaction(): stock never below zero
 require_once __DIR__ . '/company_currency.php';
 
 /*
@@ -994,7 +995,7 @@ function grn_save(array $data, ?int $id = null): array
     [$lines, $totals] = pb_totals($lines, 'grn', $vatMode, $discount, $shipping);
     $v += ['subtotal' => $totals['subtotal'], 'vat_amount' => $totals['vatAmount'], 'discount_amount' => $totals['discountAmount'],
         'shipping' => $totals['shipping'], 'grand_total' => $totals['grandTotal']];
-    $id = transaction(static function () use ($id, $v, $lines): int {
+    $id = stock_safe_transaction(static function () use ($id, $v, $lines): int {
         $id = pb_write_header('grns', 'grn_code', $id, $v, 'grn_next_code');
         pb_save_lines('grn_items', 'grn_id', $id, 'grn', $lines);
         return $id;
@@ -1004,5 +1005,6 @@ function grn_save(array $data, ?int $id = null): array
 
 function grn_delete(int $id): void
 {
-    delete_row('grns', $id, 'GRN not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('grns', $id, 'GRN not found.'));
 }

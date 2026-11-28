@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/stock_report.php';      // stock_safe_transaction(): stock never below zero
 
 /*
  * Trade Management (sales) documents: quotations (QUO-0001), sales orders (SO-0001) and delivery notes (DN-0001),
@@ -303,7 +304,7 @@ function sb_save(string $kind, array $data, ?int $id = null): array
         $v['round_off'] = pb_money((float) $round);
         $v['grand_total'] = pb_money((float) $v['grand_total'] + (float) $round);
     }
-    $id = transaction(static function () use ($kind, $d, $id, $v, $lines, $lineKind): int {
+    $id = stock_safe_transaction(static function () use ($kind, $d, $id, $v, $lines, $lineKind): int {
         $id = pb_write_header($d['table'], $d['code'], $id, $v, static fn () => sb_next_code($kind));
         pb_save_lines($d['items'], $d['owner'], $id, $lineKind, $lines);
         return $id;
@@ -377,7 +378,8 @@ function sb_currency(Input $in, ?int $customerId): string
 function sb_delete(string $kind, int $id): void
 {
     $d = SB_DOCS[$kind];
-    delete_row($d['table'], $id, $d['noun'] . ' not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row($d['table'], $id, $d['noun'] . ' not found.'));
 }
 
 /* The serve_master() callbacks for one kind. */

@@ -259,6 +259,54 @@ function stock_on_hand_matrix(array $except = []): array
     return $out;
 }
 
+/*
+ * Stock never goes below zero. Every save or delete that moves stock runs through stock_safe_transaction(): the
+ * stock on hand per stock point is worked out before, the change is made, and before it is committed the stock is
+ * worked out again. An item that the change takes below zero at a stock point (and lower than it was, so stock that
+ * was already short may still receive goods, and a document that does not touch it still saves) undoes the whole
+ * change, with a message naming the item, the stock point and how much is there.
+ */
+function stock_safe_transaction(callable $work): mixed
+{
+    $before = stock_on_hand_matrix();
+    return transaction(static function () use ($work, $before) {
+        $result = $work();
+        stock_check_not_negative($before, stock_on_hand_matrix());
+        return $result;
+    });
+}
+
+function stock_check_not_negative(array $before, array $after): void
+{
+    $short = [];
+    foreach ($after as $warehouseId => $items) {
+        foreach ($items as $itemId => $qty) {
+            $was = $before[$warehouseId][$itemId] ?? 0.0;
+            if ($qty < -0.0005 && $qty < $was - 0.0005) {
+                $short[] = [(int) $warehouseId, (int) $itemId, max(0.0, $was), $qty];
+            }
+        }
+    }
+    if (!$short) {
+        return;
+    }
+    $fmt = static fn (float $n) => rtrim(rtrim(number_format($n, 3, '.', ','), '0'), '.');
+    $lines = [];
+    foreach (array_slice($short, 0, 3) as [$warehouseId, $itemId, $had, $left]) {
+        $item = stk_rows('SELECT i.item_code, i.item_name, u.uom_name FROM items i LEFT JOIN uoms u ON u.id = i.uom_id WHERE i.id = ?', [$itemId])[0] ?? null;
+        $point = $warehouseId ? (stk_rows('SELECT warehouse_name FROM warehouses WHERE id = ?', [$warehouseId])[0]['warehouse_name'] ?? '') : '';
+        $name = $item ? trim($item['item_name'] . ' (' . $item['item_code'] . ')') : "Item #$itemId";
+        $unit = $item && $item['uom_name'] ? ' ' . $item['uom_name'] : '';
+        $where = $point !== '' ? "at $point" : 'with no stock point';
+        $lines[] = "$name $where has only {$fmt($had)}$unit in stock (this would leave {$fmt($left)}$unit)";
+    }
+    $more = count($short) > 3 ? ' … and ' . (count($short) - 3) . ' more.' : '.';
+    $message = 'Not enough stock: ' . implode('; ', $lines) . $more
+        . ' Receive the goods first (GRN / Purchase Entry) or move them here with a Stock Transfer, or lower the quantity.'
+        . ' A document whose goods have already gone out cannot be deleted or reduced.';
+    throw new ValidationError(['stock' => $message], $message);
+}
+
 /* The Stock Report's data: the ledger, the damaged stock, and the items and stock points it names. */
 function stock_report(): array
 {

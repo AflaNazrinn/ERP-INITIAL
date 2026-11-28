@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/stock_report.php';      // stock_safe_transaction(): stock never below zero
 
 /*
  * Transaction Entry › Purchase Entry (PUR-0001): a supplier's bill recorded in the books. The supplier and the
@@ -95,7 +96,7 @@ function purchase_entry_save(array $data, ?int $id = null): array
     [$lines, $totals] = pb_totals($lines, 'po', 'exclude', $discount, 0.0);
     $v += ['subtotal' => $totals['subtotal'], 'vat_amount' => $totals['vatAmount'], 'discount_amount' => $totals['discountAmount'],
         'shipping' => $totals['shipping'], 'grand_total' => $totals['grandTotal']];
-    $id = transaction(static function () use ($id, $v, $lines): int {
+    $id = stock_safe_transaction(static function () use ($id, $v, $lines): int {
         $id = pb_write_header('purchase_entries', 'pe_code', $id, $v, 'purchase_entry_next_code');
         pb_save_lines('purchase_entry_items', 'purchase_entry_id', $id, 'po', $lines);
         return $id;
@@ -105,5 +106,6 @@ function purchase_entry_save(array $data, ?int $id = null): array
 
 function purchase_entry_delete(int $id): void
 {
-    delete_row('purchase_entries', $id, 'Purchase entry not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('purchase_entries', $id, 'Purchase entry not found.'));
 }

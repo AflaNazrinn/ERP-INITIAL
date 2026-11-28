@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/purchase_book.php';
+require_once __DIR__ . '/stock_report.php';      // stock_safe_transaction(): stock never below zero
 require_once __DIR__ . '/returns_common.php';     // the lists' Filter: who made it (Employee)
 require_once __DIR__ . '/sales_replacement.php';      // srp_totals(): the same line maths as a sales replacement
 
@@ -170,7 +171,7 @@ function purchase_replacement_save(array $data, ?int $id = null): array
     $v += ['returned_value' => pb_money($returned), 'replacement_value' => pb_money($replacement), 'vat_amount' => pb_money($vat),
         'discount_amount' => pb_money($discount), 'handling_charge' => pb_money($handling),
         'grand_total' => pb_money($difference - $discount + $handling)];
-    $id = transaction(static function () use ($id, $v, $lines): int {
+    $id = stock_safe_transaction(static function () use ($id, $v, $lines): int {
         $new = $id === null;
         $id = pb_write_header('purchase_replacements', 'prp_code', $id, $v, 'purchase_replacement_next_code');
         if ($new) {
@@ -190,5 +191,6 @@ function purchase_replacement_save(array $data, ?int $id = null): array
 
 function purchase_replacement_delete(int $id): void
 {
-    delete_row('purchase_replacements', $id, 'Purchase replacement not found.');
+    // Deleting it may take stock below zero (goods already delivered): refused then.
+    stock_safe_transaction(static fn () => delete_row('purchase_replacements', $id, 'Purchase replacement not found.'));
 }
