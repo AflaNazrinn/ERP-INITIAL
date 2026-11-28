@@ -131,15 +131,15 @@
       </div>
       <div class="stat-grid-3">
         <div class="stat-box stat-box-sm">
-          <span class="stat-label stat-label-sm">Pending</span>
+          <span class="stat-label stat-label-sm">Open</span>
           <div id="quotes-pending" class="stat-value"></div>
         </div>
         <div class="stat-box stat-box-sm">
-          <span class="stat-label stat-label-sm">Approved</span>
+          <span class="stat-label stat-label-sm">Converted</span>
           <div id="quotes-approved" class="stat-value"></div>
         </div>
         <div class="stat-box stat-box-sm">
-          <span class="stat-label stat-label-sm">Rejected</span>
+          <span class="stat-label stat-label-sm">Expired</span>
           <div id="quotes-rejected" class="stat-value"></div>
         </div>
       </div>
@@ -153,7 +153,24 @@
     </div>
   </div>
 
-  <!-- ROW 3: AUDIT TRAIL -->
+  <!-- ROW 3 (a manager's dashboard): the month's top selling items, customers and suppliers.
+       Filled by renderInsights() from the dashboard's insights. -->
+  <section id="dash-insights" class="dash-insights" aria-label="Insights" hidden>
+    <div class="metric-card dash-card tone-masters">
+      <div class="card-head"><span class="card-label">Top Selling Items</span><span id="dash-items-note" class="dash-note"></span></div>
+      <ol id="dash-items" class="dash-rank"></ol>
+    </div>
+    <div class="metric-card dash-card tone-sales">
+      <div class="card-head"><span class="card-label">Top Customers</span><span id="dash-customers-note" class="dash-note"></span></div>
+      <ol id="dash-customers" class="dash-rank"></ol>
+    </div>
+    <div class="metric-card dash-card tone-purchase">
+      <div class="card-head"><span class="card-label">Top Suppliers</span><span id="dash-suppliers-note" class="dash-note"></span></div>
+      <ol id="dash-suppliers" class="dash-rank"></ol>
+    </div>
+  </section>
+
+  <!-- ROW 4: AUDIT TRAIL -->
   <section class="audit">
     <div class="audit-head">
       <div class="audit-icon" aria-hidden="true">
