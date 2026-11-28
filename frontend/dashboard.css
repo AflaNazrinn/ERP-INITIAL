@@ -3716,7 +3716,7 @@ body:is([data-page="employee"], [data-page="employee-list"], [data-page="user"],
 .dash-locked div { display: flex; flex-direction: column; gap: 2px; }
 .dash-locked strong { font-size: 15px; color: #991b1b; }
 .dash-locked span { font-size: 13px; color: #7f1d1d; }
-.dash-no-figures :is(#dashboard-kpis, .card-row, .audit, .dash-range) { display: none !important; }
+.dash-no-figures :is(#dashboard-kpis, .card-row, .dash-insights, .audit, .dash-range) { display: none !important; }
 
 /* User Setting: the Dashboard row is for managers only. */
 .us-mod.is-locked { opacity: .55; }
@@ -3726,7 +3726,7 @@ body:is([data-page="employee"], [data-page="employee-list"], [data-page="user"],
    Module cards (#/home for staff, #/modules/<module>): the modules this user may open, then a module's pages.
    Each card has the module's colour (as in the Quick Menu), its letter, a description and an Open arrow.
    ===================================================================== */
-#dashboard-view.mh-on > :is(#dashboard-kpis, .card-row, .audit, #dashboard-locked) { display: none !important; }
+#dashboard-view.mh-on > :is(#dashboard-kpis, .card-row, .dash-insights, .audit, #dashboard-locked) { display: none !important; }
 /* The module cards sit on the plain page background of the other pages (no dot grid) and drop the Growth Engine footer. */
 body:has(#dashboard-view.mh-on) { background: var(--page-bg); background-image: none; }
 #dashboard-view.mh-on .app-footer { display: none; }
@@ -4141,6 +4141,20 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .pbf-body { grid-template-columns: 56px minmax(0, 1fr); }
   .pbf-tr { grid-template-columns: 38px 96px minmax(0, 1fr) 100px; }
 }
+
+/* A manager's dashboard: Top Selling Items, Top Customers, Top Suppliers (renderInsights). */
+.dash-insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.dash-card .card-head { margin-bottom: 10px; }
+.dash-note { font-size: 11px; font-weight: 600; color: var(--ink-500); }
+.dash-rank { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dash-rank-row { display: grid; gap: 4px; }
+.dash-rank-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.dash-rank-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; text-transform: uppercase; }
+.dash-rank-value { flex: none; font-family: var(--font-mono); font-weight: 700; color: var(--tone-ink); }
+.dash-rank-sub { font-size: 11px; color: var(--ink-500); }
+.dash-rank .progress-fill { background: var(--tone-solid); }
+.dash-empty { font-size: 12.5px; color: var(--ink-500); padding: 6px 0; }
+@media (max-width: 1100px) { .dash-insights { grid-template-columns: minmax(0, 1fr); } }
 
 /* Stock Ledger › Damaged Stock › Move to Stock: a calm popup (title, Damaged · return · party; the item; Available |
    Moves to; a − / + quantity and a description; Cancel / Move to Stock), in the Supply orange. */

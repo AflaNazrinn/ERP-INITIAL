@@ -64,7 +64,7 @@ async function fetchDashboard({ year, month }, range = null) {
     profitLoss: { lastMonth: { ...lastMonth, margin: '0.0' }, overall: { margin: '0.0' } },
     chart: { sales: '0.000', purchase: '0.000',
       weeks: Array.from({ length: weeks }, (_, i) => ({ label: `W${i + 1}`, sales: '0.000', purchase: '0.000' })) },
-    returns: { purchaseReturn: '0.000', salesReturn: '0.000', rmaCount: 0, resolvedCount: 0 },
+    returns: { purchaseReturn: '0.000', salesReturn: '0.000', rmaCount: 0, topReason: '', topReasonCount: 0 },
     quotations: { total: 0, totalValue: '0.000', pending: 0, approved: 0, rejected: 0 },
     activities: [],
   };
@@ -327,18 +327,47 @@ function renderChart(chart) {
 function renderReturns(r) {
   byId('returns-purchase').textContent = formatOmr(r.purchaseReturn);
   byId('returns-sales').textContent = formatOmr(r.salesReturn);
+  // Return Root Causes: the month's returns (sales and purchase) and their commonest reason's share of them.
   const count = Number(r.rmaCount) || 0;
-  byId('returns-rma-count').textContent = `${formatCount(count)} RMA${count === 1 ? '' : 's'}`;
-  const resolvedPct = count > 0 ? Math.min(100, ((Number(r.resolvedCount) || 0) / count) * 100) : 0;
-  byId('returns-bar').style.width = `${resolvedPct}%`;
-  byId('returns-note').textContent = count > 0
-    ? `${formatCount(r.resolvedCount)} of ${formatCount(count)} returns resolved`
-    : 'No returns recorded for this period';
+  const top = Number(r.topReasonCount) || 0;
+  byId('returns-rma-count').textContent = `${formatCount(count)} return${count === 1 ? '' : 's'}`;
+  byId('returns-bar').style.width = `${count > 0 ? Math.min(100, top / count * 100) : 0}%`;
+  byId('returns-note').textContent = count === 0 ? 'No returns recorded for this period'
+    : r.topReason ? `Top cause: ${r.topReason} (${formatCount(top)} of ${formatCount(count)})` : 'No return reasons given';
 }
 
 /* =====================================================================
    Quotations
    ===================================================================== */
+
+/* =====================================================================
+   Insights (a manager's dashboard): Top Selling Items, Top Customers, Top Suppliers
+   ===================================================================== */
+
+function renderInsights(insights) {
+  const section = byId('dash-insights');
+  section.hidden = !insights;
+  if (!insights) return;
+  const ranking = (listId, noteId, rows, nouns) => {
+    const top = Math.max(0, ...rows.map(row => Number(row.value) || 0));
+    byId(noteId).textContent = 'This month';
+    byId(listId).replaceChildren(...(rows.length ? rows.map(row => {
+      const li = el('li', 'dash-rank-row');
+      const head = el('div', 'dash-rank-head');
+      head.append(el('span', 'dash-rank-name', row.name), el('span', 'dash-rank-value', formatOmr(row.value)));
+      const bar = el('div', 'progress');
+      const fill = el('div', 'progress-fill');
+      fill.style.width = `${top > 0 ? Math.max(4, (Number(row.value) || 0) / top * 100) : 0}%`;
+      bar.append(fill);
+      const orders = `${formatCount(row.count)} ${row.count === 1 ? nouns[0] : nouns[1]}`;
+      li.append(head, bar, el('span', 'dash-rank-sub', row.qty != null ? `${row.qty} ${row.unit || ''} · ${orders}`.replace(/\s+·/, ' ·') : orders));
+      return li;
+    }) : [el('li', 'dash-empty', `No ${nouns[2] || nouns[1]} this month.`)]));
+  };
+  ranking('dash-items', 'dash-items-note', insights.items || [], ['sales order', 'sales orders', 'items sold']);
+  ranking('dash-customers', 'dash-customers-note', insights.customers || [], ['sales order', 'sales orders']);
+  ranking('dash-suppliers', 'dash-suppliers-note', insights.suppliers || [], ['purchase order', 'purchase orders']);
+}
 
 function renderQuotations(q) {
   const total = Number(q.total) || 0;
@@ -5418,7 +5447,9 @@ function renderModuleHome(moduleKey) {
   const brand = el('div', 'mh-head-brand');
   brand.dataset.module = module.key;
   brand.append(iconBox, titles);
-  head.replaceChildren(back, brand);
+  // An employee's login (module landing): no All modules button and no + New on the cards.
+  const staff = isModuleLanding();
+  head.replaceChildren(...(staff ? [brand] : [back, brand]));
   head.hidden = false;
   grid.className = 'mh-grid mh-grid-subs';
   grid.replaceChildren(...subs.map(sub => {
@@ -5426,7 +5457,7 @@ function renderModuleHome(moduleKey) {
     const viewable = canDo(sub.route, 'view');
     return moduleCard({
       href: `#/${viewable ? sub.route : newRoute}`, letter: sub.letter, icon: sub.icon, nameHtml: sub.nameHtml, name: sub.name, desc: sub.desc,
-      foot: viewable ? 'Open' : 'Create new', module: module.key, newHref: viewable && newRoute ? `#/${newRoute}` : null,
+      foot: viewable ? 'Open' : 'Create new', module: module.key, newHref: !staff && viewable && newRoute ? `#/${newRoute}` : null,
     });
   }));
   byId('module-home-empty').hidden = subs.length > 0;
@@ -18653,6 +18684,7 @@ async function loadDashboard(pending) {
   renderProfitLoss(data.profitLoss);
   renderReturns(data.returns);
   renderQuotations(data.quotations);
+  renderInsights(data.insights);
   renderActivities(data.activities, data.activityTotal);
   const chartIsCurrent = state.chartYear === currentPeriod.year && state.chartMonth === currentPeriod.month;
   if (chartIsCurrent) { chartSeq++; renderChart(data.chart); }   // a month still loading must not overwrite it
