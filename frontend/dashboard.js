@@ -17704,55 +17704,65 @@ function soCostingParts(doc, { picked = null, customer = null } = {}) {
   const items = doc.items || [];
   const currencies = [...new Set(items.map(lineCurrency))];
   const oneCurrency = !allSuppliers || currencies.length === 1 ? (currencies[0] || lineCurrency({})) : '';
+  // The Quotation Request's layout (ps-docbox, ps-table, ps-bottom) with the Sales Order's own details.
   const parts = [el('h1', 'ps-title', 'Sales Order')];
-  const refline = el('div', 'pso-refline');
-  const pair = (label, value, className) => { const span = el('span', className || ''); span.append(`${label}: `, el('b', '', text(value) || '—')); return span; };
-  refline.append(pair('Ref No', doc.code, 'pso-ref'), pair('Date', String(doc.orderDate || doc.date || '').slice(0, 10)));
-  parts.push(refline);
 
   // Supplier | Buyer.
-  const card = (label, name, extra = []) => {
-    const box = el('div', 'pso-card');
-    box.append(el('div', 'pso-label', label));
-    if (name) box.append(name instanceof Node ? name : el('div', 'pso-name', name));
-    if (extra.length) {
-      const list = el('div', 'pso-card-lines');
-      list.append(...extra);
-      box.append(list);
+  const party = (label, name, lines = []) => {
+    const box = el('div', 'ps-party');
+    box.append(el('div', 'ps-label', label));
+    if (name) box.append(el('div', 'ps-party-name', name));
+    const list = el('div', 'ps-party-lines');
+    for (const line of lines) {
+      if (Array.isArray(line)) {
+        const row = el('div', 'ps-party-line');
+        row.append(el('span', 'ps-party-key', line[0]), el('span', '', `: ${line[1]}`));
+        list.append(row);
+      } else {
+        list.append(el('div', 'ps-party-text', line));
+      }
     }
+    box.append(list);
     return box;
   };
   const supplierName = picked?.name || doc.supplierName;
-  const supplierCard = allSuppliers
-    ? card('Supplier Details', el('div', 'pso-name pso-name-plain', 'Multiple Suppliers'), [el('div', 'pso-note', 'Supplier details specified per line item in the table below')])
-    : card('Supplier Details', text(supplierName) ? `M/s. ${text(supplierName)}` : '—');
-  const contactLine = (label, value) => { const row = el('div', 'pso-contact'); row.append(`${label}: `, el('b', '', text(value))); return row; };
-  const buyerExtra = [text(doc.contactName) && contactLine('Contact', doc.contactName), text(doc.contactNumber) && contactLine('Phone', doc.contactNumber)].filter(Boolean);
+  const supplierBox = allSuppliers
+    ? party('Supplier Details', 'Multiple Suppliers', ['Supplier details specified per line item in the table below'])
+    : party('Supplier Details', text(supplierName) ? `M/s. ${text(supplierName)}` : '—');
+  const buyerLines = [text(doc.contactName) && ['Contact', text(doc.contactName)], text(doc.contactNumber) && ['Phone', text(doc.contactNumber)]].filter(Boolean);
   const buyerName = text(customer?.name || doc.customerName);
-  const parties = el('div', 'pso-parties');
-  parties.append(supplierCard, card('Buyer / Customer Details', buyerName ? `M/s. ${buyerName}` : '—', buyerExtra));
-  parts.push(parties);
+  const parties = el('div', 'ps-parties');
+  parties.append(supplierBox, party('Buyer / Customer Details', buyerName ? `M/s. ${buyerName}` : '—', buyerLines));
 
-  // Ref Quotation / PO · Payment Terms · Currency (/ Supplier Currency).
-  const terms = el('dl', 'pso-terms');
-  const term = (label, value, mono) => { const item = el('div'); item.append(el('dt', 'pso-label', label), el('dd', mono ? 'pso-mono' : '', value)); return item; };
+  // Ref No · Date · Ref Quotation / PO · Payment Terms · Currency (/ Supplier Currency).
   const refs = [text(doc.quotationCode), text(doc.customerPo)].filter(Boolean).join(' / ') || 'N/A';
   const payment = [text(doc.paymentMode), doc.paymentMode === 'Credit' && text(doc.creditPeriod)].filter(Boolean).join(' · ') || 'As agreed';
   const base = 'OMR';
   const showSupplierCurrency = oneCurrency && oneCurrency !== base;
-  terms.append(term('Ref Quotation / PO', refs, true), term('Payment Terms', payment),
-    term(showSupplierCurrency ? 'Currency / Supplier Currency' : 'Currency', showSupplierCurrency ? `${base} / ${oneCurrency}` : base, true));
-  parts.push(terms);
+  const meta = [['Ref No', text(doc.code) || '—'], ['Date', String(doc.orderDate || doc.date || '').slice(0, 10) || '—'], ['Ref Quotation / PO', refs, 'ref'],
+    ['Payment Terms', payment], [showSupplierCurrency ? 'Currency / Supplier Currency' : 'Currency', showSupplierCurrency ? `${base} / ${oneCurrency}` : base]];
+  const metaGrid = el('dl', 'ps-meta');
+  metaGrid.style.setProperty('--ps-cols', String(meta.length));
+  meta.forEach(([label, value, kind], i) => {
+    const item = el('div', `ps-meta-item${i === meta.length - 1 ? ' is-row-end' : ''}${kind === 'ref' ? ' is-ref' : ''}`);
+    item.append(el('dt', '', label), el('dd', '', value));
+    metaGrid.append(item);
+  });
+  const box = el('div', 'ps-docbox');
+  box.append(parties, metaGrid);
+  parts.push(box);
+  parts.push(el('div', 'ps-section-title', 'Ordered Items'));   // the table apart from the box, as the Quotation Request's
 
   // The lines.
   const unitTag = currency => el('div', 'pso-unit', `(${currency})`);
-  const heads = [['SL', 'sno'], ['Description', 'desc'], ...(allSuppliers ? [['Supplier', 'supplier']] : []), ['Qty', 'qty'], ['Unit', 'unit'],
-    ['Selling Price', 'num', base], ['Selling Total', 'num', base], ['Buying Unit', 'num', oneCurrency], ['Buying Total', 'num', oneCurrency], ['Profit %', 'num']];
+  const heads = [['SL', 'sno'], ['Description', 'name pso-c-desc'], ...(allSuppliers ? [['Supplier', 'supplier pso-c-supplier']] : []), ['Qty', 'num pso-c-fit'], ['Unit', 'center pso-c-fit'],
+    ['Selling Price', 'num pso-c-fit', base], ['Selling Total', 'num pso-c-fit', base], ['Buying Unit', 'num pso-c-fit', oneCurrency], ['Buying Total', 'num pso-c-fit', oneCurrency], ['Profit %', 'num pso-c-fit']];
+  const cls = kind => kind.split(' ').map(part => (part.startsWith('pso-') ? part : `ps-c-${part}`)).join(' ');
   const table = el('table', `ps-table pso-table${allSuppliers ? ' pso-has-supplier' : ''}`);
   const thead = el('thead');
   const headRow = el('tr');
   for (const [label, kind, currency] of heads) {
-    const th = el('th', `pso-c-${kind}`, label);
+    const th = el('th', cls(kind), label);
     if (currency) th.append(unitTag(currency));
     headRow.append(th);
   }
@@ -17770,52 +17780,47 @@ function soCostingParts(doc, { picked = null, customer = null } = {}) {
     const buyingUnit = Math.round(toCurrency(buyingOmr, currency) * 1000) / 1000;
     const profit = price > 0 ? (price - buyingOmr * factor) / price * 100 : 0;
     const tr = el('tr');
-    const desc = el('td', 'pso-c-desc');
-    const name = el('div', 'pso-item');
-    if (line.itemNameHtml) name.append(remarksFragment(line.itemNameHtml)); else name.textContent = text(line.itemName);
-    desc.append(name);
-    if (text(line.brandName)) desc.append(el('div', 'pso-sub', `Make: ${text(line.brandName)}`));
-    if (text(line.deliveryTerm)) desc.append(el('div', 'pso-sub', `Delivery: ${text(line.deliveryTerm)}`));
-    const numCell = (value, extra = []) => { const td = el('td', 'pso-c-num'); td.append(el('div', '', value), ...extra); return td; };
-    tr.append(el('td', 'pso-c-sno', String(i + 1)), desc,
-      ...(allSuppliers ? [el('td', 'pso-c-supplier', text(line.supplierName) || '—')] : []),
-      el('td', 'pso-c-qty', pbQty(qty)), el('td', 'pso-c-unit', text(line.unit)),
-      numCell(money3(price)), numCell(money3(pbNum(line.lineTotal)), []),
+    const desc = el('td', cls('name pso-c-desc'));
+    if (line.itemNameHtml) desc.append(remarksFragment(line.itemNameHtml)); else desc.textContent = text(line.itemName);
+    if (text(line.brandName)) desc.append(el('div', 'ps-make', `Make: ${text(line.brandName)}`));
+    if (text(line.deliveryTerm)) desc.append(el('div', 'ps-make', `Delivery: ${text(line.deliveryTerm)}`));
+    const numCell = (value, extra = [], strong = false) => { const td = el('td', cls(strong ? 'num total' : 'num')); td.append(el('div', '', value), ...extra); return td; };
+    tr.append(el('td', cls('sno'), String(i + 1)), desc,
+      ...(allSuppliers ? [el('td', cls('supplier pso-c-supplier'), text(line.supplierName) || '—')] : []),
+      el('td', cls('num'), pbQty(qty)), el('td', cls('center'), text(line.unit)),
+      numCell(money3(price)), numCell(money3(pbNum(line.lineTotal)), [], true),
       numCell(money(buyingUnit), [unitTag(currency)]),
-      numCell(money(qty * buyingUnit * factor), [unitTag(currency), ...(factor > 1 ? [el('div', 'pso-trans', '(Trans Incl.)')] : [])]));
-    const pct = el('td', `pso-c-num pso-profit${profit < 0 ? ' is-loss' : ''}`, `${profit.toFixed(2)}%`);
-    tr.append(pct);
-    tr.children[allSuppliers ? 6 : 5].classList.add('pso-strong');           // the selling total in bold
+      numCell(money(qty * buyingUnit * factor), [unitTag(currency), ...(factor > 1 ? [el('div', 'pso-trans', '(Trans Incl.)')] : [])]),
+      el('td', `${cls('num')} pso-profit${profit < 0 ? ' is-loss' : ''}`, `${profit.toFixed(2)}%`));
     tbody.append(tr);
   });
   table.append(thead, tbody);
   parts.push(table);
 
   // Remarks & Notes | the totals and the profit.
-  const bottom = el('div', 'pso-bottom');
-  const remarks = el('div', 'pso-box pso-remarks');
-  remarks.append(el('div', 'pso-label pso-rule', 'Remarks & Notes'));
+  const bottom = el('div', 'ps-bottom');
+  const side = el('div', 'ps-side');
+  const remarks = el('div', 'ps-remarks');
+  remarks.append(el('div', 'ps-label', 'Remarks & Notes'));
   if (text(doc.remarks)) {
-    const body = el('div', 'pso-remarks-body');
-    if (isRemarksHtml(doc.remarks)) body.append(remarksFragment(doc.remarks)); else body.textContent = doc.remarks;
-    remarks.append(body);
+    if (isRemarksHtml(doc.remarks)) { const body = el('div', 'ps-remarks-body'); body.append(remarksFragment(doc.remarks)); remarks.append(body); }
+    else remarks.append(el('div', 'ps-remarks-text', doc.remarks));
   } else {
-    remarks.append(el('div', 'pso-empty', 'No additional remarks provided.'));
+    remarks.append(el('div', 'ps-remarks-text pso-empty', 'No additional remarks provided.'));
   }
+  side.append(remarks);
   const subtotal = pbNum(doc.subtotal);
   // The order-wide costs (left off a single supplier's copy, as its discount and charges are).
   const costs = picked ? [] : [['Discount', pbNum(doc.discountAmount)], ['Custom Duty', pbNum(doc.customDuty)],
     ['Transportation Charge', pbNum(doc.shipping)], ['Business Promotion', pbNum(doc.businessPromotion)]].filter(([, value]) => value);
   const profit = subtotal - landing - costs.reduce((sum, [, value]) => sum + value, 0);
-  const totals = el('div', 'pso-box pso-totals');
-  const totalRow = (label, value) => { const row = el('div', 'pso-total-row'); row.append(el('span', '', label), el('b', '', `${base} ${value}`)); return row; };
-  totals.append(totalRow('Total Selling Price (Subtotal)', money3(subtotal)), totalRow('Item Landing Cost', money(landing)),
-    ...costs.map(([label, value]) => totalRow(label, money(value))));
-  const profitBox = el('div', `pso-profit-box${profit < 0 ? ' is-loss' : ''}`);
-  profitBox.append(el('span', 'pso-profit-label', `Total ${profit < 0 ? 'Loss' : 'Profit'} (${base})`),
-    el('b', 'pso-profit-value', `${money(profit)} (${(subtotal > 0 ? profit / subtotal * 100 : 0).toFixed(2)}%)`));
-  totals.append(profitBox);
-  bottom.append(remarks, totals);
+  const totals = el('dl', 'ps-totals');
+  const totalRow = (label, value, className = '') => { const row = el('div', className); row.append(el('dt', '', label), el('dd', '', value)); return row; };
+  totals.append(totalRow('Total Selling Price (Subtotal)', `${base} ${money3(subtotal)}`), totalRow('Item Landing Cost', `${base} ${money(landing)}`),
+    ...costs.map(([label, value]) => totalRow(label, `${base} ${money(value)}`)),
+    totalRow(`Total ${profit < 0 ? 'Loss' : 'Profit'} (${base})`, `${money(profit)} (${(subtotal > 0 ? profit / subtotal * 100 : 0).toFixed(2)}%)`,
+      `ps-total-grand pso-profit-row${profit < 0 ? ' is-loss' : ''}`));
+  bottom.append(side, totals);
   parts.push(bottom);
   return parts;
 }
