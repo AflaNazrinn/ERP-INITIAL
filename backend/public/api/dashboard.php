@@ -4,17 +4,19 @@ declare(strict_types=1);
 /*
  * The dashboard's figures, from the signed-in company's own records.
  *   GET ?year=2026&month=11 → { kpis, profitLoss, chart, returns, quotations, activities (the latest 5), activityTotal }
+ *   &from=2026-11-01&to=2026-11-30  the dates the cards count (Total Purchase, the returns); default: the month. The chart
+ *                                   always shows year / month, week by week.
  *   GET ?audit=1            → { activities }: every recorded activity, newest first (the Audit Trail page)
  *
- *   Total Purchase   purchase orders dated in the chosen month (not Cancelled), grand totals
+ *   Total Purchase   purchase orders dated in the chosen dates (not Cancelled), grand totals
  *   Pending Purchase purchase orders not yet Received (or Cancelled), any date
  *   Total Items      items in the Item master
  *   Creditors        how many suppliers there are (Party › Creditors)
  *   Debtors          how many customers there are (Party › Debtors)
  *   Total Employees  user accounts
  *   Chart            purchase orders per week of the chosen month
- *   Sales Return     sales returns dated in the chosen month, their Total Refund
- *   Purchase Return  purchase returns dated in the chosen month, their Total Return Amount
+ *   Sales Return     sales returns dated in the chosen dates, their Total Refund
+ *   Purchase Return  purchase returns dated in the chosen dates, their Total Return Amount
  *   Activities       the latest records created or changed (Purchase Book documents and masters)
  * Sales and quotations are not counted yet, so they stay 0.
  */
@@ -32,18 +34,32 @@ if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
 }
 $from = sprintf('%04d-%02d-01', $year, $month);
 $to = date('Y-m-t', strtotime($from));
+// The cards' dates (the header's From – To): a whole valid date each, From not after To; else the month.
+[$cardFrom, $cardTo] = [$from, $to];
+if (isset($_GET['from'], $_GET['to'])) {
+    $valid = static function (string $day): bool {
+        $date = DateTime::createFromFormat('!Y-m-d', $day);
+        return $date !== false && $date->format('Y-m-d') === $day;
+    };
+    $f = (string) $_GET['from'];
+    $t = (string) $_GET['to'];
+    if (!$valid($f) || !$valid($t) || $f > $t) {
+        throw new ValidationError(['from' => 'Choose a From date on or before the To date.'], 'Choose a From date on or before the To date.');
+    }
+    [$cardFrom, $cardTo] = [$f, $t];
+}
 $money = static fn ($value) => number_format((float) $value, 3, '.', '');
 $scalar = static fn (string $sql, array $params = []) => query($sql, $params)->fetchColumn();
 
-$totalPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE po_date BETWEEN ? AND ? AND status <> 'Cancelled'", [$from, $to]);
+$totalPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE po_date BETWEEN ? AND ? AND status <> 'Cancelled'", [$cardFrom, $cardTo]);
 $pendingPurchase = $scalar("SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE status NOT IN ('Received', 'Cancelled')");
 try {
-    $salesReturn = $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM sales_returns WHERE sr_date BETWEEN ? AND ?', [$from, $to]);
+    $salesReturn = $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM sales_returns WHERE sr_date BETWEEN ? AND ?', [$cardFrom, $cardTo]);
 } catch (PDOException) {
     $salesReturn = 0;                              // the sales returns migration is not applied yet
 }
 try {
-    $purchaseReturn = $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM purchase_returns WHERE prt_date BETWEEN ? AND ?', [$from, $to]);
+    $purchaseReturn = $scalar('SELECT COALESCE(SUM(grand_total), 0) FROM purchase_returns WHERE prt_date BETWEEN ? AND ?', [$cardFrom, $cardTo]);
 } catch (PDOException) {
     $purchaseReturn = 0;                           // the purchase returns migration is not applied yet
 }

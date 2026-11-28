@@ -43,11 +43,13 @@ const byId = id => document.getElementById(id);
    ===================================================================== */
 
 // The figures come from the company's own records (api/dashboard.php); zeros if they could not be loaded.
-async function fetchDashboard({ year, month }) {
+// range: the cards' From – To (the header's dates); without it the cards count the month.
+async function fetchDashboard({ year, month }, range = null) {
   const weeks = Math.ceil(new Date(year, month, 0).getDate() / 7);
   const lastMonth = shiftMonth(today.getFullYear(), today.getMonth() + 1, -1);
   try {
-    const data = await apiRequest(`api/dashboard.php?year=${year}&month=${month}`);
+    const dates = range ? `&from=${range.from}&to=${range.to}` : '';
+    const data = await apiRequest(`api/dashboard.php?year=${year}&month=${month}${dates}`);
     // A manager's figures have no profit & loss or activities (the admins'): empty ones keep the page drawing.
     data.profitLoss ??= { overall: { margin: '0.0' }, lastMonth: { margin: '0.0' } };
     data.activities ??= [];
@@ -83,14 +85,104 @@ const state = {
 const ACTIVITY_PAGE_SIZE = 5;                 // the dashboard shows the latest 5; View All shows the rest
 
 /* =====================================================================
-   Header
+   Header: the cards' dates (From – To)
+   The button shows the dates the cards count (Total Purchase, Purchase & Sales Return); it opens From / To, with
+   This Month, Last Month and This Year. It starts on this month, the 1st to its last day (1st – 30th).
+   Keys: Enter in From → To, Enter in To applies; Esc closes. The Monthly chart keeps its own month buttons.
    ===================================================================== */
 
+const ymd = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const monthRange = (year, month) => ({ from: ymd(new Date(year, month - 1, 1)), to: ymd(new Date(year, month, 0)) });
+const DASH_PRESETS = {
+  month: () => monthRange(today.getFullYear(), today.getMonth() + 1),
+  last: () => monthRange(today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear(), today.getMonth() === 0 ? 12 : today.getMonth()),
+  year: () => ({ from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31` }),
+};
+state.range = DASH_PRESETS.month();
+
 function renderRange() {
-  const start = new Date(currentPeriod.year, currentPeriod.month - 1, 1);
-  const end = new Date(currentPeriod.year, currentPeriod.month, 0);
-  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  byId('dashboard-range-text').textContent = `${fmt(start)} — ${fmt(end)}`;
+  const fmt = day => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  byId('dashboard-range-text').textContent = `${fmt(state.range.from)} — ${fmt(state.range.to)}`;
+}
+
+function syncRangePresets() {
+  const from = byId('dash-from').value;
+  const to = byId('dash-to').value;
+  for (const button of document.querySelectorAll('[data-dash-preset]')) {
+    const range = DASH_PRESETS[button.dataset.dashPreset]();
+    button.setAttribute('aria-pressed', String(range.from === from && range.to === to));
+  }
+}
+
+function openRangePop() {
+  byId('dash-from').value = state.range.from;
+  byId('dash-to').value = state.range.to;
+  byId('dash-range-error').hidden = true;
+  syncRangePresets();
+  byId('dash-range-pop').hidden = false;
+  byId('dashboard-range-btn').setAttribute('aria-expanded', 'true');
+  byId('dash-from').focus();
+}
+
+function closeRangePop(refocus = true) {
+  if (byId('dash-range-pop').hidden) return;
+  byId('dash-range-pop').hidden = true;
+  byId('dashboard-range-btn').setAttribute('aria-expanded', 'false');
+  if (refocus) byId('dashboard-range-btn').focus();
+}
+
+function applyRange() {
+  const from = byId('dash-from').value;
+  const to = byId('dash-to').value;
+  if (!from || !to || to < from) {
+    const error = byId('dash-range-error');
+    error.textContent = !from || !to ? 'Enter both dates as DD/MM/YYYY.' : 'To must be on or after From.';
+    error.hidden = false;
+    (!from ? byId('dash-from') : byId('dash-to')).focus();
+    return;
+  }
+  state.range = { from, to };
+  renderRange();
+  closeRangePop();
+  loadDashboard();
+}
+
+function initDashRange() {
+  renderRange();
+  const pop = byId('dash-range-pop');
+  byId('dashboard-range-btn').addEventListener('click', () => { if (pop.hidden) openRangePop(); else closeRangePop(); });
+  pop.addEventListener('click', event => {
+    const preset = event.target.closest('[data-dash-preset]');
+    if (preset) {
+      const range = DASH_PRESETS[preset.dataset.dashPreset]();
+      byId('dash-from').value = range.from;
+      byId('dash-to').value = range.to;
+      byId('dash-range-error').hidden = true;
+      syncRangePresets();
+      return;
+    }
+    const action = event.target.closest('[data-dash-range]')?.dataset.dashRange;
+    if (action === 'apply') applyRange();
+    else if (action === 'cancel') closeRangePop();
+  });
+  // From: a whole date puts the same date in To when To is empty or before it (as the Filter popups).
+  byId('dash-from').addEventListener('input', event => {
+    const from = event.target.value;
+    const to = byId('dash-to');
+    if (from && (!to.value || to.value < from)) to.value = from;
+    syncRangePresets();
+  });
+  byId('dash-to').addEventListener('input', syncRangePresets);
+  pop.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRangePop(); return; }
+    if (event.key !== 'Enter' || event.ctrlKey || event.altKey || event.shiftKey) return;
+    if (event.target === byId('dash-from')) { event.preventDefault(); event.stopPropagation(); byId('dash-to').focus(); }
+    else if (event.target === byId('dash-to')) { event.preventDefault(); event.stopPropagation(); applyRange(); }
+  });
+  // A click outside closes it (without changing the dates).
+  document.addEventListener('mousedown', event => {
+    if (!pop.hidden && !event.target.closest('.dash-range')) closeRangePop(false);
+  });
 }
 
 /* =====================================================================
@@ -339,7 +431,7 @@ function renderActivities(rows, total = rows.length) {
    moved past To on leaving it takes To with it. A fix on leaving is sent on as input + change, so every filter's
    own handlers update. */
 const DATE_RANGE_PAIRS = {
-  'audit-to': 'audit-from', 'stkr-ledger-to': 'stkr-ledger-from', 'master-filter-to': 'master-filter-from',
+  'dash-to': 'dash-from', 'audit-to': 'audit-from', 'stkr-ledger-to': 'stkr-ledger-from', 'master-filter-to': 'master-filter-from',
   'rrf-d2': 'rrf-d1', 'erf-d2': 'erf-d1', 'pbf-to': 'pbf-from',
 };
 const DATE_RANGE_FROM = Object.fromEntries(Object.entries(DATE_RANGE_PAIRS).map(([to, from]) => [from, to]));
@@ -1909,8 +2001,17 @@ function plainLookupCard(config, row) {
   const cell = el('td', 'lk-card-cell');
   cell.colSpan = config.columns.length;
   const text = el('div', 'lk-card-text');
-  text.append(el('div', 'lk-card-name', config.cardName ? config.cardName(row) : config.display(row)));
-  const meta = config.cardMeta ? config.cardMeta(row) : row.code;
+  const name = config.cardName ? config.cardName(row) : config.display(row);
+  text.append(el('div', 'lk-card-name', name));
+  // Under the name: the card's own line, else the popup's other columns (code, category, date …) joined with •.
+  const meta = config.cardMeta ? config.cardMeta(row)
+    : config.columns.map(([key, heading]) => {
+      const value = row[key];
+      if (value === undefined || value === null || String(value).trim() === '' || String(value) === String(name)) return '';
+      // A bare count says what it counts: "2 Items", "1 Item".
+      if (/^\d+$/.test(String(value).trim())) return `${value} ${Number(value) === 1 ? heading.replace(/s$/, '') : heading}`;
+      return String(value);
+    }).filter(Boolean).join(' • ');
   if (meta) text.append(el('div', 'lk-card-meta', meta));
   const tick = el('span', 'lk-card-tick');
   tick.setAttribute('aria-hidden', 'true');
@@ -2349,14 +2450,15 @@ async function openLookup(field, { query = '', byKeyboard = false } = {}) {
   // Tabbed popups open on the tab of the picked row, else the first tab.
   lookup.tab = config.tabs ? (rows.find(isCurrent)?.tab || config.tabs[0].key) : '';
   lookup.active = Math.max(0, lookupTabRows().findIndex(isCurrent));
-  // Card style: the item popups everywhere (config.card), and fields marked data-lookup-cards (the Purchase Order's
-  // Supplier Name and Currency). A subtitle, the search box with + Create … beside it, rows as cards, no key hints.
-  lookup.cards = !multi && (Boolean(config.card) || field.dataset.lookupCards !== undefined);
+  // Every "Select …" popup is the same: the card style (a subtitle, the search box with + Create … beside it, rows as
+  // cards) at the one size (680 × 680), in every module. Only a multi-select (ticks) keeps the table with its boxes.
+  lookup.cards = !multi;
   dialog.classList.toggle('lk-cards', lookup.cards);
-  dialog.classList.toggle('lk-compact', lookup.cards && Boolean(config.compact));   // Buyer, Buyer Name: a small popup
-  dialog.classList.toggle('lk-compact-sm', lookup.cards && config.compact === 'small');   // Buyer Name: smaller still
-  byId('lookup-sub').textContent = lookup.cards ? config.subtitle || '' : '';
-  byId('lookup-sub').hidden = !lookup.cards || !config.subtitle;
+  dialog.classList.remove('lk-compact', 'lk-compact-sm');
+  const noun = config.title.replace(/^Select\s+/, '');
+  const subtitle = config.subtitle || `Choose ${/^[AEIOU]/i.test(noun) ? 'an' : 'a'} ${noun.toLowerCase()} from the list.`;
+  byId('lookup-sub').textContent = lookup.cards ? subtitle : '';
+  byId('lookup-sub').hidden = !lookup.cards;
   byId('lookup-new').hidden = !(lookup.cards && config.create);
   byId('lookup-new-label').textContent = config.create || '';
   byId('lookup-letter').textContent = config.letter;
@@ -6948,6 +7050,7 @@ function createMasterList(config) {
     const back = list.returnTo && list.returnTo !== list.pagedFor ? rows.findIndex(row => row.code === list.returnTo) : -1;
     if (back >= 0) { list.page = Math.floor(back / ML_PAGE_SIZE) + 1; list.pagedFor = list.returnTo; }
     const pages = Math.max(1, Math.ceil(rows.length / ML_PAGE_SIZE));
+    if (!Number.isInteger(list.page)) list.page = 1;      // never NaN ("Showing NaN to NaN"): back to page 1
     list.page = Math.min(Math.max(1, list.page), pages);
     const start = (list.page - 1) * ML_PAGE_SIZE;
     const visible = rows.slice(start, start + ML_PAGE_SIZE);
@@ -7026,8 +7129,11 @@ function createMasterList(config) {
     else if (focus === 'last') focusRow(rows[rows.length - 1]);
   }
   pager.addEventListener('click', event => {
-    const target = event.target.closest('[data-page]');
-    if (target && !target.disabled) goToPage(Number(target.dataset.page));
+    // Only a page button of this pager: <body> has a data-page too (the page on screen), so a click on the current
+    // page, the "…" or between the buttons must not read that ("customer-list" → NaN, an empty list).
+    const target = event.target.closest('button[data-page]');
+    const page = Number(target?.dataset.page);
+    if (target && pager.contains(target) && !target.disabled && Number.isInteger(page)) goToPage(page);
   });
 
   // Row navigation: ↑/↓ highlight the previous/next row (↓ from the search box enters the table, ↑ from the
@@ -7601,9 +7707,9 @@ const PBF_NUM = {
 const PBF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // A list's conditions (list.facets); from / to are also the list's date range (list.range).
-const pbfEmpty = () => ({ from: '', to: '', year: null, month: null, vat: '', emps: new Set(), parties: new Set(),
+const pbfEmpty = () => ({ from: '', to: '', year: null, month: null, vat: '', emps: new Set(), parties: new Set(), countries: new Set(),
   num: { value: pbfNumEmpty(), disc: pbfNumEmpty(), qty: pbfNumEmpty() } });
-const pbfClone = f => ({ ...f, emps: new Set(f.emps), parties: new Set(f.parties || []),
+const pbfClone = f => ({ ...f, emps: new Set(f.emps), parties: new Set(f.parties || []), countries: new Set(f.countries || []),
   num: Object.fromEntries(Object.entries(f.num).map(([key, c]) => [key, { ...c }])) });
 // A number filter: the number typed for = (eq), < (lt) and > (gt); '' = not used.
 // Matches: equal to eq, or inside the < / > bounds; so = 20 with < 20 is ≤ 20, and > 20 with < 30 is a range.
@@ -7631,6 +7737,49 @@ function pbfNumText(label, c) {
 // Every employee (api/purchase-requests.php?people=1), and their names and login usernames → the employee's key,
 // so a document's Requested By ("sanjay") or Created By ("SANJAY DUTT") counts as that employee.
 const pbfStaff = { list: [], alias: new Map() };
+
+/* Country filter: a document's country is its party's (the customer's or supplier's Country on its master record).
+   partyDir holds every customer and supplier by key (cus:12 / sup:7) and by name, fetched when a Filter opens. */
+const partyDir = { byKey: new Map(), byName: new Map(), cus: [], sup: [] };
+const NO_COUNTRY = '-';
+async function loadPartyDir() {
+  const [customers, suppliers] = await Promise.all([
+    apiRequest('api/customers.php').catch(() => null), apiRequest('api/suppliers.php').catch(() => null)]);
+  const add = (rows, prefix) => {
+    partyDir[prefix] = [];
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const entry = { country: String(row.country || '').trim() };
+      if (row.id) partyDir[prefix].push({ key: `${prefix}:${row.id}`, code: row.code || '', name: row.name || '', kind: prefix });
+      if (row.id) partyDir.byKey.set(`${prefix}:${row.id}`, entry);
+      if (row.name) partyDir.byName.set(String(row.name).trim().toLowerCase(), entry);
+    }
+  };
+  if (customers) add(customers, 'cus');
+  if (suppliers) add(suppliers, 'sup');
+}
+// A party { key, name } → its country ('-' when not known).
+const partyCountry = party => partyDir.byKey.get(party.key)?.country || partyDir.byName.get(String(party.name || '').trim().toLowerCase())?.country || NO_COUNTRY;
+const countryText = country => (country === NO_COUNTRY ? 'No country' : country);
+// Party › Debtors (customers) or Creditors (suppliers).
+const PARTY_KINDS = { cus: { many: 'Debtors', one: 'Debtor' }, sup: { many: 'Creditors', one: 'Creditor' } };
+// The All countries dropdown: every country, Oman, the UAE and India first, the rest A–Z; then any other country on
+// the documents, and No country last when a document's party has none.
+const COUNTRY_FIRST = ['Oman', 'United Arab Emirates', 'India'];
+function fillCountryPick(pick, names, current) {
+  const known = [...COUNTRY_FIRST, ...COUNTRIES.map(c => c.name).filter(name => !COUNTRY_FIRST.includes(name)).sort((a, b) => a.localeCompare(b))];
+  const others = [...new Set([...names, current].filter(name => name && name !== NO_COUNTRY && !known.includes(name)))].sort((a, b) => a.localeCompare(b));
+  const sorted = [...known, ...others, ...([...names, current].includes(NO_COUNTRY) ? [NO_COUNTRY] : [])];
+  const wanted = sorted.join('|');
+  if (pick.dataset.list !== wanted) {
+    pick.replaceChildren(...['', ...sorted].map(name => {
+      const option = el('option', '', name ? countryText(name) : 'All countries');
+      option.value = name;
+      return option;
+    }));
+    pick.dataset.list = wanted;
+  }
+  pick.value = current || '';
+}
 const pbfEmpKey = name => {
   const text = String(name ?? '').trim().toLowerCase();
   return pbfStaff.alias.get(text) ?? text;
@@ -7662,12 +7811,21 @@ function pbfPass(spec, f, row, skip) {
   for (const [key, c] of Object.entries(f.num)) if (pbfNumOn(c) && !pbfNumMatch(c, PBF_NUM[key].of(row))) return false;
   if (skip !== 'emp' && f.emps.size && !f.emps.has(pbfEmpKey(row[spec.employee.key]))) return false;
   // Supplier: any of the document's suppliers ticked (a request sent to several counts for each).
-  if (skip !== 'party' && f.parties?.size && !(spec.parties?.(row) || []).some(party => f.parties.has(party.key))) return false;
+  if (skip !== 'party' && f.parties?.size && !pbfPartyList(spec, row).some(party => f.parties.has(party.key))) return false;
+  // Country: the country of any of the document's parties ticked.
+  if (skip !== 'country' && f.countries?.size && !pbfCountriesOf(spec, row).some(country => f.countries.has(country))) return false;
   return true;
 }
+// The parties the Party filter goes by: with Debtors / Creditors (partyKinds) the document's customer and supplier.
+const pbfPartyList = (spec, row) => (spec.partyKinds ? [...pbfCustomerOf(row), ...pbfSupplierOf(row)] : spec.parties?.(row) || []);
+// A document's countries: its parties' (none: '-', shown as No country).
+function pbfCountriesOf(spec, row) {
+  const parties = spec.parties?.(row) || [];
+  return parties.length ? [...new Set(parties.map(partyCountry))] : [NO_COUNTRY];
+}
 // The conditions besides the ticked documents and the dates (the list counts those itself), for "Filter (3)".
-const pbfActive = f => [f.vat, ...Object.values(f.num).map(pbfNumOn), f.emps.size, f.parties?.size].filter(Boolean).length;
-const pbfKey = f => JSON.stringify([f.vat, f.num, [...f.emps], [...(f.parties || [])]]);
+const pbfActive = f => [f.vat, ...Object.values(f.num).map(pbfNumOn), f.emps.size, f.parties?.size, f.countries?.size].filter(Boolean).length;
+const pbfKey = f => JSON.stringify([f.vat, f.num, [...f.emps], [...(f.parties || [])], [...(f.countries || [])]]);
 
 const pbFilter = { list: null, spec: null, f: null, picked: new Set(), tab: 'all', year: 0, query: {}, opener: null, op: 'eq' };
 const pbfEl = suffix => byId(`pbf-${suffix}`);
@@ -7675,13 +7833,16 @@ const pbfIsOn = (tab, f = pbFilter.f) => ({
   all: pbFilter.picked.size > 0, date: Boolean(f.from || f.to), vat: Boolean(f.vat),
   emp: f.emps.size > 0, party: f.parties.size > 0,
 }[tab] ?? pbfNumOn(f.num[tab]));
+// What the Party filter calls the document's party: Supplier / Customer (spec.partyNoun).
+const pbfPartyNoun = () => (pbFilter.spec?.partyKinds ? PARTY_KINDS[pbFilter.partyKind].one : pbFilter.spec?.partyNoun || 'Supplier');
 
 function openPbFilter(list) {
   const spec = list.config.docFilter;
   const f = pbfClone(list.facets);
   Object.assign(f, list.range);
-  Object.assign(pbFilter, { list, spec, f, picked: new Set(list.applied), tab: 'all', query: { all: '', emp: '', party: '' },
-    opener: document.activeElement, year: Number((f.from || dateInputValue(new Date())).slice(0, 4)) });
+  Object.assign(pbFilter, { list, spec, f, picked: new Set(list.applied), tab: 'all', query: { all: '', emp: '', party: '', country: '' },
+    opener: document.activeElement, year: Number((f.from || dateInputValue(new Date())).slice(0, 4)),
+    partyKind: spec.partyNoun === 'Supplier' ? 'sup' : 'cus' });
   pbfEl('title').textContent = `Filter ${list.config.nouns}`;
   pbfEl('sub').textContent = `Search and select the ${list.many} to show`;
   const reset = el('button', 'pbf-ri pbf-ri-reset');
@@ -7698,7 +7859,7 @@ function openPbFilter(list) {
     button.setAttribute('role', 'tab');
     button.setAttribute('aria-controls', 'pbf-main');
     button.innerHTML = PBF_SVG(PBF_TABS[tab].icon);
-    button.append(PBF_TABS[tab].label);
+    button.append(tab === 'party' ? (spec.partyTab || PBF_TABS.party.label) : PBF_TABS[tab].label);
     const sep = el('div', 'pbf-sep');
     sep.setAttribute('aria-hidden', 'true');
     return index === 1 ? [sep, button] : [button];
@@ -7710,6 +7871,8 @@ function openPbFilter(list) {
   pbfEl('search').focus();
   // The Employee filter lists every employee, fetched fresh each time the popup opens.
   if (spec.employee) pbfLoadStaff().then(() => { if (byId('pb-filter').open && pbFilter.tab === 'emp') pbfRender(); });
+  // The parties' countries (Country filter), fetched fresh each time too.
+  if (spec.parties) loadPartyDir().then(() => { if (byId('pb-filter').open) pbfRender(); });
 }
 
 function closePbFilter() {
@@ -7736,7 +7899,7 @@ function resetPbFilter() {
   const { list } = pbFilter;
   pbFilter.f = pbfEmpty();
   pbFilter.picked.clear();
-  pbFilter.query = { all: '', emp: '', party: '' };
+  pbFilter.query = { all: '', emp: '', party: '', country: '' };
   pbFilter.year = new Date().getFullYear();
   list.applied.clear();
   list.facets = pbfEmpty();
@@ -7761,8 +7924,9 @@ function pbfRender() {
   pbfEl('main').setAttribute('aria-labelledby', `pbf-tab-${tab}`);
   const searching = tab === 'all' || tab === 'emp' || tab === 'party';
   pbfEl('search-wrap').hidden = !searching;
+  pbfSyncCountryPick();
   if (searching) {
-    const what = tab === 'emp' ? 'Search employee by name or code...' : tab === 'party' ? 'Search supplier by name or code...'
+    const what = tab === 'emp' ? 'Search employee by name or code...' : tab === 'party' ? `Search ${pbfPartyNoun().toLowerCase()} by name or code...`
       : `Filter by ${spec.short} number, ${spec.searchHint}...`;
     pbfEl('search').placeholder = what;
     pbfEl('search').setAttribute('aria-label', what.replace(/\.\.\.$/, ''));
@@ -7771,6 +7935,8 @@ function pbfRender() {
   pbfEl('tb').hidden = tab === 'all' || tab === 'date';
   pbfEl('tb-num').hidden = !PBF_NUM[tab];
   pbfEl('tb-vat').hidden = tab !== 'vat';
+  pbfEl('tb-kind').hidden = !(tab === 'party' && spec.partyKinds);
+  for (const button of pbfEl('tb-kind').children) button.setAttribute('aria-pressed', String(button.dataset.kind === pbFilter.partyKind));
   pbfEl('date').hidden = tab !== 'date';
   pbfEl('table').hidden = tab === 'date';
   if (tab === 'date') pbfRenderDate();
@@ -7897,10 +8063,14 @@ function pbfRenderPeople() {
 // Supplier: one row a supplier on the documents, with how many of the documents that meet the other conditions are theirs.
 function pbfRenderParties() {
   const { list, spec, f, tab } = pbFilter;
+  const kind = spec.partyKinds ? pbFilter.partyKind : null;
   const parties = new Map();
+  // Debtors / Creditors: every customer (supplier) of the master, with or without documents.
+  if (kind) for (const party of partyDir[kind]) parties.set(party.key, { ...party, count: 0 });
   for (const row of list.rows) {
     const counted = pbfPass(spec, f, row, 'party');
-    for (const party of spec.parties(row)) {
+    for (const party of pbfPartyList(spec, row)) {
+      if (kind && party.kind !== kind) continue;
       if (!parties.has(party.key)) parties.set(party.key, { ...party, count: 0 });
       if (counted) parties.get(party.key).count++;
     }
@@ -7909,11 +8079,22 @@ function pbfRenderParties() {
   const all = [...parties.values()].sort((a, b) => a.name.localeCompare(b.name));
   const rows = all.filter(party => !query || `${party.name} ${party.code}`.toLowerCase().includes(query));
   pbFilter.shown = rows;
-  pbfEl('tb-title').replaceChildren('Suppliers', el('span', '', ` · ${rows.length} visible`));
-  pbfTable(['Code', 'Supplier', list.config.nouns], rows.map(party => ({
-    key: party.key, code: party.code, title: party.name, sub: 'Supplier', value: list.count(party.count),
-  })), key => f.parties.has(key), query ? `No supplier matches “${pbFilter.query[tab].trim()}”.` : `None of the ${list.many} has a supplier yet.`);
-  pbfEl('summary').replaceChildren(`${f.parties.size} of ${all.length} suppliers selected `, el('span', '', `(${rows.length} visible)`));
+  const noun = pbfPartyNoun();
+  pbfEl('tb-title').replaceChildren(`${noun}s`, el('span', '', ` · ${rows.length} visible`));
+  pbfTable(['Code', noun, list.config.nouns], rows.map(party => ({
+    key: party.key, code: party.code, title: party.name, sub: countryText(partyCountry(party)), value: list.count(party.count),
+  })), key => f.parties.has(key), query ? `No ${noun.toLowerCase()} matches “${pbFilter.query[tab].trim()}”.` : `None of the ${list.many} has a ${noun.toLowerCase()} yet.`);
+  const ticked = all.filter(party => f.parties.has(party.key)).length;
+  pbfEl('summary').replaceChildren(`${ticked} of ${all.length} ${noun.toLowerCase()}s selected `, el('span', '', `(${rows.length} visible)`));
+}
+
+// The All countries dropdown beside the search (All tab): the parties' countries on these documents.
+function pbfSyncCountryPick() {
+  const { list, spec, f, tab } = pbFilter;
+  const pick = pbfEl('country');
+  pick.hidden = !(spec.countryPick && tab === 'all');
+  if (pick.hidden) return;
+  fillCountryPick(pick, list.rows.flatMap(row => pbfCountriesOf(spec, row)), f.countries.size === 1 ? [...f.countries][0] : '');
 }
 
 function pbfRenderDate() {
@@ -7987,18 +8168,65 @@ function handlePbFilterKeys(event) {
   if (key === 'Enter' && ctrl) { event.preventDefault(); if (!event.repeat) applyPbFilter(); return true; }
   if (ctrl || event.altKey) return false;
   const tabs = pbFilter.spec.tabs;
-  if (target.dataset?.tab) {                                   // on the rail
+  // Party › Debtors / Creditors: ← / → between them, ↑ the search, ↓ the list.
+  const kinds = [...pbfEl('tb-kind').children];
+  if (kinds.includes(target) && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) {
+    event.preventDefault();
+    if (key === 'ArrowUp') pbfEl('search').focus();
+    else if (key === 'ArrowDown') (pbfEl('rows').querySelector('.pbf-rb') || pbfEl('all')).focus();
+    else kinds[key === 'ArrowRight' ? 1 : 0].focus();
+    return true;
+  }
+  const railReset = pbfEl('rail').querySelector('[data-pbf="reset"]');
+  const foot = [...byId('pb-filter').querySelectorAll('.pbf-foot [data-pbf]')];   // Reset Filters, Apply Filters
+  if (target.dataset?.tab) {                                   // on the rail: ↓ past the last filter is Reset
     if (key === 'ArrowDown' || key === 'ArrowUp') {
       event.preventDefault();
       const at = tabs.indexOf(pbFilter.tab);
-      pbfSetTab(tabs[(at + (key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length], true);
+      const next = at + (key === 'ArrowDown' ? 1 : -1);
+      if (next >= tabs.length) railReset.focus();
+      else pbfSetTab(tabs[Math.max(0, next)], true);
       return true;
     }
     if (key === 'ArrowRight') { event.preventDefault(); pbfFirstStop()?.focus(); return true; }
     return false;
   }
+  if (target === railReset) {                                  // the rail's Reset: ↑ the last filter, → the footer
+    if (key === 'ArrowUp') { event.preventDefault(); pbfSetTab(tabs.at(-1), true); return true; }
+    if (key === 'ArrowRight') { event.preventDefault(); foot[0]?.focus(); return true; }
+    if (key === 'ArrowDown') { event.preventDefault(); return true; }
+    return false;
+  }
+  const fAt = foot.indexOf(target);
+  if (fAt >= 0) {                                              // the footer: ← / → along it, ↑ back to the list
+    if (key === 'ArrowRight' && fAt < foot.length - 1) { event.preventDefault(); foot[fAt + 1].focus(); return true; }
+    if (key === 'ArrowLeft') { event.preventDefault(); (fAt > 0 ? foot[fAt - 1] : railReset).focus(); return true; }
+    if (key === 'ArrowUp') {
+      event.preventDefault();
+      const stops = pbfEl('table').hidden ? [] : [...pbfEl('table').querySelectorAll('.pbf-rb:not(:disabled)')];
+      (stops.at(-1) || pbfFirstStop() || pbfEl(`tab-${pbFilter.tab}`)).focus();
+      return true;
+    }
+    if (key === 'ArrowDown') { event.preventDefault(); return true; }
+    return false;
+  }
   const box = target.classList?.contains('pbf-rb');
   if (box && key === 'Enter') { event.preventDefault(); if (!event.repeat) target.click(); return true; }
+  // The All countries dropdown: Enter opens its list, ← back to the search, ↓ to the list; → from the search's end.
+  const pick = pbfEl('country');
+  if (target === pick) {
+    if (key === 'Enter') { event.preventDefault(); if (!event.repeat) openSelectMenu(pick); return true; }
+    if (key === 'ArrowLeft') { event.preventDefault(); pbfEl('search').focus(); return true; }
+    if (key === 'ArrowDown') { event.preventDefault(); (pbfEl('rows').querySelector('.pbf-rb') || pbfEl('all')).focus(); return true; }
+    if (key === 'ArrowUp') { event.preventDefault(); return true; }
+    return false;
+  }
+  if (target === pbfEl('search') && key === 'ArrowRight' && !pick.hidden && target.selectionStart === target.value.length) {
+    event.preventDefault();
+    pick.focus();
+    return true;
+  }
+  if (box && key === 'ArrowRight') { event.preventDefault(); foot[0]?.focus(); return true; }
   if ((box || target === pbfEl('search')) && key === 'ArrowLeft' && (box || !target.selectionStart)) {
     event.preventDefault();
     pbfEl(`tab-${pbFilter.tab}`).focus();
@@ -8015,6 +8243,8 @@ function handlePbFilterKeys(event) {
     const at = stops.indexOf(target);
     if (at === -1) return false;
     event.preventDefault();
+    // ↓ from the last row: Apply Filters (the footer).
+    if (key === 'ArrowDown' && at === stops.length - 1) { foot.at(-1)?.focus(); return true; }
     const next = stops[Math.max(0, Math.min(stops.length - 1, at + (key === 'ArrowDown' ? 1 : -1)))];
     next.focus();
     next.closest('.pbf-tr:not(.pbf-th)')?.scrollIntoView({ block: 'nearest' });
@@ -8079,6 +8309,19 @@ function initPbFilter() {
   pbfEl('search').addEventListener('input', event => {
     pbFilter.query[pbFilter.tab] = event.target.value;
     pbfRender();
+  });
+  // All countries: one country (or all of them) for the documents.
+  pbfEl('country').addEventListener('change', event => {
+    pbFilter.f.countries = new Set(event.target.value ? [event.target.value] : []);
+    pbfRender();
+  });
+  // Party › Debtors / Creditors: the list shows that kind (the ticks of both stay).
+  pbfEl('tb-kind').addEventListener('click', event => {
+    const button = event.target.closest('[data-kind]');
+    if (!button) return;
+    pbFilter.partyKind = button.dataset.kind;
+    pbfRender();
+    button.focus();
   });
   pbfEl('num').addEventListener('input', event => {
     pbFilter.f.num[pbFilter.tab][pbFilter.op] = event.target.value.trim();
@@ -15775,7 +16018,13 @@ async function importItemLine(row) {
 const pbfItems = row => `${row.itemCount || 0} item${Number(row.itemCount) === 1 ? '' : 's'}`;
 // The Supplier filter (RFQ, PO, GRN): the document's supplier(s) as { key, code, name }.
 const pbfSupplierOf = row => (row.supplierId || row.supplierName
-  ? [{ key: row.supplierId ? `sup:${row.supplierId}` : `name:${String(row.supplierName).trim().toLowerCase()}`, code: row.supplierCode || '', name: row.supplierName || '' }] : []);
+  ? [{ key: row.supplierId ? `sup:${row.supplierId}` : `name:${String(row.supplierName).trim().toLowerCase()}`, code: row.supplierCode || '', name: row.supplierName || '', kind: 'sup' }] : []);
+// Party (Trade Management, Transaction Entry): the document's customer as { key, code, name }.
+const pbfCustomerOf = row => (row.customerId || row.customerName
+  ? [{ key: row.customerId ? `cus:${row.customerId}` : `name:${String(row.customerName).trim().toLowerCase()}`, code: row.customerCode || '', name: row.customerName || '', kind: 'cus' }] : []);
+// Purchase Book (RFQ, PO, GRN), Trade Management and Transaction Entry: the All countries dropdown by the search
+// (countryPick): the country of the document's supplier / customer. Trade Management and Transaction Entry also have
+// Party on the rail, with Debtors (customers) and Creditors (suppliers) (partyKinds; partyNoun: the kind it opens on).
 const PB_DOC_FILTERS = {
   pr: {
     tabs: ['all', 'date', 'qty', 'emp'], short: 'PR', searchHint: 'type or requester',
@@ -15784,59 +16033,65 @@ const PB_DOC_FILTERS = {
   },
   rfq: {
     // As the Purchase Request's filter: Employee is the Requested By (of the PR this request came from).
-    tabs: ['all', 'date', 'party', 'qty', 'emp'], short: 'RFQ', searchHint: 'PR, supplier or requester',
+    tabs: ['all', 'date', 'party', 'qty', 'emp'], short: 'RFQ', searchHint: 'PR, supplier or requester', countryPick: true,
     parties: row => (row.suppliers || []).map(s => ({ key: `sup:${s.id}`, code: s.code, name: s.name })),   // every supplier it went to
     details: row => [`${pbfItems(row)} · ${row.supplierCount} supplier${row.supplierCount === 1 ? '' : 's'}${row.purchaseRequestCode ? ` · ${row.purchaseRequestCode}` : ''}`,
       `Requested by ${row.requestedBy || '—'} · ${row.name}`],
     employee: { key: 'requestedBy', label: 'Requested By' },
   },
   po: {
-    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'PO', searchHint: 'supplier or reference',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'PO', searchHint: 'supplier or reference', countryPick: true,
     parties: pbfSupplierOf,
     details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.reference, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
     employee: { key: 'salesman', label: 'Created By' },
   },
   grn: {
-    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty'], short: 'GRN', searchHint: 'supplier or PO',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty'], short: 'GRN', searchHint: 'supplier or PO', countryPick: true,
     parties: pbfSupplierOf,
     details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.poNumber ? `PO ${row.poNumber}` : 'No PO', row.warehouseName].filter(Boolean).join(' · ')],
   },
   // Trade Management › Quotation (sales): the Quotation Request's filter, VAT, Value and Disc %; Employee is its Created By.
   qt: {
     // VAT: In when a line has a VAT % above 0 (the quotation has no VAT switch, only each line's VAT %).
-    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Quotation', searchHint: 'customer, reference or creator',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Quotation', searchHint: 'customer, reference or creator',
+    parties: pbfCustomerOf, partyTab: 'Party', partyNoun: 'Customer', partyKinds: true, countryPick: true,
     details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
     employee: { key: 'salesman', label: 'Created By' },
   },
   // Trade Management › Sales Order: the Quotation's filter without VAT. Employee: the Created By of its quotation.
   so: {
-    tabs: ['all', 'date', 'value', 'disc', 'qty', 'emp'], short: 'SO', searchHint: 'customer, quotation or creator',
+    tabs: ['all', 'date', 'party', 'value', 'disc', 'qty', 'emp'], short: 'SO', searchHint: 'customer, quotation or creator',
+    parties: pbfCustomerOf, partyTab: 'Party', partyNoun: 'Customer', partyKinds: true, countryPick: true,
     details: row => [row.customerName || 'No customer', [pbfItems(row), row.quotationCode && `Quotation ${row.quotationCode}`, row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
     employee: { key: 'createdBy', label: 'Created By' },
   },
   // Trade Management › Delivery Note: the Quotation's filter. Employee is the note's Created By (salesman).
   dn: {
-    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'DN', searchHint: 'customer, reference or creator',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'DN', searchHint: 'customer, reference or creator',
+    parties: pbfCustomerOf, partyTab: 'Party', partyNoun: 'Customer', partyKinds: true, countryPick: true,
     details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.salesman && `Created by ${row.salesman}`].filter(Boolean).join(' · ')],
     employee: { key: 'salesman', label: 'Created By' },
   },
   // Transaction Entry › Tax Invoice: the Delivery Note's filter. Employee: the Created By of the document it came from.
   ti: {
-    tabs: ['all', 'date', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Invoice', searchHint: 'customer, reference or creator',
+    tabs: ['all', 'date', 'party', 'vat', 'value', 'disc', 'qty', 'emp'], short: 'Invoice', searchHint: 'customer, reference or creator',
+    parties: pbfCustomerOf, partyTab: 'Party', partyNoun: 'Customer', partyKinds: true, countryPick: true,
     details: row => [row.customerName || 'No customer', [pbfItems(row), row.referenceNo && `Ref ${row.referenceNo}`, row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
     employee: { key: 'createdBy', label: 'Created By' },
   },
   // Transaction Entry › Purchase Entry: the Tax Invoice's filter without VAT and Disc %. Employee: the Created By of its
   // purchase order (or its GRN's).
   pe: {
-    tabs: ['all', 'date', 'value', 'qty', 'emp'], short: 'Purchase', searchHint: 'supplier, invoice, PO / GRN or creator',
+    tabs: ['all', 'date', 'party', 'value', 'qty', 'emp'], short: 'Purchase', searchHint: 'supplier, invoice, PO / GRN or creator',
+    parties: pbfSupplierOf, partyTab: 'Party', partyNoun: 'Supplier', partyKinds: true, countryPick: true,
     details: row => [row.supplierName || 'No supplier', [pbfItems(row), row.supplierInvoiceNo && `Inv ${row.supplierInvoiceNo}`, row.reference,
       row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
     employee: { key: 'createdBy', label: 'Created By' },
   },
   // Transaction Entry › Sales Entry: the Purchase Entry's filter. Employee: the Created By of its tax invoice (or delivery note).
   se: {
-    tabs: ['all', 'date', 'value', 'qty', 'emp'], short: 'Sales', searchHint: 'customer, ref no, invoice / DN or creator',
+    tabs: ['all', 'date', 'party', 'value', 'qty', 'emp'], short: 'Sales', searchHint: 'customer, ref no, invoice / DN or creator',
+    parties: pbfCustomerOf, partyTab: 'Party', partyNoun: 'Customer', partyKinds: true, countryPick: true,
     details: row => [row.customerName || 'No customer', [pbfItems(row), row.customerRefNo && `Ref ${row.customerRefNo}`, row.reference,
       row.createdBy && `Created by ${row.createdBy}`].filter(Boolean).join(' · ')],
     employee: { key: 'createdBy', label: 'Created By' },
@@ -16136,6 +16391,7 @@ const RRF_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 const RRF_TABS = [
   { k: 'all', l: 'All', i: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
   { k: 'date', l: 'Date', i: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  { k: 'party', l: 'Party', i: '<path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>' },
   { k: 'vat', l: 'VAT', i: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' },
   { k: 'v', l: 'Value', i: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2 0 0 0-5 0c0 2.5 5 1.5 5 4a2.5 2 0 0 1-5 0M12 6v1.5M12 16.5V18"/>' },
   { k: 'p', l: 'Disc %', i: '<path d="m20.6 13.4-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>' },
@@ -16150,7 +16406,7 @@ const RRF_NUM = {
 const RRF_CHECK = '<svg class="ok" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><svg class="mx" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
 // Value / Disc % / Qty: = < > each keep their own number, as the Purchase Book Filter (pbfNumEmpty, pbfNumMatch):
 // = 20 with < 20 is ≤ 20, > 20 with < 30 a range; rrf.op is the sign the number box is showing.
-const rrfBlank = () => ({ d1: '', d2: '', y: null, m: null, vat: '', num: { v: pbfNumEmpty(), p: pbfNumEmpty(), s: pbfNumEmpty() }, emps: [] });
+const rrfBlank = () => ({ d1: '', d2: '', y: null, m: null, vat: '', num: { v: pbfNumEmpty(), p: pbfNumEmpty(), s: pbfNumEmpty() }, emps: [], parties: [], countries: [] });
 const rrfClone = f => JSON.parse(JSON.stringify(f));
 const rrf = { op: 'eq', list: null, F: rrfBlank(), sel: new Set(), tab: 'all', viewY: new Date().getFullYear(), employees: [], opener: null, shown: [] };
 const rrfEl = suffix => byId(`rrf-${suffix}`);
@@ -16169,8 +16425,20 @@ function rrfRow(row) {
     p: subtotal > 0 ? Math.round(pbNum(row.discountAmount) / subtotal * 10000) / 100 : 0,
     s: cfg.qty ? cfg.qty(row) : pbNum(row.totalQty),
     e: row.employeeCode || '',
+    ...rrfPartyOf(row),
   };
 }
+// The document's party (a sales document's customer, a purchase one's supplier) and its country.
+function rrfPartyOf(row) {
+  const sup = !row.customerId && !row.customerName && (row.supplierId || row.supplierName);
+  const id = sup ? row.supplierId : row.customerId;
+  const name = (sup ? row.supplierName : row.customerName) || row.name || '';
+  const code = (sup ? row.supplierCode : row.customerCode) || '';
+  const pk = id ? `${sup ? 'sup' : 'cus'}:${id}` : name ? `name:${name.trim().toLowerCase()}` : '';
+  return { pk, pn: name, pc: code, pkind: sup ? 'sup' : 'cus', cn: pk ? partyCountry({ key: pk, name }) : NO_COUNTRY };
+}
+// What the Party filter calls a list's party: a purchase return / replacement's supplier, else the customer.
+const rrfPartyNoun = () => (/^p/.test(rrf.list?.config.key || '') ? 'Supplier' : 'Customer');
 // The date range a filter state stands for: From / To, else the year (and month); null: no date filter.
 function rrfRange(F) {
   if (F.d1 || F.d2) return [F.d1 || '0000-00-00', F.d2 || '9999-12-31'];
@@ -16187,11 +16455,13 @@ function rrfPass(r, F, skip) {
   if (F.vat && r.vat !== F.vat) return false;
   for (const [k, c] of Object.entries(F.num)) if (pbfNumOn(c) && !pbfNumMatch(c, r[k])) return false;
   if (skip !== 'emp' && F.emps.length && !F.emps.includes(r.e)) return false;
+  if (skip !== 'party' && F.parties?.length && !F.parties.includes(r.pk)) return false;
+  if (skip !== 'country' && F.countries?.length && !F.countries.includes(r.cn)) return false;
   return true;
 }
 // How many filters a state has on (the ticked documents count as one).
 const rrfActive = (F, picked = 0) => (picked ? 1 : 0) + (rrfRange(F) ? 1 : 0) + (F.vat ? 1 : 0)
-  + Object.values(F.num).filter(pbfNumOn).length + (F.emps.length ? 1 : 0);
+  + Object.values(F.num).filter(pbfNumOn).length + (F.emps.length ? 1 : 0) + (F.parties?.length ? 1 : 0) + (F.countries?.length ? 1 : 0);
 
 /* The lists that use this popup, and what each shows (filterHooks(settings) goes into a purchaseList's listHooks):
      tabs   the rail's filters    theme  'return' (crimson) or 'supply' (orange)
@@ -16206,7 +16476,7 @@ function filterHooks(settings) {
   };
 }
 // Return & Replacement: every filter, in the crimson.
-const RR_LIST_HOOKS = filterHooks({ theme: 'return', tabs: ['all', 'date', 'vat', 'v', 'p', 's', 'emp'] });
+const RR_LIST_HOOKS = filterHooks({ theme: 'return', countryPick: true, tabs: ['all', 'date', 'party', 'vat', 'v', 'p', 's', 'emp'] });
 // Supply Management: no VAT or discount on these documents; in the orange. A stock adjustment's quantity is its
 // net difference (more counted: +, fewer: −); a stock reservation has no money value, so no Value filter.
 const SM_ADJ_HOOKS = filterHooks({ theme: 'supply', tabs: ['all', 'date', 'v', 's', 'emp'], value: row => pbNum(row.totalValue), qty: row => pbNum(row.netQuantity) });
@@ -16232,6 +16502,11 @@ function openRrFilter(list) {
   byId('rr-filter').dataset.theme = rrfCfg().theme || 'return';
   // A filter this list does not offer stays off (an older state from another list never applies).
   if (!on.includes('vat')) rrf.F.vat = '';
+  rrf.F.parties = on.includes('party') ? rrf.F.parties || [] : [];
+  rrf.F.countries = rrfCfg().countryPick ? rrf.F.countries || [] : [];
+  rrf.partyKind = rrfPartyNoun() === 'Supplier' ? 'sup' : 'cus';
+  rrfEl('pq').value = '';
+  if (on.includes('party') || rrfCfg().countryPick) loadPartyDir().then(() => { if (byId('rr-filter').open) rrfRender(); });
   for (const k of Object.keys(rrf.F.num)) if (!on.includes(k)) rrf.F.num[k] = pbfNumEmpty();
   rrf.viewY = rrf.F.y || new Date().getFullYear();
   const { one, many } = rrfLabels();
@@ -16294,7 +16569,7 @@ function resetRrFilter() {
   rrf.F = rrfBlank();
   rrf.sel.clear();
   rrf.viewY = new Date().getFullYear();
-  rrfEl('q').value = ''; rrfEl('eq').value = ''; rrfEl('num').value = '';
+  rrfEl('q').value = ''; rrfEl('eq').value = ''; rrfEl('pq').value = ''; rrfEl('num').value = '';
   rrfCommit();
   rrfRender();
   showToast('Filters reset', `Showing all ${rrf.list.many}.`);
@@ -16309,19 +16584,31 @@ function rrfRender() {
     b.setAttribute('aria-selected', String(k === tab));
     b.tabIndex = k === tab ? 0 : -1;
     const on = k === 'all' ? rrf.sel.size > 0 : k === 'date' ? Boolean(rrfRange(F)) : k === 'vat' ? Boolean(F.vat)
-      : RRF_NUM[k] ? pbfNumOn(F.num[k]) : F.emps.length > 0;
+      : RRF_NUM[k] ? pbfNumOn(F.num[k]) : k === 'party' ? F.parties.length > 0 : F.emps.length > 0;
     b.classList.toggle('is-on', on);
   });
   rrfEl('main').setAttribute('aria-labelledby', `rrf-tab-${tab}`);
   const isNum = Boolean(RRF_NUM[tab]);
   rrfEl('srch-doc').hidden = tab !== 'all';
   rrfEl('srch-emp').hidden = tab !== 'emp';
+  rrfEl('srch-pty').hidden = tab !== 'party';
+  rrfEl('tb-kind').hidden = tab !== 'party';
+  if (tab === 'party') {
+    rrfEl('pq').placeholder = `Search ${PARTY_KINDS[rrf.partyKind].one.toLowerCase()} by name or code...`;
+    rrfEl('pq').setAttribute('aria-label', rrfEl('pq').placeholder.replace(/\.\.\.$/, ''));
+    for (const b of rrfEl('tb-kind').children) b.setAttribute('aria-pressed', String(b.dataset.kind === rrf.partyKind));
+  }
+  // All countries (Return & Replacement): beside the search on All.
+  const pick = rrfEl('country');
+  pick.hidden = !(rrfCfg().countryPick && tab === 'all');
+  if (!pick.hidden) fillCountryPick(pick, list.rows.map(row => rrfRow(row).cn), F.countries.length === 1 ? F.countries[0] : '');
   rrfEl('tb').hidden = tab === 'all' || tab === 'date';
   rrfEl('tb-vat').hidden = tab !== 'vat';
   rrfEl('tb-num').hidden = !isNum;
   rrfEl('dp').hidden = tab !== 'date';
   rrfEl('tbl').hidden = tab === 'date';
   if (tab === 'emp') { rrfRenderEmployees(); return; }
+  if (tab === 'party') { rrfRenderParties(); return; }
 
   const rows = list.rows.map(rrfRow);
   const q = rrfEl('q').value.trim().toLowerCase();
@@ -16390,6 +16677,40 @@ function rrfRenderEmployees() {
   rrfEl('sum').innerHTML = `${F.emps.length} of ${rrf.employees.length} employees selected <span>(${n} visible)</span>`;
 }
 
+// Party: Debtors (customers) or Creditors (suppliers): every one of the master, then any other on the documents, with
+// how many of the documents that meet the other filters are theirs; ticking some shows only their documents.
+function rrfRenderParties() {
+  const { list, F } = rrf;
+  const kind = rrf.partyKind;
+  const noun = PARTY_KINDS[kind].one;
+  const groups = new Map(partyDir[kind].map(party => [party.key,
+    { k: party.key, code: party.code, name: party.name, sub: countryText(partyCountry(party)), count: 0 }]));
+  for (const r of list.rows.map(rrfRow)) {
+    if (!r.pk || r.pkind !== kind) continue;
+    if (!groups.has(r.pk)) groups.set(r.pk, { k: r.pk, code: r.pc, name: r.pn, sub: countryText(r.cn), count: 0 });
+    if (rrfPass(r, F, 'party')) groups.get(r.pk).count++;
+  }
+  const q = rrfEl('pq').value.trim().toLowerCase();
+  const all = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const vis = all.filter(g => !q || `${g.name} ${g.code}`.toLowerCase().includes(q));
+  rrf.shown = vis;
+  const n = vis.length; const on = vis.filter(g => F.parties.includes(g.k)).length;
+  rrfEl('tb-t').innerHTML = `${PARTY_KINDS[kind].many}<span> · ${n} visible</span>`;
+  rrfEl('th').innerHTML = `<div class="rrf-c0"><button type="button" class="rrf-rb" id="rrf-all" role="checkbox" aria-checked="${!n || !on ? 'false' : on === n ? 'true' : 'mixed'}" aria-label="Select all visible">${RRF_CHECK}</button></div>`
+    + `<div>Code</div><div>${rrfEsc(noun)}</div><div class="rrf-last">${rrfEsc(list.config.nouns.split(' ').pop())}<span class="rrf-pill">${on} of ${n} selected</span></div>`;
+  const unit = list.config.noun.split(' ').pop().toLowerCase();   // return / replacement
+  rrfEl('rows').innerHTML = n ? vis.map(g => {
+    const s = F.parties.includes(g.k);
+    return `<div class="rrf-tr${s ? ' is-sel' : ''}" role="row" tabindex="0" data-g="${rrfEsc(g.k)}">`
+      + `<div class="rrf-c0"><span class="rrf-rb" role="checkbox" aria-checked="${s}" aria-label="Select ${rrfEsc(g.name)}">${RRF_CHECK}</span></div>`
+      + `<div class="rrf-code">${rrfEsc(g.code || '—')}</div>`
+      + `<div class="rrf-det"><b>${rrfEsc(g.name)}</b><small>${rrfEsc(g.sub)}</small></div>`
+      + `<div class="rrf-val">${g.count} ${unit}${g.count === 1 ? '' : 's'}</div></div>`;
+  }).join('') : `<div class="rrf-empty">${q ? `Nothing matches “${rrfEsc(rrfEl('pq').value.trim())}”.` : `No ${PARTY_KINDS[kind].many.toLowerCase()} yet.`}</div>`;
+  const ticked = all.filter(g => F.parties.includes(g.k)).length;
+  rrfEl('sum').innerHTML = `${ticked} of ${all.length} ${PARTY_KINDS[kind].many.toLowerCase()} selected <span>(${n} visible)</span>`;
+}
+
 function rrfRenderDate(rows) {
   const { F } = rrf;
   const { many } = rrfLabels();
@@ -16429,7 +16750,12 @@ function rrfYmToDates() {
 }
 
 function rrfToggleRow(row) {
-  if (row.dataset.e) {
+  if (row.dataset.g !== undefined) {
+    const k = row.dataset.g;
+    rrf.F.parties = rrf.F.parties.includes(k) ? rrf.F.parties.filter(x => x !== k) : [...rrf.F.parties, k];
+    rrfRender();
+    rrfEl('rows').querySelector(`.rrf-tr[data-g="${CSS.escape(k)}"]`)?.focus();
+  } else if (row.dataset.e) {
     const c = row.dataset.e; const F = rrf.F;
     F.emps = F.emps.includes(c) ? F.emps.filter(x => x !== c) : [...F.emps, c];
     rrfRender();
@@ -16460,8 +16786,9 @@ function handleRrFilterKeys(event) {
 const rrfVisible = node => Boolean(node && !node.hidden && !node.disabled && node.offsetParent !== null);
 function rrfTop() {
   const tab = rrf.tab;
-  if (tab === 'all') return [rrfEl('q')];
+  if (tab === 'all') return [rrfEl('q'), rrfEl('country')].filter(rrfVisible);
   if (tab === 'emp') return [rrfEl('eq')];
+  if (tab === 'party') return [rrfEl('pq'), ...rrfEl('tb-kind').children];
   if (tab === 'vat') return [rrfEl('vat-clr'), rrfEl('vat')].filter(rrfVisible);
   if (RRF_NUM[tab]) return [rrfEl('num-clr'), ...rrfEl('ops').children, rrfEl('num')].filter(rrfVisible);
   return [];
@@ -16478,6 +16805,7 @@ function rrfPickOp() {
   if (c) rrf.op = ['eq', 'lt', 'gt'].find(o => pbfBound(c[o]) !== null) || 'eq';
 }
 function rrfShowTab(k) {
+  if (rrf.tab !== k) rrfEl('pq').value = '';
   rrf.tab = k;
   rrfPickOp();
   rrfRender();
@@ -16515,6 +16843,7 @@ function rrfKeydown(event) {
       else if (next >= 0) rrfShowTab(shown[next].k);
       return;
     }
+    if (key === 'ArrowRight' && target === reset) { event.preventDefault(); foot[0].focus(); return; }   // Reset → the footer
     if ((key === 'ArrowRight' || key === 'Enter') && at >= 0) {
       event.preventDefault();
       if (rrf.tab !== shown[at].k) rrfShowTab(shown[at].k);
@@ -16568,6 +16897,7 @@ function rrfKeydown(event) {
   const tAt = top.indexOf(target);
   if (tAt >= 0) {
     const text = target.tagName === 'INPUT';
+    if (key === 'Enter' && target.tagName === 'SELECT') { event.preventDefault(); if (!event.repeat) openSelectMenu(target); return; }
     if (key === 'ArrowDown' || (key === 'Enter' && text)) { stop(lines[1] || lines[0] || foot[1]); return; }
     if (key === 'ArrowLeft' && (!text || rrfCaretAt(target, 'start'))) { stop(tAt > 0 ? top[tAt - 1] : rrfTabButton()); return; }
     if (key === 'ArrowRight' && tAt < top.length - 1 && (!text || rrfCaretAt(target, 'end'))) { stop(top[tAt + 1]); return; }
@@ -16589,15 +16919,15 @@ function rrfKeydown(event) {
     else if (key === 'End') stop(lines.at(-1));
     else if (key === 'ArrowLeft') stop(rrfTabButton());
     else if (key === 'ArrowRight') stop(foot[0]);
-    else if ((key.length === 1 || key === 'Backspace') && (rrf.tab === 'all' || rrf.tab === 'emp')) rrfTypeIntoSearch(event);
+    else if ((key.length === 1 || key === 'Backspace') && ['all', 'emp', 'party'].includes(rrf.tab)) rrfTypeIntoSearch(event);
     return;
   }
-  if (dialog.contains(target) && key.length === 1 && key !== ' ' && (rrf.tab === 'all' || rrf.tab === 'emp') && target.tagName !== 'INPUT') rrfTypeIntoSearch(event);
+  if (dialog.contains(target) && key.length === 1 && key !== ' ' && ['all', 'emp', 'party'].includes(rrf.tab) && target.tagName !== 'INPUT') rrfTypeIntoSearch(event);
 }
 
 // A letter typed outside the search box goes into it (Backspace edits it).
 function rrfTypeIntoSearch(event) {
-  const search = rrf.tab === 'emp' ? rrfEl('eq') : rrfEl('q');
+  const search = rrf.tab === 'emp' ? rrfEl('eq') : rrf.tab === 'party' ? rrfEl('pq') : rrfEl('q');
   event.preventDefault();
   search.value = event.key === 'Backspace' ? search.value.slice(0, -1) : search.value + event.key;
   search.focus();
@@ -16748,15 +17078,21 @@ function initRrFilter() {
     const b = event.target.closest('.rrf-ri');
     if (!b) return;
     if (b.id === 'rrf-rail-reset') { resetRrFilter(); b.focus(); return; }
+    if (rrf.tab !== b.dataset.k) rrfEl('pq').value = '';
     rrf.tab = b.dataset.k;
     rrfPickOp();
     rrfRender();
-    (rrf.tab === 'all' ? rrfEl('q') : rrf.tab === 'emp' ? rrfEl('eq') : RRF_NUM[rrf.tab] ? rrfEl('num') : b).focus();
+    (rrf.tab === 'all' ? rrfEl('q') : rrf.tab === 'emp' ? rrfEl('eq') : rrf.tab === 'party' ? rrfEl('pq')
+      : RRF_NUM[rrf.tab] ? rrfEl('num') : b).focus();
   });
   rrfEl('rows').addEventListener('click', event => { const r = event.target.closest('.rrf-tr'); if (r) rrfToggleRow(r); });
   rrfEl('th').addEventListener('click', event => {
     if (!event.target.closest('#rrf-all')) return;
-    if (rrf.tab === 'emp') {
+    if (rrf.tab === 'party') {
+      const keys = rrf.shown.map(g => g.k);
+      const all = keys.length && keys.every(k => rrf.F.parties.includes(k));
+      rrf.F.parties = all ? rrf.F.parties.filter(k => !keys.includes(k)) : [...new Set([...rrf.F.parties, ...keys])];
+    } else if (rrf.tab === 'emp') {
       const codes = rrf.shown.map(e => e.c);
       const all = codes.length && codes.every(c => rrf.F.emps.includes(c));
       rrf.F.emps = all ? rrf.F.emps.filter(c => !codes.includes(c)) : [...new Set([...rrf.F.emps, ...codes])];
@@ -16767,7 +17103,17 @@ function initRrFilter() {
     rrfRender();
     byId('rrf-all').focus();
   });
-  for (const input of [rrfEl('q'), rrfEl('eq')]) input.addEventListener('input', rrfRender);
+  for (const input of [rrfEl('q'), rrfEl('eq'), rrfEl('pq')]) input.addEventListener('input', rrfRender);
+  // All countries: one country (or all) for the documents.
+  rrfEl('country').addEventListener('change', event => { rrf.F.countries = event.target.value ? [event.target.value] : []; rrfRender(); });
+  // Party › Debtors / Creditors.
+  rrfEl('tb-kind').addEventListener('click', event => {
+    const b = event.target.closest('[data-kind]');
+    if (!b) return;
+    rrf.partyKind = b.dataset.kind;
+    rrfRender();
+    b.focus();
+  });
   // VAT switch: on = VAT In (total VAT above 0), off = VAT Out (VAT 0); Clear = both.
   rrfEl('vat').addEventListener('click', () => { rrf.F.vat = rrf.F.vat === 'in' ? 'out' : 'in'; rrfRender(); });
   rrfEl('vat-clr').addEventListener('click', () => { rrf.F.vat = ''; rrfRender(); rrfEl('vat').focus(); });
@@ -18299,9 +18645,8 @@ let loadSeq = 0;
 // pending: the figures already on their way (asked for together with the sign-in check, at start-up).
 async function loadDashboard(pending) {
   const seq = ++loadSeq;
-  renderRange();
   renderChartMonths();
-  const data = await (pending || fetchDashboard(currentPeriod));
+  const data = await (pending || fetchDashboard(currentPeriod, state.range));
   if (seq !== loadSeq) return;            // a newer load is already under way
   state.data = data;
   renderKpis(data.kpis);
@@ -18327,11 +18672,12 @@ async function loadChart() {
 document.addEventListener('DOMContentLoaded', async () => {
   // The figures are asked for at once, beside the sign-in check, so they arrive with the page instead of after
   // every screen below has been set up (a lag right after signing in).
-  const firstFigures = fetchDashboard(currentPeriod);
+  const firstFigures = fetchDashboard(currentPeriod, state.range);
   const user = await checkSignedIn();
   if (!user) return;
   document.documentElement.classList.remove('auth-pending');
   loadDashboard(firstFigures);
+  initDashRange();
   byId('header-user').textContent = user.fullName || user.username;
   useSignedInName(user);
   // The signed-in company's name in the header (also printed on Purchase Book PDFs, which read it from there).

@@ -2803,6 +2803,28 @@ input::-webkit-contacts-auto-fill-button {
 :is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .qs .ml-btn-green { background: #ea580c; }
 :is(body[data-page="sa"], body[data-page="st"], body[data-page="rsv"]) .qs .ml-btn-green:hover { background: #c2410c; }
 
+/* The same popups on the Return & Replacement pages (Sales / Purchase Return and Replacement), in their crimson. */
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp {
+  --tone-green-bg: #fff1f2; --tone-green-line: #fecdd3; --tone-green-ink: #9f1239;
+}
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-icon { background: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-card-title { border-left-color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-name { border-color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-name:not([readonly]) { border-color: #be123c; box-shadow: 0 0 0 3px rgba(190, 18, 60, .15); }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-name:focus-visible { box-shadow: 0 0 0 3px rgba(190, 18, 60, .2); }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-mini:hover { border-color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-mini[aria-pressed="true"] { background: #be123c; border-color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-mode > span { color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-editor { border-color: #be123c; box-shadow: 0 0 0 3px rgba(190, 18, 60, .12); }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-tool:hover { border-color: #be123c; background: #fff1f2; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-tool:focus { border-color: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-unit-input:focus { border-color: #be123c; box-shadow: 0 0 0 3px rgba(190, 18, 60, .2); background: #fff1f2; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp-rich:focus { background: #fffafb; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp .ml-btn-green { background: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .idp .ml-btn-green:hover { background: #9f1239; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .qs .ml-btn-green { background: #be123c; }
+:is(body[data-page="sr"], body[data-page="rp"], body[data-page="prt"], body[data-page="prp"]) .qs .ml-btn-green:hover { background: #9f1239; }
+
 /* Purchase Order preview / PDF: the company logo, faint, over the item table (as the procurement document design). */
 .ps-body { position: relative; }
 .ps-watermark {
@@ -3694,7 +3716,7 @@ body:is([data-page="employee"], [data-page="employee-list"], [data-page="user"],
 .dash-locked div { display: flex; flex-direction: column; gap: 2px; }
 .dash-locked strong { font-size: 15px; color: #991b1b; }
 .dash-locked span { font-size: 13px; color: #7f1d1d; }
-.dash-no-figures :is(#dashboard-kpis, .card-row, .audit, #dashboard-range-btn) { display: none !important; }
+.dash-no-figures :is(#dashboard-kpis, .card-row, .audit, .dash-range) { display: none !important; }
 
 /* User Setting: the Dashboard row is for managers only. */
 .us-mod.is-locked { opacity: .55; }
@@ -3705,7 +3727,6 @@ body:is([data-page="employee"], [data-page="employee-list"], [data-page="user"],
    Each card has the module's colour (as in the Quick Menu), its letter, a description and an Open arrow.
    ===================================================================== */
 #dashboard-view.mh-on > :is(#dashboard-kpis, .card-row, .audit, #dashboard-locked) { display: none !important; }
-#dashboard-view.mh-staff #dashboard-range-btn { display: none; }
 /* The module cards sit on the plain page background of the other pages (no dot grid) and drop the Growth Engine footer. */
 body:has(#dashboard-view.mh-on) { background: var(--page-bg); background-image: none; }
 #dashboard-view.mh-on .app-footer { display: none; }
@@ -4208,3 +4229,65 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
 }
 @media (min-width: 1100px) and (max-width: 1279px) { #stkr-point { width: 156px !important; } }
 @media (min-width: 1000px) and (max-width: 1099px) { #stkr-point, #stkr-period { font-size: 12px; } }
+
+/* Every "Select …" popup keeps its size and the list fills it down to the footer (no blank band under the list):
+   the body, its card and the list stretch; a long list scrolls inside. */
+#lookup.lookup.lk-cards.lk-compact { height: min(560px, calc(100vh - 32px)); }
+#lookup.lookup.lk-cards.lk-compact.lk-compact-sm { height: min(440px, calc(100vh - 32px)); }
+#lookup .lk-body { flex: 1 1 auto; min-height: 0; }
+#lookup .lk-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#lookup .lk-table-wrap, #lookup.lk-cards .lk-table-wrap, #lookup.lk-compact .lk-table-wrap, #lookup.lk-compact-sm .lk-table-wrap { flex: 1 1 auto; min-height: 60px; max-height: none; }
+
+/* Filter popups: the Purchase Book's All countries dropdown beside the search (#pbf-country). */
+.pbf-search-row { flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbf-search-row .pbf-search { flex: 1 1 auto; min-width: 0; }
+.pbf-search-row:not(:has(> :not([hidden]))) { display: none; }
+.pbf-country {
+  flex: none; width: 168px; height: 42px; padding: 0 30px 0 34px; border: 1px solid var(--line); border-radius: 9px;
+  font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink-900); cursor: pointer; appearance: none; -webkit-appearance: none;
+  background: var(--surface) no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: 11px center, right 11px center;
+}
+.pbf-country:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.pbf-country[hidden] { display: none; }
+@media (max-width: 560px) { .pbf-country { width: 130px; } }
+
+/* Return & Replacement: the All countries dropdown beside the search; Party › Debtors / Creditors. */
+.rrf-srch-row { flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rrf-srch-row .rrf-srch { flex: 1 1 auto; min-width: 0; }
+.rrf-srch-row:not(:has(> :not([hidden]))) { display: none; }
+.rrf .rrf-country { border-color: var(--rf-field, var(--line)); }
+.rrf .rrf-country:focus-visible { border-color: var(--g); box-shadow: 0 0 0 3px var(--g-ring); }
+.rrf-kind button, .pbf-kind button { width: auto; padding: 0 16px; font-size: 12.5px; letter-spacing: .02em; }
+.pbf-kind { margin-left: auto; align-items: stretch; gap: 0; }
+.pbf-kind button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.pbf-kind[hidden], #rrf-tb-kind[hidden] { display: none; }
+
+/* The dashboard's dates (header): the From – To popover under the button. */
+#dashboard-view.mh-staff .dash-range { display: none; }
+.dash-range { position: relative; }
+.dash-range-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: 320px; padding: 14px;
+  display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); box-shadow: 0 16px 40px rgba(15, 23, 42, .16);
+}
+.dash-range-pop[hidden] { display: none; }
+.dash-range-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.dash-range-presets button {
+  height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-700, #334155);
+}
+.dash-range-presets button:hover { background: var(--surface-sunk, #F1F5F9); }
+.dash-range-presets button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.dash-range-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dash-range-dates label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.dash-range-dates span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500, #64748B); }
+.dash-range-dates input { width: 100%; min-width: 0; height: 38px; }
+.dash-range-error { margin: 0; font-size: 12.5px; color: var(--danger, #DC2626); }
+.dash-range-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.dash-range-foot .range-btn { height: 34px; padding: 0 14px; }
+.dash-range-apply { border-color: var(--accent); background: var(--accent); color: #fff; }
+.dash-range-apply:hover { filter: brightness(.95); }
+@media (max-width: 560px) { .dash-range-pop { right: auto; left: 0; width: min(320px, calc(100vw - 32px)); } }
