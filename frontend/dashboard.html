@@ -5639,8 +5639,8 @@
   <div class="fp-card ml-card stk-card">
     <div class="stk-tabbar">
       <div class="stk-tabs" role="tablist" aria-label="Stock Ledger views">
-        <button type="button" class="stk-tab" role="tab" data-stk-tab="levels" aria-selected="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>Stock Levels &amp; Valuation</button>
-        <button type="button" class="stk-tab" role="tab" data-stk-tab="ledger" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>Stock Movement Ledger <span class="stk-count" id="stkr-count-ledger">0</span></button>
+        <button type="button" class="stk-tab" role="tab" data-stk-tab="levels" aria-selected="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg><span class="stk-tab-pre">Stock </span>Levels &amp; Valuation</button>
+        <button type="button" class="stk-tab" role="tab" data-stk-tab="ledger" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg><span class="stk-tab-pre">Stock </span>Movement Ledger <span class="stk-count" id="stkr-count-ledger">0</span></button>
         <button type="button" class="stk-tab" role="tab" data-stk-tab="damaged" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Damaged Stock <span class="stk-count" id="stkr-count-damaged">0</span></button>
       </div>
       <div class="stk-tab-tools">
@@ -5763,37 +5763,41 @@
 
   <!-- Move to Stock (Damaged Stock): a damaged line's quantity, or part of it, back into stock at its stock point.
        History shows it as Damage Restock. -->
-  <dialog id="stkr-restock" class="stk-hist stk-restock" aria-labelledby="stkr-restock-title">
+  <dialog id="stkr-restock" class="mts" aria-labelledby="stkr-restock-title" aria-describedby="stkr-restock-from">
     <form method="dialog" id="stkr-restock-form" novalidate>
-      <div class="stk-hist-head">
+      <header class="mts-hd">
         <div>
-          <span class="stk-hist-kicker">Damaged Stock</span>
           <h2 id="stkr-restock-title">Move to Stock</h2>
-          <p class="stk-hist-meta" id="stkr-restock-from"></p>
+          <p class="mts-from" id="stkr-restock-from"></p>
         </div>
-        <button type="button" class="lk-close" data-stk-restock="close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
-      </div>
-      <div class="stk-hist-body stk-restock-body">
-        <label class="stk-restock-field"><span>Damaged Item <b class="stk-req">*</b></span>
-          <select id="stkr-restock-key" class="fp-input fp-select" required></select></label>
-        <div class="stk-restock-info">
-          <div><span>Item</span><strong id="stkr-restock-item"></strong></div>
-          <div><span>Damaged Available</span><strong id="stkr-restock-avail"></strong></div>
-          <div><span>Moves To</span><strong id="stkr-restock-to"></strong></div>
+        <button type="button" class="mts-x" data-stk-restock="close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+      </header>
+      <div class="mts-bd">
+        <label class="mts-field"><span class="mts-lb">Damaged Item <b>*</b></span>
+          <select id="stkr-restock-key" class="mts-input mts-select" required></select></label>
+        <div class="mts-info">
+          <div><span>Available</span><strong id="stkr-restock-avail"></strong></div>
+          <div><span>Moves to</span><strong class="mts-to"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span id="stkr-restock-to"></span></strong></div>
         </div>
-        <div class="stk-restock-row">
-          <label class="stk-restock-field stk-restock-qty"><span>Quantity to Move <b class="stk-req">*</b></span>
-            <span class="stk-restock-qty-box"><input id="stkr-restock-qty" class="fp-input" type="number" min="0" step="any" inputmode="decimal" required><small id="stkr-restock-unit"></small></span></label>
-          <label class="stk-restock-field"><span>Transfer Description</span>
-            <input id="stkr-restock-desc" class="fp-input" type="text" maxlength="300" placeholder="e.g. Repaired and tested – fit for sale" autocomplete="off"></label>
+        <div class="mts-row">
+          <div class="mts-field">
+            <label class="mts-lb" for="stkr-restock-qty">Quantity <b>*</b></label>
+            <div class="mts-step">
+              <button type="button" class="mts-step-btn" data-mts-step="-1" aria-label="One less" tabindex="-1">−</button>
+              <input id="stkr-restock-qty" class="mts-step-input" type="number" min="0" step="any" inputmode="decimal" required aria-describedby="stkr-restock-unit">
+              <button type="button" class="mts-step-btn" data-mts-step="1" aria-label="One more" tabindex="-1">+</button>
+            </div>
+            <small class="mts-hint" id="stkr-restock-unit"></small>
+          </div>
+          <label class="mts-field"><span class="mts-lb">Description</span>
+            <input id="stkr-restock-desc" class="mts-input" type="text" maxlength="300" placeholder="e.g. Repaired and tested" autocomplete="off"></label>
         </div>
-        <p class="stk-restock-error" id="stkr-restock-error" role="alert" hidden></p>
-        <p class="stk-restock-note">On <b>Yes</b>, this quantity leaves Damaged Stock and is added to Stock Levels &amp; Valuation. History shows it as <b>Damage Restock</b> with a stock adjustment remark.</p>
+        <p class="mts-error" id="stkr-restock-error" role="alert" hidden></p>
       </div>
-      <div class="stk-hist-foot stk-restock-foot">
-        <button type="button" class="ml-btn stk-btn-plain" data-stk-restock="close">Cancel</button>
-        <button type="submit" class="ml-btn ml-btn-primary" id="stkr-restock-save"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7"></path></svg>Yes, Move to Stock</button>
-      </div>
+      <footer class="mts-ft">
+        <button type="button" class="mts-btn mts-btn-out" data-stk-restock="close">Cancel</button>
+        <button type="submit" class="mts-btn mts-btn-go" id="stkr-restock-save"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7"></path></svg>Move to Stock</button>
+      </footer>
     </form>
   </dialog>
 
@@ -6076,8 +6080,7 @@
     <div class="pb-check-row">
       <label class="pb-check"><input type="checkbox" data-print-field="attachSeal"><span>Attach Seal</span></label>
     </div>
-    <!-- Shown while Attach Seal is ticked: the seal the PDF prints. -->
-    <div class="pb-seal-preview" data-seal-preview hidden><img alt="Company seal" data-seal-image></div>
+    <!-- Attach Seal only marks the PDF: the seal prints on the PDF, not on the form. -->
   </div>
 </template>
 </div>

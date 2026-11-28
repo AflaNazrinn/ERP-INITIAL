@@ -4069,3 +4069,91 @@ td.ul-col-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .pbf-body { grid-template-columns: 56px minmax(0, 1fr); }
   .pbf-tr { grid-template-columns: 38px 96px minmax(0, 1fr) 100px; }
 }
+
+/* Stock Ledger › Damaged Stock › Move to Stock: a calm popup (title, Damaged · return · party; the item; Available |
+   Moves to; a − / + quantity and a description; Cancel / Move to Stock), in the Supply orange. */
+.mts { width: min(480px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 18px; background: #fff; color: #111827;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, .25); overflow: hidden; }
+.mts::backdrop { background: rgba(15, 23, 42, .45); }
+.mts form { display: flex; flex-direction: column; }
+.mts-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px 22px 6px 24px; }
+.mts-hd h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; color: #111827; }
+.mts-from { margin: 4px 0 0; font-size: 13px; color: #6B7280; }
+.mts-from b { color: #C2410C; font-weight: 700; }
+.mts-x { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #E5E7EB; border-radius: 10px; background: #fff; color: #111827; cursor: pointer; }
+.mts-x:hover { background: #F9FAFB; }
+.mts-bd { display: flex; flex-direction: column; gap: 18px; padding: 18px 24px 22px; }
+.mts-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mts-lb { font-size: 13px; font-weight: 700; color: #374151; }
+.mts-lb b { color: #DC2626; }
+.mts-input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid #D1D5DB; border-radius: 12px; background: #fff;
+  font: inherit; font-size: 14px; color: #111827; outline: none; }
+.mts-input::placeholder { color: #9CA3AF; }
+.mts-select { appearance: none; padding-right: 40px; font-weight: 600; cursor: pointer;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center; }
+.mts-input:focus, .mts-step:focus-within { border-color: #EA580C; box-shadow: 0 0 0 3px rgba(234, 88, 12, .15); }
+.mts-info { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #EEF0F2; border-radius: 12px; background: #F8FAFC; }
+.mts-info > div { padding: 12px 16px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mts-info > div + div { border-left: 1px solid #E5E7EB; }
+.mts-info span { font-size: 12.5px; color: #6B7280; }
+.mts-info strong { font-size: 15px; font-weight: 700; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mts-to { display: flex; align-items: center; gap: 6px; }
+.mts-to svg { flex: none; color: #EA580C; }
+.mts-to span { overflow: hidden; text-overflow: ellipsis; font-size: 15px; color: #111827; }
+.mts-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; align-items: start; }
+.mts-step { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; height: 46px; border: 1px solid #D1D5DB; border-radius: 12px; overflow: hidden; background: #fff; }
+.mts-step-btn { border: 0; background: #F3F4F6; color: #374151; font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; }
+.mts-step-btn:hover { background: #E5E7EB; }
+.mts-step-input { min-width: 0; border: 0; outline: none; text-align: center; font: inherit; font-size: 16px; font-weight: 700; color: #111827; background: #fff; -moz-appearance: textfield; }
+.mts-step-input::-webkit-outer-spin-button, .mts-step-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mts-step-input.is-invalid { background: #FEF2F2; }
+.mts-hint { font-size: 12px; color: #6B7280; }
+.mts-error { margin: -6px 0 0; font-size: 12.5px; font-weight: 600; color: #DC2626; }
+.mts-ft { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px 20px; border-top: 1px solid #F0F1F3; }
+.mts-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 24px; border-radius: 12px;
+  font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer; }
+.mts-btn-out { border: 1px solid #D1D5DB; background: #fff; color: #111827; }
+.mts-btn-out:hover { background: #F9FAFB; }
+.mts-btn-go { border: 0; background: #C2410C; color: #fff; }
+.mts-btn-go:hover { background: #9A3412; }
+.mts-btn-go:disabled { opacity: .6; cursor: progress; }
+.mts-x:focus-visible, .mts-btn:focus-visible, .mts-step-btn:focus-visible { outline: 3px solid rgba(234, 88, 12, .35); outline-offset: 2px; }
+@media (max-width: 520px) { .mts-row { grid-template-columns: 1fr; } }
+
+/* Stock Ledger: the tabs and their tools (Filter / Stock Point, Period, Export, Print PDF) on one line on every tab,
+   down to a 1366 px screen; on narrower screens they wrap as before. */
+.stk-tab { padding: 0 10px; }
+.stk-period { gap: 6px; }
+#stkr-point { width: 150px !important; }
+#stkr-levels-scope { width: 132px !important; }
+#stkr-dmg-filter { width: 150px !important; }
+#stkr-period { width: 130px; }
+/* Narrower screens (a laptop, or browser zoom): the tab names drop the repeated "Stock" (Levels & Valuation ·
+   Movement Ledger · Damaged Stock), so the tools stay on the same line on every tab; below 1000 px (a tablet, a
+   phone) they wrap under the tabs. */
+@media (max-width: 1499px) {
+  .stk-tab-pre { display: none; }
+}
+@media (min-width: 1000px) {
+  .stk-tabbar { flex-wrap: nowrap; gap: 10px; }
+  .stk-tab-tools { flex-wrap: nowrap; gap: 6px; }
+  .stk-tabs { flex: none; }
+}
+@media (min-width: 1000px) and (max-width: 1279px) {
+  .stk-tab { padding: 0 8px; gap: 5px; font-size: 10.5px; }
+  .stk-tab svg { display: none; }
+  .stk-period > span { display: none; }      /* the lists say what they are: All Stock Points, All Months */
+  #stkr-point { width: 140px !important; }
+  #stkr-period { width: 118px; }
+  #stkr-print span, #stkr-print { padding: 0 10px; }
+}
+@media (min-width: 1000px) and (max-width: 1279px) { .stk-tab { padding: 0 7px; } }
+/* A phone or tablet: the tabs scroll sideways inside their bar instead of running off the screen; the tools wrap under them. */
+@media (max-width: 999px) {
+  .stk-tabbar { flex-wrap: wrap; }
+  .stk-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+  .stk-tab { flex: none; }
+  .stk-tab-tools { flex-wrap: wrap; width: 100%; }
+}
+@media (min-width: 1100px) and (max-width: 1279px) { #stkr-point { width: 156px !important; } }
+@media (min-width: 1000px) and (max-width: 1099px) { #stkr-point, #stkr-period { font-size: 12px; } }

@@ -69,11 +69,26 @@ function warehouse_find(int $id): array
         + warehouse_stock($id);
 }
 
-/* The stock held at one stock point: the opening stock of every item sourcing line there, added up.
- * Items saved before opening stock was kept per line hold their total on the first line (its stock point,
- * else the item's own), as the Item page shows them. Returns availableStock ("44") and stockedItems. */
+/* The stock held at one stock point: its stock on hand worked out from the documents (src/stock_report.php: opening
+ * stock, GRNs, transfers, adjustments, deliveries …). Returns availableStock ("44") and stockedItems. Should the
+ * ledger fail, the opening stock of the item sourcing lines there, as before. */
 function warehouse_stock(int $id): array
 {
+    require_once __DIR__ . '/stock_report.php';
+    try {
+        $items = stock_on_hand_matrix()[$id] ?? [];
+        $total = 0.0;
+        $stocked = 0;
+        foreach ($items as $qty) {
+            $total += $qty;
+            if (abs($qty) > 0.0005) {
+                $stocked++;
+            }
+        }
+        return ['availableStock' => rtrim(rtrim(number_format(round($total, 3), 3, '.', ''), '0'), '.') ?: '0', 'stockedItems' => $stocked];
+    } catch (Throwable $e) {
+        error_log('Stock point stock: ' . $e->getMessage());
+    }
     $lines = query(
         'SELECT item_id, opening_stock AS qty FROM item_brands WHERE warehouse_id = ? AND opening_stock IS NOT NULL',
         [$id]
